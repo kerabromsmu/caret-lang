@@ -1,0 +1,36 @@
+add a b = a + b
+
+between low value high =
+  value >= low and value <= high
+
+inside = between 0 _ 10
+print (inside 7)
+print (inside 17)
+
+makeA n =
+  hidden = n * 2
+  ^name = "A"
+  ^count = hidden
+
+makeB =
+  ^name = "B"
+  ^enabled = true
+
+source = true & makeA 5 ! makeB
+print source.name
+print source.count~
+print source.enabled~
+
+missingSource = false & makeA 1
+print missingSource
+
+nullable = ?
+missing = ~
+print nullable
+print missing
+
+field = #count
+print source[field]~
+print (@source).kind
+print (@source).names
+print (@inside).remaining
