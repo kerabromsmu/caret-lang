@@ -19,6 +19,17 @@ final class ParserTest {
     }
 
     @Test
+    void printStatementConsumesTheRemainingExpression() {
+        ExprStmt statement = assertInstanceOf(ExprStmt.class,
+                new Parser("print add 2 3").parseProgram().getFirst());
+        Apply print = assertInstanceOf(Apply.class, statement.expression());
+        Name name = assertInstanceOf(Name.class, print.function());
+        assertEquals("print", name.name());
+        Apply add = assertInstanceOf(Apply.class, print.argument());
+        assertInstanceOf(Apply.class, add.function());
+    }
+
+    @Test
     void retainsGroupingSpan() {
         Group group = assertInstanceOf(Group.class, expression("(add 1 2)"));
         assertInstanceOf(Apply.class, group.expression());
@@ -55,6 +66,58 @@ final class ParserTest {
         LangException error = assertThrows(LangException.class, () -> new Parser("value = (1 + )").parseProgram());
         assertEquals(1, error.span().start().line());
         assertEquals(14, error.span().start().column());
+    }
+
+    @Test
+    void rejectsMissingConditionalTrueBranch() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = true & ! false").parseProgram());
+        assertEquals(16, error.span().start().column());
+        assertTrue(error.getMessage().contains("Expected expression"));
+    }
+
+    @Test
+    void rejectsUnclosedGrouping() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = (1 + 2").parseProgram());
+        assertTrue(error.getMessage().contains("Expected ')'"));
+    }
+
+    @Test
+    void rejectsMalformedFieldAndDynamicLookups() {
+        LangException field = assertThrows(LangException.class,
+                () -> new Parser("value = scope.").parseProgram());
+        assertTrue(field.getMessage().contains("Expected field name"));
+
+        LangException dynamic = assertThrows(LangException.class,
+                () -> new Parser("value = scope[#name").parseProgram());
+        assertTrue(dynamic.getMessage().contains("Expected ']'"));
+    }
+
+    @Test
+    void rejectsMalformedDefinitionsAndIndentation() {
+        LangException definition = assertThrows(LangException.class,
+                () -> new Parser("add a =").parseProgram());
+        assertTrue(definition.getMessage().contains("Function body must be indented"));
+
+        LangException indentation = assertThrows(LangException.class,
+                () -> new Parser("  value = 1").parseProgram());
+        assertTrue(indentation.getMessage().contains("Unexpected indentation"));
+    }
+
+    @Test
+    void rejectsMalformedOperatorsReflectionAndExports() {
+        LangException operator = assertThrows(LangException.class,
+                () -> new Parser("value = true and").parseProgram());
+        assertTrue(operator.getMessage().contains("Expected expression"));
+
+        LangException reflection = assertThrows(LangException.class,
+                () -> new Parser("print @").parseProgram());
+        assertTrue(reflection.getMessage().contains("Expected expression"));
+
+        LangException export = assertThrows(LangException.class,
+                () -> new Parser("^ = 1").parseProgram());
+        assertTrue(export.getMessage().contains("Invalid assignment or function definition"));
     }
 
     private Expr expression(String source) {

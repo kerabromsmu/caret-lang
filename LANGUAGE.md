@@ -47,7 +47,20 @@ makePerson name age =
 
 Indentation defines a multiline function body. If a body contains exported bindings (`^`), calling the function returns an immutable scope containing those exports. Otherwise it returns the final expression or assigned value.
 
-A zero-argument function is evaluated when its name is read. This is a provisional rule; a future design needs explicit syntax for referring to the function itself without invoking it.
+A zero-argument function is evaluated when its name is read. Use reflection syntax to refer to the
+function itself without invoking it:
+
+```text
+factory =
+  ^value = 42
+
+factory          // calls factory and produces its exported scope
+@factory         // reflects the factory function itself without calling it
+```
+
+This rule is not limited to zero-argument functions. `@function` refers to the function binding
+without invoking it regardless of the function's arity. Its reflective view includes `kind` and
+`remaining`.
 
 ## Function application
 
@@ -72,6 +85,17 @@ Parentheses remain available as a grouping escape:
 ```text
 print (add 2 3)
 ```
+
+`print` also has a statement form. The complete remainder of its logical line is parsed as one
+expression, so common output does not require grouping:
+
+```text
+print add 1 2
+print condition & "yes" ! "no"
+```
+
+This does not change ordinary application associativity: outside the `print` statement, `f x y`
+still means `(f x) y`.
 
 ## Conditional expression
 
@@ -154,6 +178,10 @@ meta = @a
 meta.kind
 meta.size
 meta.names
+
+functionMeta = @function
+functionMeta.kind
+functionMeta.remaining
 ```
 
 Current metadata:

@@ -38,4 +38,18 @@ final class LexerTest {
         assertEquals(4, error.span().start().column());
         assertTrue(error.getMessage().contains("Unexpected character: $"));
     }
+
+    @Test
+    void reportsUnterminatedStringsAtTheirLocation() {
+        LangException error = assertThrows(LangException.class, () -> Lexer.lex("  \"unfinished"));
+        assertEquals(3, error.span().start().column());
+        assertTrue(error.getMessage().contains("Unterminated string"));
+    }
+
+    @Test
+    void reportsNameLiteralsWithoutNames() {
+        LangException error = assertThrows(LangException.class, () -> Lexer.lex("#"));
+        assertEquals(1, error.span().start().column());
+        assertTrue(error.getMessage().contains("Expected a name after '#'"));
+    }
 }

@@ -58,19 +58,19 @@ final class Interpreter {
             int holes = countHoles(expr);
             return new Value.HoleFunction(expr.toString(), holes, supplied -> eval(expr, env, supplied));
         }
-        HoleCursor cursor = holeArgs == null ? null : new HoleCursor(holeArgs);
-        return evalInner(expr, env, cursor);
+        Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
+        return evalInner(resolved, env);
     }
 
-    private Value evalInner(Expr expr, Environment env, HoleCursor holes) {
+    private Value evalInner(Expr expr, Environment env) {
         try {
-            return evalInnerUnchecked(expr, env, holes);
+            return evalInnerUnchecked(expr, env);
         } catch (LangException error) {
             throw error.withSpanIfAbsent(expr.span());
         }
     }
 
-    private Value evalInnerUnchecked(Expr expr, Environment env, HoleCursor holes) {
+    private Value evalInnerUnchecked(Expr expr, Environment env) {
         if (expr instanceof Literal(Value value1, SourceSpan ignored)) return value1;
         if (expr instanceof Name(String name2, SourceSpan ignored)) {
             Value value = env.get(name2);
@@ -80,11 +80,10 @@ final class Interpreter {
             return value;
         }
         if (expr instanceof Hole) {
-            if (holes == null) throw new LangException("Internal error: unresolved hole");
-            return holes.next();
+            throw new LangException("Internal error: unresolved hole");
         }
         if (expr instanceof Unary(String operator1, Expr operand, SourceSpan ignored)) {
-            Value value = evalInner(operand, env, holes);
+            Value value = evalInner(operand, env);
             return switch (operator1) {
                 case "-" -> new Value.Num(-number(value));
                 case "not" -> new Value.Bool(!truth(value));
@@ -93,38 +92,38 @@ final class Interpreter {
         }
         if (expr instanceof Binary(String operator, Expr left1, Expr right1, SourceSpan ignored)) {
             if (operator.equals("and")) {
-                Value left = evalInner(left1, env, holes);
-                return truth(left) ? evalInner(right1, env, holes) : new Value.Bool(false);
+                Value left = evalInner(left1, env);
+                return truth(left) ? evalInner(right1, env) : new Value.Bool(false);
             }
             if (operator.equals("or")) {
-                Value left = evalInner(left1, env, holes);
-                return truth(left) ? new Value.Bool(true) : new Value.Bool(truth(evalInner(right1, env, holes)));
+                Value left = evalInner(left1, env);
+                return truth(left) ? new Value.Bool(true) : new Value.Bool(truth(evalInner(right1, env)));
             }
-            Value left = evalInner(left1, env, holes);
-            Value right = evalInner(right1, env, holes);
+            Value left = evalInner(left1, env);
+            Value right = evalInner(right1, env);
             return binary(operator, left, right);
         }
         if (expr instanceof Conditional(Expr condition1, Expr whenTrue, Expr whenFalse, SourceSpan ignored)) {
-            Value condition = evalInner(condition1, env, holes);
+            Value condition = evalInner(condition1, env);
             return truth(condition)
-                    ? evalInner(whenTrue, env, holes)
-                    : evalInner(whenFalse, env, holes);
+                    ? evalInner(whenTrue, env)
+                    : evalInner(whenFalse, env);
         }
         if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
-            Value fn = evalInner(function, env, holes);
-            Value argument = evalInner(argument1, env, holes);
+            Value fn = evalInner(function, env);
+            Value argument = evalInner(argument1, env);
             if (!(fn instanceof Value.Callable callable)) {
                 throw new LangException("Value is not callable: " + fn);
             }
             return callable.apply(argument);
         }
         if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
-            Value target = evalInner(target2, env, holes);
+            Value target = evalInner(target2, env);
             return field(target, field, optional1);
         }
         if (expr instanceof DynamicField(Expr target1, Expr name1, boolean optional, SourceSpan ignored)) {
-            Value target = evalInner(target1, env, holes);
-            Value name = evalInner(name1, env, holes);
+            Value target = evalInner(target1, env);
+            Value name = evalInner(name1, env);
             String fieldName = switch (name) {
                 case Value.Name n -> n.value();
                 case Value.Str text -> text.value();
@@ -133,10 +132,16 @@ final class Interpreter {
             return field(target, fieldName, optional);
         }
         if (expr instanceof Reflect(Expr target, SourceSpan ignored)) {
-            return reflect(evalInner(target, env, holes));
+            // Reflection of a name observes the binding itself. In particular,
+            // this is the escape hatch for referring to a zero-argument function
+            // without triggering the normal implicit invocation on name reads.
+            Value targetValue = target instanceof Name(String name, SourceSpan ignoredNameSpan)
+                    ? env.get(name)
+                    : evalInner(target, env);
+            return reflect(targetValue);
         }
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
-            return evalInner(expression, env, holes);
+            return evalInner(expression, env);
         }
         throw new LangException("Unknown expression: " + expr);
     }
@@ -252,10 +257,32 @@ final class Interpreter {
         };
     }
 
-    private static final class HoleCursor {
+    private Expr bindHoles(Expr expr, HoleBinder holes) {
+        return switch (expr) {
+            case Hole hole -> new Literal(holes.next(), hole.span());
+            case Literal literal -> literal;
+            case Name name -> name;
+            case Unary unary -> new Unary(unary.operator(), bindHoles(unary.operand(), holes), unary.span());
+            case Binary binary -> new Binary(binary.operator(), bindHoles(binary.left(), holes),
+                    bindHoles(binary.right(), holes), binary.span());
+            case Conditional conditional -> new Conditional(bindHoles(conditional.condition(), holes),
+                    bindHoles(conditional.whenTrue(), holes), bindHoles(conditional.whenFalse(), holes),
+                    conditional.span());
+            case Apply apply -> new Apply(bindHoles(apply.function(), holes), bindHoles(apply.argument(), holes),
+                    apply.span());
+            case Field field -> new Field(bindHoles(field.target(), holes), field.field(), field.optional(),
+                    field.span());
+            case DynamicField field -> new DynamicField(bindHoles(field.target(), holes),
+                    bindHoles(field.name(), holes), field.optional(), field.span());
+            case Reflect reflect -> new Reflect(bindHoles(reflect.target(), holes), reflect.span());
+            case Group group -> new Group(bindHoles(group.expression(), holes), group.span());
+        };
+    }
+
+    private static final class HoleBinder {
         private final List<Value> values;
         private int index;
-        private HoleCursor(List<Value> values) { this.values = values; }
+        private HoleBinder(List<Value> values) { this.values = values; }
         Value next() {
             if (index >= values.size()) throw new LangException("Not enough arguments for partial expression");
             return values.get(index++);

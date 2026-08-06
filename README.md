@@ -73,6 +73,9 @@ print source.count~
 print source.enabled~
 ```
 
+`print` consumes the remainder of its logical line as one expression, so `print add 2 3` prints
+the result of `add 2 3`. Parenthesized output remains valid.
+
 ## Current limitations
 
 - A function definition must start at the beginning of a logical line.
