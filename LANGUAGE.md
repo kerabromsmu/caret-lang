@@ -207,6 +207,102 @@ From lower to higher precedence:
 9. function application
 10. field and dynamic lookup
 
+## Implementation planned
+
+The following facilities and semantic decisions are planned prerequisites for implementing a
+Caret interpreter in Caret. They describe the current design direction, not behavior implemented
+by this prototype.
+
+### Source text operations
+
+A Caret lexer needs a small set of text primitives:
+
+```text
+textSize text
+textAt text index
+textSlice text start end
+textNumber text
+numberText number
+```
+
+Text indexes are planned to count Unicode code points rather than UTF-16 code units. An invalid
+index or a failed numeric conversion should return `~` instead of throwing for an expected
+condition. Exact slice-boundary behavior still needs to be specified before implementation.
+
+### Immutable collections
+
+Token streams, syntax trees, environments, and captured output need immutable sequences and
+dictionaries. The planned minimum operations are equivalent to:
+
+```text
+seqEmpty
+seqAdd sequence value
+seqGet sequence index
+seqSize sequence
+
+dictEmpty
+dictPut dictionary key value
+dictGet dictionary key
+dictHas dictionary key
+dictKeys dictionary
+```
+
+Dictionary keys are planned to accept strings and name values, and key iteration should preserve
+insertion order. `dictHas` must distinguish an absent key from a present key whose value is `~`.
+Collection literal syntax is not required for the initial self-interpreter.
+
+### Unified binary functions and operators
+
+A binary operator and a function taking two parameters are planned to be the same kind of callable
+value. Either may be called with prefix notation or placed between its arguments with infix
+notation:
+
+```text
+add left right = left + right
+
+add 2 3       // prefix call of a named function
+2 add 3       // infix call of the same named function
+
++ 2 3         // prefix call of a symbolic operator
+2 + 3         // infix call of the same symbolic operator
+```
+
+The parser will distinguish the two forms from the beginning of the expression:
+
+- If the first expression is a value, or a function taking no parameters, and the next expression
+  denotes a function taking two parameters, the form is an infix call. The first expression is the
+  first argument and the following expression is the second argument.
+- If the first expression denotes a function that takes one or more parameters, the form is a
+  prefix call of that function. Later binary functions in the argument sequence do not change that
+  initial choice.
+
+This is planned behavior and is not implemented by the current parser. The rules for declaring the
+precedence and associativity of named and symbolic binary functions still need to be specified.
+
+### Semantics to resolve
+
+The following behavior must be specified before the Caret implementation can be treated as a
+conforming interpreter:
+
+- direct and mutual recursion;
+- whether closures capture a snapshot or a live scope, including visibility of later definitions;
+- duplicate definitions, rebinding, parameter shadowing, and parent-scope lookup;
+- exact operand rules for operators and equality, including collections and scopes;
+- precedence and associativity for functions used with infix notation;
+- division by zero and other non-finite numeric results;
+- recognized string escapes and diagnostics for invalid escapes;
+- whether `@function` is metadata only or a callable reflective reference; and
+- structured propagation of lexical, parse, and runtime diagnostics with source spans.
+
+The self-interpreter may represent successful and failed operations as exported result scopes. Its
+CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
+
+### Not required for self-interpretation
+
+The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
+lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
+immutable collections, tagged exported scopes, and the planned text operations are sufficient.
+
 ## Not implemented
 
 - static types and `T?`, `T~`, `T?~`
