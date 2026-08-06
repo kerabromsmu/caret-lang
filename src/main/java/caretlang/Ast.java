@@ -3,20 +3,25 @@ package caretlang;
 import java.util.List;
 
 final class Ast {
-    sealed interface Stmt permits Assign, ExprStmt, FunctionDef {}
-    record Assign(String name, boolean exported, Expr value) implements Stmt {}
-    record ExprStmt(Expr expression) implements Stmt {}
-    record FunctionDef(String name, List<String> params, List<Stmt> body) implements Stmt {}
+    sealed interface Stmt permits Assign, ExprStmt, FunctionDef {
+        SourceSpan span();
+    }
+    record Assign(String name, boolean exported, Expr value, SourceSpan span) implements Stmt {}
+    record ExprStmt(Expr expression, SourceSpan span) implements Stmt {}
+    record FunctionDef(String name, List<String> params, List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Conditional, Apply, Field, DynamicField, Reflect, Hole {}
-    record Literal(Value value) implements Expr {}
-    record Name(String name) implements Expr {}
-    record Unary(String operator, Expr operand) implements Expr {}
-    record Binary(String operator, Expr left, Expr right) implements Expr {}
-    record Conditional(Expr condition, Expr whenTrue, Expr whenFalse) implements Expr {}
-    record Apply(Expr function, Expr argument) implements Expr {}
-    record Field(Expr target, String field, boolean optional) implements Expr {}
-    record DynamicField(Expr target, Expr name, boolean optional) implements Expr {}
-    record Reflect(Expr target) implements Expr {}
-    record Hole() implements Expr {}
+    sealed interface Expr permits Literal, Name, Unary, Binary, Conditional, Apply, Field, DynamicField, Reflect, Hole, Group {
+        SourceSpan span();
+    }
+    record Literal(Value value, SourceSpan span) implements Expr {}
+    record Name(String name, SourceSpan span) implements Expr {}
+    record Unary(String operator, Expr operand, SourceSpan span) implements Expr {}
+    record Binary(String operator, Expr left, Expr right, SourceSpan span) implements Expr {}
+    record Conditional(Expr condition, Expr whenTrue, Expr whenFalse, SourceSpan span) implements Expr {}
+    record Apply(Expr function, Expr argument, SourceSpan span) implements Expr {}
+    record Field(Expr target, String field, boolean optional, SourceSpan span) implements Expr {}
+    record DynamicField(Expr target, Expr name, boolean optional, SourceSpan span) implements Expr {}
+    record Reflect(Expr target, SourceSpan span) implements Expr {}
+    record Hole(SourceSpan span) implements Expr {}
+    record Group(Expr expression, SourceSpan span) implements Expr {}
 }

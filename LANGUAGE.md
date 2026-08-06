@@ -15,6 +15,24 @@ true false  Boolean
 
 Null and missing are separate runtime values.
 
+Number literals start with a digit and may contain at most one decimal point. Malformed number
+literals are reported as language errors rather than leaking a Java numeric-conversion exception.
+
+## Comments
+
+`//` introduces a line comment. `#name` is always a name value, including when it appears at the
+beginning of a line; `#` is not a comment marker.
+
+## Diagnostics
+
+Lexical, parse, and runtime errors include the one-based line and column of the smallest relevant
+source expression. Columns count raw source characters. A tab therefore advances the displayed
+column by one, although a leading tab still contributes two spaces to indentation depth.
+
+```text
+Error: Line 1, column 7: Unknown name: absent
+```
+
 ## Bindings and functions
 
 ```text

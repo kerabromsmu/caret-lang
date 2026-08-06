@@ -7,7 +7,7 @@ import caretlang.Lexer.Token;
 import java.util.*;
 
 final class Parser {
-    private record Line(int indent, String text, int number) {}
+    private record Line(int indent, String text, int number, int offset, int column, SourceSpan span) {}
 
     private final List<Line> lines;
     private int lineIndex;
@@ -35,7 +35,7 @@ final class Parser {
 
     private Stmt parseLine(Line line, int indent) {
         lineIndex++;
-        List<Token> tokens = Lexer.lex(line.text);
+        List<Token> tokens = Lexer.lex(line.text, line.offset, line.number, line.column);
 
         int eq = topLevelEquals(tokens);
         if (eq >= 0) {
@@ -47,12 +47,16 @@ final class Parser {
             if (!exported && left.size() > 1 && left.stream().allMatch(t -> t.kind() == Kind.IDENT) && !right.isEmpty()) {
                 String name = left.getFirst().text();
                 List<String> params = left.subList(1, left.size()).stream().map(Token::text).toList();
-                Expr expression = new ExprParser(right, line.number).parse();
-                return new FunctionDef(name, params, List.of(new ExprStmt(expression)));
+                Expr expression = new ExprParser(right).parse();
+                ExprStmt expressionStatement = new ExprStmt(expression, expression.span());
+                return new FunctionDef(name, params, List.of(expressionStatement),
+                        SourceSpan.cover(left.getFirst().span(), expression.span()));
             }
 
             if (left.size() == offset + 1 && left.get(offset).kind() == Kind.IDENT && !right.isEmpty()) {
-                return new Assign(left.get(offset).text(), exported, new ExprParser(right, line.number).parse());
+                Expr expression = new ExprParser(right).parse();
+                return new Assign(left.get(offset).text(), exported, expression,
+                        SourceSpan.cover(left.getFirst().span(), expression.span()));
             }
 
             if (!exported && !left.isEmpty() && left.stream().allMatch(t -> t.kind() == Kind.IDENT) && right.isEmpty()) {
@@ -63,7 +67,7 @@ final class Parser {
                 }
                 int childIndent = lines.get(lineIndex).indent;
                 List<Stmt> body = parseBlock(childIndent);
-                return new FunctionDef(name, params, body);
+                return new FunctionDef(name, params, body, functionSpan(left, body));
             }
 
             if (left.size() == offset + 1 && left.get(offset).kind() == Kind.IDENT && right.isEmpty()) {
@@ -71,14 +75,21 @@ final class Parser {
                 if (!exported && lineIndex < lines.size() && lines.get(lineIndex).indent > indent) {
                     String name = left.get(offset).text();
                     int childIndent = lines.get(lineIndex).indent;
-                    return new FunctionDef(name, List.of(), parseBlock(childIndent));
+                    List<Stmt> body = parseBlock(childIndent);
+                    return new FunctionDef(name, List.of(), body, functionSpan(left, body));
                 }
             }
 
             throw error(line, "Invalid assignment or function definition");
         }
 
-        return new ExprStmt(new ExprParser(tokens.subList(0, tokens.size() - 1), line.number).parse());
+        Expr expression = new ExprParser(tokens.subList(0, tokens.size() - 1)).parse();
+        return new ExprStmt(expression, expression.span());
+    }
+
+    private SourceSpan functionSpan(List<Token> header, List<Stmt> body) {
+        SourceSpan start = header.getFirst().span();
+        return SourceSpan.cover(start, body.getLast().span());
     }
 
     private int topLevelEquals(List<Token> tokens) {
@@ -94,30 +105,52 @@ final class Parser {
 
     private static List<Line> preprocess(String source) {
         ArrayList<Line> result = new ArrayList<>();
-        String[] raw = source.replace("\t", "  ").split("\\R", -1);
-        for (int i = 0; i < raw.length; i++) {
-            String line = raw[i].stripTrailing();
+        int lineStart = 0;
+        int lineNumber = 1;
+        while (lineStart <= source.length()) {
+            int lineEnd = lineStart;
+            while (lineEnd < source.length() && source.charAt(lineEnd) != '\n' && source.charAt(lineEnd) != '\r') {
+                lineEnd++;
+            }
+            String line = source.substring(lineStart, lineEnd).stripTrailing();
             String trimmed = line.stripLeading();
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
-            int indent = line.length() - trimmed.length();
-            result.add(new Line(indent, trimmed, i + 1));
+            int leadingCharacters = line.length() - trimmed.length();
+            if (!trimmed.isEmpty() && !trimmed.startsWith("//")) {
+                int indent = 0;
+                for (int i = 0; i < leadingCharacters; i++) {
+                    indent += line.charAt(i) == '\t' ? 2 : 1;
+                }
+                int contentOffset = lineStart + leadingCharacters;
+                SourcePosition start = new SourcePosition(contentOffset, lineNumber, leadingCharacters + 1);
+                SourcePosition end = new SourcePosition(contentOffset + trimmed.length(), lineNumber,
+                        leadingCharacters + trimmed.length() + 1);
+                result.add(new Line(indent, trimmed, lineNumber, contentOffset, leadingCharacters + 1,
+                        new SourceSpan(start, end)));
+            }
+
+            if (lineEnd >= source.length()) break;
+            if (source.charAt(lineEnd) == '\r' && lineEnd + 1 < source.length()
+                    && source.charAt(lineEnd + 1) == '\n') lineEnd++;
+            lineStart = lineEnd + 1;
+            lineNumber++;
         }
         return result;
     }
 
     private LangException error(Line line, String message) {
-        return new LangException("Line " + line.number + ": " + message + "\n  " + line.text);
+        return new LangException(message + "\n  " + line.text, line.span);
     }
 
     private static final class ExprParser {
         private final List<Token> tokens;
-        private final int line;
         private int current;
 
-        ExprParser(List<Token> tokens, int line) {
+        ExprParser(List<Token> tokens) {
             this.tokens = new ArrayList<>(tokens);
-            this.tokens.add(new Token(Kind.EOF, ""));
-            this.line = line;
+            SourcePosition end = tokens.isEmpty()
+                    ? new SourcePosition(0, 1, 1)
+                    : tokens.getLast().span().end();
+            this.tokens.add(new Token(Kind.EOF, "", SourceSpan.point(end)));
         }
 
         Expr parse() {
@@ -130,8 +163,9 @@ final class Parser {
             Expr condition = or();
             if (match("&")) {
                 Expr yes = conditionalBranch();
-                Expr no = match("!") ? conditional() : new Literal(Value.Missing.INSTANCE);
-                return new Conditional(condition, yes, no);
+                Expr no = match("!") ? conditional()
+                        : new Literal(Value.Missing.INSTANCE, SourceSpan.point(yes.span().end()));
+                return new Conditional(condition, yes, no, SourceSpan.cover(condition.span(), no.span()));
             }
             return condition;
         }
@@ -143,13 +177,19 @@ final class Parser {
 
         private Expr or() {
             Expr expr = and();
-            while (matchIdent("or")) expr = new Binary("or", expr, and());
+            while (matchIdent("or")) {
+                Expr right = and();
+                expr = new Binary("or", expr, right, SourceSpan.cover(expr.span(), right.span()));
+            }
             return expr;
         }
 
         private Expr and() {
             Expr expr = equality();
-            while (matchIdent("and")) expr = new Binary("and", expr, equality());
+            while (matchIdent("and")) {
+                Expr right = equality();
+                expr = new Binary("and", expr, right, SourceSpan.cover(expr.span(), right.span()));
+            }
             return expr;
         }
 
@@ -157,7 +197,8 @@ final class Parser {
             Expr expr = comparison();
             while (match("==", "!=")) {
                 String op = previous().text();
-                expr = new Binary(op, expr, comparison());
+                Expr right = comparison();
+                expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
             }
             return expr;
         }
@@ -166,7 +207,8 @@ final class Parser {
             Expr expr = term();
             while (match(">", ">=", "<", "<=")) {
                 String op = previous().text();
-                expr = new Binary(op, expr, term());
+                Expr right = term();
+                expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
             }
             return expr;
         }
@@ -175,7 +217,8 @@ final class Parser {
             Expr expr = factor();
             while (match("+", "-")) {
                 String op = previous().text();
-                expr = new Binary(op, expr, factor());
+                Expr right = factor();
+                expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
             }
             return expr;
         }
@@ -184,22 +227,36 @@ final class Parser {
             Expr expr = unary();
             while (match("*", "/", "%")) {
                 String op = previous().text();
-                expr = new Binary(op, expr, unary());
+                Expr right = unary();
+                expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
             }
             return expr;
         }
 
         private Expr unary() {
-            if (match("-")) return new Unary("-", unary());
-            if (match("@")) return new Reflect(unary());
-            if (matchIdent("not")) return new Unary("not", unary());
+            if (match("-")) {
+                Token operator = previous();
+                Expr operand = unary();
+                return new Unary("-", operand, SourceSpan.cover(operator.span(), operand.span()));
+            }
+            if (match("@")) {
+                Token operator = previous();
+                Expr operand = unary();
+                return new Reflect(operand, SourceSpan.cover(operator.span(), operand.span()));
+            }
+            if (matchIdent("not")) {
+                Token operator = previous();
+                Expr operand = unary();
+                return new Unary("not", operand, SourceSpan.cover(operator.span(), operand.span()));
+            }
             return application();
         }
 
         private Expr application() {
             Expr expr = postfix();
             while (canStartAtom(peek())) {
-                expr = new Apply(expr, postfix());
+                Expr argument = postfix();
+                expr = new Apply(expr, argument, SourceSpan.cover(expr.span(), argument.span()));
             }
             return expr;
         }
@@ -210,14 +267,17 @@ final class Parser {
                 if (match(".")) {
                     Token name = consume(Kind.IDENT, "Expected field name after '.'");
                     boolean optional = match("~");
-                    expr = new Field(expr, name.text(), optional);
+                    SourceSpan end = optional ? previous().span() : name.span();
+                    expr = new Field(expr, name.text(), optional, SourceSpan.cover(expr.span(), end));
                     continue;
                 }
                 if (match("[")) {
                     Expr name = conditional();
                     consume("]", "Expected ']'");
+                    Token close = previous();
                     boolean optional = match("~");
-                    expr = new DynamicField(expr, name, optional);
+                    SourceSpan end = optional ? previous().span() : close.span();
+                    expr = new DynamicField(expr, name, optional, SourceSpan.cover(expr.span(), end));
                     continue;
                 }
                 break;
@@ -226,19 +286,20 @@ final class Parser {
         }
 
         private Expr primary() {
-            if (matchKind(Kind.NUMBER)) return new Literal(new Value.Num(Double.parseDouble(previous().text())));
-            if (matchKind(Kind.STRING)) return new Literal(new Value.Str(previous().text()));
-            if (matchKind(Kind.NAME)) return new Literal(new Value.Name(previous().text()));
-            if (matchIdent("true")) return new Literal(new Value.Bool(true));
-            if (matchIdent("false")) return new Literal(new Value.Bool(false));
-            if (match("?")) return new Literal(Value.Null.INSTANCE);
-            if (match("~")) return new Literal(Value.Missing.INSTANCE);
-            if (matchIdent("_")) return new Hole();
-            if (matchKind(Kind.IDENT)) return new Name(previous().text());
+            if (matchKind(Kind.NUMBER)) return new Literal(new Value.Num(Double.parseDouble(previous().text())), previous().span());
+            if (matchKind(Kind.STRING)) return new Literal(new Value.Str(previous().text()), previous().span());
+            if (matchKind(Kind.NAME)) return new Literal(new Value.Name(previous().text()), previous().span());
+            if (matchIdent("true")) return new Literal(new Value.Bool(true), previous().span());
+            if (matchIdent("false")) return new Literal(new Value.Bool(false), previous().span());
+            if (match("?")) return new Literal(Value.Null.INSTANCE, previous().span());
+            if (match("~")) return new Literal(Value.Missing.INSTANCE, previous().span());
+            if (matchIdent("_")) return new Hole(previous().span());
+            if (matchKind(Kind.IDENT)) return new Name(previous().text(), previous().span());
             if (match("(")) {
+                Token open = previous();
                 Expr expr = conditional();
                 consume(")", "Expected ')'");
-                return expr;
+                return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }
             throw error("Expected expression, found '" + peek().text() + "'");
         }
@@ -280,6 +341,6 @@ final class Parser {
         private Token peek() { return tokens.get(current); }
         private Token previous() { return tokens.get(current - 1); }
         private boolean atEnd() { return peek().kind() == Kind.EOF; }
-        private LangException error(String message) { return new LangException("Line " + line + ": " + message); }
+        private LangException error(String message) { return new LangException(message, peek().span()); }
     }
 }
