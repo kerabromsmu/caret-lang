@@ -37,6 +37,16 @@ Start the REPL:
 java -cp out caretlang.Main
 ```
 
+Run the automated tests:
+
+```bash
+./gradlew test
+./test.sh
+```
+
+The Gradle task runs the JUnit lexer, parser, interpreter, and CLI tests. `test.sh` remains as a
+compatibility smoke test for representative Caret programs, including `examples/demo.caret`.
+
 ## Example
 
 ```text
@@ -70,6 +80,21 @@ print source.enabled~
 - Types are dynamic in this first prototype.
 - `?` and `~` are distinct runtime values, but nullable/optional type syntax is not yet checked.
 - No mutation, resource ownership, modules, bytecode, or optimizer.
+
+## Diagnostics
+
+Lexer, parser, and runtime errors report one-based line and column locations. Source spans use raw
+character columns; a tab counts as one source character in diagnostics while leading tabs retain the
+prototype's two-space indentation width.
+
+For example:
+
+```text
+Error: Line 1, column 7: Unknown name: absent
+```
+
+Line comments start with `//`. A leading `#` is not a comment marker: `#count` is a name value even
+when it appears at the beginning of a line.
 
 ## Reflection currently implemented
 

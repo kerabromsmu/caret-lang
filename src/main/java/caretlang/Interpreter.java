@@ -2,12 +2,19 @@ package caretlang;
 
 import caretlang.Ast.*;
 
+import java.io.PrintStream;
 import java.util.*;
 
 final class Interpreter {
     private final Environment globals = new Environment(null);
+    private final PrintStream output;
 
     Interpreter() {
+        this(System.out);
+    }
+
+    Interpreter(PrintStream output) {
+        this.output = output;
         installBuiltins();
     }
 
@@ -24,14 +31,15 @@ final class Interpreter {
         Value last = Value.Missing.INSTANCE;
 
         for (Stmt statement : statements) {
-            if (statement instanceof Assign(String name, boolean exported, Expr value1)) {
+            if (statement instanceof Assign(String name, boolean exported, Expr value1, SourceSpan ignored)) {
                 Value value = eval(value1, env, null);
                 env.define(name, value);
                 if (exported) exports.put(name, value);
                 last = value;
-            } else if (statement instanceof ExprStmt(Expr expression)) {
+            } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
                 last = eval(expression, env, null);
-            } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> body)) {
+            } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> body,
+                                                        SourceSpan ignored)) {
                 Value.FunctionValue fn = new Value.FunctionValue(name, params, args -> {
                     Environment local = new Environment(env);
                     for (int i = 0; i < params.size(); i++) local.define(params.get(i), args.get(i));
@@ -55,8 +63,16 @@ final class Interpreter {
     }
 
     private Value evalInner(Expr expr, Environment env, HoleCursor holes) {
-        if (expr instanceof Literal(Value value1)) return value1;
-        if (expr instanceof Name(String name2)) {
+        try {
+            return evalInnerUnchecked(expr, env, holes);
+        } catch (LangException error) {
+            throw error.withSpanIfAbsent(expr.span());
+        }
+    }
+
+    private Value evalInnerUnchecked(Expr expr, Environment env, HoleCursor holes) {
+        if (expr instanceof Literal(Value value1, SourceSpan ignored)) return value1;
+        if (expr instanceof Name(String name2, SourceSpan ignored)) {
             Value value = env.get(name2);
             if (value instanceof Value.Callable callable && callable.remainingArity() == 0) {
                 return ((Value.FunctionValue) callable).invokeZero();
@@ -67,7 +83,7 @@ final class Interpreter {
             if (holes == null) throw new LangException("Internal error: unresolved hole");
             return holes.next();
         }
-        if (expr instanceof Unary(String operator1, Expr operand)) {
+        if (expr instanceof Unary(String operator1, Expr operand, SourceSpan ignored)) {
             Value value = evalInner(operand, env, holes);
             return switch (operator1) {
                 case "-" -> new Value.Num(-number(value));
@@ -75,7 +91,7 @@ final class Interpreter {
                 default -> throw new LangException("Unknown unary operator: " + operator1);
             };
         }
-        if (expr instanceof Binary(String operator, Expr left1, Expr right1)) {
+        if (expr instanceof Binary(String operator, Expr left1, Expr right1, SourceSpan ignored)) {
             if (operator.equals("and")) {
                 Value left = evalInner(left1, env, holes);
                 return truth(left) ? evalInner(right1, env, holes) : new Value.Bool(false);
@@ -88,13 +104,13 @@ final class Interpreter {
             Value right = evalInner(right1, env, holes);
             return binary(operator, left, right);
         }
-        if (expr instanceof Conditional(Expr condition1, Expr whenTrue, Expr whenFalse)) {
+        if (expr instanceof Conditional(Expr condition1, Expr whenTrue, Expr whenFalse, SourceSpan ignored)) {
             Value condition = evalInner(condition1, env, holes);
             return truth(condition)
                     ? evalInner(whenTrue, env, holes)
                     : evalInner(whenFalse, env, holes);
         }
-        if (expr instanceof Apply(Expr function, Expr argument1)) {
+        if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
             Value fn = evalInner(function, env, holes);
             Value argument = evalInner(argument1, env, holes);
             if (!(fn instanceof Value.Callable callable)) {
@@ -102,11 +118,11 @@ final class Interpreter {
             }
             return callable.apply(argument);
         }
-        if (expr instanceof Field(Expr target2, String field, boolean optional1)) {
+        if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
             Value target = evalInner(target2, env, holes);
             return field(target, field, optional1);
         }
-        if (expr instanceof DynamicField(Expr target1, Expr name1, boolean optional)) {
+        if (expr instanceof DynamicField(Expr target1, Expr name1, boolean optional, SourceSpan ignored)) {
             Value target = evalInner(target1, env, holes);
             Value name = evalInner(name1, env, holes);
             String fieldName = switch (name) {
@@ -116,8 +132,11 @@ final class Interpreter {
             };
             return field(target, fieldName, optional);
         }
-        if (expr instanceof Reflect(Expr target)) {
+        if (expr instanceof Reflect(Expr target, SourceSpan ignored)) {
             return reflect(evalInner(target, env, holes));
+        }
+        if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
+            return evalInner(expression, env, holes);
         }
         throw new LangException("Unknown expression: " + expr);
     }
@@ -161,7 +180,7 @@ final class Interpreter {
 
     private void installBuiltins() {
         globals.define("print", new Value.FunctionValue("print", List.of("value"), args -> {
-            System.out.println(args.getFirst());
+            output.println(args.getFirst());
             return args.getFirst();
         }));
 
@@ -229,6 +248,7 @@ final class Interpreter {
             case Field f -> countHoles(f.target());
             case DynamicField f -> countHoles(f.target()) + countHoles(f.name());
             case Reflect r -> countHoles(r.target());
+            case Group g -> countHoles(g.expression());
         };
     }
 
