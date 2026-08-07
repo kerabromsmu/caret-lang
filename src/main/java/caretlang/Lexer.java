@@ -13,23 +13,27 @@ final class Lexer {
 
     static List<Token> lex(String source, int baseOffset, int line, int baseColumn) {
         ArrayList<Token> tokens = new ArrayList<>();
+        PositionTable positions = new PositionTable(source, baseOffset, line, baseColumn);
         int i = 0;
         while (i < source.length()) {
             char c = source.charAt(i);
             if (Character.isWhitespace(c)) { i++; continue; }
-            if (c == '/' && i + 1 < source.length() && source.charAt(i + 1) == '/') break;
+            if (c == '/' && i + 1 < source.length() && source.charAt(i + 1) == '/') {
+                while (i < source.length() && source.charAt(i) != '\n' && source.charAt(i) != '\r') i++;
+                continue;
+            }
             if (c == '#') {
                 int tokenStart = i;
                 int start = ++i;
                 if (i >= source.length() || (!Character.isLetter(source.charAt(i)) && source.charAt(i) != '_'))
-                    throw error("Expected a name after '#'", baseOffset, line, baseColumn, tokenStart, i);
+                    throw error("Expected a name after '#'", positions, tokenStart, i);
                 i++;
                 while (i < source.length()) {
                     char d = source.charAt(i);
                     if (!Character.isLetterOrDigit(d) && d != '_') break;
                     i++;
                 }
-                tokens.add(token(Kind.NAME, source.substring(start, i), baseOffset, line, baseColumn, tokenStart, i));
+                tokens.add(token(Kind.NAME, source.substring(start, i), positions, tokenStart, i));
                 continue;
             }
             if (c == '"') {
@@ -40,7 +44,7 @@ final class Lexer {
                     char d = source.charAt(i++);
                     if (d == '\\') {
                         if (i >= source.length()) {
-                            throw error("Incomplete string escape", baseOffset, line, baseColumn, i - 1, i);
+                            throw error("Incomplete string escape", positions, i - 1, i);
                         }
                         char e = source.charAt(i++);
                         switch (e) {
@@ -49,16 +53,18 @@ final class Lexer {
                             case 't' -> b.append('\t');
                             case '"' -> b.append('"');
                             case '\\' -> b.append('\\');
-                            case 'u' -> i = appendUnicodeEscape(source, i, b, baseOffset, line, baseColumn);
+                            case 'u' -> i = appendUnicodeEscape(source, i, b, positions);
                             default -> throw error("Unknown string escape: \\" + e,
-                                    baseOffset, line, baseColumn, i - 2, i);
+                                    positions, i - 2, i);
                         }
+                    } else if (d == '\n' || d == '\r') {
+                        throw error("Unterminated string", positions, tokenStart, i - 1);
                     } else b.append(d);
                 }
                 if (i >= source.length())
-                    throw error("Unterminated string", baseOffset, line, baseColumn, tokenStart, i);
+                    throw error("Unterminated string", positions, tokenStart, i);
                 i++;
-                tokens.add(token(Kind.STRING, b.toString(), baseOffset, line, baseColumn, tokenStart, i));
+                tokens.add(token(Kind.STRING, b.toString(), positions, tokenStart, i));
                 continue;
             }
             if (Character.isDigit(c)) {
@@ -66,11 +72,11 @@ final class Lexer {
                 boolean sawDot = false;
                 while (i < source.length() && (Character.isDigit(source.charAt(i)) || source.charAt(i) == '.')) {
                     if (source.charAt(i) == '.' && sawDot)
-                        throw error("Invalid number literal", baseOffset, line, baseColumn, start, i + 1);
+                        throw error("Invalid number literal", positions, start, i + 1);
                     if (source.charAt(i) == '.') sawDot = true;
                     i++;
                 }
-                tokens.add(token(Kind.NUMBER, source.substring(start, i), baseOffset, line, baseColumn, start, i));
+                tokens.add(token(Kind.NUMBER, source.substring(start, i), positions, start, i));
                 continue;
             }
             if (Character.isLetter(c) || c == '_') {
@@ -80,48 +86,46 @@ final class Lexer {
                     if (!Character.isLetterOrDigit(d) && d != '_') break;
                     i++;
                 }
-                tokens.add(token(Kind.IDENT, source.substring(start, i), baseOffset, line, baseColumn, start, i));
+                tokens.add(token(Kind.IDENT, source.substring(start, i), positions, start, i));
                 continue;
             }
             String two = i + 1 < source.length() ? source.substring(i, i + 2) : "";
             if (List.of("==", "!=", ">=", "<=").contains(two)) {
-                tokens.add(token(Kind.SYMBOL, two, baseOffset, line, baseColumn, i, i + 2));
+                tokens.add(token(Kind.SYMBOL, two, positions, i, i + 2));
                 i += 2;
                 continue;
             }
             if ("()[]@+-*/%^=<>.&!?~".indexOf(c) >= 0) {
-                tokens.add(token(Kind.SYMBOL, Character.toString(c), baseOffset, line, baseColumn, i, i + 1));
+                tokens.add(token(Kind.SYMBOL, Character.toString(c), positions, i, i + 1));
                 i++;
                 continue;
             }
-            throw error("Unexpected character: " + c, baseOffset, line, baseColumn, i, i + 1);
+            throw error("Unexpected character: " + c, positions, i, i + 1);
         }
-        tokens.add(token(Kind.EOF, "", baseOffset, line, baseColumn, i, i));
+        tokens.add(token(Kind.EOF, "", positions, i, i));
         return tokens;
     }
 
-    private static Token token(Kind kind, String text, int baseOffset, int line, int baseColumn,
-                               int start, int end) {
-        return new Token(kind, text, span(baseOffset, line, baseColumn, start, end));
+    private static Token token(Kind kind, String text, PositionTable positions, int start, int end) {
+        return new Token(kind, text, positions.span(start, end));
     }
 
-    private static LangException error(String message, int baseOffset, int line, int baseColumn,
-                                       int start, int end) {
+    private static LangException error(String message, PositionTable positions, int start, int end) {
         return new LangException(Diagnostic.Phase.LEXER, "INVALID_TOKEN", message,
-                span(baseOffset, line, baseColumn, start, end));
+                positions.span(start, end));
     }
 
     private static int appendUnicodeEscape(String source, int index, StringBuilder output,
-                                           int baseOffset, int line, int baseColumn) {
+                                           PositionTable positions) {
         int escapeStart = index - 2;
         if (index >= source.length() || source.charAt(index) != '{') {
-            throw error("Unicode escape must use \\u{...}", baseOffset, line, baseColumn,
+            throw error("Unicode escape must use \\u{...}", positions,
                     escapeStart, Math.min(index + 1, source.length()));
         }
         int digitsStart = ++index;
         while (index < source.length() && source.charAt(index) != '}') index++;
         if (index >= source.length() || index == digitsStart) {
-            throw error("Invalid Unicode escape", baseOffset, line, baseColumn,
+            throw error("Invalid Unicode escape", positions,
                     escapeStart, Math.min(index + 1, source.length()));
         }
         String digits = source.substring(digitsStart, index);
@@ -129,20 +133,51 @@ final class Lexer {
         try {
             codePoint = Integer.parseInt(digits, 16);
         } catch (NumberFormatException ignored) {
-            throw error("Invalid Unicode escape", baseOffset, line, baseColumn,
+            throw error("Invalid Unicode escape", positions,
                     escapeStart, index + 1);
         }
         if (!Character.isValidCodePoint(codePoint) || codePoint >= 0xD800 && codePoint <= 0xDFFF) {
-            throw error("Invalid Unicode code point", baseOffset, line, baseColumn,
+            throw error("Invalid Unicode code point", positions,
                     escapeStart, index + 1);
         }
         output.appendCodePoint(codePoint);
         return index + 1;
     }
 
-    private static SourceSpan span(int baseOffset, int line, int baseColumn, int start, int end) {
-        return new SourceSpan(
-                new SourcePosition(baseOffset + start, line, baseColumn + start),
-                new SourcePosition(baseOffset + end, line, baseColumn + end));
+    private static final class PositionTable {
+        private final int baseOffset;
+        private final int[] lines;
+        private final int[] columns;
+
+        private PositionTable(String source, int baseOffset, int initialLine, int initialColumn) {
+            this.baseOffset = baseOffset;
+            lines = new int[source.length() + 1];
+            columns = new int[source.length() + 1];
+            int line = initialLine;
+            int column = initialColumn;
+            for (int i = 0; i <= source.length(); i++) {
+                lines[i] = line;
+                columns[i] = column;
+                if (i == source.length()) break;
+                char c = source.charAt(i);
+                if (c == '\r') {
+                    line++;
+                    column = 1;
+                } else if (c == '\n') {
+                    if (i == 0 || source.charAt(i - 1) != '\r') line++;
+                    column = 1;
+                } else {
+                    column++;
+                }
+            }
+        }
+
+        private SourceSpan span(int start, int end) {
+            return new SourceSpan(position(start), position(end));
+        }
+
+        private SourcePosition position(int index) {
+            return new SourcePosition(baseOffset + index, lines[index], columns[index]);
+        }
     }
 }

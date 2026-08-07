@@ -8,6 +8,7 @@ import java.util.*;
 
 final class Parser {
     private record Line(int indent, String text, int number, int offset, int column, SourceSpan span) {}
+    private record PhysicalLine(int start, int end, int nextStart, int number) {}
 
     private final List<Line> lines;
     private int lineIndex;
@@ -43,7 +44,8 @@ final class Parser {
         if (tokens.size() > 2 && tokens.getFirst().kind() == Kind.IDENT
                 && tokens.getFirst().text().equals("print")
                 && !tokens.get(1).text().equals("=")) {
-            Expr expression = new ExprParser(tokens.subList(1, tokens.size() - 1)).parse();
+            Expr expression = new ExprParser(tokens.subList(1, tokens.size() - 1),
+                    tokens.getLast().span().end()).parse();
             Expr print = new Name("print", tokens.getFirst().span());
             Expr call = new Apply(print, expression, SourceSpan.cover(print.span(), expression.span()));
             return new ExprStmt(call, call.span());
@@ -59,14 +61,14 @@ final class Parser {
             if (!exported && left.size() > 1 && left.stream().allMatch(t -> t.kind() == Kind.IDENT) && !right.isEmpty()) {
                 String name = left.getFirst().text();
                 List<String> params = left.subList(1, left.size()).stream().map(Token::text).toList();
-                Expr expression = new ExprParser(right).parse();
+                Expr expression = new ExprParser(right, tokens.getLast().span().end()).parse();
                 ExprStmt expressionStatement = new ExprStmt(expression, expression.span());
                 return new FunctionDef(name, params, List.of(expressionStatement),
                         SourceSpan.cover(left.getFirst().span(), expression.span()));
             }
 
             if (left.size() == offset + 1 && left.get(offset).kind() == Kind.IDENT && !right.isEmpty()) {
-                Expr expression = new ExprParser(right).parse();
+                Expr expression = new ExprParser(right, tokens.getLast().span().end()).parse();
                 return new Assign(left.get(offset).text(), exported, expression,
                         SourceSpan.cover(left.getFirst().span(), expression.span()));
             }
@@ -95,7 +97,8 @@ final class Parser {
             throw error(line, "Invalid assignment or function definition");
         }
 
-        Expr expression = new ExprParser(tokens.subList(0, tokens.size() - 1)).parse();
+        Expr expression = new ExprParser(tokens.subList(0, tokens.size() - 1),
+                tokens.getLast().span().end()).parse();
         return new ExprStmt(expression, expression.span());
     }
 
@@ -108,45 +111,81 @@ final class Parser {
         int depth = 0;
         for (int i = 0; i < tokens.size() - 1; i++) {
             String t = tokens.get(i).text();
-            if (t.equals("(")) depth++;
-            else if (t.equals(")")) depth--;
+            if (t.equals("(") || t.equals("[")) depth++;
+            else if (t.equals(")") || t.equals("]")) depth--;
             else if (t.equals("=") && depth == 0) return i;
         }
         return -1;
     }
 
     private static List<Line> preprocess(String source) {
+        List<PhysicalLine> physicalLines = physicalLines(source);
         ArrayList<Line> result = new ArrayList<>();
-        int lineStart = 0;
-        int lineNumber = 1;
-        while (lineStart <= source.length()) {
-            int lineEnd = lineStart;
-            while (lineEnd < source.length() && source.charAt(lineEnd) != '\n' && source.charAt(lineEnd) != '\r') {
-                lineEnd++;
-            }
-            String line = source.substring(lineStart, lineEnd).stripTrailing();
+        for (int physicalIndex = 0; physicalIndex < physicalLines.size(); physicalIndex++) {
+            PhysicalLine first = physicalLines.get(physicalIndex);
+            String line = source.substring(first.start(), first.end()).stripTrailing();
             String trimmed = line.stripLeading();
             int leadingCharacters = line.length() - trimmed.length();
-            if (!trimmed.isEmpty() && !trimmed.startsWith("//")) {
-                int indent = 0;
-                for (int i = 0; i < leadingCharacters; i++) {
-                    indent += line.charAt(i) == '\t' ? 2 : 1;
-                }
-                int contentOffset = lineStart + leadingCharacters;
-                SourcePosition start = new SourcePosition(contentOffset, lineNumber, leadingCharacters + 1);
-                SourcePosition end = new SourcePosition(contentOffset + trimmed.length(), lineNumber,
-                        leadingCharacters + trimmed.length() + 1);
-                result.add(new Line(indent, trimmed, lineNumber, contentOffset, leadingCharacters + 1,
-                        new SourceSpan(start, end)));
+            if (trimmed.isEmpty() || trimmed.startsWith("//")) continue;
+
+            int indent = 0;
+            for (int i = 0; i < leadingCharacters; i++) {
+                indent += line.charAt(i) == '\t' ? 2 : 1;
+            }
+            int contentOffset = first.start() + leadingCharacters;
+            int depth = delimiterDelta(trimmed);
+            PhysicalLine last = first;
+            while (depth > 0 && physicalIndex + 1 < physicalLines.size()) {
+                last = physicalLines.get(++physicalIndex);
+                depth += delimiterDelta(source.substring(last.start(), last.end()));
             }
 
-            if (lineEnd >= source.length()) break;
-            if (source.charAt(lineEnd) == '\r' && lineEnd + 1 < source.length()
-                    && source.charAt(lineEnd + 1) == '\n') lineEnd++;
-            lineStart = lineEnd + 1;
-            lineNumber++;
+            String lastText = source.substring(last.start(), last.end()).stripTrailing();
+            int logicalEnd = last.start() + lastText.length();
+            String logicalText = source.substring(contentOffset, logicalEnd);
+            SourcePosition start = new SourcePosition(contentOffset, first.number(), leadingCharacters + 1);
+            SourcePosition end = new SourcePosition(logicalEnd, last.number(), lastText.length() + 1);
+            result.add(new Line(indent, logicalText, first.number(), contentOffset, leadingCharacters + 1,
+                    new SourceSpan(start, end)));
         }
         return result;
+    }
+
+    private static List<PhysicalLine> physicalLines(String source) {
+        ArrayList<PhysicalLine> lines = new ArrayList<>();
+        int start = 0;
+        int number = 1;
+        while (start <= source.length()) {
+            int end = start;
+            while (end < source.length() && source.charAt(end) != '\n' && source.charAt(end) != '\r') end++;
+            int next = end;
+            if (next < source.length() && source.charAt(next) == '\r') next++;
+            if (next < source.length() && source.charAt(next) == '\n') next++;
+            lines.add(new PhysicalLine(start, end, next, number++));
+            if (end >= source.length()) break;
+            start = next;
+        }
+        return lines;
+    }
+
+    private static int delimiterDelta(String text) {
+        int depth = 0;
+        boolean string = false;
+        boolean escaped = false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (string) {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') string = false;
+                continue;
+            }
+            if (c == '"') string = true;
+            else if (c == '/' && i + 1 < text.length() && text.charAt(i + 1) == '/') break;
+            else if (c == '(' || c == '[') depth++;
+            else if (c == ')' || c == ']') depth--;
+        }
+        return depth;
     }
 
     private LangException error(Line line, String message) {
@@ -159,10 +198,13 @@ final class Parser {
         private int current;
 
         ExprParser(List<Token> tokens) {
-            this.tokens = new ArrayList<>(tokens);
-            SourcePosition end = tokens.isEmpty()
+            this(tokens, tokens.isEmpty()
                     ? new SourcePosition(0, 1, 1)
-                    : tokens.getLast().span().end();
+                    : tokens.getLast().span().end());
+        }
+
+        ExprParser(List<Token> tokens, SourcePosition end) {
+            this.tokens = new ArrayList<>(tokens);
             this.tokens.add(new Token(Kind.EOF, "", SourceSpan.point(end)));
         }
 

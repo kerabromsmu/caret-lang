@@ -130,6 +130,48 @@ final class ParserTest {
         assertTrue(error.getMessage().contains("outside the finite range"));
     }
 
+    @Test
+    void parsesMultilineExpressionsInsideExplicitGrouping() {
+        List<Stmt> program = new Parser("""
+                result = (
+                  add
+                    1
+                    2
+                )
+                """).parseProgram();
+        Assign assignment = assertInstanceOf(Assign.class, program.getFirst());
+        Group group = assertInstanceOf(Group.class, assignment.value());
+        Apply outer = assertInstanceOf(Apply.class, group.expression());
+        assertInstanceOf(Apply.class, outer.function());
+        assertEquals(1, assignment.span().start().line());
+        assertEquals(5, assignment.span().end().line());
+    }
+
+    @Test
+    void continuationIndentationDoesNotCreateABlock() {
+        List<Stmt> program = new Parser("""
+                result = source[
+                    #field
+                  ]~
+                next = 2
+                """).parseProgram();
+        Assign first = assertInstanceOf(Assign.class, program.getFirst());
+        DynamicField field = assertInstanceOf(DynamicField.class, first.value());
+        assertTrue(field.optional());
+        assertEquals(2, program.size());
+    }
+
+    @Test
+    void multilineParseErrorsPointAtTheFinalPhysicalLine() {
+        LangException error = assertThrows(LangException.class, () -> new Parser("""
+                value = (
+                  add 1 2
+                """).parseProgram());
+        assertEquals(3, error.span().start().line());
+        assertEquals(1, error.span().start().column());
+        assertTrue(error.getMessage().contains("Expected ')'"));
+    }
+
     private Expr expression(String source) {
         ExprStmt statement = assertInstanceOf(ExprStmt.class, new Parser(source).parseProgram().getFirst());
         return statement.expression();

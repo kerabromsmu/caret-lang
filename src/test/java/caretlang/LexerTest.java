@@ -68,4 +68,16 @@ final class LexerTest {
         LangException unicode = assertThrows(LangException.class, () -> Lexer.lex("\"\\u{D800}\""));
         assertTrue(unicode.getMessage().contains("Invalid Unicode code point"));
     }
+
+    @Test
+    void tracksTokensAcrossLinesAndContinuesAfterComments() {
+        List<Lexer.Token> tokens = Lexer.lex("add (\n  1 // first\n  2\n)", 10, 4, 3);
+
+        Lexer.Token one = tokens.stream().filter(token -> token.text().equals("1")).findFirst().orElseThrow();
+        Lexer.Token two = tokens.stream().filter(token -> token.text().equals("2")).findFirst().orElseThrow();
+        assertEquals(new SourcePosition(18, 5, 3), one.span().start());
+        assertEquals(new SourcePosition(31, 6, 3), two.span().start());
+        assertEquals(4, tokens.stream().filter(token -> token.text().equals("(") || token.text().equals(")")
+                || token.kind() == Lexer.Kind.NUMBER).count());
+    }
 }

@@ -82,7 +82,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 ## Current limitations
 
 - A function definition must start at the beginning of a logical line.
-- Multiline calls are not implemented yet; indentation currently defines function bodies only.
+- Grouped expressions and dynamic lookups may span lines; ungrouped multiline calls and trailing
+  blocks remain unspecified.
 - Types are dynamic in this first prototype.
 - `?` and `~` are distinct runtime values, but nullable/optional type syntax is not yet checked.
 - No mutation, resource ownership, modules, bytecode, or optimizer.

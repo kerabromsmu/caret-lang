@@ -245,6 +245,26 @@ final class InterpreterTest {
                 """));
     }
 
+    @Test
+    void evaluatesGroupedMultilineCallsAndLookups() {
+        assertEquals("6\n42\n", execute("""
+                add a b = a + b
+                result = (
+                  add
+                    1
+                    (add 2 3)
+                )
+                print result
+
+                make =
+                  ^answer = 42
+                scope = make
+                print scope[
+                  #answer
+                ]~
+                """));
+    }
+
     private String execute(String source) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));

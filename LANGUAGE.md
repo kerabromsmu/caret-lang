@@ -94,6 +94,23 @@ Parentheses remain available as a grouping escape:
 print (add 2 3)
 ```
 
+Expressions inside parentheses and dynamic-lookup brackets may span physical lines. Indentation
+inside the delimiters is continuation layout and does not start a function body:
+
+```caret
+result = (
+  add
+    1
+    2
+)
+
+value = scope[
+  #field
+]~
+```
+
+Ungrouped multiline arguments and trailing callable blocks remain unspecified.
+
 `print` also has a statement form. The complete remainder of its logical line is parsed as one
 expression, so common output does not require grouping:
 
@@ -891,7 +908,7 @@ requests that logical lane width specifically. The compiler may use one or more 
 
 - static types and `T?`, `T~`, `T?~`
 - cycle primitive and immutable scope transitions
-- multiline call arguments or trailing blocks
+- ungrouped multiline call arguments and trailing blocks
 - lambdas
 - mutation and immutable scope-update expressions
 - resource ownership and deterministic destruction
