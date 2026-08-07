@@ -18,6 +18,9 @@ A small tree-walking interpreter exploring these ideas:
 
 This is deliberately a language experiment, not a production compiler.
 
+See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
+program demonstrating every feature currently supported by the prototype.
+
 ## Run
 
 With Gradle:

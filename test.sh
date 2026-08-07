@@ -18,6 +18,9 @@ name,count
 EXPECTED
 diff -u /tmp/caret-expected.txt /tmp/caret-output.txt
 
+./run.sh examples/implemented_features.caret > /tmp/caret-implemented-features-output.txt
+diff -u examples/implemented_features.expected /tmp/caret-implemented-features-output.txt
+
 cat > /tmp/caret-language.caret <<'CARET'
 add a b = a + b
 mul a b = a * b

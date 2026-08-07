@@ -1,0 +1,167 @@
+// Every currently implemented Caret language feature in one runnable program.
+
+// Values: finite numbers, strings, Booleans, null, missing, and name values.
+print 42
+print 3.5
+print "text"
+print true
+print false
+print ?
+print ~
+print #field
+#lineStartName
+print type 42
+print type #field
+
+// Strings support standard escapes and Unicode code-point escapes.
+escaped = "quote: \" slash: \\ tab: \t smile: \u{1F642}"
+print escaped
+
+// Bindings, one-line functions, indented function bodies, and lexical lookup.
+base = 10
+add a b = a + b
+scale value =
+  factor = 2
+  value * factor
+print add 2 3
+print scale base
+
+// Zero-argument functions are invoked when read.
+answer =
+  40 + 2
+print answer
+print (@answer).kind
+print (@answer).remaining
+
+// Direct and mutual recursion.
+factorial n = n == 0 & 1 ! n * factorial (n - 1)
+even n = n == 0 & true ! odd (n - 1)
+odd n = n == 0 & false ! even (n - 1)
+print factorial 5
+print even 8
+print odd 8
+
+// Grouping, precedence, unary operators, arithmetic, comparison, and equality.
+print (1 + 2 * 3)
+print (-5 + 8)
+print (7 / 2)
+print (7 % 2)
+print (2 < 3 and 3 <= 3)
+print (4 > 3 and 4 >= 4)
+print (2 != 3)
+print not false
+print ("left" + "right")
+
+// and/or and conditional branches short-circuit.
+print (false and unknownAnd)
+print (true or unknownOr)
+print (true & "selected" ! unknownConditional)
+print (false & unknownConditional ! "fallback")
+print (false & unknownConditional)
+print (? & unknownConditional ! "null is false")
+print (~ & unknownConditional ! "missing is false")
+
+// Ordinary holes, eager fixed-operand capture, numbered reordering, and reuse.
+between low value high = value >= low and value <= high
+inside = between 0 _ 10
+print inside 7
+
+first left right = left
+announce value = print value
+captured = first (announce "captured now") _
+print captured "ignored"
+
+digits a b c = a * 100 + b * 10 + c
+reordered = digits _2 2 _1
+print reordered 1 3
+join left right = left + right
+duplicated = join _1 _1
+print duplicated "x"
+
+// Exported scopes expose only ^ bindings. Scopes compare structurally.
+makePerson name age =
+  privateAge = age + 1
+  ^name = name
+  ^age = age
+
+person = makePerson "Ada" 36
+samePerson = makePerson "Ada" 36
+print person.name
+print person.age
+print person.privateAge~
+print person.phone~
+print (person == samePerson)
+
+// Name/string dynamic lookup and safe missing lookup.
+fieldName = #name
+print person[fieldName]~
+print person["age"]~
+print person[#age]
+print person[#phone]~
+
+// Reflection exposes value kind and public metadata without invoking functions.
+print (@person).kind
+print (@person).size
+print (@person).names
+print (@factorial).kind
+print (@factorial).remaining
+print (@?).kind
+print (@~).kind
+print (@42).kind
+print (@#field).kind
+
+// Grouped expressions and dynamic lookups may span physical lines.
+multiline = (
+  add
+    20
+    22
+)
+print multiline
+print person[
+  #name
+]~
+
+// Text indexes count Unicode code points; slices use [start, end).
+unicodeText = "🙂ab"
+print textSize unicodeText
+print textAt unicodeText 0
+print textSlice unicodeText 1 3
+print textAt unicodeText 99
+print textNumber "12.5"
+print textNumber "not a number"
+print numberText 12.5
+
+// Sequences are immutable and use safe indexed lookup.
+emptySequence = seqEmpty
+sequence = seqAdd (seqAdd emptySequence "first") ~
+print seqSize emptySequence
+print seqSize sequence
+print seqGet sequence 0
+print seqGet sequence 1
+print seqGet sequence 99
+print (sequence == seqAdd (seqAdd seqEmpty "first") ~)
+print (@sequence).kind
+print (@sequence).size
+
+// Dictionaries are immutable, ordered, and normalize string/name keys.
+emptyDictionary = dictEmpty
+oneEntry = dictPut emptyDictionary #present 1
+dictionary = dictPut oneEntry "missingValue" ~
+print dictHas emptyDictionary #present
+print dictHas dictionary "present"
+print dictHas dictionary #missingValue
+print dictGet dictionary #present
+print dictGet dictionary "missingValue"
+print dictGet dictionary #absent
+print dictKeys dictionary
+print (@dictionary).kind
+print (@dictionary).size
+print (@dictionary).names
+
+// Expected diagnostics are demonstrated without aborting this runnable example:
+// absentName                         // unknown name
+// person.absent                     // required missing field
+// 1 / 0                             // division by zero
+// 1 % 0                             // remainder by zero
+// add _ _1                          // mixed numbered and ordinary holes
+// factorial == factorial            // callable equality is undefined

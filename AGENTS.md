@@ -106,13 +106,15 @@ inside 5
 
 Each `_` introduces an unfilled argument, ordered from left to right.
 
-Possible future support:
+Numbered holes reorder or reuse future arguments:
 
 ```caret
 f _2 fixed _1
+pair _1 _1
 ```
 
-Numbered holes reorder or reuse future arguments. Do not implement this unless the task explicitly requests it.
+The highest numbered hole determines the resulting arity. Numbered and unnumbered holes may not be
+mixed in one partial expression.
 
 ### Reflection
 
@@ -140,6 +142,8 @@ Expected reflection failures such as a missing binding must produce `~` or a str
 * Run the full test suite after changes.
 * Update `LANGUAGE.md` whenever observable language behavior changes.
 * Include representative Caret programs as integration tests.
+* For every newly implemented language feature, add or extend a runnable `.caret` example that
+  demonstrates the feature, and exercise that example from the integration test suite.
 
 ## Change discipline
 
