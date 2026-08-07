@@ -22,6 +22,7 @@ final class Ast {
     record Field(Expr target, String field, boolean optional, SourceSpan span) implements Expr {}
     record DynamicField(Expr target, Expr name, boolean optional, SourceSpan span) implements Expr {}
     record Reflect(Expr target, SourceSpan span) implements Expr {}
-    record Hole(SourceSpan span) implements Expr {}
+    /** index is zero for an ordinary left-to-right hole, otherwise one-based. */
+    record Hole(int index, SourceSpan span) implements Expr {}
     record Group(Expr expression, SourceSpan span) implements Expr {}
 }

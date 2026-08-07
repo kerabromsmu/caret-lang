@@ -28,6 +28,7 @@ final class Interpreter {
 
     private Value executeBlock(List<Stmt> statements, Environment env) {
         LinkedHashMap<String, Value> exports = new LinkedHashMap<>();
+        IdentityHashMap<FunctionDef, Value.FunctionValue> functions = prepareDeclarations(statements, env);
         Value last = Value.Missing.INSTANCE;
 
         for (Stmt statement : statements) {
@@ -40,23 +41,71 @@ final class Interpreter {
                 last = eval(expression, env, null);
             } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> body,
                                                         SourceSpan ignored)) {
-                Value.FunctionValue fn = new Value.FunctionValue(name, params, args -> {
-                    Environment local = new Environment(env);
-                    for (int i = 0; i < params.size(); i++) local.define(params.get(i), args.get(i));
-                    return executeBlock(body, local);
-                });
-                env.define(name, fn);
-                last = fn;
+                last = functions.get((FunctionDef) statement);
             }
         }
 
         return exports.isEmpty() ? last : new Value.Scope(exports);
     }
 
+    private IdentityHashMap<FunctionDef, Value.FunctionValue> prepareDeclarations(List<Stmt> statements,
+                                                                                   Environment env) {
+        IdentityHashMap<FunctionDef, Value.FunctionValue> functions = new IdentityHashMap<>();
+        HashSet<String> declarations = new HashSet<>();
+        for (Stmt statement : statements) {
+            if (statement instanceof Assign(String name, boolean ignoredExport, Expr ignoredValue, SourceSpan span)) {
+                if (!declarations.add(name)) duplicateDefinition(name, span);
+            } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> ignoredBody,
+                                                        SourceSpan span)) {
+                if (!declarations.add(name)) duplicateDefinition(name, span);
+                HashSet<String> parameterNames = new HashSet<>();
+                for (String parameter : params) {
+                    if (!parameterNames.add(parameter)) {
+                        throw new LangException(Diagnostic.Phase.RUNTIME, "DUPLICATE_PARAMETER",
+                                "Duplicate parameter: " + parameter, span);
+                    }
+                }
+            }
+        }
+        for (Stmt statement : statements) {
+            if (statement instanceof FunctionDef function) declare(env, function.name(), function.span());
+        }
+        for (Stmt statement : statements) {
+            if (statement instanceof FunctionDef function) {
+                Value.FunctionValue value = new Value.FunctionValue(function.name(), function.params(), args -> {
+                    Environment parameters = new Environment(env);
+                    for (int i = 0; i < function.params().size(); i++) {
+                        parameters.define(function.params().get(i), args.get(i));
+                    }
+                    return executeBlock(function.body(), new Environment(parameters));
+                });
+                env.initialize(function.name(), value);
+                functions.put(function, value);
+            }
+        }
+        return functions;
+    }
+
+    private void declare(Environment env, String name, SourceSpan span) {
+        try {
+            env.declare(name);
+        } catch (LangException error) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, "DUPLICATE_DEFINITION",
+                    error.detail(), span);
+        }
+    }
+
+    private void duplicateDefinition(String name, SourceSpan span) {
+        throw new LangException(Diagnostic.Phase.RUNTIME, "DUPLICATE_DEFINITION",
+                "Duplicate definition: " + name, span);
+    }
+
     private Value eval(Expr expr, Environment env, List<Value> holeArgs) {
         if (containsHole(expr) && holeArgs == null) {
-            int holes = countHoles(expr);
-            return new Value.HoleFunction(expr.toString(), holes, supplied -> eval(expr, env, supplied));
+            HoleShape shape = holeShape(expr);
+            Expr captured = captureNonHoleParts(expr, env);
+            return new Value.HoleFunction(expr.toString(), shape.arity(),
+                    supplied -> eval(captured, env, supplied));
         }
         Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
         return evalInner(resolved, env);
@@ -85,7 +134,7 @@ final class Interpreter {
         if (expr instanceof Unary(String operator1, Expr operand, SourceSpan ignored)) {
             Value value = evalInner(operand, env);
             return switch (operator1) {
-                case "-" -> new Value.Num(-number(value));
+                case "-" -> finiteNumber(-number(value), "Numeric result is not finite");
                 case "not" -> new Value.Bool(!truth(value));
                 default -> throw new LangException("Unknown unary operator: " + operator1);
             };
@@ -151,12 +200,20 @@ final class Interpreter {
             case "+" -> {
                 if (left instanceof Value.Str || right instanceof Value.Str)
                     yield new Value.Str(left.toString() + right);
-                yield new Value.Num(number(left) + number(right));
+                yield finiteNumber(number(left) + number(right), "Numeric result is not finite");
             }
-            case "-" -> new Value.Num(number(left) - number(right));
-            case "*" -> new Value.Num(number(left) * number(right));
-            case "/" -> new Value.Num(number(left) / number(right));
-            case "%" -> new Value.Num(number(left) % number(right));
+            case "-" -> finiteNumber(number(left) - number(right), "Numeric result is not finite");
+            case "*" -> finiteNumber(number(left) * number(right), "Numeric result is not finite");
+            case "/" -> {
+                double divisor = number(right);
+                if (divisor == 0.0) throw new LangException("Division by zero");
+                yield finiteNumber(number(left) / divisor, "Numeric result is not finite");
+            }
+            case "%" -> {
+                double divisor = number(right);
+                if (divisor == 0.0) throw new LangException("Division by zero");
+                yield finiteNumber(number(left) % divisor, "Numeric result is not finite");
+            }
             case ">" -> new Value.Bool(number(left) > number(right));
             case ">=" -> new Value.Bool(number(left) >= number(right));
             case "<" -> new Value.Bool(number(left) < number(right));
@@ -168,6 +225,9 @@ final class Interpreter {
     }
 
     private boolean equalsValue(Value a, Value b) {
+        if (a instanceof Value.Callable || b instanceof Value.Callable) {
+            throw new LangException("Callable values cannot be compared for equality");
+        }
         if (a instanceof Value.Num(double value1) && b instanceof Value.Num(double value)) return value1 == value;
         return Objects.equals(a, b);
     }
@@ -175,6 +235,11 @@ final class Interpreter {
     private double number(Value value) {
         if (value instanceof Value.Num(double value1)) return value1;
         throw new LangException("Expected number, got: " + value);
+    }
+
+    private Value.Num finiteNumber(double value, String message) {
+        if (!Double.isFinite(value)) throw new LangException(message);
+        return new Value.Num(value);
     }
 
     private boolean truth(Value value) {
@@ -199,10 +264,113 @@ final class Interpreter {
                 case Value.Null ignored -> "Nullable";
                 case Value.Missing ignored -> "Missing";
                 case Value.Scope ignored -> "Scope";
+                case Value.Seq ignored -> "Sequence";
+                case Value.Dict ignored -> "Dictionary";
                 case Value.Callable ignored -> "Function";
             };
             return new Value.Str(name);
         }));
+
+        globals.define("textSize", function("textSize", List.of("text"), args ->
+                new Value.Num(text(args.getFirst()).codePointCount(0, text(args.getFirst()).length()))));
+        globals.define("textAt", function("textAt", List.of("text", "index"), args -> {
+            String value = text(args.get(0));
+            OptionalInt index = index(args.get(1));
+            int size = value.codePointCount(0, value.length());
+            if (index.isEmpty() || index.getAsInt() >= size) return Value.Missing.INSTANCE;
+            int offset = value.offsetByCodePoints(0, index.getAsInt());
+            return new Value.Str(new String(Character.toChars(value.codePointAt(offset))));
+        }));
+        globals.define("textSlice", function("textSlice", List.of("text", "start", "end"), args -> {
+            String value = text(args.get(0));
+            OptionalInt start = index(args.get(1));
+            OptionalInt end = index(args.get(2));
+            int size = value.codePointCount(0, value.length());
+            if (start.isEmpty() || end.isEmpty() || start.getAsInt() > end.getAsInt()
+                    || end.getAsInt() > size) return Value.Missing.INSTANCE;
+            int from = value.offsetByCodePoints(0, start.getAsInt());
+            int to = value.offsetByCodePoints(0, end.getAsInt());
+            return new Value.Str(value.substring(from, to));
+        }));
+        globals.define("textNumber", function("textNumber", List.of("text"), args -> {
+            try {
+                double number = Double.parseDouble(text(args.getFirst()));
+                return Double.isFinite(number) ? new Value.Num(number) : Value.Missing.INSTANCE;
+            } catch (NumberFormatException ignored) {
+                return Value.Missing.INSTANCE;
+            }
+        }));
+        globals.define("numberText", function("numberText", List.of("number"), args ->
+                new Value.Str(new Value.Num(number(args.getFirst())).toString())));
+
+        globals.define("seqEmpty", function("seqEmpty", List.of(), args -> new Value.Seq(List.of())));
+        globals.define("seqAdd", function("seqAdd", List.of("sequence", "value"), args ->
+                sequence(args.get(0)).appended(args.get(1))));
+        globals.define("seqGet", function("seqGet", List.of("sequence", "index"), args -> {
+            List<Value> values = sequence(args.get(0)).values();
+            OptionalInt index = index(args.get(1));
+            return index.isPresent() && index.getAsInt() < values.size()
+                    ? values.get(index.getAsInt()) : Value.Missing.INSTANCE;
+        }));
+        globals.define("seqSize", function("seqSize", List.of("sequence"), args ->
+                new Value.Num(sequence(args.getFirst()).values().size())));
+
+        globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dict(Map.of())));
+        globals.define("dictPut", function("dictPut", List.of("dictionary", "key", "value"), args ->
+                dictionary(args.get(0)).put(requiredDictionaryKey(args.get(1)), args.get(2))));
+        globals.define("dictGet", function("dictGet", List.of("dictionary", "key"), args -> {
+            String key = dictionaryKey(args.get(1));
+            return key == null ? Value.Missing.INSTANCE
+                    : dictionary(args.get(0)).find(key).orElse(Value.Missing.INSTANCE);
+        }));
+        globals.define("dictHas", function("dictHas", List.of("dictionary", "key"), args -> {
+            String key = dictionaryKey(args.get(1));
+            return new Value.Bool(key != null && dictionary(args.get(0)).entries().containsKey(key));
+        }));
+        globals.define("dictKeys", function("dictKeys", List.of("dictionary"), args -> new Value.Seq(
+                dictionary(args.getFirst()).entries().keySet().stream().map(Value.Name::new).toList())));
+    }
+
+    private Value.FunctionValue function(String name, List<String> parameters,
+                                         java.util.function.Function<List<Value>, Value> implementation) {
+        return new Value.FunctionValue(name, parameters, implementation);
+    }
+
+    private String text(Value value) {
+        if (value instanceof Value.Str(String text)) return text;
+        throw new LangException("Expected string, got: " + value);
+    }
+
+    private Value.Seq sequence(Value value) {
+        if (value instanceof Value.Seq sequence) return sequence;
+        throw new LangException("Expected sequence, got: " + value);
+    }
+
+    private Value.Dict dictionary(Value value) {
+        if (value instanceof Value.Dict dictionary) return dictionary;
+        throw new LangException("Expected dictionary, got: " + value);
+    }
+
+    private OptionalInt index(Value value) {
+        if (!(value instanceof Value.Num(double number)) || !Double.isFinite(number)
+                || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) {
+            return OptionalInt.empty();
+        }
+        return OptionalInt.of((int) number);
+    }
+
+    private String dictionaryKey(Value value) {
+        return switch (value) {
+            case Value.Name name -> name.value();
+            case Value.Str text -> text.value();
+            default -> null;
+        };
+    }
+
+    private String requiredDictionaryKey(Value value) {
+        String key = dictionaryKey(value);
+        if (key == null) throw new LangException("Dictionary key must be a name or string, got: " + value);
+        return key;
     }
 
     private Value field(Value target, String name, boolean optional) {
@@ -230,6 +398,15 @@ final class Interpreter {
                 metadata.put("size", new Value.Num(scope.fields().size()));
                 metadata.put("names", new Value.Str(String.join(",", scope.fields().keySet())));
             }
+            case Value.Seq sequence -> {
+                kind = "Sequence";
+                metadata.put("size", new Value.Num(sequence.values().size()));
+            }
+            case Value.Dict dictionary -> {
+                kind = "Dictionary";
+                metadata.put("size", new Value.Num(dictionary.entries().size()));
+                metadata.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
+            }
             case Value.Callable callable -> {
                 kind = "Function";
                 metadata.put("remaining", new Value.Num(callable.remainingArity()));
@@ -240,6 +417,64 @@ final class Interpreter {
     }
 
     private boolean containsHole(Expr expr) { return countHoles(expr) > 0; }
+
+    private record HoleShape(int arity, boolean numbered) {}
+
+    private HoleShape holeShape(Expr expr) {
+        ArrayList<Integer> indexes = new ArrayList<>();
+        collectHoles(expr, indexes);
+        boolean numbered = indexes.stream().anyMatch(index -> index > 0);
+        boolean ordinary = indexes.stream().anyMatch(index -> index == 0);
+        if (numbered && ordinary) {
+            throw new LangException("Cannot mix numbered and unnumbered holes", expr.span());
+        }
+        int arity = numbered ? indexes.stream().mapToInt(Integer::intValue).max().orElseThrow()
+                : indexes.size();
+        return new HoleShape(arity, numbered);
+    }
+
+    private void collectHoles(Expr expr, List<Integer> indexes) {
+        switch (expr) {
+            case Hole hole -> indexes.add(hole.index());
+            case Literal ignored -> { }
+            case Name ignored -> { }
+            case Unary unary -> collectHoles(unary.operand(), indexes);
+            case Binary binary -> { collectHoles(binary.left(), indexes); collectHoles(binary.right(), indexes); }
+            case Conditional conditional -> {
+                collectHoles(conditional.condition(), indexes);
+                collectHoles(conditional.whenTrue(), indexes);
+                collectHoles(conditional.whenFalse(), indexes);
+            }
+            case Apply apply -> { collectHoles(apply.function(), indexes); collectHoles(apply.argument(), indexes); }
+            case Field field -> collectHoles(field.target(), indexes);
+            case DynamicField field -> { collectHoles(field.target(), indexes); collectHoles(field.name(), indexes); }
+            case Reflect reflect -> collectHoles(reflect.target(), indexes);
+            case Group group -> collectHoles(group.expression(), indexes);
+        }
+    }
+
+    private Expr captureNonHoleParts(Expr expr, Environment env) {
+        if (!containsHole(expr)) return new Literal(evalInner(expr, env), expr.span());
+        return switch (expr) {
+            case Hole hole -> hole;
+            case Literal literal -> literal;
+            case Name name -> name;
+            case Unary unary -> new Unary(unary.operator(), captureNonHoleParts(unary.operand(), env), unary.span());
+            case Binary binary -> new Binary(binary.operator(), captureNonHoleParts(binary.left(), env),
+                    captureNonHoleParts(binary.right(), env), binary.span());
+            case Conditional conditional -> new Conditional(captureNonHoleParts(conditional.condition(), env),
+                    captureNonHoleParts(conditional.whenTrue(), env),
+                    captureNonHoleParts(conditional.whenFalse(), env), conditional.span());
+            case Apply apply -> new Apply(captureNonHoleParts(apply.function(), env),
+                    captureNonHoleParts(apply.argument(), env), apply.span());
+            case Field field -> new Field(captureNonHoleParts(field.target(), env), field.field(), field.optional(),
+                    field.span());
+            case DynamicField field -> new DynamicField(captureNonHoleParts(field.target(), env),
+                    captureNonHoleParts(field.name(), env), field.optional(), field.span());
+            case Reflect reflect -> new Reflect(captureNonHoleParts(reflect.target(), env), reflect.span());
+            case Group group -> new Group(captureNonHoleParts(group.expression(), env), group.span());
+        };
+    }
 
     private int countHoles(Expr expr) {
         return switch (expr) {
@@ -259,7 +494,7 @@ final class Interpreter {
 
     private Expr bindHoles(Expr expr, HoleBinder holes) {
         return switch (expr) {
-            case Hole hole -> new Literal(holes.next(), hole.span());
+            case Hole hole -> new Literal(hole.index() == 0 ? holes.next() : holes.at(hole.index()), hole.span());
             case Literal literal -> literal;
             case Name name -> name;
             case Unary unary -> new Unary(unary.operator(), bindHoles(unary.operand(), holes), unary.span());
@@ -286,6 +521,12 @@ final class Interpreter {
         Value next() {
             if (index >= values.size()) throw new LangException("Not enough arguments for partial expression");
             return values.get(index++);
+        }
+        Value at(int oneBasedIndex) {
+            if (oneBasedIndex < 1 || oneBasedIndex > values.size()) {
+                throw new LangException("Not enough arguments for numbered partial expression");
+            }
+            return values.get(oneBasedIndex - 1);
         }
     }
 }

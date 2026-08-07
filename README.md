@@ -9,9 +9,12 @@ A small tree-walking interpreter exploring these ideas:
 - nullable literal `?` and missing literal `~`
 - optional field lookup: `scope.name~`
 - arbitrary partial application with holes: `between 0 _ 10`
+- eager partial capture and numbered argument holes: `f _2 fixed _1`
 - implicit scope return when a function exports bindings
 - name literals and safe dynamic lookup: `scope[#name]~`
 - lightweight metadata reflection: `@value`
+- Unicode code-point text primitives
+- persistent sequences and insertion-ordered dictionaries
 
 This is deliberately a language experiment, not a production compiler.
 

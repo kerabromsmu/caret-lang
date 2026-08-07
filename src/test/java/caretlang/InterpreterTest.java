@@ -76,6 +76,33 @@ final class InterpreterTest {
     }
 
     @Test
+    void partialApplicationCapturesFixedOperandsEagerly() {
+        assertEquals("captured\ncaptured\n", execute("""
+                announce value = print value
+                first left right = left
+                partial = first (announce "captured") _
+                print partial "ignored"
+                """));
+    }
+
+    @Test
+    void numberedHolesReorderAndReuseArguments() {
+        assertEquals("321\nxx\n", execute("""
+                digits a b c = a * 100 + b * 10 + c
+                reordered = digits _2 2 _1
+                print reordered 1 3
+                join left right = left + right
+                duplicate = join _1 _1
+                print duplicate "x"
+                """));
+    }
+
+    @Test
+    void rejectsMixedNumberedAndOrdinaryHoles() {
+        assertDiagnostic("partial = pair _ _1", "Cannot mix numbered and unnumbered holes", 1, 11);
+    }
+
+    @Test
     void conditionalEvaluatesOnlyTheSelectedBranch() {
         assertEquals("yes\nno\n", execute("""
                 print true & "yes" ! absent
@@ -130,6 +157,92 @@ final class InterpreterTest {
         assertEquals(4, error.span().start().line());
         assertEquals(7, error.span().start().column());
         assertTrue(error.getMessage().contains("Scope has no exported binding: absent"));
+    }
+
+    @Test
+    void supportsDirectAndMutualRecursionThroughBlockPredeclaration() {
+        assertEquals("120\ntrue\n", execute("""
+                factorial n = n == 0 & 1 ! n * factorial (n - 1)
+                even n = n == 0 & true ! odd (n - 1)
+                odd n = n == 0 & false ! even (n - 1)
+                print factorial 5
+                print even 8
+                """));
+    }
+
+    @Test
+    void rejectsDuplicateDefinitionsAndParameters() {
+        assertDiagnostic("value = 1\nvalue = 2", "Duplicate definition: value", 2, 1);
+        assertDiagnostic("same value value = value", "Duplicate parameter: value", 1, 1);
+    }
+
+    @Test
+    void reportsReadsBeforeSequentialDeclarations() {
+        assertDiagnostic("first = second\nsecond = 2", "Unknown name: second", 1, 9);
+    }
+
+    @Test
+    void rejectsInvalidNumericResultsAndCallableEquality() {
+        assertDiagnostic("print 1 / 0", "Division by zero", 1, 7);
+        assertDiagnostic("print 1 % 0", "Division by zero", 1, 7);
+        assertDiagnostic("identity x = x\nprint identity == identity",
+                "Callable values cannot be compared for equality", 2, 7);
+    }
+
+    @Test
+    void comparesExportedScopesStructurally() {
+        assertEquals("true\n", execute("""
+                make value =
+                  ^value = value
+                print make 1 == make 1
+                """));
+    }
+
+    @Test
+    void providesUnicodeCodePointTextPrimitives() {
+        assertEquals("2\n🙂\na\n~\n42.5\n~\n42.5\n", execute("""
+                text = "🙂a"
+                print textSize text
+                print textAt text 0
+                print textSlice text 1 2
+                print textAt text 2
+                print textNumber "42.5"
+                print textNumber "nope"
+                print numberText 42.5
+                """));
+    }
+
+    @Test
+    void providesPersistentSequencesAndInsertionOrderedDictionaries() {
+        assertEquals("0\n2\n1\n~\nfalse\ntrue\n~\n1\nfirst,missing\n", execute("""
+                empty = seqEmpty
+                values = seqAdd (seqAdd empty 1) ~
+                print seqSize empty
+                print seqSize values
+                print seqGet values 0
+                print seqGet values 5
+
+                base = dictEmpty
+                withFirst = dictPut base #first 1
+                complete = dictPut withFirst "missing" ~
+                print dictHas base #first
+                print dictHas complete "missing"
+                print dictGet complete #missing
+                print dictGet complete #first
+                print (@complete).names
+                """));
+    }
+
+    @Test
+    void collectionEqualityIsStructural() {
+        assertEquals("true\ntrue\n", execute("""
+                left = seqAdd seqEmpty 1
+                right = seqAdd seqEmpty 1
+                print left == right
+                first = dictPut dictEmpty #value left
+                second = dictPut dictEmpty "value" right
+                print first == second
+                """));
     }
 
     private String execute(String source) {

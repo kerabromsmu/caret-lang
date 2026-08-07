@@ -1,34 +1,39 @@
 package caretlang;
 
 public final class LangException extends RuntimeException {
-    private final String detail;
-    private final SourceSpan span;
+    private final Diagnostic diagnostic;
 
     public LangException(String message) {
-        this(message, null);
+        this(new Diagnostic(Diagnostic.Phase.RUNTIME, "RUNTIME_ERROR", message, null));
     }
 
     LangException(String message, SourceSpan span) {
-        super(format(message, span));
-        this.detail = message;
-        this.span = span;
+        this(new Diagnostic(Diagnostic.Phase.RUNTIME, "RUNTIME_ERROR", message, span));
+    }
+
+    LangException(Diagnostic.Phase phase, String code, String message, SourceSpan span) {
+        this(new Diagnostic(phase, code, message, span));
+    }
+
+    LangException(Diagnostic diagnostic) {
+        super(diagnostic.render());
+        this.diagnostic = diagnostic;
     }
 
     String detail() {
-        return detail;
+        return diagnostic.message();
     }
 
     SourceSpan span() {
-        return span;
+        return diagnostic.primarySpan();
+    }
+
+    Diagnostic diagnostic() {
+        return diagnostic;
     }
 
     LangException withSpanIfAbsent(SourceSpan fallback) {
-        return span == null ? new LangException(detail, fallback) : this;
-    }
-
-    private static String format(String message, SourceSpan span) {
-        if (span == null) return message;
-        SourcePosition start = span.start();
-        return "Line " + start.line() + ", column " + start.column() + ": " + message;
+        Diagnostic located = diagnostic.withPrimarySpanIfAbsent(fallback);
+        return located == diagnostic ? this : new LangException(located);
     }
 }

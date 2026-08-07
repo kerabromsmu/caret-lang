@@ -150,7 +150,8 @@ final class Parser {
     }
 
     private LangException error(Line line, String message) {
-        return new LangException(message + "\n  " + line.text, line.span);
+        return new LangException(Diagnostic.Phase.PARSER, "INVALID_SYNTAX",
+                message + "\n  " + line.text, line.span);
     }
 
     private static final class ExprParser {
@@ -298,14 +299,25 @@ final class Parser {
         }
 
         private Expr primary() {
-            if (matchKind(Kind.NUMBER)) return new Literal(new Value.Num(Double.parseDouble(previous().text())), previous().span());
+            if (matchKind(Kind.NUMBER)) return numberLiteral(previous());
             if (matchKind(Kind.STRING)) return new Literal(new Value.Str(previous().text()), previous().span());
             if (matchKind(Kind.NAME)) return new Literal(new Value.Name(previous().text()), previous().span());
             if (matchIdent("true")) return new Literal(new Value.Bool(true), previous().span());
             if (matchIdent("false")) return new Literal(new Value.Bool(false), previous().span());
             if (match("?")) return new Literal(Value.Null.INSTANCE, previous().span());
             if (match("~")) return new Literal(Value.Missing.INSTANCE, previous().span());
-            if (matchIdent("_")) return new Hole(previous().span());
+            if (matchIdent("_")) return new Hole(0, previous().span());
+            if (peek().kind() == Kind.IDENT && peek().text().matches("_[1-9][0-9]*")) {
+                Token hole = tokens.get(current++);
+                final int index;
+                try {
+                    index = Integer.parseInt(hole.text().substring(1));
+                } catch (NumberFormatException ignored) {
+                    throw new LangException(Diagnostic.Phase.PARSER, "INVALID_HOLE",
+                            "Numbered hole index is too large", hole.span());
+                }
+                return new Hole(index, hole.span());
+            }
             if (matchKind(Kind.IDENT)) return new Name(previous().text(), previous().span());
             if (match("(")) {
                 Token open = previous();
@@ -314,6 +326,21 @@ final class Parser {
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }
             throw error("Expected expression, found '" + peek().text() + "'");
+        }
+
+        private Expr numberLiteral(Token token) {
+            final double value;
+            try {
+                value = Double.parseDouble(token.text());
+            } catch (NumberFormatException ignored) {
+                throw new LangException(Diagnostic.Phase.PARSER, "INVALID_NUMBER",
+                        "Invalid number literal", token.span());
+            }
+            if (!Double.isFinite(value)) {
+                throw new LangException(Diagnostic.Phase.PARSER, "INVALID_NUMBER",
+                        "Number literal is outside the finite range", token.span());
+            }
+            return new Literal(new Value.Num(value), token.span());
         }
 
         private boolean canStartAtom(Token token) {
@@ -353,6 +380,8 @@ final class Parser {
         private Token peek() { return tokens.get(current); }
         private Token previous() { return tokens.get(current - 1); }
         private boolean atEnd() { return peek().kind() == Kind.EOF; }
-        private LangException error(String message) { return new LangException(message, peek().span()); }
+        private LangException error(String message) {
+            return new LangException(Diagnostic.Phase.PARSER, "INVALID_EXPRESSION", message, peek().span());
+        }
     }
 }

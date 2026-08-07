@@ -38,15 +38,21 @@ final class Lexer {
                 i++;
                 while (i < source.length() && source.charAt(i) != '"') {
                     char d = source.charAt(i++);
-                    if (d == '\\' && i < source.length()) {
+                    if (d == '\\') {
+                        if (i >= source.length()) {
+                            throw error("Incomplete string escape", baseOffset, line, baseColumn, i - 1, i);
+                        }
                         char e = source.charAt(i++);
-                        b.append(switch (e) {
-                            case 'n' -> '\n';
-                            case 't' -> '\t';
-                            case '"' -> '"';
-                            case '\\' -> '\\';
-                            default -> e;
-                        });
+                        switch (e) {
+                            case 'n' -> b.append('\n');
+                            case 'r' -> b.append('\r');
+                            case 't' -> b.append('\t');
+                            case '"' -> b.append('"');
+                            case '\\' -> b.append('\\');
+                            case 'u' -> i = appendUnicodeEscape(source, i, b, baseOffset, line, baseColumn);
+                            default -> throw error("Unknown string escape: \\" + e,
+                                    baseOffset, line, baseColumn, i - 2, i);
+                        }
                     } else b.append(d);
                 }
                 if (i >= source.length())
@@ -101,7 +107,37 @@ final class Lexer {
 
     private static LangException error(String message, int baseOffset, int line, int baseColumn,
                                        int start, int end) {
-        return new LangException(message, span(baseOffset, line, baseColumn, start, end));
+        return new LangException(Diagnostic.Phase.LEXER, "INVALID_TOKEN", message,
+                span(baseOffset, line, baseColumn, start, end));
+    }
+
+    private static int appendUnicodeEscape(String source, int index, StringBuilder output,
+                                           int baseOffset, int line, int baseColumn) {
+        int escapeStart = index - 2;
+        if (index >= source.length() || source.charAt(index) != '{') {
+            throw error("Unicode escape must use \\u{...}", baseOffset, line, baseColumn,
+                    escapeStart, Math.min(index + 1, source.length()));
+        }
+        int digitsStart = ++index;
+        while (index < source.length() && source.charAt(index) != '}') index++;
+        if (index >= source.length() || index == digitsStart) {
+            throw error("Invalid Unicode escape", baseOffset, line, baseColumn,
+                    escapeStart, Math.min(index + 1, source.length()));
+        }
+        String digits = source.substring(digitsStart, index);
+        final int codePoint;
+        try {
+            codePoint = Integer.parseInt(digits, 16);
+        } catch (NumberFormatException ignored) {
+            throw error("Invalid Unicode escape", baseOffset, line, baseColumn,
+                    escapeStart, index + 1);
+        }
+        if (!Character.isValidCodePoint(codePoint) || codePoint >= 0xD800 && codePoint <= 0xDFFF) {
+            throw error("Invalid Unicode code point", baseOffset, line, baseColumn,
+                    escapeStart, index + 1);
+        }
+        output.appendCodePoint(codePoint);
+        return index + 1;
     }
 
     private static SourceSpan span(int baseOffset, int line, int baseColumn, int start, int end) {

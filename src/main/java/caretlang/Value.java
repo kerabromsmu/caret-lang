@@ -4,7 +4,7 @@ import java.util.*;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Name, Value.Scope, Value.Callable {
+        Value.Name, Value.Scope, Value.Seq, Value.Dict, Value.Callable {
 
     record Num(double value) implements Value {
         @Override public String toString() {
@@ -53,6 +53,78 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() {
             StringJoiner joiner = new StringJoiner(", ", "^{", "}");
             fields.forEach((k, v) -> joiner.add(k + " = " + v));
+            return joiner.toString();
+        }
+
+        @Override public boolean equals(Object other) {
+            return other instanceof Scope scope && fields.equals(scope.fields);
+        }
+
+        @Override public int hashCode() {
+            return fields.hashCode();
+        }
+    }
+
+    final class Seq implements Value {
+        private final List<Value> values;
+
+        public Seq(Collection<? extends Value> values) {
+            this.values = List.copyOf(values);
+        }
+
+        public List<Value> values() {
+            return values;
+        }
+
+        public Seq appended(Value value) {
+            ArrayList<Value> result = new ArrayList<>(values);
+            result.add(value);
+            return new Seq(result);
+        }
+
+        @Override public boolean equals(Object other) {
+            return other instanceof Seq sequence && values.equals(sequence.values);
+        }
+
+        @Override public int hashCode() { return values.hashCode(); }
+
+        @Override public String toString() {
+            StringJoiner joiner = new StringJoiner(", ", "[", "]");
+            values.forEach(value -> joiner.add(value.toString()));
+            return joiner.toString();
+        }
+    }
+
+    final class Dict implements Value {
+        private final LinkedHashMap<String, Value> entries;
+
+        public Dict(Map<String, Value> entries) {
+            this.entries = new LinkedHashMap<>(entries);
+        }
+
+        public Map<String, Value> entries() {
+            return Collections.unmodifiableMap(entries);
+        }
+
+        public Optional<Value> find(String key) {
+            return entries.containsKey(key) ? Optional.of(entries.get(key)) : Optional.empty();
+        }
+
+        public Dict put(String key, Value value) {
+            LinkedHashMap<String, Value> result = new LinkedHashMap<>(entries);
+            result.put(key, value);
+            return new Dict(result);
+        }
+
+        @Override public boolean equals(Object other) {
+            return other instanceof Dict dictionary && entries.equals(dictionary.entries);
+        }
+
+        @Override public int hashCode() { return entries.hashCode(); }
+
+        @Override public String toString() {
+            StringJoiner joiner = new StringJoiner(", ", "#[", "]");
+            entries.forEach((key, value) -> joiner.add("#" + key + " = " + value));
             return joiner.toString();
         }
     }

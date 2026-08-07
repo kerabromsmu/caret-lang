@@ -120,6 +120,16 @@ final class ParserTest {
         assertTrue(export.getMessage().contains("Invalid assignment or function definition"));
     }
 
+    @Test
+    void rejectsNonFiniteNumberLiteralsAsLocatedParserDiagnostics() {
+        String huge = "9".repeat(400);
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = " + huge).parseProgram());
+        assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+        assertEquals(9, error.span().start().column());
+        assertTrue(error.getMessage().contains("outside the finite range"));
+    }
+
     private Expr expression(String source) {
         ExprStmt statement = assertInstanceOf(ExprStmt.class, new Parser(source).parseProgram().getFirst());
         return statement.expression();
