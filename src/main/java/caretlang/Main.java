@@ -14,6 +14,14 @@ public final class Main {
     }
 
     static int run(String[] args, InputStream input, PrintStream output, PrintStream error) throws IOException {
+        if (args.length > 0 && args[0].equals("test")) {
+            if (args.length != 2) {
+                error.println("Usage: caret test <file>");
+                return 1;
+            }
+            return runTests(Path.of(args[1]), output, error);
+        }
+
         Interpreter interpreter = new Interpreter(output);
         if (args.length > 0) {
             String source = Files.readString(Path.of(args[0]));
@@ -40,5 +48,18 @@ public final class Main {
             }
         }
         return 0;
+    }
+
+    private static int runTests(Path program, PrintStream output, PrintStream error) throws IOException {
+        TestReporter reporter = new TestReporter(output);
+        Interpreter interpreter = new Interpreter(output, reporter);
+        String source = Files.readString(program);
+        try {
+            interpreter.execute(new Parser(source).parseProgram());
+        } catch (LangException e) {
+            error.println("Error: " + e.getMessage());
+            return 1;
+        }
+        return reporter.finish() ? 0 : 1;
     }
 }

@@ -103,11 +103,81 @@ final class MainTest {
         assertFalse(invocation.error().contains("caretlang.Parser"));
     }
 
+    @Test
+    void testModeRunsOneFileAndCollectsAssertionFailures() throws Exception {
+        Path program = temporaryDirectory.resolve("mixed-tests.caret");
+        Files.writeString(program, """
+                assert "addition" (1 + 2 == 3)
+                assertEqual "wrong total" (2 + 2) 5
+                assert "still runs" true
+                """);
+
+        Invocation invocation = run("test", program.toString());
+
+        assertEquals(1, invocation.exitCode());
+        assertEquals("""
+                PASS: addition
+                FAIL: wrong total (Line 2, column 1)
+                  expected: 5
+                  actual: 4
+                PASS: still runs
+                Summary: 3 tests, 2 passed, 1 failed
+                """, invocation.output());
+        assertEquals("", invocation.error());
+    }
+
+    @Test
+    void testModeSucceedsOnlyWhenAtLeastOneAssertionPasses() throws Exception {
+        Path passing = temporaryDirectory.resolve("passing-tests.caret");
+        Files.writeString(passing, "assertEqual \"answer\" 42 42\n");
+        Invocation success = run("test", passing.toString());
+        assertEquals(0, success.exitCode());
+        assertEquals("PASS: answer\nSummary: 1 test, 1 passed, 0 failed\n", success.output());
+
+        Path empty = temporaryDirectory.resolve("empty-tests.caret");
+        Files.writeString(empty, "value = 42\n");
+        Invocation noTests = run("test", empty.toString());
+        assertEquals(1, noTests.exitCode());
+        assertEquals("No tests found.\nSummary: 0 tests, 0 passed, 0 failed\n", noTests.output());
+    }
+
+    @Test
+    void testModeAbortsOnEvaluationErrorsWithoutPrintingACompletedSummary() throws Exception {
+        Path program = temporaryDirectory.resolve("aborting-tests.caret");
+        Files.writeString(program, """
+                assert "first" true
+                assertEqual "error" (1 / 0) 0
+                assert "unreached" true
+                """);
+
+        Invocation invocation = run("test", program.toString());
+
+        assertEquals(1, invocation.exitCode());
+        assertEquals("PASS: first\n", invocation.output());
+        assertTrue(invocation.error().contains("Error: Line 2, column 22: Division by zero"));
+        assertFalse(invocation.output().contains("Summary:"));
+    }
+
+    @Test
+    void assertionsAreAvailableOnlyInTestMode() throws Exception {
+        Path program = temporaryDirectory.resolve("ordinary.caret");
+        Files.writeString(program, "assert \"not ordinary\" true\n");
+
+        Invocation invocation = run(program);
+
+        assertEquals(1, invocation.exitCode());
+        assertTrue(invocation.error().contains("Unknown name: assert"));
+    }
+
     private Invocation run(Path program) throws Exception {
+        return run(program.toString());
+    }
+
+    private Invocation run(String... args) throws Exception {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         ByteArrayOutputStream error = new ByteArrayOutputStream();
         int exitCode = Main.run(
-                new String[]{program.toString()},
+                args,
                 new ByteArrayInputStream(new byte[0]),
                 new PrintStream(output, true, StandardCharsets.UTF_8),
                 new PrintStream(error, true, StandardCharsets.UTF_8));

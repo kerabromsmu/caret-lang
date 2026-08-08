@@ -1,6 +1,7 @@
 package caretlang;
 
 import java.util.*;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
@@ -130,7 +131,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     }
 
     non-sealed interface Callable extends Value {
-        Value apply(Value argument);
+        Value apply(Value argument, SourceSpan callSpan);
         int remainingArity();
     }
 
@@ -138,14 +139,19 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final String name;
         private final List<String> params;
         private final List<Value> bound;
-        private final Function<List<Value>, Value> implementation;
+        private final BiFunction<List<Value>, SourceSpan, Value> implementation;
 
         public FunctionValue(String name, List<String> params, Function<List<Value>, Value> implementation) {
+            this(name, params, List.of(), (arguments, ignoredSpan) -> implementation.apply(arguments));
+        }
+
+        FunctionValue(String name, List<String> params,
+                      BiFunction<List<Value>, SourceSpan, Value> implementation) {
             this(name, params, List.of(), implementation);
         }
 
         private FunctionValue(String name, List<String> params, List<Value> bound,
-                              Function<List<Value>, Value> implementation) {
+                              BiFunction<List<Value>, SourceSpan, Value> implementation) {
             this.name = name;
             this.params = List.copyOf(params);
             this.bound = List.copyOf(bound);
@@ -154,14 +160,14 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         public Value invokeZero() {
             if (remainingArity() != 0) throw new LangException("Function still requires arguments: " + name);
-            return implementation.apply(bound);
+            return implementation.apply(bound, null);
         }
 
-        @Override public Value apply(Value argument) {
+        @Override public Value apply(Value argument, SourceSpan callSpan) {
             ArrayList<Value> next = new ArrayList<>(bound);
             next.add(argument);
             if (next.size() == params.size()) {
-                return implementation.apply(next);
+                return implementation.apply(next, callSpan);
             }
             if (next.size() > params.size()) {
                 throw new LangException("Too many arguments for " + name);
@@ -196,7 +202,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.implementation = implementation;
         }
 
-        @Override public Value apply(Value argument) {
+        @Override public Value apply(Value argument, SourceSpan callSpan) {
             ArrayList<Value> next = new ArrayList<>(bound);
             next.add(argument);
             if (next.size() == arity) return implementation.apply(next);

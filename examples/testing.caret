@@ -1,0 +1,13 @@
+// Run with: java -cp out caretlang.Main test examples/testing.caret
+
+add left right = left + right
+
+assert "addition produces the expected value" (add 2 3 == 5)
+assertEqual "null remains distinct from missing" (? == ~) false
+
+first = seqAdd seqEmpty 1
+second = seqAdd seqEmpty 1
+assertEqual "sequences compare structurally" first second
+
+// A failing assertion is reported without stopping later assertions:
+// assertEqual "intentional failure" (add 2 2) 5

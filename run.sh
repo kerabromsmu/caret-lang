@@ -4,4 +4,8 @@ cd "$(dirname "$0")"
 rm -rf out
 mkdir -p out
 javac --release 21 -d out $(find src/main/java -name '*.java')
-java -cp out caretlang.Main "${1:-examples/demo.caret}"
+if [[ $# -eq 0 ]]; then
+  java -cp out caretlang.Main examples/demo.caret
+else
+  java -cp out caretlang.Main "$@"
+fi

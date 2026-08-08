@@ -1,0 +1,172 @@
+// Caret-native tests for every successfully executable feature in the prototype.
+// Run with: ./run.sh test examples/implemented_features_test.caret
+
+// Scalar values, name values, type inspection, and string escapes.
+assertEqual "integer number" 42 42
+assertEqual "decimal number" 3.5 3.5
+assertEqual "string value" "text" "text"
+assertEqual "Boolean true" true true
+assertEqual "Boolean false" false false
+assertEqual "null value" ? ?
+assertEqual "missing value" ~ ~
+assertEqual "null and missing differ" (? == ~) false
+assertEqual "name value" #field #field
+assertEqual "line-start name value" #lineStartName #lineStartName
+assertEqual "number type" (type 42) "Number"
+assertEqual "name type" (type #field) "Name"
+assertEqual "escaped string" "quote: \" slash: \\ tab: \t smile: \u{1F642}" "quote: \" slash: \\ tab: \t smile: 🙂"
+
+// Bindings, functions, lexical lookup, and implicit zero-argument invocation.
+base = 10
+add left right = left + right
+scale value =
+  factor = 2
+  value * factor
+
+answer =
+  40 + 2
+
+assertEqual "binding lookup" base 10
+assertEqual "function application" (add 2 3) 5
+assertEqual "multiline function body" (scale base) 20
+assertEqual "zero-argument function invocation" answer 42
+assertEqual "zero-argument function reflection kind" (@answer).kind "Function"
+assertEqual "zero-argument function reflection arity" (@answer).remaining 0
+
+// Direct and mutual recursion.
+factorial n = n == 0 & 1 ! n * factorial (n - 1)
+even n = n == 0 & true ! odd (n - 1)
+odd n = n == 0 & false ! even (n - 1)
+
+assertEqual "direct recursion" (factorial 5) 120
+assert "mutual recursion even" (even 8)
+assertEqual "mutual recursion odd" (odd 8) false
+
+// Grouping, precedence, arithmetic, comparison, equality, and Boolean operators.
+assertEqual "operator precedence" (1 + 2 * 3) 7
+assertEqual "grouped application" (add (add 1 2) 3) 6
+assertEqual "unary negation" (-5 + 8) 3
+assertEqual "division" (7 / 2) 3.5
+assertEqual "remainder" (7 % 2) 1
+assert "less-than comparison" (2 < 3)
+assert "less-than-or-equal comparison" (3 <= 3)
+assert "greater-than comparison" (4 > 3)
+assert "greater-than-or-equal comparison" (4 >= 4)
+assert "inequality" (2 != 3)
+assert "Boolean not" (not false)
+assertEqual "string concatenation" ("left" + "right") "leftright"
+
+// Short-circuit Boolean operations and conditional expressions.
+assertEqual "and short-circuits" (false and unknownAnd) false
+assert "or short-circuits" (true or unknownOr)
+assertEqual "conditional selects true branch" (true & "selected" ! unknownConditional) "selected"
+assertEqual "conditional selects false branch" (false & unknownConditional ! "fallback") "fallback"
+assertEqual "conditional defaults to missing" (false & unknownConditional) ~
+assertEqual "null is false in a conditional" (? & unknownConditional ! "fallback") "fallback"
+assertEqual "missing is false in a conditional" (~ & unknownConditional ! "fallback") "fallback"
+
+// Ordinary and numbered holes, argument reordering, and argument reuse.
+between low value high = value >= low and value <= high
+inside = between 0 _ 10
+digits a b c = a * 100 + b * 10 + c
+reordered = digits _2 2 _1
+join left right = left + right
+duplicated = join _1 _1
+
+assert "ordinary partial application" (inside 7)
+assertEqual "numbered holes reorder arguments" (reordered 1 3) 321
+assertEqual "numbered holes reuse arguments" (duplicated "x") "xx"
+
+// Exported scopes, privacy, optional access, dynamic lookup, and structural equality.
+makePerson name age =
+  privateAge = age + 1
+  ^name = name
+  ^age = age
+
+person = makePerson "Ada" 36
+samePerson = makePerson "Ada" 36
+fieldName = #name
+
+assertEqual "required exported field" person.name "Ada"
+assertEqual "second exported field" person.age 36
+assertEqual "private binding is hidden" person.privateAge~ ~
+assertEqual "optional absent field" person.phone~ ~
+assert "exported scopes compare structurally" (person == samePerson)
+assertEqual "dynamic name lookup" person[fieldName]~ "Ada"
+assertEqual "dynamic string lookup" person["age"]~ 36
+assertEqual "required dynamic lookup" person[#age] 36
+assertEqual "optional dynamic lookup" person[#phone]~ ~
+
+// Reflection exposes only public metadata and does not invoke functions.
+assertEqual "scope reflection kind" (@person).kind "Scope"
+assertEqual "scope reflection size" (@person).size 2
+assertEqual "scope reflection names" (@person).names "name,age"
+assertEqual "function reflection kind" (@factorial).kind "Function"
+assertEqual "function reflection remaining arity" (@factorial).remaining 1
+assertEqual "null reflection kind" (@?).kind "Null"
+assertEqual "missing reflection kind" (@~).kind "Missing"
+assertEqual "number reflection kind" (@42).kind "Number"
+assertEqual "name reflection kind" (@#field).kind "Name"
+
+// Explicit grouping and dynamic lookup may span physical lines.
+multiline = (
+  add
+    20
+    22
+)
+multilineField = person[
+  #name
+]~
+
+assertEqual "multiline grouped call" multiline 42
+assertEqual "multiline dynamic lookup" multilineField "Ada"
+
+// Unicode code-point text primitives and safe conversion failures.
+unicodeText = "🙂ab"
+assertEqual "text size counts code points" (textSize unicodeText) 3
+assertEqual "textAt returns a code point" (textAt unicodeText 0) "🙂"
+assertEqual "textSlice uses half-open bounds" (textSlice unicodeText 1 3) "ab"
+assertEqual "textAt invalid index is missing" (textAt unicodeText 99) ~
+assertEqual "textNumber parses finite numbers" (textNumber "12.5") 12.5
+assertEqual "textNumber failure is missing" (textNumber "not a number") ~
+assertEqual "numberText formats a number" (numberText 12.5) "12.5"
+
+// Persistent sequences.
+emptySequence = seqEmpty
+sequence = seqAdd (seqAdd emptySequence "first") ~
+sameSequence = seqAdd (seqAdd seqEmpty "first") ~
+
+assertEqual "empty sequence size" (seqSize emptySequence) 0
+assertEqual "sequence append is persistent" (seqSize sequence) 2
+assertEqual "sequence first element" (seqGet sequence 0) "first"
+assertEqual "sequence present missing element" (seqGet sequence 1) ~
+assertEqual "sequence invalid index" (seqGet sequence 99) ~
+assert "sequence structural equality" (sequence == sameSequence)
+assertEqual "sequence reflection kind" (@sequence).kind "Sequence"
+assertEqual "sequence reflection size" (@sequence).size 2
+
+// Persistent insertion-ordered dictionaries with normalized name/string keys.
+emptyDictionary = dictEmpty
+oneEntry = dictPut emptyDictionary #present 1
+dictionary = dictPut oneEntry "missingValue" ~
+sameDictionary = dictPut (dictPut dictEmpty "present" 1) #missingValue ~
+
+assertEqual "empty dictionary remains unchanged" (dictHas emptyDictionary #present) false
+assert "dictionary has string-normalized key" (dictHas dictionary "present")
+assert "dictionary distinguishes present missing value" (dictHas dictionary #missingValue)
+assertEqual "dictionary name lookup" (dictGet dictionary #present) 1
+assertEqual "dictionary present missing lookup" (dictGet dictionary "missingValue") ~
+assertEqual "dictionary absent lookup" (dictGet dictionary #absent) ~
+assertEqual "dictionary insertion-ordered keys" (dictKeys dictionary) (seqAdd (seqAdd seqEmpty #present) #missingValue)
+assert "dictionary structural equality" (dictionary == sameDictionary)
+assertEqual "dictionary reflection kind" (@dictionary).kind "Dictionary"
+assertEqual "dictionary reflection size" (@dictionary).size 2
+assertEqual "dictionary reflection names" (@dictionary).names "present,missingValue"
+
+// Expected diagnostics cannot yet be isolated by the eager v1 test runner:
+// absentName
+// person.absent
+// 1 / 0
+// 1 % 0
+// add _ _1
+// factorial == factorial

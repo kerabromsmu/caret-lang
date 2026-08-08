@@ -53,6 +53,32 @@ Run the automated tests:
 The Gradle task runs the JUnit lexer, parser, interpreter, and CLI tests. `test.sh` remains as a
 compatibility smoke test for representative Caret programs, including `examples/demo.caret`.
 
+## Test Caret programs
+
+Run a single Caret test file with the `test` subcommand:
+
+```bash
+java -cp out caretlang.Main test examples/testing.caret
+```
+
+[`examples/implemented_features_test.caret`](examples/implemented_features_test.caret) is the
+comprehensive Caret-native suite for behavior implemented by the prototype.
+
+Test files use ordinary function-call syntax:
+
+```caret
+assert "addition succeeds" (add 2 3 == 5)
+assertEqual "addition result" (add 2 3) 5
+```
+
+`assert` requires a Boolean condition. `assertEqual` compares values using Caret's normal
+structural equality. Assertion mismatches are collected, reported with their source locations, and
+produce a nonzero exit status after the summary. A test file with no assertions also fails.
+
+Assertion arguments are evaluated eagerly. A lexer, parser, or runtime error while evaluating a
+test aborts the file immediately; isolated test bodies and expected-error assertions are not yet
+supported. The assertion functions are available only through the `test` subcommand.
+
 ## Example
 
 ```text

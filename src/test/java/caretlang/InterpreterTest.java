@@ -265,6 +265,48 @@ final class InterpreterTest {
                 """));
     }
 
+    @Test
+    void testAssertionsCollectFailuresAndReturnMissing() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        PrintStream output = new PrintStream(bytes, true, StandardCharsets.UTF_8);
+        TestReporter reporter = new TestReporter(output);
+        Interpreter interpreter = new Interpreter(output, reporter);
+
+        interpreter.execute(new Parser("""
+                print assert "true condition" true
+                assert "false condition" false
+                assertEqual "null differs from missing" ? ~
+                assertEqual "structural sequence equality" (seqAdd seqEmpty 1) (seqAdd seqEmpty 1)
+                """).parseProgram());
+        assertFalse(reporter.finish());
+
+        assertEquals("""
+                PASS: true condition
+                ~
+                FAIL: false condition (Line 2, column 1)
+                  expected: true
+                  actual: false
+                FAIL: null differs from missing (Line 3, column 1)
+                  expected: ~
+                  actual: ?
+                PASS: structural sequence equality
+                Summary: 4 tests, 2 passed, 2 failed
+                """, bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testAssertionsValidateTheirArgumentsWithLocatedErrors() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        TestReporter reporter = new TestReporter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes), reporter);
+
+        LangException condition = assertThrows(LangException.class, () -> interpreter.execute(
+                new Parser("assert \"boolean required\" 1").parseProgram()));
+        assertEquals(1, condition.span().start().line());
+        assertEquals(1, condition.span().start().column());
+        assertTrue(condition.getMessage().contains("Assertion condition must be Boolean"));
+    }
+
     private String execute(String source) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));

@@ -14,8 +14,13 @@ final class Interpreter {
     }
 
     Interpreter(PrintStream output) {
+        this(output, null);
+    }
+
+    Interpreter(PrintStream output, TestReporter testReporter) {
         this.output = output;
         installBuiltins();
+        if (testReporter != null) installTestBuiltins(testReporter);
     }
 
     void execute(List<Stmt> program) {
@@ -164,7 +169,7 @@ final class Interpreter {
             if (!(fn instanceof Value.Callable callable)) {
                 throw new LangException("Value is not callable: " + fn);
             }
-            return callable.apply(argument);
+            return callable.apply(argument, expr.span());
         }
         if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
             Value target = evalInner(target2, env);
@@ -305,7 +310,7 @@ final class Interpreter {
 
         globals.define("seqEmpty", function("seqEmpty", List.of(), args -> new Value.Seq(List.of())));
         globals.define("seqAdd", function("seqAdd", List.of("sequence", "value"), args ->
-                sequence(args.get(0)).appended(args.get(1))));
+                sequence(args.getFirst()).appended(args.get(1))));
         globals.define("seqGet", function("seqGet", List.of("sequence", "index"), args -> {
             List<Value> values = sequence(args.get(0)).values();
             OptionalInt index = index(args.get(1));
@@ -317,7 +322,7 @@ final class Interpreter {
 
         globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dict(Map.of())));
         globals.define("dictPut", function("dictPut", List.of("dictionary", "key", "value"), args ->
-                dictionary(args.get(0)).put(requiredDictionaryKey(args.get(1)), args.get(2))));
+                dictionary(args.getFirst()).put(requiredDictionaryKey(args.get(1)), args.get(2))));
         globals.define("dictGet", function("dictGet", List.of("dictionary", "key"), args -> {
             String key = dictionaryKey(args.get(1));
             return key == null ? Value.Missing.INSTANCE
@@ -329,6 +334,26 @@ final class Interpreter {
         }));
         globals.define("dictKeys", function("dictKeys", List.of("dictionary"), args -> new Value.Seq(
                 dictionary(args.getFirst()).entries().keySet().stream().map(Value.Name::new).toList())));
+    }
+
+    private void installTestBuiltins(TestReporter reporter) {
+        globals.define("assert", new Value.FunctionValue("assert", List.of("name", "condition"),
+                (args, span) -> {
+                    String name = text(args.get(0));
+                    if (!(args.get(1) instanceof Value.Bool condition)) {
+                        throw new LangException("Assertion condition must be Boolean, got: " + args.get(1));
+                    }
+                    reporter.record(name, condition, new Value.Bool(true), condition.value(), span);
+                    return Value.Missing.INSTANCE;
+                }));
+        globals.define("assertEqual", new Value.FunctionValue("assertEqual", List.of("name", "actual", "expected"),
+                (args, span) -> {
+                    String name = text(args.get(0));
+                    Value actual = args.get(1);
+                    Value expected = args.get(2);
+                    reporter.record(name, actual, expected, equalsValue(actual, expected), span);
+                    return Value.Missing.INSTANCE;
+                }));
     }
 
     private Value.FunctionValue function(String name, List<String> parameters,

@@ -41,6 +41,29 @@ space for related source spans. The CLI renders the primary location in the comp
 Error: Line 1, column 7: Unknown name: absent
 ```
 
+## Test files
+
+The CLI can run one Caret test file with `caret test file.caret`. Test mode adds two assertion
+functions without changing the language grammar:
+
+```caret
+assert "descriptive name" condition
+assertEqual "descriptive name" actual expected
+```
+
+`assert` requires a string name and a Boolean condition. `assertEqual` requires a string name and
+uses the same structural equality rules as `==`; callable values therefore cannot be compared.
+Both functions return `~` after recording their result.
+
+Passing and failing assertions are written to standard output. Failures include the line and column
+of the complete assertion call plus expected and actual values. Evaluation continues after an
+assertion mismatch and ends with a summary. The process succeeds only when at least one assertion
+ran and every assertion passed.
+
+Assertion arguments remain eager. Lexical, parse, and runtime errors abort the file, are written to
+standard error as normal located diagnostics, and do not produce a completed summary. Assertions
+are test-runner builtins and are not present during ordinary file or REPL execution.
+
 ## Bindings and functions
 
 ```text
