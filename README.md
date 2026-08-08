@@ -1,39 +1,56 @@
 # Caret language prototype
 
-A small tree-walking interpreter exploring these ideas:
+Caret is an experimental concise programming language implemented as a Java 21 tree-walking
+interpreter. The current prototype supports:
 
-- indentation-delimited function bodies
-- Haskell-style whitespace application: `add 2 3`
-- compact conditional expressions: `condition & yes ! no`
-- exported scope bindings: `^name = value`
-- nullable literal `?` and missing literal `~`
-- optional field lookup: `scope.name~`
-- arbitrary partial application with holes: `between 0 _ 10`
-- eager partial capture and numbered argument holes: `f _2 fixed _1`
-- implicit scope return when a function exports bindings
-- name literals and safe dynamic lookup: `scope[#name]~`
-- lightweight metadata reflection: `@value`
-- Unicode code-point text primitives
-- persistent sequences and insertion-ordered dictionaries
+- finite numbers, strings, Booleans, null (`?`), missing (`~`), and name values (`#name`);
+- indentation-delimited functions, lexical closures, direct and mutual recursion;
+- whitespace application (`add 2 3`) with application binding more tightly than infix operators;
+- lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
+- exported immutable scopes, required/optional field access, and dynamic lookup;
+- arbitrary partial application with ordinary and numbered holes;
+- basic language-owned reflection through `@value`;
+- Unicode code-point text operations; and
+- persistent sequences and insertion-ordered dictionaries with structural equality.
 
-This is deliberately a language experiment, not a production compiler.
+This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
+describes both the implemented language sketch and the larger planned language. Features described
+there as planned are not necessarily available in this prototype. [PLAN.md](PLAN.md) gives the
+implementation roadmap.
 
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
 
-## Run
+## Requirements
+
+- Java 21
+- A POSIX-compatible shell for the provided launchers
+
+The Gradle wrapper downloads the required Gradle distribution and dependencies on first use.
+
+## Run a program
+
+The project launcher builds the distribution and runs a Caret source file:
+
+```bash
+./run.sh examples/implemented_features.caret
+```
+
+With no arguments, it runs `examples/demo.caret`:
+
+```bash
+./run.sh
+```
 
 With Gradle:
 
 ```bash
-gradle run --args='examples/demo.caret'
+./gradlew run --args='examples/demo.caret'
 ```
 
-Or through the project launcher:
+Language errors are written to standard error and return a nonzero process status.
 
-```bash
-./run.sh examples/demo.caret
-```
+## REPL
 
 Start the REPL:
 
@@ -48,22 +65,26 @@ and `exit` are not saved, and history is limited to 1,000 entries.
 
 Enter one-line expressions or assignments and type `exit` (or press Ctrl-D) to leave. Ctrl-C cancels
 the current input and opens a fresh prompt. Bindings remain available for the rest of the session.
+The REPL does not yet accept multiline function definitions or other multiline input.
 
 Do not launch the interactive REPL with `./gradlew run`: Gradle forwards ordinary input but does not
 give the Java child process ownership of the terminal, so terminal editing and arrow keys cannot
 work. Gradle's `run --args='path.caret'` form remains available for non-interactive file execution.
 
-Run the automated tests:
+## Tests
+
+Run the JUnit suite and compatibility/integration suite:
 
 ```bash
 ./gradlew test
 ./test.sh
 ```
 
-The Gradle task runs the JUnit lexer, parser, interpreter, and CLI tests. `test.sh` remains as a
-compatibility smoke test for representative Caret programs, including `examples/demo.caret`.
+The Gradle task runs lexer, parser, interpreter, REPL, and CLI tests. `test.sh` executes
+representative Caret programs, checks their output, runs the Caret-native suites, and verifies a
+failure diagnostic.
 
-## Test Caret programs
+### Caret-native test files
 
 Run a single Caret test file with the `test` subcommand:
 
@@ -89,7 +110,7 @@ Assertion arguments are evaluated eagerly. A lexer, parser, or runtime error whi
 test aborts the file immediately; isolated test bodies and expected-error assertions are not yet
 supported. The assertion functions are available only through the `test` subcommand.
 
-## Example
+## Language example
 
 ```text
 add a b = a + b
@@ -123,9 +144,13 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - A function definition must start at the beginning of a logical line.
 - Grouped expressions and dynamic lookups may span lines; ungrouped multiline calls and trailing
   blocks remain unspecified.
-- Types are dynamic in this first prototype.
-- `?` and `~` are distinct runtime values, but nullable/optional type syntax is not yet checked.
-- No mutation, resource ownership, modules, bytecode, or optimizer.
+- Values are dynamically checked; contracts, static types, nullable/optional type checking, and
+  effect inference are not implemented.
+- General collection/data literals, first-class fields, formats, lambdas, cycles, SIMD, rules,
+  rulesets, and rule cycles are not implemented.
+- There is no mutation, immutable scope-update syntax, object model, module system, compiler
+  backend, bytecode, or optimizer.
+- Reflection is intentionally limited to basic kind, size/name, and function-arity metadata.
 
 ## Diagnostics
 
@@ -142,6 +167,19 @@ Error: Line 1, column 7: Unknown name: absent
 Line comments start with `//`. A leading `#` is not a comment marker: `#count` is a name value even
 when it appears at the beginning of a line.
 
+## Built-ins
+
+The ordinary runtime provides:
+
+- `print value` and `type value`;
+- `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
+- `seqEmpty`, `seqAdd`, `seqGet`, and `seqSize`; and
+- `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
+
+Invalid text indexes, sequence indexes, slices, and numeric text conversions return `~`. Dictionary
+keys may be strings or name values; `dictHas` distinguishes an absent key from a present key whose
+value is `~`.
+
 ## Reflection currently implemented
 
 ```text
@@ -151,4 +189,6 @@ print (@source).kind
 print (@source).names
 ```
 
-`@scope` currently returns basic metadata (`kind`, `size`, `names`). `@function` returns `kind` and remaining arity. This is intentionally small and will need a richer metadata value model.
+`@scope`, `@sequence`, and `@dictionary` expose basic metadata such as `kind`, `size`, and, where
+applicable, `names`. `@function` exposes `kind` and remaining arity. Reflection exposes only public
+or exported bindings and does not invoke a reflected function.

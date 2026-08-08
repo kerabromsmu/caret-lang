@@ -4273,6 +4273,1462 @@ This provides conventional iteration while remaining compatible with:
 
 The core model should remain small enough that more specialized iteration constructs can be implemented as ordinary Caret functions rather than additional language syntax.
 
+## Rules, Rulesets, and Rule Cycles
+
+### Overview
+
+Caret provides a rule system for defining reactive systems such as:
+
+* games;
+* simulations;
+* data and stream interpreters;
+* protocol processors;
+* workflow engines;
+* state machines.
+
+Rules execute inside a `ruleCycle`.
+
+A rule does not independently poll or execute globally. The surrounding `ruleCycle` provides:
+
+* object traversal;
+* context changes;
+* context fronts;
+* rule evaluation;
+* rule scheduling;
+* effect propagation;
+* chaining;
+* lifecycle and termination.
+
+The components of a rule are summarized by the mnemonic **CATEN**:
+
+```text
+C  Context
+A  Active state
+T  Trigger
+E  Effect
+N  Name
+```
+
+All CATEN components are optional.
+
+---
+
+# Rules
+
+## Basic definition
+
+A rule is a first-class Caret value.
+
+Example:
+
+```caret
+capture = rule
+  C game and playerTurn
+  A on
+  T captureRequested and validCapture
+  E
+    move selectedPiece target
+    destroy targetPiece
+  N capture
+```
+
+The components are:
+
+```text
+C  context in which the rule can apply
+A  whether the rule is active
+T  condition or event that triggers application
+E  changes caused by the rule
+N  optional identity
+```
+
+The canonical documentation order is CATEN.
+
+---
+
+## Context
+
+A context has a persistent Boolean state:
+
+```text
+up
+down
+```
+
+A rule may apply only while its `C` expression is up.
+
+Contexts may be combined using ordinary Boolean expressions:
+
+```caret
+game and playerTurn
+combat and not paused
+dialog or cutscene
+```
+
+Example:
+
+```caret
+attack = rule
+  C game and playerTurn
+  T attackRequested
+  E performAttack
+```
+
+If:
+
+```caret
+game and playerTurn
+```
+
+is down, `attack` cannot apply.
+
+### Context fronts
+
+Changing a context produces a transient front.
+
+A transition:
+
+```text
+down -> up
+```
+
+produces:
+
+```caret
+rise context
+```
+
+A transition:
+
+```text
+up -> down
+```
+
+produces:
+
+```caret
+fall context
+```
+
+Examples:
+
+```caret
+rise combat
+fall dialog
+```
+
+Boolean combinations may also have fronts:
+
+```caret
+rise (game and playerTurn)
+fall (combat or dialog)
+```
+
+The distinction between a level and a front is fundamental:
+
+```caret
+combat
+```
+
+means `combat` is currently up.
+
+```caret
+rise combat
+```
+
+means `combat` has just changed from down to up.
+
+```caret
+fall combat
+```
+
+means `combat` has just changed from up to down.
+
+A front is transient and exists only as part of the corresponding rule-cycle propagation.
+
+---
+
+## Changing contexts
+
+Contexts may be changed by rule effects or other rule-cycle operations:
+
+```caret
+raise combat
+lower combat
+```
+
+`raise` changes a context to up.
+
+`lower` changes a context to down.
+
+Raising an already-up context does not generate another rise front.
+
+Lowering an already-down context does not generate another fall front.
+
+---
+
+## Active state
+
+Every rule has an active state independent of its context.
+
+The active state is:
+
+```text
+on
+off
+```
+
+Example:
+
+```caret
+specialAttack = rule
+  A off
+  T specialRequested
+  E performSpecialAttack
+```
+
+An inactive rule cannot apply.
+
+Rules may be activated and deactivated at runtime:
+
+```caret
+activate @specialAttack
+deactivate @specialAttack
+```
+
+Context and active state have different meanings:
+
+```text
+Context
+    describes whether circumstances permit the rule.
+
+Active state
+    describes whether the rule itself is enabled.
+```
+
+---
+
+## Trigger
+
+`T` defines the condition or Boolean combination of conditions that causes a rule to become applicable.
+
+Example:
+
+```caret
+death = rule
+  T player.health <= 0
+  E destroy player
+```
+
+Normal persistent conditions use transition semantics.
+
+For:
+
+```caret
+player.health <= 0
+```
+
+the triggering event is normally:
+
+```text
+false -> true
+```
+
+A continuously true condition does not repeatedly trigger the rule.
+
+A rule therefore becomes applicable when:
+
+```text
+C is up
+AND
+A is on
+AND
+T triggers
+```
+
+### Fronts in triggers
+
+Context fronts may be used directly:
+
+```caret
+beginTurn = rule
+  T rise playerTurn
+  E prepareTurn
+
+resume = rule
+  T fall dialog
+  E resumeGame
+```
+
+This is particularly important for chaining rules.
+
+### Context and active state are gates
+
+`C` and `A` permit application but do not normally generate a delayed trigger.
+
+For example:
+
+```caret
+rule
+  C combat
+  T enemy.health <= 0
+```
+
+If:
+
+```caret
+enemy.health <= 0
+```
+
+becomes true while `combat` is down, subsequently raising `combat` does not retroactively apply the rule.
+
+If entering combat should itself cause evaluation as an event, it should be expressed explicitly:
+
+```caret
+rule
+  T rise combat and enemy.health <= 0
+```
+
+---
+
+## Effect
+
+`E` contains the changes caused by application of the rule.
+
+Example:
+
+```caret
+capture = rule
+  T validCapture
+  E
+    move selectedPiece target
+    destroy capturedPiece
+    addScore currentPlayer captureValue
+```
+
+`E` is an ordinary Caret block.
+
+It may call ordinary functions.
+
+Typical operations may include:
+
+```caret
+raise context
+lower context
+
+activate @rule
+deactivate @rule
+
+create object
+destroy object
+
+send message
+```
+
+The rule system does not require a closed hard-coded set of effect operations.
+
+### Effect inference
+
+Calls made from `E` participate in Caret's ordinary effect system.
+
+An effect involving networking, file access, GUI state, or other externally observable behavior introduces the corresponding inferred effects.
+
+`C` and `T` should normally remain pure because the rule engine may reevaluate them freely.
+
+---
+
+## Name
+
+`N` optionally identifies a rule.
+
+Example:
+
+```caret
+rule
+  N capture
+  T validCapture
+  E capturePiece
+```
+
+When a rule is assigned directly:
+
+```caret
+capture = rule
+  T validCapture
+  E capturePiece
+```
+
+the implementation should normally infer:
+
+```text
+N capture
+```
+
+unless another explicit identity is supplied.
+
+Binding name and rule identity are conceptually distinct:
+
+```caret
+r = rule
+  N capture
+  ...
+```
+
+---
+
+## Optional CATEN components
+
+All CATEN components are optional.
+
+Recommended defaults are:
+
+```text
+C omitted  -> always up
+A omitted  -> initially on
+T omitted  -> no autonomous trigger
+E omitted  -> no explicit effect
+N omitted  -> anonymous/internal identity
+```
+
+A rule without `E` still produces its implicit rule context when applied.
+
+A rule without `T` may still participate in mechanisms such as explicit invocation or chaining.
+
+---
+
+## Implicit rule context
+
+Every rule owns an implicit context.
+
+When a rule applies:
+
+```text
+raise rule.context
+execute E
+lower rule.context
+```
+
+Therefore every application produces:
+
+```caret
+rise @rule.context
+fall @rule.context
+```
+
+Other rules may respond to those fronts.
+
+Example:
+
+```caret
+capture = rule
+  T captureRequested
+  E capturePiece
+
+score = rule
+  T fall @capture.context
+  E addScore currentPlayer captureValue
+```
+
+The implicit context exists even when the rule has no explicit `E`.
+
+---
+
+# Rule ordering
+
+## Unordered rules
+
+Rule definition order does **not** imply execution order.
+
+If several rules are simultaneously applicable and no ordering relationship between them has been specified, the `ruleCycle` may choose any of them.
+
+For example:
+
+```caret
+a = rule
+  T event
+  E effectA
+
+b = rule
+  T event
+  E effectB
+```
+
+If both become applicable, either sequence is valid:
+
+```text
+a
+b
+```
+
+or:
+
+```text
+b
+a
+```
+
+Caret deliberately provides no guarantee that the chosen order remains the same across:
+
+* executions;
+* compiler versions;
+* platforms;
+* optimization levels;
+* runtime implementations.
+
+Source order must never be relied upon as implicit rule priority.
+
+---
+
+## Effects affect subsequent scheduling
+
+Applicable rules are not normally executed as an immutable simultaneous batch.
+
+The scheduler conceptually operates as follows:
+
+```text
+determine applicable rules
+
+choose one permitted rule
+
+apply it
+
+propagate its effects
+
+reevaluate affected rules
+
+choose another applicable rule
+
+...
+```
+
+Therefore the first selected rule may alter whether another previously applicable rule remains applicable.
+
+Example:
+
+```caret
+a = rule
+  T condition
+  E disableSomething
+
+b = rule
+  T condition and somethingEnabled
+  E otherEffect
+```
+
+If both initially become applicable and `a` executes first, its effect may make `b` no longer applicable.
+
+If `b` executes first, both effects may occur.
+
+If that difference matters, the developer must specify ordering.
+
+---
+
+## Unordered-rule diagnostics
+
+Because accidental ordering dependencies can produce difficult bugs, Caret tooling should warn when it detects potentially significant unordered rule application.
+
+A diagnostic may conceptually report:
+
+```text
+warning:
+rules `a` and `b` may become applicable without a defined order
+their effects may be observed in either order
+```
+
+Static analysis should report cases it can reasonably identify.
+
+A development or debug runtime may additionally report actual cases where several unordered rules become applicable together.
+
+This is a warning, not an error.
+
+Unordered application is a legitimate and intentional design technique.
+
+---
+
+## Explicit acknowledgement of unordered execution
+
+A developer may explicitly state that arbitrary ordering is acceptable.
+
+The `unordered` contract marks such intent:
+
+```caret
+(unordered) ambientEffect = rule
+  T event
+  E updateAmbientEffect
+```
+
+A ruleset may similarly declare that unordered interactions among its relevant rules are intentional:
+
+```caret
+(unordered) AmbientRules =
+  ruleset
+    ...
+```
+
+The annotation suppresses applicable unordered-order diagnostics.
+
+It does **not** change scheduling behavior.
+
+```caret
+(unordered)
+```
+
+means:
+
+> Arbitrary ordering is semantically acceptable here.
+
+It does not mean that the runtime must randomize execution order.
+
+---
+
+## Enforcing order
+
+When execution order matters, it must be represented explicitly.
+
+The preferred mechanism is a causal relationship between rules.
+
+For example:
+
+```caret
+damage = rule
+  T attack
+  E applyDamage
+
+death = rule
+  T fall @damage.context
+  E checkDeath
+```
+
+`death` cannot precede completion of `damage`.
+
+This is a semantic dependency rather than a source-order convention.
+
+---
+
+# Rule chaining
+
+## Explicit chain
+
+A sequence of rules may be defined explicitly through rule contexts:
+
+```caret
+first = rule
+  T start
+  E firstEffect
+
+second = rule
+  T fall @first.context
+  E secondEffect
+
+third = rule
+  T fall @second.context
+  E thirdEffect
+```
+
+This imposes:
+
+```text
+first
+  ↓
+second
+  ↓
+third
+```
+
+---
+
+## `chain` sugar
+
+Caret should provide concise sugar for this common pattern:
+
+```caret
+chain
+  rule
+    T start
+    E firstEffect
+
+  rule
+    E secondEffect
+
+  rule
+    E thirdEffect
+```
+
+This is equivalent to connecting each subsequent rule to:
+
+```caret
+fall @previous.context
+```
+
+The chain therefore compiles to ordinary rules and ordinary contexts.
+
+It does not introduce a separate execution mechanism.
+
+---
+
+## Explicit trigger in a chain
+
+A chained rule may additionally specify a trigger:
+
+```caret
+chain
+  rule
+    T start
+    E first
+
+  rule
+    T ready
+    E second
+```
+
+The effective trigger of the second rule is conceptually:
+
+```caret
+fall @previous.context and ready
+```
+
+Thus `ready` must hold at the completion front of the previous rule.
+
+If the desired meaning is instead:
+
+> first must have completed, then wait however long necessary for `ready`
+
+that should be represented using a persistent context rather than ordinary chain-front semantics.
+
+---
+
+## Partial ordering
+
+Rule dependencies may form a partial order rather than a single sequence.
+
+Conceptually:
+
+```text
+       A
+      / \
+     B   C
+      \ /
+       D
+```
+
+`B` and `C` have no ordering relationship and may therefore execute in arbitrary order.
+
+Both are constrained to occur after `A`.
+
+`D` is constrained by both branches.
+
+This is intentional.
+
+Caret should constrain only those rule relationships explicitly expressed by the program.
+
+Independent branches remain unordered.
+
+Numeric priorities or implicit source-order priorities are not required for the core rule model.
+
+---
+
+# Rulesets
+
+## Overview
+
+A `RuleSet` is a first-class reusable scope containing rules and supporting definitions.
+
+Rulesets may contain:
+
+* rules;
+* contexts;
+* helper functions;
+* data;
+* configuration;
+* nested rulesets;
+* private implementation state.
+
+Example:
+
+```caret
+Combat attacker target damage =
+  ruleset
+    prepare = rule
+      T attackRequested attacker
+      E prepareAttack attacker
+
+    ^attack = rule
+      T fall @prepare.context
+      E damage target (damage attacker target)
+
+    cleanup = rule
+      T fall @attack.context
+      E finishAttack attacker
+```
+
+---
+
+## Ruleset templates
+
+Caret does not require a separate template language for rulesets.
+
+An ordinary function returning a `RuleSet` acts as a template:
+
+```caret
+Combat attacker target damage =
+  ruleset
+    ...
+```
+
+Its ordinary Caret parameters are the ruleset holes.
+
+Ruleset parameters may include:
+
+* objects;
+* contexts;
+* functions;
+* rules;
+* rulesets;
+* collections;
+* predicates;
+* formats;
+* configuration values;
+* effect functions.
+
+Normal contracts may constrain them.
+
+Normal partial application also applies:
+
+```caret
+standardCombat =
+  Combat _ _ standardDamage
+```
+
+The remaining `_` positions are supplied when the template is instantiated.
+
+---
+
+## Ruleset encapsulation
+
+Members of a ruleset are private by default.
+
+`^` exposes a member through the ruleset's public interface.
+
+Example:
+
+```caret
+TurnSystem players =
+  ruleset
+    index = 0
+    internalState = context down
+
+    ^turn = context down
+
+    ^next = rule
+      T endTurn
+      E advancePlayer players
+```
+
+External code may access:
+
+```caret
+turnSystem.turn
+turnSystem.next
+```
+
+but cannot access private bindings such as:
+
+```caret
+turnSystem.index
+turnSystem.internalState
+```
+
+This uses the normal Caret meaning of `^`.
+
+Rulesets do not introduce another visibility system.
+
+---
+
+## Exported rules
+
+Rules are exported in exactly the same way:
+
+```caret
+Movement board pieces =
+  ruleset
+    validate = rule
+      ...
+
+    update = rule
+      ...
+
+    ^completed = rule
+      ...
+```
+
+External users may refer to:
+
+```caret
+movement.completed
+@movement.completed
+@movement.completed.context
+```
+
+Private internal rules remain inaccessible.
+
+Exported rules and contexts provide stable integration points between ruleset libraries.
+
+---
+
+## Ruleset instances
+
+Every ruleset construction creates an independent instance.
+
+For example:
+
+```caret
+playerCombat = Combat player enemy damage
+enemyCombat = Combat enemy player enemyDamage
+```
+
+must create independent runtime state for:
+
+* active states;
+* rule contexts;
+* private contexts;
+* private instance state;
+* instance-local rules.
+
+The ruleset definition may be shared, but runtime state belongs to each instance.
+
+---
+
+## Nested rulesets
+
+Rulesets may build larger systems from smaller rulesets:
+
+```caret
+TurnBasedCombat players world damage =
+  ruleset
+    install TurnRules players
+    install TargetSelection world
+    install DamageRules world damage
+    install DeathRules world
+```
+
+This allows reusable libraries to be assembled hierarchically.
+
+---
+
+# `ruleCycle`
+
+## Overview
+
+`ruleCycle` is the execution environment for rules.
+
+A rule cycle:
+
+1. executes initialization;
+2. establishes its objects, contexts, rules, and rulesets;
+3. raises its master context;
+4. traverses relevant objects and rules;
+5. generates implicit contexts and fronts;
+6. determines applicable rules;
+7. applies one permitted applicable rule at a time;
+8. propagates its effects;
+9. reevaluates affected rules;
+10. continues until stable;
+11. advances its traversal;
+12. terminates when its master context goes down.
+
+---
+
+## Initialization
+
+A rule cycle contains an `init` part:
+
+```caret
+system =
+  ruleCycle
+    init
+      ...
+```
+
+Initialization establishes the initial rule-cycle universe.
+
+It may create:
+
+* objects;
+* contexts;
+* rules;
+* ruleset instances;
+* data;
+* other cycle-local state.
+
+Example:
+
+```caret
+game =
+  ruleCycle
+    init
+      player = object
+        ^health 100
+
+      enemy = object
+        ^health 50
+
+      gameOver = rule
+        T player.health <= 0
+        E lower cycle
+```
+
+---
+
+## Installing rulesets
+
+A ruleset may be constructed independently:
+
+```caret
+combat = Combat player enemy calculateDamage
+```
+
+and installed into the current cycle:
+
+```caret
+install combat
+```
+
+or commonly:
+
+```caret
+install Combat player enemy calculateDamage
+```
+
+according to normal Caret application rules.
+
+Installation makes the ruleset's relevant rules and contexts part of the current `ruleCycle`.
+
+A constructed but uninstalled ruleset remains an ordinary value and does not autonomously execute.
+
+---
+
+## Template-based system construction
+
+A principal purpose of `ruleCycle` is to assemble systems from reusable rule libraries.
+
+Example:
+
+```caret
+game =
+  ruleCycle
+    init
+      board = makeBoard 8 8
+
+      white = Player "White"
+      black = Player "Black"
+
+      pieces = makePieces board white black
+
+      install AlternatingTurns white black
+      install ChessMovement board pieces
+      install CaptureRules pieces
+      install ChessVictory white black pieces
+```
+
+The application-specific definition may therefore consist mainly of objects, configuration, and instantiated rulesets.
+
+The same mechanism can construct a data interpreter:
+
+```caret
+parser =
+  ruleCycle
+    init
+      source = stream bytes
+
+      install Signature pngSignature
+      install ChunkReader source PngChunk
+      install StopAt "IEND"
+```
+
+---
+
+## Master cycle context
+
+Every `ruleCycle` owns an implicit master context.
+
+At cycle start:
+
+```text
+down -> up
+```
+
+producing its rise front.
+
+The cycle runs while that context is up.
+
+A rule may terminate the cycle:
+
+```caret
+finish = rule
+  T completed
+  E lower cycle
+```
+
+The cycle ends when its master context goes down.
+
+---
+
+## Object traversal
+
+A rule cycle implicitly traverses the objects belonging to its runtime universe.
+
+Application code does not normally write this outer traversal explicitly.
+
+When an object is entered, processed, or left, the cycle may implicitly raise and lower object-related contexts.
+
+Conceptually:
+
+```text
+object A context rises
+    rule propagation
+object A context falls
+
+object B context rises
+    rule propagation
+object B context falls
+```
+
+These transitions produce ordinary fronts available to rule triggers.
+
+Objects may also participate in category or state contexts where defined by their contracts or object model.
+
+---
+
+## Rule scheduling
+
+The observable scheduling model is:
+
+```text
+1. Update context/object state.
+
+2. Determine applicable rules.
+
+3. Respect explicit causal ordering relationships.
+
+4. If multiple unordered rules are applicable,
+   choose an arbitrary one.
+
+5. Raise the chosen rule's implicit context.
+
+6. Execute its effect.
+
+7. Propagate state and context changes.
+
+8. Lower the rule's implicit context.
+
+9. Propagate the resulting fall front.
+
+10. Reevaluate affected rules.
+
+11. Repeat until no applicable rule remains
+    for the current propagation step.
+```
+
+The implementation need not literally scan every rule.
+
+It may maintain dependency indexes, queues, or other optimized structures.
+
+The observable result must follow the same scheduling semantics.
+
+---
+
+## No source-order guarantee
+
+The order in which rules appear in:
+
+* source code;
+* a `ruleset`;
+* an `init` block;
+* an internal collection
+
+does not create a scheduling constraint.
+
+For example:
+
+```caret
+firstInSource = rule
+  ...
+
+secondInSource = rule
+  ...
+```
+
+does not imply:
+
+```text
+firstInSource -> secondInSource
+```
+
+If order matters, the program must state the relationship explicitly.
+
+---
+
+## Propagation to stability
+
+Effects may change:
+
+* object state;
+* contexts;
+* rule active states;
+* object existence;
+* installed state;
+* values used by triggers.
+
+These changes may make other rules applicable.
+
+The cycle continues applying and propagating rules until the current processing step reaches a state in which no further rule is applicable.
+
+Conceptually:
+
+```text
+change
+  ↓
+rule A
+  ↓
+change
+  ↓
+rule B
+  ↓
+rule C
+  ↓
+stable
+```
+
+Only then does normal traversal advance.
+
+---
+
+## Trigger stability
+
+Repeated evaluation must not repeatedly fire a continuously true trigger.
+
+For:
+
+```caret
+rule
+  T x > 10
+  E ...
+```
+
+application occurs on the relevant transition:
+
+```text
+false -> true
+```
+
+not on every internal scan while `x > 10` remains true.
+
+The runtime must retain sufficient trigger history to preserve this behavior.
+
+---
+
+## Object creation and destruction
+
+Effects may create objects:
+
+```caret
+create bullet
+```
+
+or destroy them:
+
+```caret
+destroy enemy
+```
+
+Created objects become part of the rule-cycle universe.
+
+Destroyed objects cease to participate after destruction becomes effective.
+
+The implementation must provide deterministic lifecycle behavior even though rule scheduling itself may intentionally be unordered.
+
+The initial implementation should avoid uncontrolled traversal reentrancy when an object is created during another object's propagation.
+
+---
+
+## Dynamic rule state
+
+Rule effects may change rule active states:
+
+```caret
+activate @specialRule
+deactivate @tutorialRule
+```
+
+Such changes participate in normal propagation.
+
+The active state is runtime state, not merely a compile-time annotation.
+
+---
+
+## Cycle termination
+
+The rule cycle runs while its master context remains up.
+
+A normal termination operation is:
+
+```caret
+lower cycle
+```
+
+Once the cycle context falls, no new ordinary traversal iteration should begin.
+
+The runtime may finish the currently required deterministic cleanup or propagation before returning.
+
+---
+
+## Relationship to ordinary `cycle`
+
+Ordinary:
+
+```caret
+cycle initial condition body prepare
+```
+
+explicitly provides state transformations.
+
+`ruleCycle` derives them from:
+
+* objects;
+* contexts;
+* installed rules;
+* installed rulesets;
+* CATEN semantics;
+* the rule scheduler.
+
+Conceptually:
+
+```text
+condition:
+    cycle context is up
+
+body:
+    process objects and contexts
+    schedule applicable rules
+    propagate rule effects to stability
+
+prepare:
+    advance traversal
+```
+
+`ruleCycle` may internally reuse ordinary cycle machinery, but its reactive scheduling semantics are defined separately.
+
+---
+
+# Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. A first-class `Rule` value.
+2. Optional CATEN clauses:
+
+```text
+C Context
+A Active
+T Trigger
+E Effect
+N Name
+```
+
+3. Persistent up/down contexts.
+4. Boolean context combinations.
+5. `rise` and `fall` fronts.
+6. Runtime rule active states.
+7. Edge-based trigger behavior.
+8. Implicit contexts for rule application.
+9. Rule chaining through rule-context fronts.
+10. `chain` sugar.
+11. Explicitly unordered rule execution when no dependency defines order.
+12. No implicit source-order priority.
+13. Reevaluation after each selected rule's effects.
+14. Warning diagnostics for potentially significant unordered rule interactions.
+15. `(unordered)` as explicit acknowledgement/suppression of those diagnostics.
+16. Explicit ordering through rule dependencies and chains.
+17. A first-class `RuleSet`.
+18. Ruleset parameters through ordinary Caret functions.
+19. Partial ruleset application using `_`.
+20. `^` exports for rules and other ruleset members.
+21. Independent ruleset instances.
+22. `install ruleset`.
+23. `ruleCycle` initialization.
+24. An implicit master cycle context.
+25. Object traversal and implicit object-related context changes.
+26. Rule propagation until stable.
+27. Object creation and destruction.
+28. Runtime rule activation/deactivation.
+29. Cycle termination by lowering its master context.
+30. Ordinary Caret effect inference through rule effects.
+
+The initial implementation may postpone:
+
+* numeric rule priorities;
+* parallel execution;
+* transactional batches;
+* distributed rule cycles;
+* optimized dependency graphs;
+* dynamic ruleset unloading;
+* debugger visualization;
+* formal conflict analysis.
+
+These later features must preserve the principle that rule order is constrained only where the program explicitly specifies a dependency.
+
+---
+
+# Design principle
+
+A `ruleCycle` establishes a reactive universe of objects, contexts, rules, and rulesets.
+
+A rule becomes applicable when:
+
+```text
+C is up
+AND
+A is on
+AND
+T triggers
+```
+
+Application causes:
+
+```text
+rule context rises
+E executes
+rule context falls
+```
+
+Those effects and fronts may make additional rules applicable.
+
+When several rules are applicable:
+
+```text
+explicit dependency
+    -> constrains their order
+
+no dependency
+    -> order is deliberately arbitrary
+```
+
+The runtime applies one permitted rule, propagates its effects, reevaluates the system, and continues until the current propagation reaches stability.
+
+The developer may explicitly acknowledge harmless unordered behavior with:
+
+```caret
+(unordered)
+```
+
+and should express required ordering through causal relationships such as rule-context dependencies or `chain`.
+
+Rulesets package reusable parameterized behavior.
+
+`^` defines their public interface.
+
+The `ruleCycle` `init` block assembles those reusable rule libraries with concrete objects and configuration, allowing systems such as games, interpreters, simulations, and workflows to be built primarily by composition rather than explicit control flow.
+
 
 ## Not implemented
 
