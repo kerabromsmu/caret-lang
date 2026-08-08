@@ -9,6 +9,15 @@ import java.util.Scanner;
 
 public final class Main {
     public static void main(String[] args) throws IOException {
+        if (args.length == 0) {
+            String userHome = System.getProperty("user.home");
+            Path historyFile = userHome == null
+                    ? Path.of(".caret_history")
+                    : Path.of(userHome, ".caret_history");
+            int exitCode = JLineRepl.run(new Interpreter(System.out), System.out, System.err, historyFile);
+            if (exitCode != 0) System.exit(exitCode);
+            return;
+        }
         int exitCode = run(args, System.in, System.out, System.err);
         if (exitCode != 0) System.exit(exitCode);
     }
@@ -34,17 +43,21 @@ public final class Main {
             return 0;
         }
 
-        output.println("Caret prototype REPL. Enter one-line expressions or assignments. Ctrl-D to exit.");
+        output.println("Caret prototype REPL. Enter one-line expressions or assignments. Type exit or press Ctrl-D to exit.");
         Scanner scanner = new Scanner(input);
         while (true) {
             output.print("> ");
+            output.flush();
             if (!scanner.hasNextLine()) break;
             String line = scanner.nextLine();
             if (line.isBlank()) continue;
+            if (line.trim().equals("exit")) break;
             try {
                 interpreter.execute(new Parser(line).parseProgram());
+                output.flush();
             } catch (LangException e) {
                 error.println("Error: " + e.getMessage());
+                error.flush();
             }
         }
         return 0;

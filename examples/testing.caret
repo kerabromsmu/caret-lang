@@ -1,4 +1,4 @@
-// Run with: java -cp out caretlang.Main test examples/testing.caret
+// Run with: ./run.sh test examples/testing.caret
 
 add left right = left + right
 

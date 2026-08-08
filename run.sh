@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-rm -rf out
-mkdir -p out
-javac --release 21 -d out $(find src/main/java -name '*.java')
+./gradlew --quiet installDist
+launcher="build/install/caret-lang-prototype/bin/caret-lang-prototype"
 if [[ $# -eq 0 ]]; then
-  java -cp out caretlang.Main examples/demo.caret
-else
-  java -cp out caretlang.Main "$@"
+  exec "$launcher" examples/demo.caret
 fi
+exec "$launcher" "$@"

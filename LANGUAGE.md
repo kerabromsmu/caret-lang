@@ -926,14 +926,3357 @@ simd 8 Float
 
 requests that logical lane width specifically. The compiler may use one or more hardware vector operations to implement it where necessary, or reject it when the target cannot support the required semantics.
 
+## Collections and Data Literals
+
+### Collection
+
+`Collection` is the general contract for values that contain zero or more elements.
+
+Concrete collection types such as lists, arrays, sets, dictionaries, queues, and similar structures are refinements or derivative types of `Collection`.
+
+Conceptually:
+
+```text
+Collection E
+  List E
+  Array E
+  Set E
+  Dictionary K V
+  Queue E
+  ...
+```
+
+Concrete collection types may impose additional contracts such as:
+
+```text
+ordered
+indexed
+unique
+keyed
+fixedSize
+mutable
+contiguous
+sorted
+```
+
+For example, conceptually:
+
+```text
+List
+  Collection
+  ordered
+
+Array
+  Collection
+  ordered
+  indexed
+  fixedSize
+  contiguous
+
+Set
+  Collection
+  unique
+
+Dictionary
+  Collection
+  keyed
+```
+
+These properties should be treated structurally where possible rather than requiring nominal inheritance.
+
+A user-defined type may satisfy `Collection` and other collection contracts without extending a specific built-in implementation class.
+
+### Heterogeneous collections
+
+Collections are not required to contain values of one concrete type.
+
+For example:
+
+```caret
+data
+  10
+  "hello"
+  true
+  3.14
+```
+
+is a valid heterogeneous collection.
+
+The compiler should infer an element contract capable of representing all contained values, conceptually similar to:
+
+```text
+Collection (Int | String | Bool | Float)
+```
+
+A homogeneous collection is simply a collection whose inferred or declared element contract is narrower:
+
+```text
+Collection Int
+List String
+Array Float
+```
+
+Heterogeneous collections must not require an `Any` escape type merely because their elements differ.
+
+### Dictionaries
+
+A dictionary is a specialized collection with keyed entries.
+
+Conceptually:
+
+```text
+Dictionary K V
+```
+
+may be treated structurally as:
+
+```text
+Collection (Entry K V)
+```
+
+where an entry exposes:
+
+```caret
+entry.key
+entry.value
+```
+
+Generic collection functionality should operate on dictionaries consistently through their entries unless a more specific dictionary operation is requested.
+
+### Fixed heterogeneous structures
+
+A heterogeneous collection is distinct from a tuple or other fixed structural product.
+
+For example:
+
+```text
+Collection (Int | String)
+```
+
+means that its size may vary and each element satisfies either `Int` or `String`.
+
+A fixed structure conceptually equivalent to:
+
+```text
+(Int String Bool)
+```
+
+instead guarantees:
+
+* exactly three positions;
+* position 0 is `Int`;
+* position 1 is `String`;
+* position 2 is `Bool`.
+
+Do not implement tuples merely as heterogeneous collections if doing so would lose these structural guarantees.
+
+---
+
+## `data` expressions
+
+`data` constructs a general heterogeneous collection.
+
+Its indented child expressions become collection elements.
+
+Example:
+
+```caret
+values =
+  data
+    10
+    "hello"
+    true
+    calculate x
+```
+
+Each child is an ordinary Caret expression.
+
+There is no separate lexical or expression language inside a `data` block.
+
+Normal Caret rules continue to apply to:
+
+* string literals;
+* numeric literals;
+* Boolean values;
+* null and missing values;
+* function application;
+* conditionals;
+* function composition;
+* partial application;
+* nested expressions.
+
+This is important: `data` must not introduce YAML-like implicit string parsing or a separate "data mode."
+
+Strings remain ordinary quoted Caret strings:
+
+```caret
+data
+  "hello"
+  "text containing spaces"
+  "true"
+  "42"
+```
+
+The values `"true"` and `"42"` above remain strings because they are explicitly quoted.
+
+Ordinary unquoted literals retain their normal meanings:
+
+```caret
+data
+  true
+  42
+  3.14
+  ?
+  ~
+```
+
+### Computed values
+
+Functions and arbitrary expressions may be used directly inside data definitions.
+
+Example:
+
+```caret
+person =
+  data
+    ^name displayName user
+    ^age calculateAge user
+    ^active user.enabled and accountValid user
+```
+
+No interpolation or escape syntax such as `$` is required.
+
+The expression following a field name is evaluated using ordinary Caret semantics.
+
+For example:
+
+```caret
+^name "Alice"
+```
+
+and:
+
+```caret
+^name getName user
+```
+
+differ only in the expression used to calculate the field value.
+
+---
+
+## Named fields
+
+`^name expression` constructs a named field.
+
+Example:
+
+```caret
+person =
+  data
+    ^name "Alice"
+    ^age 42
+    ^active true
+```
+
+The resulting value exposes the named members:
+
+```caret
+person.name
+person.age
+person.active
+```
+
+Conceptually:
+
+```caret
+^age 42
+```
+
+constructs a field equivalent to:
+
+```text
+Field("age", 42)
+```
+
+The `^` marker therefore means that the following identifier becomes the externally visible name of the constructed field.
+
+This is related to the existing use of `^` for exported bindings in returned scopes: in both cases, `^` marks a binding or value as a named member of the surrounding structure.
+
+### Fields are values
+
+A field should be usable as a first-class value rather than existing only as parser metadata inside `data`.
+
+For example:
+
+```caret
+ageField user =
+  ^age calculateAge user
+```
+
+may be inserted into a collection:
+
+```caret
+person =
+  data
+    ^name user.name
+    ageField user
+```
+
+A `data` collection containing a field exposes that field as a named member.
+
+### Dynamic field names
+
+`^name` is syntax for a statically written field name.
+
+Dynamic names use an ordinary constructor function:
+
+```caret
+field name value
+```
+
+For example:
+
+```caret
+field "age" 42
+```
+
+is semantically equivalent to:
+
+```caret
+^age 42
+```
+
+A dynamically calculated name is therefore possible:
+
+```caret
+name = calculateFieldName input
+
+value =
+  field name calculateValue input
+```
+
+Do not introduce a separate `#name` syntax for field names.
+
+Field names are represented using ordinary string values unless a stronger `Name` contract is introduced later.
+
+---
+
+## Nested data
+
+A `data` expression may contain another `data` expression.
+
+Example:
+
+```caret
+person =
+  data
+    ^name "Alice"
+    ^address data
+      ^street "Example Street 12"
+      ^city "Stockholm"
+      ^country "Sweden"
+```
+
+This creates a nested collection.
+
+The nested value is accessible normally:
+
+```caret
+person.address.city
+```
+
+Collections of structures require no special list-item syntax.
+
+Example:
+
+```caret
+people =
+  data
+    data
+      ^name "Alice"
+      ^age 32
+
+    data
+      ^name "Bob"
+      ^age 41
+```
+
+The outer `data` value contains two unnamed elements, each of which is itself a structured `data` value.
+
+Do not require YAML-style `-` markers.
+
+---
+
+## Named and unnamed elements
+
+A `data` collection may contain unnamed elements:
+
+```caret
+values =
+  data
+    10
+    "hello"
+    true
+```
+
+It may contain named fields:
+
+```caret
+point =
+  data
+    ^x 10
+    ^y 20
+```
+
+The general collection representation may also support both forms in the same collection:
+
+```caret
+mixed =
+  data
+    ^version 2
+    "payload"
+    ^checksum calculateChecksum source
+```
+
+The language should not require separate "object" and "array" literal syntaxes merely because elements are named or unnamed.
+
+Instead, `data` constructs one general heterogeneous collection representation capable of containing fields and ordinary values.
+
+Libraries or more specific collection contracts may prohibit mixed named and unnamed elements where appropriate.
+
+---
+
+## Field access
+
+A statically known field is accessed using ordinary member syntax:
+
+```caret
+person.name
+```
+
+Dynamic field lookup uses ordinary indexed lookup with a string:
+
+```caret
+name = "age"
+person[name]
+```
+
+Safe optional dynamic lookup follows the ordinary optional-access rules:
+
+```caret
+person[name]~
+```
+
+A missing field and a field whose value is null must remain distinguishable.
+
+For example:
+
+```caret
+person["email"]~
+```
+
+may produce:
+
+```text
+~
+```
+
+when the field does not exist, while an existing nullable field may contain:
+
+```text
+?
+```
+
+---
+
+## Conditional fields
+
+Because expressions inside `data` use normal Caret syntax, conditionals may determine field values.
+
+Example:
+
+```caret
+response =
+  data
+    ^name user.name
+    ^email user.hasEmail & user.email ! ~
+```
+
+Here the `email` field always exists, but its value may be missing.
+
+Caret may also permit a conditional whose selected expression is itself a field:
+
+```caret
+response =
+  data
+    ^name user.name
+
+    user.hasEmail &
+      ^email user.email
+```
+
+This has different semantics: when the condition is false, the `email` field itself is absent from the resulting structure.
+
+The implementation must preserve the distinction between:
+
+```caret
+^email ~
+```
+
+and no `email` field at all.
+
+---
+
+## Contracts on data
+
+Normal contracts may constrain a complete data expression:
+
+```caret
+(Person) alice =
+  data
+    ^name "Alice"
+    ^age 32
+```
+
+The compiler should validate statically known data against the contract wherever possible.
+
+For example, if `Person` requires an `Int` field named `age`, this should fail during compilation:
+
+```caret
+(Person) alice =
+  data
+    ^name "Alice"
+    ^age "thirty-two"
+```
+
+Contracts may also constrain collections:
+
+```caret
+(Collection Int) numbers =
+  data
+    1
+    2
+    3
+```
+
+The contract-expression parser must treat:
+
+```caret
+(Collection Int)
+```
+
+as application of the `Collection` contract/type constructor to `Int`, not merely as two unrelated contracts.
+
+---
+
+## Relationship to scopes
+
+Structured `data` values and returned scopes may share structural behavior.
+
+For example:
+
+```caret
+makePerson user =
+  internal = loadInternal user
+  ^name = internal.name
+  ^age = internal.age
+```
+
+and:
+
+```caret
+person =
+  data
+    ^name user.name
+    ^age user.age
+```
+
+both produce values exposing:
+
+```caret
+person.name
+person.age
+```
+
+However, a runtime scope may additionally have:
+
+* lexical bindings;
+* lifecycle;
+* ownership;
+* resource behavior;
+* executable members;
+* mutable state.
+
+A `data` collection should remain primarily a data value unless additional contracts explicitly give it such behavior.
+
+Do not automatically treat every structured `data` value as a live lexical scope.
+
+---
+
+## Relationship to formats
+
+Formats decode into and encode from ordinary Caret data structures.
+
+For example, a decoded packet containing fields:
+
+```text
+length
+type
+payload
+```
+
+should produce a value structurally equivalent to:
+
+```caret
+data
+  ^length 128
+  ^type 2
+  ^payload bytes
+```
+
+The format subsystem must not require a separate special-purpose record representation.
+
+A format may therefore operate bidirectionally between:
+
+```text
+representation ↔ ordinary Caret data
+```
+
+This allows the same data value to be represented using different formats such as:
+
+* binary protocols;
+* JSON;
+* CBOR;
+* compressed representations;
+* encrypted representations;
+* network packet formats;
+* file formats.
+
+The in-memory data model remains independent of its serialized representation.
+
+---
+
+## Implementation requirements
+
+The first implementation should support at minimum:
+
+1. `Collection` as a general collection contract.
+2. Heterogeneous `data` collections.
+3. Named fields using:
+
+```caret
+^name expression
+```
+
+4. First-class field values.
+5. Dynamic field creation through:
+
+```caret
+field name value
+```
+
+6. Nested `data` expressions.
+7. Ordinary function calls and expressions as field values.
+8. Static field access:
+
+```caret
+value.name
+```
+
+9. Dynamic field lookup:
+
+```caret
+value[name]
+value[name]~
+```
+
+10. Correct distinction between absent fields, `~`, and `?`.
+11. Type/contract inference across heterogeneous elements.
+12. Contract validation of statically known data.
+
+Do not implement:
+
+* implicit unquoted strings;
+* YAML-style parsing rules;
+* comma-separated object syntax;
+* mandatory curly braces;
+* special interpolation syntax inside `data`;
+* separate JSON-like object and array literal systems.
+
+The goal is for structured data construction to remain a direct extension of ordinary Caret expressions rather than a separate embedded language.
+
+## Formats
+
+### Overview
+
+A `Format` describes a bidirectional relation between an in-memory Caret value and an external representation.
+
+Conceptually:
+
+```text
+Value ↔ Representation
+```
+
+Examples of representations include:
+
+* byte streams;
+* files;
+* network packets;
+* textual formats;
+* JSON-like data;
+* compressed data;
+* encrypted data;
+* protocol messages.
+
+A format definition should normally describe both directions at once:
+
+```text
+decode : Representation -> Value
+encode : Value -> Representation
+```
+
+The programmer should not normally write independent encoder and decoder implementations for the same structure.
+
+The compiler/runtime derives both directions from the same `Format` value wherever possible.
+
+---
+
+## Formats as relations
+
+A format is relational rather than inherently directional.
+
+For example:
+
+```text
+u16be
+```
+
+describes the relation between an integer and its two-byte big-endian representation:
+
+```text
+Int ↔ Bytes
+```
+
+When applied in the decoding direction:
+
+```text
+00 2A -> 42
+```
+
+When applied in the encoding direction:
+
+```text
+42 -> 00 2A
+```
+
+A compound format describes a larger relation assembled from smaller relations.
+
+Caret does not require general Prolog-style search or backtracking for format relations.
+
+A format is expected to support deterministic evaluation when one side of the relation is sufficiently known.
+
+The normal supported directions are:
+
+```text
+known Representation -> Value
+known Value          -> Representation
+```
+
+The format system must not implicitly search arbitrary solution spaces when neither side is sufficiently determined.
+
+---
+
+## `Format` as a first-class value
+
+`Format` is a first-class Caret value.
+
+Formats may be:
+
+* stored in variables;
+* passed to functions;
+* returned from functions;
+* composed;
+* partially applied;
+* placed in collections;
+* inspected through reflection.
+
+Format construction should use ordinary Caret functions rather than special grammar for each format feature.
+
+For example:
+
+```caret
+Packet =
+  format
+  >> constant "PACK"
+  >> field u16be "length"
+  >> field u8 "type"
+  >> field (bytes length) "payload"
+```
+
+`format` is the empty format.
+
+Functions such as:
+
+```text
+constant
+field
+array
+when
+choice
+require
+codec
+```
+
+construct or transform formats.
+
+They should normally be library-level functions or standard format primitives rather than separate parser constructs.
+
+---
+
+## Formats as specialized collections
+
+`Format` satisfies the general Caret `Collection` model.
+
+Conceptually:
+
+```text
+Format : Collection FormatElement
+```
+
+A format may contain heterogeneous elements such as:
+
+```text
+Constant
+Field
+Sequence
+Repeat
+Choice
+Conditional
+Constraint
+Codec
+```
+
+These elements may have different concrete types but satisfy the common format-element contract.
+
+A format should normally be immutable.
+
+Functions that extend a format return an updated format rather than mutating the original value.
+
+Conceptually:
+
+```text
+Format -> Format
+```
+
+For example:
+
+```caret
+addHeader f =
+  f
+  >> constant "HEAD"
+  >> field u16be "version"
+```
+
+Because formats are ordinary immutable values, they can be reused safely:
+
+```caret
+Base =
+  format
+  >> constant "DOC"
+
+Version1 =
+  Base
+  >> field u8 "flags"
+
+Version2 =
+  Base
+  >> field u16be "flags"
+```
+
+---
+
+## Format composition
+
+Caret's normal `>>` composition operator is also used for format construction and relational composition.
+
+When a function is partially applied so that it accepts a `Format` and returns a `Format`, it can participate directly in a format pipeline.
+
+For example:
+
+```caret
+Packet =
+  format
+  >> constant "PACK"
+  >> field u16be "length"
+  >> field u8 "type"
+```
+
+Conceptually:
+
+```text
+format
+  -> add constant
+  -> add length field
+  -> add type field
+```
+
+When complete bidirectional relations are composed:
+
+```text
+A ↔ B
+B ↔ C
+```
+
+their composition describes:
+
+```text
+A ↔ C
+```
+
+The encoding direction follows the relation in one direction and the decoding direction follows it in the opposite direction.
+
+This allows format composition to define both encoder and decoder behavior from one expression.
+
+---
+
+## Primitive formats
+
+Primitive representation formats are themselves `Format` values.
+
+Examples may include:
+
+```caret
+u8
+u16be
+u16le
+u32be
+u32le
+i16le
+f32le
+bytes
+utf8
+ascii
+```
+
+For example:
+
+```caret
+field u32be "size"
+```
+
+uses `u32be` as a format describing:
+
+```text
+Int ↔ four big-endian bytes
+```
+
+A compound format may be used anywhere a primitive format can be used.
+
+For example:
+
+```caret
+Point =
+  format
+  >> field f32le "x"
+  >> field f32le "y"
+
+Object =
+  format
+  >> field Point "position"
+```
+
+`field` must not distinguish unnecessarily between primitive and compound formats.
+
+---
+
+## Fields
+
+A field relates a named member of an in-memory data structure to a representation described by another format.
+
+Conceptually:
+
+```text
+field : Format -> String -> Format -> Format
+```
+
+Exact internal argument ordering may follow normal Caret partial-application rules, but this syntax should be supported:
+
+```caret
+field u16be "length"
+```
+
+When decoding, the format:
+
+1. decodes a value using `u16be`;
+2. adds a named field `"length"` to the resulting Caret data value.
+
+When encoding, it:
+
+1. obtains the field `length` from the input data;
+2. encodes it using `u16be`.
+
+For example:
+
+```caret
+Point =
+  format
+  >> field f32le "x"
+  >> field f32le "y"
+```
+
+decodes into a value structurally equivalent to:
+
+```caret
+data
+  ^x 10.0
+  ^y 20.0
+```
+
+and encodes such a value back into the corresponding representation.
+
+Field names are ordinary strings.
+
+Do not require `#name` syntax.
+
+---
+
+## References to earlier fields
+
+Later format elements may depend on values decoded or encoded earlier in the same structure.
+
+For example:
+
+```caret
+Packet =
+  format
+  >> field u16be "length"
+  >> field (bytes length) "payload"
+```
+
+Within the format definition, `length` refers to the logical value of the previously defined field.
+
+In the decoding direction:
+
+1. decode `length`;
+2. use it to determine how many bytes constitute `payload`.
+
+In the encoding direction, the same relationship must be respected.
+
+If a field such as `length` can be derived from another value during encoding, the format system should permit the implementation to derive or validate it rather than require duplicated application code.
+
+The precise dependency-resolution rules may be expanded later, but dependencies must be represented as relationships rather than duplicated encode/decode implementations wherever possible.
+
+---
+
+## Constant representation elements
+
+A constant format element represents data that appears in the external representation but normally does not need to appear as a logical in-memory field.
+
+Example:
+
+```caret
+PngLike =
+  format
+  >> constant signature
+  >> field u32be "length"
+```
+
+In the decoding direction:
+
+```text
+constant x
+```
+
+consumes representation data and verifies that it equals `x`.
+
+If it does not match, decoding fails.
+
+In the encoding direction, the same element emits `x` automatically.
+
+This is a naturally bidirectional relation:
+
+```text
+representation element == x
+```
+
+A constant should not create an in-memory field unless explicitly requested.
+
+This is useful for:
+
+* file signatures;
+* magic values;
+* protocol markers;
+* separators;
+* fixed headers;
+* reserved constants.
+
+---
+
+## Repeated formats
+
+Repeated structures are created by format combinators rather than special looping syntax.
+
+For example:
+
+```caret
+array count Item
+```
+
+constructs a format representing `count` repetitions of `Item`.
+
+Example:
+
+```caret
+Point =
+  format
+  >> field f32le "x"
+  >> field f32le "y"
+
+Polygon =
+  format
+  >> field u16be "count"
+  >> field (array count Point) "points"
+```
+
+Decoding produces a collection of decoded `Point` values.
+
+Encoding consumes a collection of `Point` values.
+
+The same format definition controls both directions.
+
+The count may be:
+
+* constant;
+* derived from a previous field;
+* derived from the value being encoded;
+* determined by another format relation.
+
+The implementation should avoid requiring the user to write separate loops for encoding and decoding.
+
+---
+
+## Conditional formats
+
+A format may conditionally include another format.
+
+A combinator conceptually similar to:
+
+```caret
+when predicate format
+```
+
+constructs a conditional format.
+
+Example:
+
+```caret
+Extension =
+  format
+  >> field u32be "extra"
+
+Packet =
+  format
+  >> field u8 "flags"
+  >> field
+       (when (flags has Extended) Extension)
+       "extension"
+```
+
+The condition should be usable in both directions whenever enough information is available.
+
+In the decoding direction, previously decoded data may determine whether the subformat is present.
+
+In the encoding direction, the logical data may determine whether the corresponding representation is emitted.
+
+The compiler/runtime should derive both directions from the same condition wherever possible.
+
+---
+
+## Choices and pattern matching
+
+Formats may describe alternatives based on data patterns or discriminators.
+
+Conceptually:
+
+```caret
+choice selector alternatives
+```
+
+For example:
+
+```caret
+MessageBody =
+  choice kind
+    1 TextMessage
+    2 ImageMessage
+    3 FileMessage
+```
+
+The exact surface syntax for declaring the alternatives may be refined separately.
+
+The semantic requirement is more important:
+
+* decoding may use representation data to determine which alternative applies;
+* encoding may use the logical value to determine which representation and discriminator are required.
+
+Where the relationship is deterministic in both directions, the user should not have to write separate selection logic for encoding and decoding.
+
+Pattern matching in formats should therefore be treated relationally where practical.
+
+---
+
+## Format constraints
+
+Ordinary Caret contracts may constrain values represented by a format.
+
+Conceptually:
+
+```caret
+require contract format
+```
+
+returns a constrained format.
+
+Example:
+
+```caret
+PositiveInt =
+  require positive u32be
+```
+
+When decoding:
+
+1. decode an integer;
+2. require that `positive` holds.
+
+When encoding:
+
+1. require that the supplied value satisfies `positive`;
+2. encode it.
+
+The same pure contract is used in both directions.
+
+This connects format validation directly to Caret's normal contract system.
+
+---
+
+## Automatic bidirectionality
+
+Format components should define both directions automatically whenever their relation contains enough information to do so.
+
+Examples include:
+
+```caret
+constant "PNG"
+field u16be "length"
+array count Entry
+require positive u32be
+```
+
+The programmer should not write:
+
+```text
+encodeConstant
+decodeConstant
+
+encodeField
+decodeField
+
+encodeArray
+decodeArray
+```
+
+as separate application-level definitions.
+
+The common format description should generate both behaviors.
+
+---
+
+## Explicit codecs
+
+Not every transformation can be inverted automatically.
+
+For example:
+
+```text
+compressed bytes ↔ uncompressed bytes
+encrypted bytes  ↔ plaintext
+base64 text       ↔ bytes
+```
+
+The compiler cannot generally derive a compressor from a decompressor or an encryptor from a decryptor.
+
+Caret therefore supports a format component that explicitly supplies the two directions.
+
+Conceptually:
+
+```caret
+codec decode encode format
+```
+
+The first function implements representation-to-value transformation.
+
+The second implements value-to-representation transformation.
+
+For example:
+
+```caret
+gzip format =
+  codec gunzip gzip format
+```
+
+or:
+
+```caret
+encrypted key format =
+  codec (decrypt key) (encrypt key) format
+```
+
+These functions construct new formats.
+
+They are not special external encoding/decoding procedures attached after format construction.
+
+They are components of the format relation itself.
+
+---
+
+## Codec composition
+
+Explicit codecs compose with ordinary declarative formats.
+
+For example:
+
+```caret
+Payload =
+  format
+  >> field u32be "id"
+  >> field utf8 "text"
+
+CompressedPayload =
+  gzip Payload
+```
+
+Conceptually, the relationship is:
+
+```text
+Caret Payload
+      ↕ Payload format
+uncompressed representation
+      ↕ gzip codec
+compressed representation
+```
+
+Encoding follows:
+
+```text
+Caret value
+ -> Payload representation
+ -> compression
+ -> compressed representation
+```
+
+Decoding follows:
+
+```text
+compressed representation
+ -> decompression
+ -> Payload representation
+ -> Caret value
+```
+
+The complete encoder and decoder are derived from the composed relation.
+
+---
+
+## Representation transformations versus logical transformations
+
+A codec may alter either the physical representation or the logical value.
+
+Representation example:
+
+```text
+plain bytes ↔ compressed bytes
+```
+
+Logical-value example:
+
+```text
+stored integer ↔ floating-point temperature
+```
+
+For example:
+
+```caret
+Temperature =
+  codec
+    (x -> x / 100.0)
+    (x -> round (x * 100))
+    i16le
+```
+
+The external representation is a signed integer.
+
+The logical Caret value is a floating-point temperature.
+
+Both kinds of transformations use the same relational format machinery.
+
+Libraries may provide more descriptive wrapper functions for common purposes, but they need not require separate compiler concepts.
+
+---
+
+## Purity of format definitions
+
+A `Format` describes data relationships and should normally be pure.
+
+Format construction functions should therefore normally be pure.
+
+Encoder and decoder functions supplied to `codec` must normally be pure.
+
+For example:
+
+```caret
+gzip format =
+  codec gunzip gzip format
+```
+
+requires `gunzip` and `gzip` to satisfy the purity requirement.
+
+Reading a file, receiving network data, or writing to a socket is not part of the format relation itself.
+
+For example:
+
+```caret
+(fs) raw = read file
+value = decode Packet raw
+```
+
+and:
+
+```caret
+raw = encode Packet value
+(fs) write file raw
+```
+
+`decode` and `encode` remain pure even though acquiring or storing the representation is effectful.
+
+This separation must be preserved.
+
+---
+
+## Decode and encode operations
+
+The standard library should expose explicit directional operations:
+
+```caret
+decode Format representation
+encode Format value
+```
+
+These are ordinary functions.
+
+For a bidirectional format:
+
+```caret
+decoded = decode Packet bytes
+encoded = encode Packet packet
+```
+
+Both operations use the same `Packet` value.
+
+Do not require separately declared `PacketDecoder` and `PacketEncoder` objects.
+
+A future relational application syntax may permit direction to be inferred from which side is known, but explicit `decode` and `encode` functions must remain available and unambiguous.
+
+---
+
+## Failure
+
+Decoding may fail because:
+
+* a signature or constant does not match;
+* input ends prematurely;
+* a field representation is invalid;
+* a contract fails;
+* no conditional/pattern alternative matches;
+* a codec rejects the representation.
+
+Encoding may also fail because:
+
+* a required field is missing;
+* a field has an invalid value;
+* a contract fails;
+* the value cannot be represented by the selected primitive format;
+* no encoding alternative matches;
+* a codec rejects the logical value.
+
+These failures should be represented explicitly rather than relying on exceptions for expected format mismatch.
+
+The exact result/error type may be specified separately.
+
+Errors should be capable of carrying useful information such as:
+
+* format component;
+* field name;
+* representation position;
+* expected condition;
+* actual value;
+* nested error cause.
+
+---
+
+## Canonical representations and round trips
+
+A bidirectional format does not necessarily imply that every raw representation round-trips byte-for-byte.
+
+For example:
+
+```text
+"00123" -> 123 -> "123"
+```
+
+may be valid if the encoder emits a canonical representation.
+
+The preferred semantic guarantee is normally:
+
+```text
+decode (encode value) == value
+```
+
+for every valid logical value.
+
+The opposite:
+
+```text
+encode (decode representation) == representation
+```
+
+is required only for formats that explicitly promise representation-preserving round trips.
+
+Formats may therefore normalize representations.
+
+---
+
+## Relationship to Caret `data`
+
+Formats decode into ordinary Caret values.
+
+Structured formats should normally produce `data` collections containing ordinary fields.
+
+For example:
+
+```caret
+Packet =
+  format
+  >> field u16be "length"
+  >> field u8 "type"
+  >> field (bytes length) "payload"
+```
+
+may decode to:
+
+```caret
+data
+  ^length 128
+  ^type 2
+  ^payload payloadBytes
+```
+
+The format subsystem must not introduce a separate object model for decoded data.
+
+The same value may therefore:
+
+* be created directly using `data`;
+* be decoded from a binary format;
+* be encoded into another format;
+* be passed through ordinary Caret functions;
+* satisfy contracts;
+* participate in collection operations;
+* be inspected through reflection.
+
+---
+
+## Formats are independent of transport
+
+A format describes representation, not where that representation comes from.
+
+The same format may be used with:
+
+```text
+file
+network connection
+memory buffer
+HTTP body
+database blob
+IPC message
+```
+
+Transport effects belong to transport functions.
+
+For example:
+
+```caret
+(net) raw = receive connection
+message = decode MessageFormat raw
+```
+
+The format itself remains pure.
+
+This allows the same `Format` to be reused across files, REST clients, servers, protocols, tests, and in-memory transformations.
+
+---
+
+## Extensibility
+
+Most format functionality should be implementable as ordinary Caret functions.
+
+A library should be able to introduce new combinators such as:
+
+```caret
+checksum
+padding
+aligned
+gzip
+encrypted
+terminated
+versioned
+optional
+bounded
+```
+
+without adding new grammar to the language.
+
+For example:
+
+```caret
+gzip format =
+  codec gunzip gzip format
+```
+
+A user-defined format constructor should have the same compositional status as a standard-library format constructor.
+
+Do not hard-code individual file formats, protocol fields, compression algorithms, or serialization systems into the Caret parser.
+
+---
+
+## Reflection
+
+Formats are first-class values and should be reflectable.
+
+Reflection may expose information such as:
+
+```text
+format elements
+field names
+nested formats
+primitive representations
+contracts
+constants
+choices
+codecs
+decode capability
+encode capability
+```
+
+Reflection must not violate private bindings or other normal Caret visibility rules.
+
+Format reflection should make it possible to build tooling such as:
+
+* format inspectors;
+* binary viewers;
+* protocol debuggers;
+* generated documentation;
+* editors;
+* test-data generators;
+* schema converters.
+
+---
+
+## Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. A first-class immutable `Format` value.
+2. An empty `format`.
+3. Format composition using ordinary functions and `>>`.
+4. Primitive formats for common integer and byte representations.
+5. Named fields using ordinary string names:
+
+```caret
+field u16be "length"
+```
+
+6. Constant/signature elements.
+7. Nested compound formats.
+8. Repeated formats with a fixed or previously decoded count.
+9. Contract validation through a format combinator.
+10. Explicit:
+
+```caret
+decode Format representation
+encode Format value
+```
+
+11. Decoding structured formats into ordinary Caret `data` values.
+12. Encoding ordinary compatible `data` values.
+13. Pure explicit bidirectional codecs:
+
+```caret
+codec decode encode format
+```
+
+14. Composition of codecs with structural formats.
+15. Explicit format mismatch/failure values rather than expected-case exceptions.
+
+The initial implementation may postpone:
+
+* general relational solving;
+* automatic inversion of arbitrary Caret functions;
+* nondeterministic relations;
+* backtracking;
+* sophisticated pattern-derived discriminators;
+* streaming incremental decoding;
+* zero-copy decoding;
+* asynchronous transport integration.
+
+These later capabilities should not require changing the fundamental model that a `Format` is a first-class bidirectional relation assembled compositionally from smaller relations.
+
+---
+
+## Design principle
+
+The central principle is:
+
+> A Caret format describes the relationship between a logical value and its representation, not separate procedures for reading and writing it.
+
+Where the relationship is structurally reversible, Caret derives both directions from one description.
+
+Where reversal requires algorithms that cannot be inferred, the format explicitly contains both directional functions:
+
+```caret
+codec decode encode
+```
+
+Complex formats are built from smaller bidirectional relations using ordinary Caret functions, collections, contracts, partial application, and composition.
+
+## Lambda Functions
+
+### Overview
+
+Lambda expressions create anonymous first-class functions.
+
+The basic syntax is:
+
+```caret
+x -> expression
+```
+
+Example:
+
+```caret
+square = x -> x * x
+```
+
+A lambda may have multiple parameters:
+
+```caret
+x y -> x + y
+```
+
+Equivalent named function:
+
+```caret
+add x y =
+  x + y
+```
+
+and lambda:
+
+```caret
+add = x y -> x + y
+```
+
+Lambda parameters are separated by whitespace, consistently with ordinary Caret function declarations and application.
+
+---
+
+## Lambda bodies
+
+A lambda may contain a single expression:
+
+```caret
+x -> x * 2
+```
+
+or an indented block:
+
+```caret
+x ->
+  doubled = x * 2
+  doubled + 1
+```
+
+The result of the final expression is the result of the lambda, following the same rules as an ordinary function body.
+
+Example:
+
+```caret
+normalize =
+  text ->
+    trimmed = trim text
+    lowercase trimmed
+```
+
+No braces, commas, or explicit `return` keyword are required.
+
+---
+
+## Parameter contracts
+
+Lambda parameters use the same contract syntax as named-function parameters.
+
+Example:
+
+```caret
+(Int) x -> x * 2
+```
+
+Multiple contracts are written in one parenthesized contract clause:
+
+```caret
+(Int positive) x -> x * 2
+```
+
+Multiple parameters may each have their own contracts:
+
+```caret
+(Int) x (Int positive) y ->
+  x + y
+```
+
+Contracts have exactly the same semantics as on named function parameters.
+
+For example:
+
+```caret
+(Int positive) x -> x * 2
+```
+
+requires `x` to satisfy both `Int` and `positive`.
+
+The compiler should statically verify contracts wherever possible and retain runtime checks only where necessary according to the normal Caret contract rules.
+
+---
+
+## Arity
+
+A lambda's arity is the number of explicitly declared parameters.
+
+```caret
+x -> expression
+```
+
+has arity 1.
+
+```caret
+x y -> expression
+```
+
+has arity 2.
+
+```caret
+a b c -> expression
+```
+
+has arity 3.
+
+Lambda arity participates in Caret's ordinary arity-directed function application and binary-function interpretation.
+
+For example:
+
+```caret
+compare = a b -> a.value < b.value
+```
+
+creates an ordinary two-argument function and may be used anywhere another binary function can be used.
+
+---
+
+## Application
+
+Lambda values are called using ordinary whitespace application.
+
+Example:
+
+```caret
+double = x -> x * 2
+
+result = double 10
+```
+
+A lambda may also be created and immediately applied:
+
+```caret
+(x -> x * 2) 10
+```
+
+Parentheses are required here to delimit the lambda expression before its argument.
+
+Application is left-associative according to the normal Caret rules.
+
+---
+
+## Partial application
+
+Multi-parameter lambdas support ordinary partial application.
+
+Given:
+
+```caret
+add = x y -> x + y
+```
+
+then:
+
+```caret
+add 10
+```
+
+returns a unary function awaiting `y`.
+
+Example:
+
+```caret
+addTen = add 10
+result = addTen 5
+```
+
+Caret's arbitrary-position hole syntax also works with lambdas and lambda-derived functions.
+
+For example:
+
+```caret
+between = low value high ->
+  value >= low and value <= high
+
+inside = between 0 _ 10
+```
+
+`inside` is a unary function.
+
+---
+
+## Lambdas versus holes
+
+Caret supports both explicit lambdas and implicit partial application through `_`.
+
+For simple partial application:
+
+```caret
+addOne = + _ 1
+```
+
+is preferred over unnecessarily verbose lambda syntax:
+
+```caret
+addOne = x -> x + 1
+```
+
+Both are valid and semantically compatible.
+
+Explicit lambdas are useful when:
+
+* a parameter is used more than once;
+* multiple expressions are needed;
+* the parameter needs a meaningful local name;
+* parameter contracts are needed;
+* control flow is required;
+* the body cannot be expressed naturally through partial application.
+
+Example:
+
+```caret
+distanceSquared = p ->
+  p.x * p.x + p.y * p.y
+```
+
+A hole `_` always denotes a future argument to an existing application expression. It is not itself a named lambda variable.
+
+---
+
+## Closures
+
+A lambda may reference bindings from its lexical environment.
+
+Example:
+
+```caret
+makeAdder amount =
+  x -> x + amount
+```
+
+Then:
+
+```caret
+addFive = makeAdder 5
+addFive 10
+```
+
+produces:
+
+```text
+15
+```
+
+The lambda captures `amount`.
+
+Captured values follow Caret's normal ownership, mutability, and lifetime rules.
+
+A closure must not provide a way to access a value after its ownership or lifetime has ended.
+
+The compiler may copy, borrow, share, or move captured values according to the applicable ownership rules.
+
+---
+
+## Capture timing
+
+Captured expressions are evaluated according to normal lexical evaluation semantics when the closure is created.
+
+For example:
+
+```caret
+amount = calculateAmount source
+f = x -> x + amount
+```
+
+the lambda captures the resulting `amount`; it does not implicitly call `calculateAmount` again whenever `f` is invoked.
+
+This is consistent with arbitrary partial application:
+
+```caret
+f = calculate _ expensiveExpression
+```
+
+where supplied expressions are evaluated when the partial function is constructed unless explicitly represented as another function.
+
+---
+
+## Purity and effects
+
+Lambda effects are inferred exactly like effects of named functions.
+
+Example:
+
+```caret
+square = x -> x * x
+```
+
+has an empty inferred effect set and is pure.
+
+An effectful lambda:
+
+```caret
+writer = x ->
+  writeFile path x
+```
+
+inherits the filesystem effect of `writeFile`.
+
+Effects propagate through:
+
+* direct calls;
+* captured functions;
+* higher-order calls;
+* composition;
+* partial application.
+
+A lambda passed to a parameter requiring purity must have an empty inferred effect set.
+
+For example:
+
+```caret
+map (pure) transform values =
+  ...
+```
+
+accepts:
+
+```caret
+map (x -> x * 2) values
+```
+
+but rejects an effectful lambda.
+
+Explicit function-value contracts may also be applied using the normal Caret contract mechanism where needed.
+
+Conceptually:
+
+```caret
+(pure) (x -> x * 2)
+```
+
+requires the resulting lambda value to satisfy `pure`.
+
+Purity must always be verified from the lambda body; the contract is a requirement, not merely an annotation.
+
+---
+
+## Lambda return values
+
+A lambda returns the value produced by its body.
+
+Single-expression example:
+
+```caret
+x -> x * 2
+```
+
+Block example:
+
+```caret
+x ->
+  a = x * 2
+  b = a + 1
+  b
+```
+
+returns `b`.
+
+Return-type or return-value contracts should follow the general Caret function-result contract mechanism once that syntax is finalized.
+
+Do not introduce a separate lambda-specific return-type syntax.
+
+---
+
+## Nullary lambdas
+
+Caret may represent a zero-argument anonymous function as:
+
+```caret
+-> expression
+```
+
+Example:
+
+```caret
+action =
+  ->
+    calculateSomething
+```
+
+A nullary lambda is a function value.
+
+Creating the lambda does not execute its body.
+
+This differs from referring to a named zero-argument function by its ordinary name, where Caret's normal nullary-function evaluation rules may invoke the function.
+
+The lambda literal itself is already an explicit function value and therefore does not require `@`.
+
+For example:
+
+```caret
+action = -> currentTime
+```
+
+stores a function.
+
+Invoking `action` follows the normal rules for a nullary function.
+
+The exact invocation syntax for a stored nullary function should remain consistent with the general nullary-function rules.
+
+---
+
+## Reification
+
+A lambda is already a function value.
+
+It does not require `@` in order to be passed to another function:
+
+```caret
+map (x -> x * 2) values
+```
+
+`@` remains the general binding-reference/reification operator and is primarily needed when referring to an existing binding without applying its normal evaluation behavior.
+
+For example:
+
+```caret
+@namedFunction
+```
+
+reifies the binding `namedFunction`.
+
+Do not redefine `@` as lambda syntax.
+
+---
+
+## Higher-order functions
+
+Lambdas are ordinary function values and may be:
+
+* passed as arguments;
+* returned from functions;
+* stored in collections;
+* stored in fields;
+* composed;
+* partially applied;
+* reflected;
+* constrained by function contracts.
+
+Example:
+
+```caret
+apply transform value =
+  transform value
+
+result = apply (x -> x * 2) 10
+```
+
+A function may return a lambda:
+
+```caret
+multiplier factor =
+  x -> x * factor
+```
+
+A lambda may return another lambda:
+
+```caret
+x -> y -> x + y
+```
+
+This is equivalent in behavior to a curried two-stage function.
+
+It is distinct in structure from:
+
+```caret
+x y -> x + y
+```
+
+which is a single lambda with arity 2.
+
+Both may support equivalent partial use where appropriate, but reflection must preserve their actual structure.
+
+---
+
+## Function composition
+
+Lambda values participate in ordinary `>>` composition.
+
+Example:
+
+```caret
+process =
+  (x -> x * 2)
+  >> normalize
+  >> validate
+```
+
+or:
+
+```caret
+double = x -> x * 2
+process = double >> normalize
+```
+
+Composition preserves inferred contracts and effects according to the normal Caret composition rules.
+
+A composition is pure only if every participating function is pure.
+
+---
+
+## Lambdas in collection operations
+
+Lambdas may be used directly with collection functions.
+
+Examples:
+
+```caret
+numbers map (x -> x * 2)
+```
+
+```caret
+numbers filter (x -> x > 0)
+```
+
+```caret
+people map (person -> person.name)
+```
+
+Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.
+
+For example:
+
+```caret
+positive = (Int) x -> x > 0
+```
+
+is a pure unary Boolean function and therefore satisfies the requirements for use as a contract predicate.
+
+Where a contract must be referenced repeatedly or participate in static reasoning, assigning it a stable name is preferred.
+
+---
+
+## Lambdas and SIMD
+
+Pure lambdas may participate in SIMD application when their operations are vectorizable.
+
+Example:
+
+```caret
+values :: (x -> x * x + 1)
+```
+
+The compiler should infer that the lambda is pure and determine whether its operations support SIMD execution.
+
+An effectful lambda cannot normally be used with `::`.
+
+Example:
+
+```caret
+values :: (x ->
+  print x
+  x * 2)
+```
+
+must fail if `print` introduces an observable effect.
+
+SIMD support does not require separate lambda syntax.
+
+---
+
+## Lambdas in data definitions
+
+Because `data` blocks contain ordinary Caret expressions, lambda values may be stored directly in data structures.
+
+Example:
+
+```caret
+operations =
+  data
+    ^double (x -> x * 2)
+    ^positive (x -> x > 0)
+```
+
+The resulting fields contain ordinary function values.
+
+Likewise, a lambda may calculate a field value through immediate application or higher-order functions.
+
+No special data-lambda syntax is required.
+
+---
+
+## Parsing and precedence
+
+`->` introduces a lambda and has low precedence.
+
+The expression:
+
+```caret
+x -> x + 1
+```
+
+must parse as:
+
+```text
+x -> (x + 1)
+```
+
+not:
+
+```text
+(x -> x) + 1
+```
+
+Multiple parameters immediately preceding `->` belong to the same lambda:
+
+```caret
+x y z -> expression
+```
+
+Parameter contracts bind to the immediately following parameter:
+
+```caret
+(Int) x (String) y -> expression
+```
+
+When a lambda appears as an argument inside a larger expression, parentheses should be required wherever its extent would otherwise be ambiguous:
+
+```caret
+map (x -> x * 2) values
+```
+
+rather than relying on context-sensitive parsing.
+
+An indented lambda body extends through the lambda's indentation block.
+
+---
+
+## Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. Unary lambdas:
+
+```caret
+x -> expression
+```
+
+2. Multi-parameter lambdas:
+
+```caret
+x y -> expression
+```
+
+3. Parameter contracts:
+
+```caret
+(Int positive) x -> expression
+```
+
+4. Indented lambda bodies:
+
+```caret
+x ->
+  expression
+  expression
+```
+
+5. Lexical captures.
+6. Ordinary function application of lambda values.
+7. Partial application.
+8. Interaction with `_` hole-based partial application.
+9. Lambda effect and purity inference.
+10. Passing lambdas to higher-order functions.
+11. Returning lambdas from functions.
+12. Function composition using `>>`.
+13. Reflection/reification compatibility.
+14. SIMD eligibility for suitable pure lambdas.
+
+The initial implementation may postpone:
+
+* sophisticated capture optimization;
+* static totality checking;
+* explicit capture lists;
+* ownership-polymorphic closures;
+* specialized allocation-free closure representations.
+
+These implementation optimizations must not alter the semantic rule that a lambda is an ordinary first-class Caret function value.
+
+---
+
+## Design principle
+
+Lambda syntax should remain a minimal anonymous form of ordinary Caret function syntax.
+
+Named function:
+
+```caret
+add x y =
+  x + y
+```
+
+Anonymous equivalent:
+
+```caret
+x y -> x + y
+```
+
+Caret should not create a separate semantic category for lambdas.
+
+They use the same:
+
+* application rules;
+* contracts;
+* arity;
+* partial application;
+* purity/effect inference;
+* composition;
+* ownership rules;
+* reflection;
+* SIMD rules
+
+as named functions.
+
+## Cycles
+
+### Overview
+
+A Caret cycle is a generalized iterative state transformation.
+
+Rather than giving `for`, `while`, and similar loops unrelated semantics, Caret models iteration as repeated transformation of a state value.
+
+Conceptually:
+
+```text
+initial state
+    ↓
+condition
+    ↓
+body
+    ↓
+prepare next state
+    ↺
+```
+
+A cycle produces a final value.
+
+It is therefore an expression, not merely a control-flow statement.
+
+Conceptually:
+
+```text
+cycle : Init -> Condition -> Body -> Prepare -> Result
+```
+
+For a state type `S`:
+
+```text
+init      : () -> S
+condition : S -> Bool
+body      : S -> S
+prepare   : S -> S
+
+cycle     : S
+```
+
+The cycle repeatedly transforms `S` until `condition` becomes false.
+
+---
+
+## Fundamental semantics
+
+Given:
+
+```caret
+result = cycle init condition body prepare
+```
+
+the semantics are equivalent to:
+
+```text
+state = init
+
+while condition(state):
+    state = body(state)
+    state = prepare(state)
+
+result = state
+```
+
+This description is only explanatory.
+
+Caret should not require mutable state internally.
+
+The semantic model is functional:
+
+```text
+S -> S -> S -> ...
+```
+
+Each stage receives a state and produces the next state.
+
+The final state is the value of the entire `cycle` expression.
+
+---
+
+## Initialization
+
+`init` creates the initial state.
+
+It may be:
+
+* an existing value;
+* a function producing a value;
+* a `data` structure;
+* a returned scope;
+* another expression whose result becomes the initial cycle state.
+
+Example:
+
+```caret
+initial =
+  data
+    ^i 0
+    ^sum 0
+
+result =
+  cycle initial condition body prepare
+```
+
+A nullary initializer may also be used where initialization itself must be deferred:
+
+```caret
+result =
+  cycle @makeInitialState condition body prepare
+```
+
+The exact handling of nullary functions follows the normal Caret function-reference rules.
+
+---
+
+## State as a scope
+
+A particularly important use of `cycle` is iteration over a structured scope.
+
+Example state:
+
+```caret
+data
+  ^i 0
+  ^sum 0
+```
+
+The cycle may transform this scope at every step.
+
+Conceptually:
+
+```caret
+condition s =
+  s.i < 10
+
+body s =
+  s
+  >> set "sum" (s.sum + s.i)
+
+prepare s =
+  s
+  >> set "i" (s.i + 1)
+```
+
+Then:
+
+```caret
+result =
+  cycle initial condition body prepare
+```
+
+produces a final state equivalent to:
+
+```caret
+data
+  ^i 10
+  ^sum 45
+```
+
+The exact collection/scope update functions may be provided by the standard library.
+
+The important semantic rule is that each phase receives the complete current state and returns the complete next state.
+
+---
+
+## Functional semantics
+
+Cycles are semantically compatible with immutable data.
+
+A cycle does not require mutation of the current state.
+
+Conceptually:
+
+```text
+S0
+ ↓ body
+S1
+ ↓ prepare
+S2
+ ↓ body
+S3
+ ...
+```
+
+The previous state may become unreachable after the next state is produced.
+
+This permits Caret implementations to optimize immutable cycle transformations aggressively.
+
+If the compiler can prove that a previous state is no longer observable, it may:
+
+* reuse storage;
+* update values in place internally;
+* eliminate intermediate allocations;
+* use mutable machine registers or stack slots;
+* perform tail-call-like transformations.
+
+Such optimizations must not change the observable immutable semantics.
+
+---
+
+## Equivalence to tail recursion
+
+A cycle can be expressed as tail recursion.
+
+Conceptually:
+
+```caret
+run s =
+  condition s &
+    run (prepare (body s))
+  !
+    s
+```
+
+Therefore:
+
+```caret
+cycle initial condition body prepare
+```
+
+is semantically equivalent to repeatedly applying:
+
+```caret
+body >> prepare
+```
+
+while `condition` holds.
+
+This equivalence is important.
+
+`cycle` is not a separate mutable execution model.
+
+It is a convenient and optimizable representation of a common recursive state transformation.
+
+---
+
+## Body and prepare are separate
+
+`body` and `prepare` deliberately have separate roles.
+
+For a conventional `for`-style loop:
+
+```text
+initialize
+check
+body
+increment
+check
+body
+increment
+...
+```
+
+the mapping is:
+
+```text
+init       -> initialization
+condition  -> loop condition
+body       -> loop body
+prepare    -> increment/update before next iteration
+```
+
+For example:
+
+```caret
+initial =
+  data
+    ^i 0
+    ^sum 0
+
+condition s =
+  s.i < 10
+
+body s =
+  update s "sum" (s.sum + s.i)
+
+prepare s =
+  update s "i" (s.i + 1)
+
+result =
+  cycle initial condition body prepare
+```
+
+Keeping `body` and `prepare` separate makes conventional iteration easy to express while retaining the general state-transform model.
+
+---
+
+## Omitted prepare phase
+
+When no separate preparation step is needed, the identity function may be used.
+
+Conceptually:
+
+```caret
+cycle initial condition body identity
+```
+
+The standard library should provide an identity function.
+
+Caret may later provide shorthand syntax for omitting an identity `prepare` phase, but the fundamental semantics remain:
+
+```text
+prepare : S -> S
+```
+
+---
+
+## Omitted body phase
+
+Similarly, a cycle whose meaningful work occurs entirely in the preparation transformation may use `identity` as its body:
+
+```caret
+cycle initial condition identity prepare
+```
+
+No special loop form is required.
+
+---
+
+## Example: counting
+
+Conceptually:
+
+```caret
+initial =
+  data
+    ^i 0
+
+condition s =
+  s.i < 10
+
+body s =
+  s
+
+prepare s =
+  update s "i" (s.i + 1)
+
+result =
+  cycle initial condition body prepare
+```
+
+The final result contains:
+
+```caret
+result.i
+```
+
+with value:
+
+```text
+10
+```
+
+---
+
+## Example: accumulation
+
+```caret
+initial =
+  data
+    ^i 1
+    ^total 1
+
+condition s =
+  s.i <= 10
+
+body s =
+  update s "total" (s.total * s.i)
+
+prepare s =
+  update s "i" (s.i + 1)
+
+result =
+  cycle initial condition body prepare
+```
+
+The final cycle state contains both the accumulated result and the final index.
+
+The caller may select the part it needs:
+
+```caret
+factorial10 = result.total
+```
+
+This is preferable to requiring a separate externally mutable accumulator.
+
+---
+
+## Lambdas with cycles
+
+Cycle phases may be supplied directly as lambdas.
+
+Example:
+
+```caret
+result =
+  cycle
+    initial
+    (s -> s.i < 10)
+    (s -> update s "sum" (s.sum + s.i))
+    (s -> update s "i" (s.i + 1))
+```
+
+All lambda rules apply normally:
+
+* contracts;
+* lexical capture;
+* purity inference;
+* effects;
+* partial application;
+* ownership.
+
+No separate "loop lambda" syntax is required.
+
+---
+
+## Partial application
+
+Because `cycle` is an ordinary higher-order function, partial application may be used to define reusable cycle forms.
+
+For example:
+
+```caret
+repeatWhile condition body =
+  cycle _ condition body identity
+```
+
+or:
+
+```caret
+iterate prepare =
+  cycle _ _ identity prepare
+```
+
+The exact reusable abstractions should preferably be library functions rather than additional loop syntax.
+
+---
+
+## Scope shape
+
+The initial implementation should require a stable state shape across a cycle unless the type system can prove a broader compatible type.
+
+For example, if the initial state is:
+
+```caret
+data
+  ^i 0
+  ^sum 0
+```
+
+then `body` and `prepare` should normally return values exposing compatible fields:
+
+```text
+i
+sum
+```
+
+A transformation that sometimes returns:
+
+```caret
+data
+  ^i 1
+```
+
+and sometimes:
+
+```caret
+data
+  ^i 1
+  ^sum 10
+  ^error "..."
+```
+
+introduces variant state shapes.
+
+Such cycles may eventually be represented using:
+
+* structural unions;
+* optional fields;
+* pattern matching;
+* row-polymorphic types.
+
+The initial implementation may reject incompatible state-shape changes.
+
+---
+
+## Contracts
+
+Cycle phase contracts follow ordinary Caret rules.
+
+For a state contract `State`:
+
+```caret
+condition (State) s =
+  ...
+
+body (State) s =
+  ...
+
+prepare (State) s =
+  ...
+```
+
+The compiler should infer that the cycle preserves `State` where possible.
+
+Conceptually:
+
+```text
+condition : State -> Bool
+body      : State -> State
+prepare   : State -> State
+```
+
+A phase that violates the required state contract causes a compile-time error where statically detectable.
+
+---
+
+## Purity and effects
+
+`cycle` itself does not imply mutation or effects.
+
+A cycle is pure if:
+
+* initialization is pure;
+* `condition` is pure;
+* `body` is pure;
+* `prepare` is pure.
+
+For example:
+
+```caret
+result =
+  cycle
+    initial
+    (s -> s.i < 10)
+    updateTotal
+    increment
+```
+
+is pure if all supplied components are pure.
+
+If a phase has effects, those effects propagate to the cycle expression according to the ordinary effect system.
+
+Example:
+
+```caret
+(io) printState s =
+  print s
+  s
+```
+
+Using it as the body causes the cycle to acquire the `io` effect.
+
+The enclosing function must therefore explicitly permit that effect.
+
+Effects must not be hidden merely because they occur inside iteration.
+
+---
+
+## Condition purity
+
+The cycle condition must normally be pure.
+
+```text
+condition : S -> Bool
+```
+
+The compiler must reject a condition whose evaluation introduces an undeclared observable effect.
+
+This avoids behavior where merely checking whether another iteration should occur changes external program state.
+
+If effectful conditions are ever supported, they must be explicitly represented and must participate in normal effect inference.
+
+The initial implementation should require cycle conditions to be pure.
+
+---
+
+## State ownership
+
+Cycle state follows normal Caret ownership and lifetime rules.
+
+Conceptually, each iteration consumes the current state and produces the next state:
+
+```text
+S0 -> S1 -> S2
+```
+
+When a state is uniquely owned and the old version is not subsequently accessible, the compiler may safely reuse its physical storage.
+
+This is particularly important for large:
+
+* collections;
+* buffers;
+* scopes;
+* SIMD data;
+* format-processing state.
+
+Functional cycle semantics must therefore not imply mandatory copying.
+
+---
+
+## Cycles over collections
+
+Collection iteration can be implemented using `cycle`, although high-level collection operations should remain available.
+
+For example, operations such as:
+
+```caret
+map
+filter
+fold
+reduce
+```
+
+may internally lower to cycle-like transformations.
+
+Application code should normally prefer these more descriptive operations when they directly express the intent.
+
+Use `cycle` when the iteration requires explicit multi-value state or a more general state machine.
+
+---
+
+## Cycles and SIMD
+
+A cycle may be optimized using SIMD when its transformations satisfy normal SIMD requirements.
+
+The presence of `cycle` does not itself request SIMD execution.
+
+Explicit SIMD syntax such as:
+
+```caret
+collection :: transform
+```
+
+remains the preferred way to require vectorized element-wise execution.
+
+The compiler may nevertheless auto-vectorize suitable pure cycles where safe.
+
+---
+
+## Cycles and formats
+
+Streaming or incremental format processing may eventually use cycles internally.
+
+For example, a decoder may repeatedly transform a state containing:
+
+```text
+input position
+decoded values
+current format element
+remaining input
+```
+
+until the format is complete.
+
+The format system should not require application programmers to manually write such cycles for ordinary decoding.
+
+`cycle` provides a general implementation mechanism rather than replacing declarative formats.
+
+---
+
+## Early termination
+
+A future version of Caret may support explicit cycle-control values such as:
+
+```text
+Continue S
+Break S
+```
+
+Conceptually:
+
+```text
+body : S -> Continue S | Break S
+```
+
+A `Break` result terminates the cycle and returns its contained state.
+
+A `Continue` result proceeds normally.
+
+This is preferable to implementing `break` through:
+
+* exceptions;
+* hidden mutation;
+* non-local jumps.
+
+The initial implementation may postpone `Break` and `Continue`.
+
+Until then, early termination should be represented through the cycle condition or explicit state.
+
+For example:
+
+```caret
+data
+  ^done false
+  ^state ...
+```
+
+with:
+
+```caret
+condition s =
+  not s.done
+```
+
+---
+
+## Nested cycles
+
+A cycle is an expression and may therefore be used inside another cycle.
+
+Example conceptually:
+
+```caret
+outerResult =
+  cycle outerInitial outerCondition
+    (outer ->
+      innerResult =
+        cycle innerInitial innerCondition innerBody innerPrepare
+
+      combine outer innerResult)
+    outerPrepare
+```
+
+No special nesting syntax is required.
+
+Each cycle has its own state value.
+
+---
+
+## Relationship to conventional loops
+
+Common imperative loop forms can be expressed through `cycle`.
+
+A conventional:
+
+```text
+for initialization; condition; increment
+    body
+```
+
+corresponds to:
+
+```text
+cycle initialization condition body increment
+```
+
+A conventional:
+
+```text
+while condition
+    body
+```
+
+corresponds conceptually to:
+
+```text
+cycle initial condition body identity
+```
+
+A repeated state machine corresponds to:
+
+```text
+cycle initial notFinished transition identity
+```
+
+Therefore separate `for`, `while`, and `do` constructs are not required for the core language.
+
+Libraries may provide convenience abstractions where useful.
+
+---
+
+## Implementation model
+
+The compiler should initially lower:
+
+```caret
+cycle initial condition body prepare
+```
+
+to behavior equivalent to tail-recursive execution:
+
+```text
+state = initial
+
+loop:
+    if not condition(state):
+        return state
+
+    state = body(state)
+    state = prepare(state)
+    goto loop
+```
+
+This imperative pseudocode is an implementation strategy only.
+
+The observable language semantics remain immutable state transformation.
+
+The compiler is free to implement the cycle using:
+
+* a machine-level loop;
+* tail-call elimination;
+* mutable local variables;
+* registers;
+* in-place storage reuse;
+* specialized collection iteration.
+
+No intermediate state copies are required unless observable semantics demand them.
+
+---
+
+## Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. `cycle` as an expression that returns its final state.
+2. An initial state value.
+3. A pure unary Boolean condition.
+4. A unary body transformation.
+5. A unary preparation transformation.
+6. Lambda expressions as phase arguments.
+7. Named functions as phase arguments.
+8. Structured `data` or scope values as cycle state.
+9. Effect inference through all cycle phases.
+10. Contract checking of state transformations.
+11. Efficient lowering without mandatory immutable copying.
+12. Stable state shape across iterations.
+
+The initial implementation may postpone:
+
+* `Break` / `Continue` values;
+* changing structural state types during iteration;
+* effectful conditions;
+* automatic parallel cycles;
+* explicit loop labels;
+* generalized nondeterministic relational cycles.
+
+---
+
+## Design principle
+
+A Caret cycle is not fundamentally a mutable loop.
+
+It is repeated application of state transformations:
+
+```text
+S
+ -> body
+ -> prepare
+ -> S
+```
+
+controlled by:
+
+```text
+S -> Bool
+```
+
+and producing the final state as its result.
+
+This provides conventional iteration while remaining compatible with:
+
+* immutable data;
+* first-class scopes;
+* contracts;
+* effect inference;
+* lambdas;
+* partial application;
+* ownership optimization;
+* tail recursion;
+* SIMD optimization.
+
+The core model should remain small enough that more specialized iteration constructs can be implemented as ordinary Caret functions rather than additional language syntax.
+
 
 ## Not implemented
 
-- static types and `T?`, `T~`, `T?~`
 - cycle primitive and immutable scope transitions
 - ungrouped multiline call arguments and trailing blocks
-- lambdas
 - mutation and immutable scope-update expressions
-- resource ownership and deterministic destruction
-- rich reflection and reflected invocation
 - modules, imports, compiler backend, bytecode, optimizer

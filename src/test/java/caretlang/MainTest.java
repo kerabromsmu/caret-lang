@@ -169,6 +169,26 @@ final class MainTest {
         assertTrue(invocation.error().contains("Unknown name: assert"));
     }
 
+    @Test
+    void replKeepsStateAndStopsAtExitCommand() throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ByteArrayOutputStream error = new ByteArrayOutputStream();
+        int exitCode = Main.run(
+                new String[0],
+                new ByteArrayInputStream("value = 40\nprint value + 2\n  exit  \nprint absent\n"
+                        .getBytes(StandardCharsets.UTF_8)),
+                new PrintStream(output, true, StandardCharsets.UTF_8),
+                new PrintStream(error, true, StandardCharsets.UTF_8));
+
+        assertEquals(0, exitCode);
+        assertEquals("""
+                Caret prototype REPL. Enter one-line expressions or assignments. \
+                Type exit or press Ctrl-D to exit.
+                > > 42
+                >\s""", output.toString(StandardCharsets.UTF_8));
+        assertEquals("", error.toString(StandardCharsets.UTF_8));
+    }
+
     private Invocation run(Path program) throws Exception {
         return run(program.toString());
     }

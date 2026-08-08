@@ -29,19 +29,29 @@ With Gradle:
 gradle run --args='examples/demo.caret'
 ```
 
-Or with Java directly:
+Or through the project launcher:
 
 ```bash
-mkdir -p out
-javac --release 21 -d out $(find src/main/java -name '*.java')
-java -cp out caretlang.Main examples/demo.caret
+./run.sh examples/demo.caret
 ```
 
 Start the REPL:
 
 ```bash
-java -cp out caretlang.Main
+./repl.sh
 ```
+
+This launcher builds the application and then replaces itself with the interpreter, so there is no
+Gradle progress display around the interactive session. Up/Down browse previously entered lines,
+including commands saved across sessions in `~/.caret_history`. Consecutive duplicates, blank lines,
+and `exit` are not saved, and history is limited to 1,000 entries.
+
+Enter one-line expressions or assignments and type `exit` (or press Ctrl-D) to leave. Ctrl-C cancels
+the current input and opens a fresh prompt. Bindings remain available for the rest of the session.
+
+Do not launch the interactive REPL with `./gradlew run`: Gradle forwards ordinary input but does not
+give the Java child process ownership of the terminal, so terminal editing and arrow keys cannot
+work. Gradle's `run --args='path.caret'` form remains available for non-interactive file execution.
 
 Run the automated tests:
 
@@ -58,7 +68,7 @@ compatibility smoke test for representative Caret programs, including `examples/
 Run a single Caret test file with the `test` subcommand:
 
 ```bash
-java -cp out caretlang.Main test examples/testing.caret
+./run.sh test examples/testing.caret
 ```
 
 [`examples/implemented_features_test.caret`](examples/implemented_features_test.caret) is the
