@@ -93,24 +93,22 @@ final class Parser {
     }
 
     private Expr parseExpression(List<Token> tokens, SourcePosition end, int baseIndent) {
-        Expr expression = new ExprParser(tokens, end).parse();
-        return applyContinuations(expression, baseIndent);
+        return new ExprParser(tokens, end, continuationArguments(baseIndent)).parse();
     }
 
-    private Expr applyContinuations(Expr function, int baseIndent) {
-        if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= baseIndent) return function;
+    private List<Expr> continuationArguments(int baseIndent) {
+        if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= baseIndent) return List.of();
         int continuationIndent = lines.get(lineIndex).indent();
-        Expr result = function;
+        ArrayList<Expr> arguments = new ArrayList<>();
         while (lineIndex < lines.size() && lines.get(lineIndex).indent() > baseIndent) {
             LogicalLine line = lines.get(lineIndex);
             if (line.indent() != continuationIndent) {
                 throw error(line, Diagnostic.Codes.PARSE_UNEXPECTED_INDENT,
                         "Inconsistent continuation indentation");
             }
-            Expr argument = parseContinuationArgument(line);
-            result = new Apply(result, argument, SourceSpan.cover(result.span(), argument.span()));
+            arguments.add(parseContinuationArgument(line));
         }
-        return result;
+        return List.copyOf(arguments);
     }
 
     private Expr parseContinuationArgument(LogicalLine line) {
@@ -120,9 +118,8 @@ final class Parser {
             throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
                     "Continuation argument must be an expression");
         }
-        Expr argument = new ExprParser(tokens.subList(0, tokens.size() - 1),
-                tokens.getLast().span().end()).parse();
-        return applyContinuations(argument, line.indent());
+        return parseExpression(tokens.subList(0, tokens.size() - 1),
+                tokens.getLast().span().end(), line.indent());
     }
 
     private DefinitionHeader definitionHeader(List<Token> tokens) {
@@ -172,6 +169,7 @@ final class Parser {
 
     private static final class ExprParser {
         private final List<Token> tokens;
+        private final List<Expr> continuationArguments;
         private int current;
 
         ExprParser(List<Token> tokens) {
@@ -181,8 +179,13 @@ final class Parser {
         }
 
         ExprParser(List<Token> tokens, SourcePosition end) {
+            this(tokens, end, List.of());
+        }
+
+        ExprParser(List<Token> tokens, SourcePosition end, List<Expr> continuationArguments) {
             this.tokens = new ArrayList<>(tokens);
             this.tokens.add(new Token(Kind.EOF, "", SourceSpan.point(end)));
+            this.continuationArguments = List.copyOf(continuationArguments);
         }
 
         Expr parse() {
@@ -289,6 +292,11 @@ final class Parser {
             while (canStartAtom(peek())) {
                 Expr argument = postfix();
                 expr = new Apply(expr, argument, SourceSpan.cover(expr.span(), argument.span()));
+            }
+            if (atEnd()) {
+                for (Expr argument : continuationArguments) {
+                    expr = new Apply(expr, argument, SourceSpan.cover(expr.span(), argument.span()));
+                }
             }
             return expr;
         }

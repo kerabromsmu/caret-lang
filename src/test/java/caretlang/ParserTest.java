@@ -180,6 +180,27 @@ final class ParserTest {
     }
 
     @Test
+    void multilineArgumentsRetainApplicationPrecedence() {
+        Assign conditionalAssignment = assertInstanceOf(Assign.class, new Parser("""
+                result = true & add
+                  1
+                  2
+                """).parseProgram().getFirst());
+        Conditional conditional = assertInstanceOf(Conditional.class, conditionalAssignment.value());
+        Apply conditionalCall = assertInstanceOf(Apply.class, conditional.whenTrue());
+        assertInstanceOf(Apply.class, conditionalCall.function());
+
+        Assign infixAssignment = assertInstanceOf(Assign.class, new Parser("""
+                result = 1 + add
+                  2
+                  3
+                """).parseProgram().getFirst());
+        Binary addition = assertInstanceOf(Binary.class, infixAssignment.value());
+        Apply rightCall = assertInstanceOf(Apply.class, addition.right());
+        assertInstanceOf(Apply.class, rightCall.function());
+    }
+
+    @Test
     void blankAndCommentLinesDoNotEndUngroupedContinuation() {
         Assign assignment = assertInstanceOf(Assign.class, new Parser("""
                 result = add

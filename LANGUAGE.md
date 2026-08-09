@@ -361,7 +361,9 @@ This unified prefix/infix behavior is planned and is not implemented by the curr
 
 Outside an explicit delimiter, a physical line indented more deeply than a non-definition
 expression continues that expression. Each continuation expression is the next whitespace-applied
-argument, and dedentation ends the call.
+argument at ordinary application precedence, and dedentation ends the call. Lower-precedence
+operators on the initial line remain outside that application: `true & add` followed by indented
+`1` and `2` means `true & (add 1 2)`.
 
 ```caret
 result = add

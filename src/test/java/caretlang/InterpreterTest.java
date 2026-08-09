@@ -331,7 +331,7 @@ final class InterpreterTest {
 
     @Test
     void evaluatesUngroupedMultilineCalls() {
-        assertEquals("7\n9\n", execute("""
+        assertEquals("7\n9\n3\n6\n", execute("""
                 add a b = a + b
                 multiply a b = a * b
                 result = add
@@ -343,6 +343,14 @@ final class InterpreterTest {
                 print add
                   4
                   5
+                conditional = true & add
+                  1
+                  2
+                print conditional
+                infix = 1 + add
+                  2
+                  3
+                print infix
                 """));
     }
 
