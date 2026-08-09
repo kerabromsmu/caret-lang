@@ -16,10 +16,27 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Iterator;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 final class JLineReplTest {
+    @Test
+    void failedSubmissionDoesNotPoisonLaterBindingDefinition() {
+        ByteArrayOutputStream outputBytes = new ByteArrayOutputStream();
+        ByteArrayOutputStream errorBytes = new ByteArrayOutputStream();
+        PrintStream output = new PrintStream(outputBytes, true, StandardCharsets.UTF_8);
+        PrintStream error = new PrintStream(errorBytes, true, StandardCharsets.UTF_8);
+        Iterator<String> lines = List.of("x = missing", "x = 1", "print x", "exit").iterator();
+
+        JLineRepl.runLoop(() -> lines.hasNext() ? lines.next() : null,
+                new Interpreter(output), output, error);
+
+        assertEquals("1\n", outputBytes.toString(StandardCharsets.UTF_8));
+        assertTrue(errorBytes.toString(StandardCharsets.UTF_8).contains("Unknown name: missing"));
+        assertFalse(errorBytes.toString(StandardCharsets.UTF_8).contains("Duplicate definition: x"));
+    }
     @TempDir Path temporaryDirectory;
 
     @Test

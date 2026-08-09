@@ -26,8 +26,14 @@ final class Interpreter {
     }
 
     void execute(List<Stmt> program) {
-        Resolution resolution = Resolver.resolve(program, globals);
-        executeBlock(program, globals, resolution);
+        int checkpoint = globals.checkpoint();
+        try {
+            Resolution resolution = Resolver.resolve(program, globals);
+            executeBlock(program, globals, resolution);
+        } catch (RuntimeException | Error failure) {
+            globals.rollbackTo(checkpoint);
+            throw failure;
+        }
     }
 
     Value evalExpression(Expr expression) {

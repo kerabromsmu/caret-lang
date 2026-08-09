@@ -141,6 +141,22 @@ final class InterpreterTest {
     }
 
     @Test
+    void lazyBranchesDeferForwardInitializationChecksUntilSelected() {
+        assertEquals("1\nfalse\n", execute("""
+                print true & 1 ! later
+                print false and later
+                later = 2
+                """));
+
+        LangException selected = assertThrows(LangException.class, () -> execute("""
+                print false & 1 ! later
+                later = 2
+                """));
+        assertEquals(Diagnostic.Codes.READ_BEFORE_INITIALIZATION, selected.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, selected.diagnostic().phase());
+    }
+
+    @Test
     void optionalMissingFieldsAreValuesButInvalidOperationsAreDiagnostics() {
         assertEquals("~\n", execute("""
                 make =
@@ -202,7 +218,7 @@ final class InterpreterTest {
 
     @Test
     void rejectsDuplicateDefinitionsAndParameters() {
-        LangException duplicate = assertDiagnostic("value = 1\nvalue = 2", "Duplicate definition: value", 2, 1);
+        LangException duplicate = expectDiagnostic("value = 1\nvalue = 2", "Duplicate definition: value", 2, 1);
         assertEquals(Diagnostic.Phase.SEMANTIC, duplicate.diagnostic().phase());
         assertTrue(duplicate.getMessage().contains("Note: Line 1, column 1"));
         assertDiagnostic("same value value = value", "Duplicate parameter: value", 1, 1);
@@ -210,7 +226,7 @@ final class InterpreterTest {
 
     @Test
     void reportsReadsBeforeSequentialDeclarations() {
-        LangException error = assertDiagnostic("first = second\nsecond = 2",
+        LangException error = expectDiagnostic("first = second\nsecond = 2",
                 "Binding read before initialization: second", 1, 9);
         assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
         assertEquals(Diagnostic.Codes.READ_BEFORE_INITIALIZATION, error.diagnostic().code());
@@ -346,7 +362,8 @@ final class InterpreterTest {
     void testAssertionsValidateTheirArgumentsWithLocatedErrors() {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         TestReporter reporter = new TestReporter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
-        Interpreter interpreter = new Interpreter(new PrintStream(bytes), reporter);
+        Interpreter interpreter = new Interpreter(
+                new PrintStream(bytes, true, StandardCharsets.UTF_8), reporter);
 
         LangException condition = assertThrows(LangException.class, () -> interpreter.execute(
                 new Parser("assert \"boolean required\" 1").parseProgram()));
@@ -362,11 +379,20 @@ final class InterpreterTest {
         return bytes.toString(StandardCharsets.UTF_8);
     }
 
-    private LangException assertDiagnostic(String source, String detail, int line, int column) {
+    private void assertDiagnostic(String source, String detail, int line, int column) {
         LangException error = assertThrows(LangException.class, () -> execute(source));
+        assertDiagnosticDetails(error, detail, line, column);
+    }
+
+    private LangException expectDiagnostic(String source, String detail, int line, int column) {
+        LangException error = assertThrows(LangException.class, () -> execute(source));
+        assertDiagnosticDetails(error, detail, line, column);
+        return error;
+    }
+
+    private void assertDiagnosticDetails(LangException error, String detail, int line, int column) {
         assertEquals(line, error.span().start().line());
         assertEquals(column, error.span().start().column());
         assertTrue(error.getMessage().contains(detail));
-        return error;
     }
 }

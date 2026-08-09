@@ -384,6 +384,14 @@ Blocks predeclare their function bindings before executing statements. This supp
 mutual recursion. Other bindings are initialized in source order and cannot be read before their
 declaration executes.
 
+Initialization checks respect lazy evaluation. A reference to a later binding in an unselected
+conditional branch or a short-circuited Boolean right operand does not fail; selecting that path
+before the declaration executes produces a located `READ_BEFORE_INITIALIZATION` diagnostic.
+
+Top-level execution commits newly declared bindings only when the submitted program completes.
+This is observable in the REPL: after a failed submission such as `x = absent`, a later `x = 1`
+submission remains valid. External effects already performed before a failure are not rolled back.
+
 Closures capture their lexical environment. Duplicate definitions and duplicate parameters in one
 scope are errors. Parameters and declarations in a function body may shadow outer bindings;
 function-body declarations are nested inside the parameter scope so established forms such as

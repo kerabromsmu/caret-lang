@@ -15,6 +15,7 @@ final class Environment {
     private final Environment parent;
     private final Map<String, Binding> values = new LinkedHashMap<>();
     private final List<Binding> slots = new ArrayList<>();
+    private final List<String> slotNames = new ArrayList<>();
 
     Environment(Environment parent) {
         this.parent = parent;
@@ -32,6 +33,7 @@ final class Environment {
         }
         values.put(name, new Binding());
         slots.add(values.get(name));
+        slotNames.add(name);
     }
 
     void initialize(String name, Value value) {
@@ -75,9 +77,24 @@ final class Environment {
     }
 
     List<LocalBinding> localBindings() {
-        ArrayList<LocalBinding> bindings = new ArrayList<>(values.size());
-        int slot = 0;
-        for (String name : values.keySet()) bindings.add(new LocalBinding(name, slot++));
+        ArrayList<LocalBinding> bindings = new ArrayList<>(slotNames.size());
+        for (int slot = 0; slot < slotNames.size(); slot++) {
+            bindings.add(new LocalBinding(slotNames.get(slot), slot));
+        }
         return List.copyOf(bindings);
+    }
+
+    int checkpoint() {
+        return slots.size();
+    }
+
+    void rollbackTo(int checkpoint) {
+        if (checkpoint < 0 || checkpoint > slots.size()) {
+            throw new IllegalArgumentException("Invalid environment checkpoint");
+        }
+        while (slots.size() > checkpoint) {
+            slots.removeLast();
+            values.remove(slotNames.removeLast());
+        }
     }
 }

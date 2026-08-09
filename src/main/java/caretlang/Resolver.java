@@ -1,8 +1,26 @@
 package caretlang;
 
-import caretlang.Ast.*;
+import caretlang.Ast.Apply;
+import caretlang.Ast.Assign;
+import caretlang.Ast.Binary;
+import caretlang.Ast.Conditional;
+import caretlang.Ast.DynamicField;
+import caretlang.Ast.Expr;
+import caretlang.Ast.ExprStmt;
+import caretlang.Ast.Field;
+import caretlang.Ast.FunctionDef;
+import caretlang.Ast.Group;
+import caretlang.Ast.Hole;
+import caretlang.Ast.Literal;
+import caretlang.Ast.Name;
+import caretlang.Ast.Reflect;
+import caretlang.Ast.Stmt;
+import caretlang.Ast.Unary;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 
 final class Resolver {
     private record Symbol(int slot, SourceSpan declaration, boolean initialized) {
@@ -35,10 +53,12 @@ final class Resolver {
         for (Stmt statement : statements) {
             switch (statement) {
                 case Assign assign -> {
-                    resolveExpr(assign.value(), scope, functionBody);
-                    scope.symbols.compute(assign.name(), (ignored, symbol) -> symbol.initializedSymbol());
+                    resolveExpr(assign.value(), scope, functionBody, false);
+                    Symbol symbol = scope.symbols.get(assign.name());
+                    if (symbol == null) throw new IllegalStateException("Assignment was not predeclared");
+                    scope.symbols.put(assign.name(), symbol.initializedSymbol());
                 }
-                case ExprStmt expression -> resolveExpr(expression.expression(), scope, functionBody);
+                case ExprStmt expression -> resolveExpr(expression.expression(), scope, functionBody, false);
                 case FunctionDef function -> resolveFunction(function, scope);
             }
         }
@@ -73,58 +93,66 @@ final class Resolver {
         resolveBlock(function.body(), new Scope(parameters), true);
     }
 
-    private void resolveExpr(Expr expression, Scope scope, boolean functionBody) {
+    private void resolveExpr(Expr expression, Scope scope, boolean functionBody, boolean deferred) {
         switch (expression) {
-            case Name name -> resolveName(name, scope, functionBody);
+            case Name name -> resolveName(name, scope, functionBody, deferred);
             case Literal ignored -> { }
             case Hole ignored -> { }
-            case Unary unary -> resolveExpr(unary.operand(), scope, functionBody);
+            case Unary unary -> resolveExpr(unary.operand(), scope, functionBody, deferred);
             case Binary binary -> {
-                resolveExpr(binary.left(), scope, functionBody);
-                resolveExpr(binary.right(), scope, functionBody);
+                resolveExpr(binary.left(), scope, functionBody, deferred);
+                resolveExpr(binary.right(), scope, functionBody,
+                        deferred || binary.operator().equals("and") || binary.operator().equals("or"));
             }
             case Conditional conditional -> {
-                resolveExpr(conditional.condition(), scope, functionBody);
-                resolveExpr(conditional.whenTrue(), scope, functionBody);
-                resolveExpr(conditional.whenFalse(), scope, functionBody);
+                resolveExpr(conditional.condition(), scope, functionBody, deferred);
+                resolveExpr(conditional.whenTrue(), scope, functionBody, true);
+                resolveExpr(conditional.whenFalse(), scope, functionBody, true);
             }
             case Apply apply -> {
-                resolveExpr(apply.function(), scope, functionBody);
-                resolveExpr(apply.argument(), scope, functionBody);
+                resolveExpr(apply.function(), scope, functionBody, deferred);
+                resolveExpr(apply.argument(), scope, functionBody, deferred);
             }
-            case Field field -> resolveExpr(field.target(), scope, functionBody);
+            case Field field -> resolveExpr(field.target(), scope, functionBody, deferred);
             case DynamicField field -> {
-                resolveExpr(field.target(), scope, functionBody);
-                resolveExpr(field.name(), scope, functionBody);
+                resolveExpr(field.target(), scope, functionBody, deferred);
+                resolveExpr(field.name(), scope, functionBody, deferred);
             }
-            case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody);
-            case Group group -> resolveExpr(group.expression(), scope, functionBody);
+            case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
+            case Group group -> resolveExpr(group.expression(), scope, functionBody, deferred);
         }
     }
 
-    private void resolveName(Name name, Scope scope, boolean functionBody) {
+    private void resolveName(Name name, Scope scope, boolean functionBody, boolean deferred) {
         int depth = 0;
-        Symbol premature = null;
+        boolean premature = false;
         for (Scope current = scope; current != null; current = current.parent, depth++) {
             Symbol symbol = current.symbols.get(name.name());
             if (symbol == null) continue;
             // A function body may close over a later outer assignment because invocation happens
             // dynamically. Its own block declarations and parameters must still be initialized.
             if (!symbol.initialized() && !(functionBody && depth >= 2)) {
-                premature = symbol;
+                if (deferred) {
+                    names.put(name, binding(symbol, depth, false));
+                    return;
+                }
+                premature = true;
                 continue;
             }
-            names.put(name, new Resolution.Binding(depth, symbol.slot(), symbol.declaration(),
-                    functionBody && depth >= 2));
+            names.put(name, binding(symbol, depth, functionBody && depth >= 2));
             return;
         }
-        if (premature != null) {
+        if (premature) {
             throw new LangException(Diagnostic.Phase.SEMANTIC,
                     Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
                     "Binding read before initialization: " + name.name(), name.span());
         }
         // Preserve lazy conditional/Boolean behavior: an unresolved name in an unselected branch
         // is harmless. Selected unresolved reads retain the established runtime diagnostic.
+    }
+
+    private static Resolution.Binding binding(Symbol symbol, int depth, boolean captured) {
+        return new Resolution.Binding(depth, symbol.slot(), symbol.declaration(), captured);
     }
 
     private void duplicate(String name, SourceSpan span, Symbol original) {
