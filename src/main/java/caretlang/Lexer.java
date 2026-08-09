@@ -6,6 +6,8 @@ import java.util.List;
 final class Lexer {
     enum Kind { NUMBER, STRING, IDENT, NAME, SYMBOL, EOF }
     record Token(Kind kind, String text, SourceSpan span) {}
+    record LogicalLine(int indent, String text, int number, int offset, int column, SourceSpan span) {}
+    private record PhysicalLine(int start, int end, int number) {}
 
     static List<Token> lex(String source) {
         return lex(source, 0, 1, 1);
@@ -132,6 +134,53 @@ final class Lexer {
             else if (c == ')' || c == ']') depth--;
         }
         return depth;
+    }
+
+    static List<LogicalLine> logicalLines(String source) {
+        List<PhysicalLine> physicalLines = physicalLines(source);
+        ArrayList<LogicalLine> result = new ArrayList<>();
+        for (int physicalIndex = 0; physicalIndex < physicalLines.size(); physicalIndex++) {
+            PhysicalLine first = physicalLines.get(physicalIndex);
+            String line = source.substring(first.start(), first.end()).stripTrailing();
+            String trimmed = line.stripLeading();
+            int leadingCharacters = line.length() - trimmed.length();
+            if (trimmed.isEmpty() || trimmed.startsWith("//")) continue;
+
+            int indent = 0;
+            for (int i = 0; i < leadingCharacters; i++) indent += line.charAt(i) == '\t' ? 2 : 1;
+            int contentOffset = first.start() + leadingCharacters;
+            int depth = continuationDelimiterDelta(trimmed);
+            PhysicalLine last = first;
+            while (depth > 0 && physicalIndex + 1 < physicalLines.size()) {
+                last = physicalLines.get(++physicalIndex);
+                depth += continuationDelimiterDelta(source.substring(last.start(), last.end()));
+            }
+
+            String lastText = source.substring(last.start(), last.end()).stripTrailing();
+            int logicalEnd = last.start() + lastText.length();
+            SourcePosition start = new SourcePosition(contentOffset, first.number(), leadingCharacters + 1);
+            SourcePosition end = new SourcePosition(logicalEnd, last.number(), lastText.length() + 1);
+            result.add(new LogicalLine(indent, source.substring(contentOffset, logicalEnd), first.number(),
+                    contentOffset, leadingCharacters + 1, new SourceSpan(start, end)));
+        }
+        return result;
+    }
+
+    private static List<PhysicalLine> physicalLines(String source) {
+        ArrayList<PhysicalLine> lines = new ArrayList<>();
+        int start = 0;
+        int number = 1;
+        while (start <= source.length()) {
+            int end = start;
+            while (end < source.length() && source.charAt(end) != '\n' && source.charAt(end) != '\r') end++;
+            int next = end;
+            if (next < source.length() && source.charAt(next) == '\r') next++;
+            if (next < source.length() && source.charAt(next) == '\n') next++;
+            lines.add(new PhysicalLine(start, end, number++));
+            if (end >= source.length()) break;
+            start = next;
+        }
+        return lines;
     }
 
     private static Token token(Kind kind, String text, PositionTable positions, int start, int end) {

@@ -66,6 +66,13 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
     String render() {
         if (primarySpan == null) return message;
         SourcePosition start = primarySpan.start();
-        return "Line " + start.line() + ", column " + start.column() + ": " + message;
+        StringBuilder rendered = new StringBuilder("Line ")
+                .append(start.line()).append(", column ").append(start.column()).append(": ").append(message);
+        for (Related note : related) {
+            SourcePosition relatedStart = note.span().start();
+            rendered.append("\n  Note: Line ").append(relatedStart.line())
+                    .append(", column ").append(relatedStart.column()).append(": ").append(note.message());
+        }
+        return rendered.toString();
     }
 }

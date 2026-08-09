@@ -40,7 +40,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final LinkedHashMap<String, Value> fields;
 
         public Scope(Map<String, Value> fields) {
-            this.fields = new LinkedHashMap<>(fields);
+            this.fields = checkedMap(fields);
         }
 
         public Optional<Value> find(String name) {
@@ -126,7 +126,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.parent = null;
             this.addedKey = null;
             this.addedValue = null;
-            this.materialized = Collections.unmodifiableMap(new LinkedHashMap<>(entries));
+            this.materialized = Collections.unmodifiableMap(checkedMap(entries));
         }
 
         private Dict(Dict parent, String key, Value value) {
@@ -271,5 +271,13 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() {
             return "<partial " + display + "/" + remainingArity() + ">";
         }
+    }
+
+    private static LinkedHashMap<String, Value> checkedMap(Map<String, Value> values) {
+        Objects.requireNonNull(values, "values");
+        LinkedHashMap<String, Value> copy = new LinkedHashMap<>();
+        values.forEach((key, value) -> copy.put(
+                Objects.requireNonNull(key, "value name"), Objects.requireNonNull(value, "value")));
+        return copy;
     }
 }

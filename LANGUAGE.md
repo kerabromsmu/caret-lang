@@ -38,7 +38,9 @@ source expression. Columns count raw source characters. A tab therefore advances
 column by one, although a leading tab still contributes two spaces to indentation depth.
 
 Internally, errors retain their phase, a stable diagnostic code, message, primary source span, and
-space for related source spans. The CLI renders the primary location in the compact form below.
+related source spans. The CLI renders the primary location in the compact form below and follows it
+with located `Note:` lines when a diagnostic has related locations, such as the first declaration
+for a duplicate definition.
 
 ```text
 Error: Line 1, column 7: Unknown name: absent
@@ -396,6 +398,10 @@ normal implicit invocation of a nullary binding, can be passed anywhere a callab
 exposes reflective fields such as `kind` and `remaining`. Bare nullary function names continue to
 invoke automatically. This is one reflective value rather than separate metadata and
 function-reference operators.
+
+Function invocation has an interpreter-owned maximum depth. Both ordinary application and the
+implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
+of exposing JVM stack exhaustion.
 
 The complete operand/coercion rules for operators once collections and static types exist remain a
 prerequisite for extending unified binary functions beyond the existing scalar operators.

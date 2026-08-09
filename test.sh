@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-./run.sh examples/demo.caret > /tmp/caret-output.txt
-cat > /tmp/caret-expected.txt <<'EXPECTED'
+CARET_TEST_TMP=$(mktemp -d /tmp/caret-tests.XXXXXX)
+trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
+./run.sh examples/demo.caret > "$CARET_TEST_TMP/output.txt"
+cat > "$CARET_TEST_TMP/expected.txt" <<'EXPECTED'
 true
 false
 A
@@ -16,24 +18,24 @@ Scope
 name,count
 1
 EXPECTED
-diff -u /tmp/caret-expected.txt /tmp/caret-output.txt
+diff -u "$CARET_TEST_TMP/expected.txt" "$CARET_TEST_TMP/output.txt"
 
-./run.sh examples/implemented_features.caret > /tmp/caret-implemented-features-output.txt
-diff -u examples/implemented_features.expected /tmp/caret-implemented-features-output.txt
+./run.sh examples/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
+diff -u examples/implemented_features.expected "$CARET_TEST_TMP/implemented-features-output.txt"
 
-./run.sh test examples/testing.caret > /tmp/caret-testing-output.txt
-cat > /tmp/caret-testing-expected.txt <<'EXPECTED'
+./run.sh test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
+cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value
 PASS: null remains distinct from missing
 PASS: sequences compare structurally
 Summary: 3 tests, 3 passed, 0 failed
 EXPECTED
-diff -u /tmp/caret-testing-expected.txt /tmp/caret-testing-output.txt
+diff -u "$CARET_TEST_TMP/testing-expected.txt" "$CARET_TEST_TMP/testing-output.txt"
 
 ./run.sh test examples/implemented_features_test.caret \
-  > /tmp/caret-implemented-features-test-output.txt
+  > "$CARET_TEST_TMP/implemented-features-test-output.txt"
 
-cat > /tmp/caret-language.caret <<'CARET'
+cat > "$CARET_TEST_TMP/language.caret" <<'CARET'
 add a b = a + b
 mul a b = a * b
 
@@ -82,8 +84,8 @@ print (@made).size
 print (@made).names
 CARET
 
-./run.sh /tmp/caret-language.caret > /tmp/caret-language-output.txt
-cat > /tmp/caret-language-expected.txt <<'EXPECTED'
+./run.sh "$CARET_TEST_TMP/language.caret" > "$CARET_TEST_TMP/language-output.txt"
+cat > "$CARET_TEST_TMP/language-expected.txt" <<'EXPECTED'
 7
 9
 true
@@ -108,17 +110,17 @@ Scope
 2
 answer,nothing
 EXPECTED
-diff -u /tmp/caret-language-expected.txt /tmp/caret-language-output.txt
+diff -u "$CARET_TEST_TMP/language-expected.txt" "$CARET_TEST_TMP/language-output.txt"
 
-cat > /tmp/caret-required-field.caret <<'CARET'
+cat > "$CARET_TEST_TMP/required-field.caret" <<'CARET'
 make =
   ^present = true
 value = make
 print value.absent
 CARET
-if ./run.sh /tmp/caret-required-field.caret > /tmp/caret-required-field.out 2>&1; then
+if ./run.sh "$CARET_TEST_TMP/required-field.caret" > "$CARET_TEST_TMP/required-field.out" 2>&1; then
   printf 'Required missing field unexpectedly succeeded.\n' >&2
   exit 1
 fi
-grep -F 'Scope has no exported binding: absent' /tmp/caret-required-field.out >/dev/null
+grep -F 'Scope has no exported binding: absent' "$CARET_TEST_TMP/required-field.out" >/dev/null
 printf 'All prototype tests passed.\n'

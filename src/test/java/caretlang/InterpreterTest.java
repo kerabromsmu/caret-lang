@@ -70,6 +70,17 @@ final class InterpreterTest {
     }
 
     @Test
+    void excessiveImplicitZeroArgumentRecursionProducesALanguageDiagnostic() {
+        LangException error = assertThrows(LangException.class, () -> execute("""
+                loop =
+                  loop
+                print loop
+                """));
+        assertEquals(Diagnostic.Codes.CALL_DEPTH_EXCEEDED, error.diagnostic().code());
+        assertNotNull(error.span());
+    }
+
+    @Test
     void reflectionRefersToFunctionsWithoutInvokingThem() {
         assertEquals("Function\n0\nFunction\n1\n", execute("""
                 zero =
@@ -191,7 +202,9 @@ final class InterpreterTest {
 
     @Test
     void rejectsDuplicateDefinitionsAndParameters() {
-        assertDiagnostic("value = 1\nvalue = 2", "Duplicate definition: value", 2, 1);
+        LangException duplicate = assertDiagnostic("value = 1\nvalue = 2", "Duplicate definition: value", 2, 1);
+        assertEquals(Diagnostic.Phase.SEMANTIC, duplicate.diagnostic().phase());
+        assertTrue(duplicate.getMessage().contains("Note: Line 1, column 1"));
         assertDiagnostic("same value value = value", "Duplicate parameter: value", 1, 1);
     }
 
@@ -346,10 +359,11 @@ final class InterpreterTest {
         return bytes.toString(StandardCharsets.UTF_8);
     }
 
-    private void assertDiagnostic(String source, String detail, int line, int column) {
+    private LangException assertDiagnostic(String source, String detail, int line, int column) {
         LangException error = assertThrows(LangException.class, () -> execute(source));
         assertEquals(line, error.span().start().line());
         assertEquals(column, error.span().start().column());
         assertTrue(error.getMessage().contains(detail));
+        return error;
     }
 }

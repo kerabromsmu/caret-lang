@@ -6,8 +6,10 @@ import java.io.PrintStream;
 import java.util.*;
 
 final class Interpreter {
+    private static final int MAX_CALL_DEPTH = 1_000;
     private final Environment globals = new Environment(null);
     private final PrintStream output;
+    private int callDepth;
 
     Interpreter() {
         this(System.out);
@@ -32,6 +34,7 @@ final class Interpreter {
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env) {
+        SemanticValidator.validate(statements);
         LinkedHashMap<String, Value> exports = new LinkedHashMap<>();
         IdentityHashMap<FunctionDef, Value.FunctionValue> functions = prepareDeclarations(statements, env);
         Value last = Value.Missing.INSTANCE;
@@ -56,24 +59,6 @@ final class Interpreter {
     private IdentityHashMap<FunctionDef, Value.FunctionValue> prepareDeclarations(List<Stmt> statements,
                                                                                    Environment env) {
         IdentityHashMap<FunctionDef, Value.FunctionValue> functions = new IdentityHashMap<>();
-        LinkedHashMap<String, SourceSpan> declarations = new LinkedHashMap<>();
-        for (Stmt statement : statements) {
-            if (statement instanceof Assign(String name, boolean ignoredExport, Expr ignoredValue, SourceSpan span)) {
-                SourceSpan original = declarations.putIfAbsent(name, span);
-                if (original != null) duplicateDefinition(name, span, original);
-            } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> ignoredBody,
-                                                        SourceSpan span)) {
-                SourceSpan original = declarations.putIfAbsent(name, span);
-                if (original != null) duplicateDefinition(name, span, original);
-                HashSet<String> parameterNames = new HashSet<>();
-                for (String parameter : params) {
-                    if (!parameterNames.add(parameter)) {
-                        throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_PARAMETER,
-                                "Duplicate parameter: " + parameter, span);
-                    }
-                }
-            }
-        }
         for (Stmt statement : statements) {
             if (statement instanceof FunctionDef function) declare(env, function.name(), function.span());
         }
@@ -102,24 +87,23 @@ final class Interpreter {
         }
     }
 
-    private void duplicateDefinition(String name, SourceSpan span, SourceSpan original) {
-        throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
-                Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: " + name, span,
-                List.of(new Diagnostic.Related("First definition of " + name, original))));
-    }
-
     private Value eval(Expr expr, Environment env, List<Value> holeArgs) {
-        if (holeArgs == null) {
-            HoleAnalysis analysis = analyzeHoles(expr);
-            if (!analysis.indexes().isEmpty()) {
-                HoleShape shape = holeShape(expr, analysis.indexes());
-                Expr captured = captureNonHoleParts(expr, env, analysis.containsHole());
-                return new Value.HoleFunction(expr.toString(), shape.arity(),
-                        supplied -> eval(captured, env, supplied));
+        try {
+            if (holeArgs == null) {
+                HoleAnalysis analysis = analyzeHoles(expr);
+                if (!analysis.indexes().isEmpty()) {
+                    HoleShape shape = holeShape(expr, analysis.indexes());
+                    Expr captured = captureNonHoleParts(expr, env, analysis.containsHole());
+                    return new Value.HoleFunction(expr.toString(), shape.arity(),
+                            supplied -> eval(captured, env, supplied));
+                }
             }
+            Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
+            return evalInner(resolved, env);
+        } catch (StackOverflowError exhaustedStack) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
+                    "Maximum Caret evaluation depth exceeded", expr.span());
         }
-        Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
-        return evalInner(resolved, env);
     }
 
     private Value evalInner(Expr expr, Environment env) {
@@ -135,7 +119,7 @@ final class Interpreter {
         if (expr instanceof Name(String name2, SourceSpan ignored)) {
             Value value = env.get(name2);
             if (value instanceof Value.Callable callable && callable.remainingArity() == 0) {
-                return ((Value.FunctionValue) callable).invokeZero();
+                return invokeZero(callable, expr.span());
             }
             return value;
         }
@@ -176,12 +160,7 @@ final class Interpreter {
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
-            try {
-                return callable.apply(argument, expr.span());
-            } catch (StackOverflowError exhaustedStack) {
-                throw runtime(Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
-                        "Maximum Caret call depth exceeded");
-            }
+            return invoke(callable, argument, expr.span());
         }
         if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
             Value target = evalInner(target2, env);
@@ -211,6 +190,34 @@ final class Interpreter {
             return evalInner(expression, env);
         }
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
+    }
+
+    private Value invoke(Value.Callable callable, Value argument, SourceSpan span) {
+        return withinCallDepth(span, () -> callable.apply(argument, span));
+    }
+
+    private Value invokeZero(Value.Callable callable, SourceSpan span) {
+        if (!(callable instanceof Value.FunctionValue function)) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                    "Unsupported zero-argument callable", span);
+        }
+        return withinCallDepth(span, function::invokeZero);
+    }
+
+    private Value withinCallDepth(SourceSpan span, java.util.function.Supplier<Value> invocation) {
+        if (callDepth >= MAX_CALL_DEPTH) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
+                    "Maximum Caret call depth exceeded", span);
+        }
+        callDepth++;
+        try {
+            return invocation.get();
+        } catch (StackOverflowError exhaustedStack) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
+                    "Maximum Caret call depth exceeded", span);
+        } finally {
+            callDepth--;
+        }
     }
 
     private Value binary(String op, Value left, Value right) {
@@ -507,53 +514,15 @@ final class Interpreter {
 
     private Expr captureNonHoleParts(Expr expr, Environment env,
                                      IdentityHashMap<Expr, Boolean> containsHole) {
-        if (!containsHole.get(expr)) return new Literal(evalInner(expr, env), expr.span());
-        return switch (expr) {
-            case Hole hole -> hole;
-            case Literal literal -> literal;
-            case Name name -> name;
-            case Unary unary -> new Unary(unary.operator(),
-                    captureNonHoleParts(unary.operand(), env, containsHole), unary.span());
-            case Binary binary -> new Binary(binary.operator(),
-                    captureNonHoleParts(binary.left(), env, containsHole),
-                    captureNonHoleParts(binary.right(), env, containsHole), binary.span());
-            case Conditional conditional -> new Conditional(
-                    captureNonHoleParts(conditional.condition(), env, containsHole),
-                    captureNonHoleParts(conditional.whenTrue(), env, containsHole),
-                    captureNonHoleParts(conditional.whenFalse(), env, containsHole), conditional.span());
-            case Apply apply -> new Apply(captureNonHoleParts(apply.function(), env, containsHole),
-                    captureNonHoleParts(apply.argument(), env, containsHole), apply.span());
-            case Field field -> new Field(captureNonHoleParts(field.target(), env, containsHole),
-                    field.field(), field.optional(), field.span());
-            case DynamicField field -> new DynamicField(
-                    captureNonHoleParts(field.target(), env, containsHole),
-                    captureNonHoleParts(field.name(), env, containsHole), field.optional(), field.span());
-            case Reflect reflect -> new Reflect(captureNonHoleParts(reflect.target(), env, containsHole),
-                    reflect.span());
-            case Group group -> new Group(captureNonHoleParts(group.expression(), env, containsHole), group.span());
-        };
+        return AstRewriter.rewrite(expr, candidate -> !containsHole.get(candidate)
+                ? Optional.of(new Literal(evalInner(candidate, env), candidate.span()))
+                : Optional.empty());
     }
 
     private Expr bindHoles(Expr expr, HoleBinder holes) {
-        return switch (expr) {
-            case Hole hole -> new Literal(hole.index() == 0 ? holes.next() : holes.at(hole.index()), hole.span());
-            case Literal literal -> literal;
-            case Name name -> name;
-            case Unary unary -> new Unary(unary.operator(), bindHoles(unary.operand(), holes), unary.span());
-            case Binary binary -> new Binary(binary.operator(), bindHoles(binary.left(), holes),
-                    bindHoles(binary.right(), holes), binary.span());
-            case Conditional conditional -> new Conditional(bindHoles(conditional.condition(), holes),
-                    bindHoles(conditional.whenTrue(), holes), bindHoles(conditional.whenFalse(), holes),
-                    conditional.span());
-            case Apply apply -> new Apply(bindHoles(apply.function(), holes), bindHoles(apply.argument(), holes),
-                    apply.span());
-            case Field field -> new Field(bindHoles(field.target(), holes), field.field(), field.optional(),
-                    field.span());
-            case DynamicField field -> new DynamicField(bindHoles(field.target(), holes),
-                    bindHoles(field.name(), holes), field.optional(), field.span());
-            case Reflect reflect -> new Reflect(bindHoles(reflect.target(), holes), reflect.span());
-            case Group group -> new Group(bindHoles(group.expression(), holes), group.span());
-        };
+        return AstRewriter.rewrite(expr, candidate -> candidate instanceof Hole(int index, SourceSpan span)
+                ? Optional.of(new Literal(index == 0 ? holes.next() : holes.at(index), span))
+                : Optional.empty());
     }
 
     private static final class HoleBinder {

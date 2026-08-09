@@ -2,31 +2,38 @@ package caretlang;
 
 import caretlang.Ast.*;
 import caretlang.Lexer.Kind;
+import caretlang.Lexer.LogicalLine;
 import caretlang.Lexer.Token;
 
 import java.util.*;
 
 final class Parser {
-    private record Line(int indent, String text, int number, int offset, int column, SourceSpan span) {}
-    private record PhysicalLine(int start, int end, int nextStart, int number) {}
-
-    private final List<Line> lines;
+    private record DefinitionHeader(String name, List<String> parameters, boolean exported) {}
+    private final List<LogicalLine> lines;
     private int lineIndex;
 
     Parser(String source) {
-        this.lines = preprocess(source);
+        this.lines = Lexer.logicalLines(source);
     }
 
     List<Stmt> parseProgram() {
-        return parseBlock(0);
+        try {
+            return parseBlock(0);
+        } catch (StackOverflowError exhaustedStack) {
+            SourceSpan span = lines.isEmpty()
+                    ? SourceSpan.point(new SourcePosition(0, 1, 1))
+                    : lines.get(Math.min(lineIndex, lines.size() - 1)).span();
+            throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                    "Maximum expression nesting depth exceeded", span);
+        }
     }
 
     private List<Stmt> parseBlock(int indent) {
         ArrayList<Stmt> result = new ArrayList<>();
         while (lineIndex < lines.size()) {
-            Line line = lines.get(lineIndex);
-            if (line.indent < indent) break;
-            if (line.indent > indent) {
+            LogicalLine line = lines.get(lineIndex);
+            if (line.indent() < indent) break;
+            if (line.indent() > indent) {
                 throw error(line, Diagnostic.Codes.PARSE_UNEXPECTED_INDENT, "Unexpected indentation");
             }
             result.add(parseLine(line, indent));
@@ -34,9 +41,9 @@ final class Parser {
         return result;
     }
 
-    private Stmt parseLine(Line line, int indent) {
+    private Stmt parseLine(LogicalLine line, int indent) {
         lineIndex++;
-        List<Token> tokens = Lexer.lex(line.text, line.offset, line.number, line.column);
+        List<Token> tokens = Lexer.lex(line.text(), line.offset(), line.number(), line.column());
 
         // Output is intentionally a statement form: the complete remainder of the
         // line is its expression. This keeps ordinary whitespace application
@@ -55,48 +62,25 @@ final class Parser {
         if (eq >= 0) {
             List<Token> left = tokens.subList(0, eq);
             List<Token> right = tokens.subList(eq + 1, tokens.size() - 1);
-            boolean exported = !left.isEmpty() && left.getFirst().text().equals("^");
-            int offset = exported ? 1 : 0;
-
-            if (!exported && left.size() > 1 && left.stream().allMatch(t -> t.kind() == Kind.IDENT) && !right.isEmpty()) {
-                requireBindable(left);
-                String name = left.getFirst().text();
-                List<String> params = left.subList(1, left.size()).stream().map(Token::text).toList();
+            DefinitionHeader header = definitionHeader(left);
+            if (header != null && !right.isEmpty()) {
                 Expr expression = new ExprParser(right, tokens.getLast().span().end()).parse();
-                ExprStmt expressionStatement = new ExprStmt(expression, expression.span());
-                return new FunctionDef(name, params, List.of(expressionStatement),
-                        SourceSpan.cover(left.getFirst().span(), expression.span()));
-            }
-
-            if (left.size() == offset + 1 && left.get(offset).kind() == Kind.IDENT && !right.isEmpty()) {
-                requireBindable(left.get(offset));
-                Expr expression = new ExprParser(right, tokens.getLast().span().end()).parse();
-                return new Assign(left.get(offset).text(), exported, expression,
-                        SourceSpan.cover(left.getFirst().span(), expression.span()));
-            }
-
-            if (!exported && !left.isEmpty() && left.stream().allMatch(t -> t.kind() == Kind.IDENT) && right.isEmpty()) {
-                requireBindable(left);
-                String name = left.getFirst().text();
-                List<String> params = left.subList(1, left.size()).stream().map(Token::text).toList();
-                if (lineIndex >= lines.size() || lines.get(lineIndex).indent <= indent) {
-                    throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
-                            "Function body must be indented");
+                if (header.parameters().isEmpty()) {
+                    return new Assign(header.name(), header.exported(), expression,
+                            SourceSpan.cover(left.getFirst().span(), expression.span()));
                 }
-                int childIndent = lines.get(lineIndex).indent;
-                List<Stmt> body = parseBlock(childIndent);
-                return new FunctionDef(name, params, body, functionSpan(left, body));
-            }
-
-            if (left.size() == offset + 1 && left.get(offset).kind() == Kind.IDENT && right.isEmpty()) {
-                // Zero-argument function with an indented body.
-                if (!exported && lineIndex < lines.size() && lines.get(lineIndex).indent > indent) {
-                    requireBindable(left.get(offset));
-                    String name = left.get(offset).text();
-                    int childIndent = lines.get(lineIndex).indent;
-                    List<Stmt> body = parseBlock(childIndent);
-                    return new FunctionDef(name, List.of(), body, functionSpan(left, body));
+                if (!header.exported()) {
+                    ExprStmt expressionStatement = new ExprStmt(expression, expression.span());
+                    return new FunctionDef(header.name(), header.parameters(), List.of(expressionStatement),
+                            SourceSpan.cover(left.getFirst().span(), expression.span()));
                 }
+            }
+            if (header != null && right.isEmpty() && !header.exported()) {
+                if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= indent) {
+                    throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Function body must be indented");
+                }
+                List<Stmt> body = parseBlock(lines.get(lineIndex).indent());
+                return new FunctionDef(header.name(), header.parameters(), body, functionSpan(left, body));
             }
 
             throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
@@ -106,6 +90,17 @@ final class Parser {
         Expr expression = new ExprParser(tokens.subList(0, tokens.size() - 1),
                 tokens.getLast().span().end()).parse();
         return new ExprStmt(expression, expression.span());
+    }
+
+    private DefinitionHeader definitionHeader(List<Token> tokens) {
+        boolean exported = !tokens.isEmpty() && tokens.getFirst().text().equals("^");
+        int start = exported ? 1 : 0;
+        if (tokens.size() <= start || !tokens.subList(start, tokens.size()).stream()
+                .allMatch(token -> token.kind() == Kind.IDENT)) return null;
+        List<Token> names = tokens.subList(start, tokens.size());
+        requireBindable(names);
+        return new DefinitionHeader(names.getFirst().text(),
+                names.subList(1, names.size()).stream().map(Token::text).toList(), exported);
     }
 
     private SourceSpan functionSpan(List<Token> header, List<Stmt> body) {
@@ -137,59 +132,9 @@ final class Parser {
         return -1;
     }
 
-    private static List<Line> preprocess(String source) {
-        List<PhysicalLine> physicalLines = physicalLines(source);
-        ArrayList<Line> result = new ArrayList<>();
-        for (int physicalIndex = 0; physicalIndex < physicalLines.size(); physicalIndex++) {
-            PhysicalLine first = physicalLines.get(physicalIndex);
-            String line = source.substring(first.start(), first.end()).stripTrailing();
-            String trimmed = line.stripLeading();
-            int leadingCharacters = line.length() - trimmed.length();
-            if (trimmed.isEmpty() || trimmed.startsWith("//")) continue;
-
-            int indent = 0;
-            for (int i = 0; i < leadingCharacters; i++) {
-                indent += line.charAt(i) == '\t' ? 2 : 1;
-            }
-            int contentOffset = first.start() + leadingCharacters;
-            int depth = Lexer.continuationDelimiterDelta(trimmed);
-            PhysicalLine last = first;
-            while (depth > 0 && physicalIndex + 1 < physicalLines.size()) {
-                last = physicalLines.get(++physicalIndex);
-                depth += Lexer.continuationDelimiterDelta(source.substring(last.start(), last.end()));
-            }
-
-            String lastText = source.substring(last.start(), last.end()).stripTrailing();
-            int logicalEnd = last.start() + lastText.length();
-            String logicalText = source.substring(contentOffset, logicalEnd);
-            SourcePosition start = new SourcePosition(contentOffset, first.number(), leadingCharacters + 1);
-            SourcePosition end = new SourcePosition(logicalEnd, last.number(), lastText.length() + 1);
-            result.add(new Line(indent, logicalText, first.number(), contentOffset, leadingCharacters + 1,
-                    new SourceSpan(start, end)));
-        }
-        return result;
-    }
-
-    private static List<PhysicalLine> physicalLines(String source) {
-        ArrayList<PhysicalLine> lines = new ArrayList<>();
-        int start = 0;
-        int number = 1;
-        while (start <= source.length()) {
-            int end = start;
-            while (end < source.length() && source.charAt(end) != '\n' && source.charAt(end) != '\r') end++;
-            int next = end;
-            if (next < source.length() && source.charAt(next) == '\r') next++;
-            if (next < source.length() && source.charAt(next) == '\n') next++;
-            lines.add(new PhysicalLine(start, end, next, number++));
-            if (end >= source.length()) break;
-            start = next;
-        }
-        return lines;
-    }
-
-    private LangException error(Line line, String code, String message) {
+    private LangException error(LogicalLine line, String code, String message) {
         return new LangException(Diagnostic.Phase.PARSER, code,
-                message + "\n  " + line.text, line.span);
+                message + "\n  " + line.text(), line.span());
     }
 
     private static final class ExprParser {

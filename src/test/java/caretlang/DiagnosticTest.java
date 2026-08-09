@@ -32,13 +32,14 @@ final class DiagnosticTest {
         LangException error = assertThrows(LangException.class,
                 () -> execute("value = 1\nvalue = 2"));
 
-        assertDiagnostic(error, Diagnostic.Phase.RUNTIME,
+        assertDiagnostic(error, Diagnostic.Phase.SEMANTIC,
                 Diagnostic.Codes.DUPLICATE_DEFINITION, 2, 1);
         assertEquals(1, error.diagnostic().related().size());
         Diagnostic.Related original = error.diagnostic().related().getFirst();
         assertEquals("First definition of value", original.message());
         assertEquals(1, original.span().start().line());
         assertEquals(1, original.span().start().column());
+        assertTrue(error.getMessage().contains("Note: Line 1, column 1"));
     }
 
     private void execute(String source) {
