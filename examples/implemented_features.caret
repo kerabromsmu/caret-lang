@@ -27,6 +27,12 @@ scale value =
 print add 2 3
 print scale base
 
+// Symbolic binary operators are the same callable values in prefix and infix form.
+increment = + _ 1
+print + 2 3
+print increment 5
+print (-) 7 2
+
 // Zero-argument functions are invoked when read.
 answer =
   40 + 2
@@ -106,6 +112,12 @@ print (@person).size
 print (@person).names
 print (@factorial).kind
 print (@factorial).remaining
+factorialReference = @factorial
+print factorialReference == @factorial
+print factorialReference == @add
+print (@+).kind
+print (@+).remaining
+print factorialReference.absent~
 print (@?).kind
 print (@~).kind
 print (@42).kind

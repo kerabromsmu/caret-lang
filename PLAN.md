@@ -318,23 +318,18 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Recommended next implementation step
 
-Continue Phase 1 with the unified callable representation required by `CORE-INFIX-002` and
-`CORE-CALL-004`, before adding named infix parsing or composition.
+Continue Phase 1 with fixed-precedence named infix calls (`CORE-INFIX-001`). Unified symbolic
+callables and non-callable function references are now implemented by `CORE-INFIX-002` and
+`CORE-CALL-004`.
 
-1. Represent built-in symbolic operators as ordinary callable values with the same arity,
-   application, partial-state, depth-guard, and reflection protocol as named functions.
-2. Add prefix symbolic application such as `+ 2 3` without changing existing infix precedence or
-   inventing custom symbolic-operator declaration syntax.
-3. Replace the special nullary `FunctionValue` cast with a callable-level explicit invocation API.
-4. Implement the specified callable reflective view for `@function`, preserving suppression of bare
-   nullary auto-invocation and documenting the deliberate compatibility change.
-5. Extend callable and partial reflection tests, operator error/arity tests, the runnable example,
-   and conformance evidence.
-6. Only then add fixed-precedence named infix calls and `>>` composition on top of the shared
-   callable metadata.
-
-This step prevents operator, function, partial, reflection, and future lambda invocation semantics
-from diverging before the parser gains additional callable forms.
+1. Resolve the grammar boundary that distinguishes a named infix call from whitespace application,
+   while retaining the specified precedence between comparison and addition.
+2. Parse and evaluate named binary infix calls through the existing callable application path.
+3. Require exactly the documented callable behavior and produce located diagnostics for invalid
+   infix targets or arity.
+4. Add precedence, associativity, partial-application interaction, multiline, and failure tests.
+5. Extend the runnable example, native Caret test, language reference, and conformance evidence.
+6. Then implement `>>` composition (`CORE-COMP-001`) on the shared callable representation.
 
 ## Explicit assumptions and allowed deferrals
 

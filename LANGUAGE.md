@@ -98,8 +98,9 @@ factory          // calls factory and produces its exported scope
 ```
 
 This rule is not limited to zero-argument functions. `@function` refers to the function binding
-without invoking it regardless of the function's arity. Its reflective view includes `kind` and
-`remaining`.
+without invoking it regardless of the function's arity. The result is a non-callable function
+reference whose reflective fields include `kind` and `remaining`. References to the same function
+compare equal by target identity; references to different functions do not.
 
 ## Function application
 
@@ -257,7 +258,11 @@ Current metadata:
 
 - all values: `kind`
 - scopes: `size`, `names`
-- functions: `remaining`
+- function references: `kind = "Function"`, `remaining`
+
+`@function` is a reference and reflection mechanism, not an alternate call syntax. Applying the
+result is a `NOT_CALLABLE` error. Reflecting an existing function reference returns the same
+reference.
 
 The metadata representation is intentionally minimal. A later version should expose iterable field descriptors, parameter descriptors, mutability, ownership, nullability, optionality, and export status.
 
@@ -404,22 +409,31 @@ scope are errors. Parameters and declarations in a function body may shadow oute
 function-body declarations are nested inside the parameter scope so established forms such as
 `^name = name` export a parameter under the same name. Parent lookup is lexical.
 
-Equality is structural for scalar values and exported scopes. Callable values cannot be compared
-for equality. Collection equality will be structural when collections are implemented.
+Equality is structural for scalar values, exported scopes, and collections. Callable values cannot
+be compared for equality. Function references compare by the identity of their referenced callable.
 
-The current prototype's `@function` result is metadata and is not callable. The planned reification
-model extends that behavior: `@function` produces a callable reflective view. It suppresses the
-normal implicit invocation of a nullary binding, can be passed anywhere a callable is accepted, and
-exposes reflective fields such as `kind` and `remaining`. Bare nullary function names continue to
-invoke automatically. This is one reflective value rather than separate metadata and
-function-reference operators.
+`@function` produces a non-callable reflective function reference. It suppresses normal implicit
+invocation of a nullary binding and exposes `kind` and `remaining`; bare nullary function names
+continue to invoke automatically.
+
+Built-in symbolic binary operators are ordinary two-argument callable values. Prefix and infix
+forms share the same implementation, arity, partial application, call-depth guard, and errors:
+
+```text
++ 2 3       // 5
+2 + 3       // 5
+increment = + _ 1
+```
+
+Unary negation retains its established parsing for `- name arg`. Use grouping when prefix
+subtraction begins with a named operand: `(-) left right`.
 
 Function invocation has an interpreter-owned maximum depth. Both ordinary application and the
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
 
-The complete operand/coercion rules for operators once collections and static types exist remain a
-prerequisite for extending unified binary functions beyond the existing scalar operators.
+The complete operand/coercion rules for operators once static types exist remain a prerequisite for
+extending unified binary functions beyond the existing scalar operators.
 
 The self-interpreter may represent successful and failed operations as exported result scopes. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.

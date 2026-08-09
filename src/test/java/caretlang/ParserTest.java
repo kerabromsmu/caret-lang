@@ -19,6 +19,37 @@ final class ParserTest {
     }
 
     @Test
+    void parsesSymbolicOperatorsAsPrefixCallableValues() {
+        for (String operator : List.of("+", "*", "/", "%", "==", "!=", ">", ">=", "<", "<=")) {
+            Apply outer = assertInstanceOf(Apply.class, expression(operator + " 6 2"));
+            Apply inner = assertInstanceOf(Apply.class, outer.function());
+            assertEquals(operator, assertInstanceOf(Name.class, inner.function()).name());
+        }
+
+        Apply subtraction = assertInstanceOf(Apply.class, expression("- 6 2"));
+        assertEquals("-", assertInstanceOf(Name.class,
+                assertInstanceOf(Apply.class, subtraction.function()).function()).name());
+
+        Unary establishedUnary = assertInstanceOf(Unary.class, expression("- identity 5"));
+        assertInstanceOf(Apply.class, establishedUnary.operand());
+        Apply groupedSubtraction = assertInstanceOf(Apply.class, expression("(-) left right"));
+        assertInstanceOf(Group.class,
+                assertInstanceOf(Apply.class, groupedSubtraction.function()).function());
+    }
+
+    @Test
+    void parsesPrefixOperatorsWithMultilineArguments() {
+        Assign assignment = assertInstanceOf(Assign.class, new Parser("""
+                result = +
+                  2
+                  3
+                """).parseProgram().getFirst());
+        Apply call = assertInstanceOf(Apply.class, assignment.value());
+        assertInstanceOf(Apply.class, call.function());
+        assertEquals(3, call.span().end().line());
+    }
+
+    @Test
     void printStatementConsumesTheRemainingExpression() {
         ExprStmt statement = assertInstanceOf(ExprStmt.class,
                 new Parser("print add 2 3").parseProgram().getFirst());

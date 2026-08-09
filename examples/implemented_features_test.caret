@@ -30,6 +30,11 @@ answer =
 assertEqual "binding lookup" base 10
 assertEqual "function application" (add 2 3) 5
 assertEqual "multiline function body" (scale base) 20
+increment = + _ 1
+assertEqual "prefix symbolic operator" (+ 2 3) 5
+assertEqual "prefix and infix operators agree" (+ 2 3) (2 + 3)
+assertEqual "symbolic operator partial" (increment 5) 6
+assertEqual "grouped prefix subtraction" ((-) 7 2) 5
 assertEqual "zero-argument function invocation" answer 42
 assertEqual "zero-argument function reflection kind" (@answer).kind "Function"
 assertEqual "zero-argument function reflection arity" (@answer).remaining 0
@@ -104,6 +109,12 @@ assertEqual "scope reflection size" (@person).size 2
 assertEqual "scope reflection names" (@person).names "name,age"
 assertEqual "function reflection kind" (@factorial).kind "Function"
 assertEqual "function reflection remaining arity" (@factorial).remaining 1
+factorialReference = @factorial
+assert "function references use target identity" (factorialReference == @factorial)
+assertEqual "different function references are unequal" (factorialReference == @add) false
+assertEqual "operator reference kind" (@+).kind "Function"
+assertEqual "operator reference remaining arity" (@+).remaining 2
+assertEqual "function reference optional metadata" factorialReference.absent~ ~
 assertEqual "null reflection kind" (@?).kind "Null"
 assertEqual "missing reflection kind" (@~).kind "Missing"
 assertEqual "number reflection kind" (@42).kind "Number"

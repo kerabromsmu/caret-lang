@@ -95,6 +95,59 @@ final class InterpreterTest {
     }
 
     @Test
+    void functionReferencesAreReflectiveNonCallableAndUseTargetIdentity() {
+        assertEquals("Function\n1\ntrue\nfalse\nFunction\n2\ntrue\n~\n", execute("""
+                identity value = value
+                other value = value
+                reference = @identity
+                sameReference = @identity
+                reflectedAgain = @reference
+                operatorReference = @+
+
+                print reference.kind
+                print reference.remaining
+                print reference == sameReference
+                print reference == @other
+                print operatorReference.kind
+                print operatorReference.remaining
+                print reflectedAgain == reference
+                print reference.absent~
+                """));
+
+        LangException error = assertThrows(LangException.class, () -> execute("""
+                identity value = value
+                reference = @identity
+                print reference 1
+                """));
+        assertEquals(Diagnostic.Codes.NOT_CALLABLE, error.diagnostic().code());
+        assertTrue(error.getMessage().contains("Value is not callable"));
+    }
+
+    @Test
+    void symbolicOperatorsSharePrefixInfixAndPartialBehavior() {
+        assertEquals("5\n5\n6\n2\n3\n1\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n6\n5\n-5\n", execute("""
+                identity value = value
+                increment = + _ 1
+                subtract = (-)
+                print + 2 3
+                print 2 + 3
+                print * 2 3
+                print / 6 3
+                print % 7 4
+                print - 7 6
+                print == 2 2
+                print != 2 3
+                print < 2 3
+                print <= 3 3
+                print > 3 2
+                print >= 3 3
+                print increment 5
+                print subtract 7 2
+                print - identity 5
+                """));
+    }
+
+    @Test
     void holesBecomeFutureArgumentsInLeftToRightOrder() {
         assertEquals("123\nno\n", execute("""
                 digits a b c = a * 100 + b * 10 + c

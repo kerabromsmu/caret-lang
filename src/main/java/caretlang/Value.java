@@ -5,7 +5,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Name, Value.Scope, Value.Seq, Value.Dict, Value.Callable {
+        Value.Name, Value.Reflective, Value.Seq, Value.Dict, Value.Callable {
 
     record Num(double value) implements Value {
         @Override public String toString() {
@@ -36,7 +36,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return "~"; }
     }
 
-    final class Scope implements Value {
+    non-sealed interface Reflective extends Value {
+        Optional<Value> find(String name);
+        Map<String, Value> fields();
+    }
+
+    final class Scope implements Reflective {
         private final LinkedHashMap<String, Value> fields;
 
         public Scope(Map<String, Value> fields) {
@@ -180,6 +185,11 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     non-sealed interface Callable extends Value {
         Value apply(Value argument, SourceSpan callSpan);
         int remainingArity();
+
+        default Value invokeZero(SourceSpan callSpan) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                    "Callable still requires arguments", callSpan);
+        }
     }
 
     final class FunctionValue implements Callable {
@@ -205,12 +215,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.implementation = implementation;
         }
 
-        public Value invokeZero() {
+        @Override public Value invokeZero(SourceSpan callSpan) {
             if (remainingArity() != 0) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
-                        "Function still requires arguments: " + name, null);
+                        "Function still requires arguments: " + name, callSpan);
             }
-            return implementation.apply(bound, null);
+            return implementation.apply(bound, callSpan);
         }
 
         @Override public Value apply(Value argument, SourceSpan callSpan) {
@@ -233,6 +243,33 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() {
             return "<fn " + name + "/" + remainingArity() + ">";
         }
+    }
+
+    final class FunctionReference implements Reflective {
+        private final Callable target;
+
+        FunctionReference(Callable target) {
+            this.target = Objects.requireNonNull(target);
+        }
+
+        Callable target() { return target; }
+
+        @Override public Optional<Value> find(String name) {
+            return Optional.ofNullable(fields().get(name));
+        }
+
+        @Override public Map<String, Value> fields() {
+            return Map.of("kind", new Str("Function"),
+                    "remaining", new Num(target.remainingArity()));
+        }
+
+        @Override public boolean equals(Object other) {
+            return other instanceof FunctionReference reference && target == reference.target;
+        }
+
+        @Override public int hashCode() { return System.identityHashCode(target); }
+
+        @Override public String toString() { return "<function-reference " + target + ">"; }
     }
 
     final class HoleFunction implements Callable {

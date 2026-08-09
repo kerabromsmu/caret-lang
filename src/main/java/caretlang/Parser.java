@@ -168,6 +168,8 @@ final class Parser {
     }
 
     private static final class ExprParser {
+        private static final Set<String> BINARY_OPERATOR_VALUES = Set.of(
+                "+", "-", "*", "/", "%", "==", "!=", ">", ">=", "<", "<=");
         private final List<Token> tokens;
         private final List<Expr> continuationArguments;
         private int current;
@@ -269,7 +271,7 @@ final class Parser {
         }
 
         private Expr unary() {
-            if (match("-")) {
+            if (peek().text().equals("-") && !prefixOrReferenceMinus() && match("-")) {
                 Token operator = previous();
                 Expr operand = unary();
                 return new Unary("-", operand, SourceSpan.cover(operator.span(), operand.span()));
@@ -329,6 +331,10 @@ final class Parser {
         }
 
         private Expr primary() {
+            if (peek().kind() == Kind.SYMBOL && BINARY_OPERATOR_VALUES.contains(peek().text())) {
+                Token operator = tokens.get(current++);
+                return new Name(operator.text(), operator.span());
+            }
             if (matchKind(Kind.NUMBER)) return numberLiteral(previous());
             if (matchKind(Kind.STRING)) return new Literal(new Value.Str(previous().text()), previous().span());
             if (matchKind(Kind.NAME)) return new Literal(new Value.Name(previous().text()), previous().span());
@@ -382,6 +388,64 @@ final class Parser {
                 return !Set.of("and", "or", "not").contains(token.text());
             }
             return Set.of("(", "?", "~").contains(token.text());
+        }
+
+        private boolean prefixOrReferenceMinus() {
+            int operands = continuationArguments.size();
+            int index = current + 1;
+            Token firstOperand = index < tokens.size() ? tokens.get(index) : tokens.getLast();
+            while (index < tokens.size() && tokens.get(index).kind() != Kind.EOF
+                    && !BINARY_OPERATOR_VALUES.contains(tokens.get(index).text())) {
+                int end = postfixAtomEnd(index);
+                if (end == index) break;
+                operands++;
+                index = end;
+            }
+            if (operands == 0) return true;
+            boolean namedFirstOperand = firstOperand.kind() == Kind.IDENT
+                    && !firstOperand.text().equals("_")
+                    && !firstOperand.text().matches("_[1-9][0-9]*");
+            return operands >= 2 && !namedFirstOperand;
+        }
+
+        /** Returns the index after one atom and its postfix accesses, or the input index if absent. */
+        private int postfixAtomEnd(int index) {
+            if (index >= tokens.size()) return index;
+            Token token = tokens.get(index);
+            int end;
+            if (token.text().equals("(")) {
+                int depth = 1;
+                end = index + 1;
+                while (end < tokens.size() && depth > 0) {
+                    String text = tokens.get(end++).text();
+                    if (text.equals("(")) depth++;
+                    else if (text.equals(")")) depth--;
+                }
+                if (depth != 0) return index;
+            } else if (canStartAtom(token)) {
+                end = index + 1;
+            } else {
+                return index;
+            }
+            while (end < tokens.size()) {
+                if (tokens.get(end).text().equals(".") && end + 1 < tokens.size()) {
+                    end += 2;
+                    if (end < tokens.size() && tokens.get(end).text().equals("~")) end++;
+                } else if (tokens.get(end).text().equals("[")) {
+                    int depth = 1;
+                    end++;
+                    while (end < tokens.size() && depth > 0) {
+                        String text = tokens.get(end++).text();
+                        if (text.equals("[")) depth++;
+                        else if (text.equals("]")) depth--;
+                    }
+                    if (depth != 0) return index;
+                    if (end < tokens.size() && tokens.get(end).text().equals("~")) end++;
+                } else {
+                    break;
+                }
+            }
+            return end;
         }
 
         private boolean match(String... texts) {

@@ -12,6 +12,9 @@ Null
 quote: " slash: \ tab: 	 smile: 🙂
 5
 20
+5
+6
+5
 42
 Function
 0
@@ -53,6 +56,11 @@ Scope
 name,age
 Function
 1
+true
+false
+Function
+2
+~
 Null
 Missing
 Number

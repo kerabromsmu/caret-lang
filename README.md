@@ -192,5 +192,6 @@ print (@source).names
 ```
 
 `@scope`, `@sequence`, and `@dictionary` expose basic metadata such as `kind`, `size`, and, where
-applicable, `names`. `@function` exposes `kind` and remaining arity. Reflection exposes only public
-or exported bindings and does not invoke a reflected function.
+applicable, `names`. `@function` returns a non-callable function reference exposing `kind` and
+remaining arity. References compare by target identity. Reflection exposes only public or exported
+bindings and does not invoke a reflected function.

@@ -157,7 +157,7 @@ final class Interpreter {
             }
             Value left = evalInner(left1, env, resolution);
             Value right = evalInner(right1, env, resolution);
-            return binary(operator, left, right);
+            return applyBinaryOperator(operator, left, right, expr.span());
         }
         if (expr instanceof Conditional(Expr condition1, Expr whenTrue, Expr whenFalse, SourceSpan ignored)) {
             Value condition = evalInner(condition1, env, resolution);
@@ -213,11 +213,7 @@ final class Interpreter {
     }
 
     private Value invokeZero(Value.Callable callable, SourceSpan span) {
-        if (!(callable instanceof Value.FunctionValue function)) {
-            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
-                    "Unsupported zero-argument callable", span);
-        }
-        return withinCallDepth(span, function::invokeZero);
+        return withinCallDepth(span, () -> callable.invokeZero(span));
     }
 
     private Value withinCallDepth(SourceSpan span, java.util.function.Supplier<Value> invocation) {
@@ -236,7 +232,21 @@ final class Interpreter {
         }
     }
 
-    private Value binary(String op, Value left, Value right) {
+    private Value applyBinaryOperator(String operator, Value left, Value right, SourceSpan span) {
+        Value value = globals.get(operator);
+        if (!(value instanceof Value.Callable callable)) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                    "Binary operator is not callable: " + operator, span);
+        }
+        Value partial = invoke(callable, left, span);
+        if (!(partial instanceof Value.Callable remaining)) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                    "Binary operator did not retain its second parameter: " + operator, span);
+        }
+        return invoke(remaining, right, span);
+    }
+
+    private Value binaryOperation(String op, Value left, Value right) {
         return switch (op) {
             case "+" -> {
                 if (left instanceof Value.Str || right instanceof Value.Str)
@@ -296,6 +306,11 @@ final class Interpreter {
     }
 
     private void installBuiltins() {
+        for (String operator : List.of("+", "-", "*", "/", "%", "==", "!=", ">", ">=", "<", "<=")) {
+            globals.define(operator, function(operator, List.of("left", "right"), args ->
+                    binaryOperation(operator, args.get(0), args.get(1))));
+        }
+
         globals.define("print", new Value.FunctionValue("print", List.of("value"), args -> {
             output.println(args.getFirst());
             return args.getFirst();
@@ -430,17 +445,22 @@ final class Interpreter {
     }
 
     private Value field(Value target, String name, boolean optional) {
-        if (!(target instanceof Value.Scope scope)) {
+        if (!(target instanceof Value.Reflective reflective)) {
             throw runtime(Diagnostic.Codes.INVALID_FIELD_TARGET,
                     "Field access requires a scope, got: " + target);
         }
-        Optional<Value> value = scope.find(name);
+        Optional<Value> value = reflective.find(name);
         if (value.isPresent()) return value.get();
         if (optional) return Value.Missing.INSTANCE;
-        throw runtime(Diagnostic.Codes.MISSING_FIELD, "Scope has no exported binding: " + name);
+        if (target instanceof Value.Scope) {
+            throw runtime(Diagnostic.Codes.MISSING_FIELD, "Scope has no exported binding: " + name);
+        }
+        throw runtime(Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: " + name);
     }
 
     private Value reflect(Value value) {
+        if (value instanceof Value.FunctionReference reference) return reference;
+        if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
         LinkedHashMap<String, Value> metadata = new LinkedHashMap<>();
         switch (value) {
             case Value.Num ignored -> { }
@@ -453,12 +473,13 @@ final class Interpreter {
                 metadata.put("size", new Value.Num(scope.fields().size()));
                 metadata.put("names", new Value.Str(String.join(",", scope.fields().keySet())));
             }
+            case Value.Reflective reflective -> metadata.putAll(reflective.fields());
             case Value.Seq sequence -> metadata.put("size", new Value.Num(sequence.values().size()));
             case Value.Dict dictionary -> {
                 metadata.put("size", new Value.Num(dictionary.entries().size()));
                 metadata.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
             }
-            case Value.Callable callable -> metadata.put("remaining", new Value.Num(callable.remainingArity()));
+            case Value.Callable ignored -> throw new AssertionError("Handled above");
         }
         metadata.putFirst("kind", new Value.Str(kindOf(value)));
         return new Value.Scope(metadata);
@@ -473,6 +494,8 @@ final class Interpreter {
             case Value.Null ignored -> "Null";
             case Value.Missing ignored -> "Missing";
             case Value.Scope ignored -> "Scope";
+            case Value.FunctionReference ignored -> "FunctionReference";
+            case Value.Reflective ignored -> "Reflective";
             case Value.Seq ignored -> "Sequence";
             case Value.Dict ignored -> "Dictionary";
             case Value.Callable ignored -> "Function";
