@@ -210,7 +210,10 @@ final class InterpreterTest {
 
     @Test
     void reportsReadsBeforeSequentialDeclarations() {
-        assertDiagnostic("first = second\nsecond = 2", "Unknown name: second", 1, 9);
+        LangException error = assertDiagnostic("first = second\nsecond = 2",
+                "Binding read before initialization: second", 1, 9);
+        assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.READ_BEFORE_INITIALIZATION, error.diagnostic().code());
     }
 
     @Test

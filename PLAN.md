@@ -16,7 +16,10 @@ The existing prototype already implements scalar values, `?` and `~`, bindings a
 closures, indentation-based bodies, whitespace application, conditionals, Boolean/arithmetic
 operators, exported scopes, partial application and numbered holes, static/optional/dynamic lookup,
 basic reflection, Unicode text primitives, persistent sequences/dictionaries, Caret-native tests,
-located diagnostics, and the REPL. These remain the compatibility baseline.
+located diagnostics (including rendered related spans), guarded callable invocation, and the REPL.
+Logical-line construction is owned by the lexer, and an initial semantic-validation pass diagnoses
+duplicate declarations and parameters before block execution. These remain the compatibility
+baseline.
 
 ## Cross-cutting architecture
 
@@ -44,6 +47,13 @@ located diagnostics, and the REPL. These remain the compatibility baseline.
   not be invented during implementation.
 
 ## Phase 1 — Front end, binding semantics, and unified callables
+
+Current status: Phase 1 is in progress. Logical-line construction has moved out of the parser,
+definition-header parsing has been consolidated, and the semantic resolver now predeclares block
+bindings and records lexical depth/slot metadata consumed by the interpreter. Duplicate and
+premature-read diagnostics run in the semantic phase, callable invocation has a common depth guard,
+and partial-expression rewrites share one exhaustive AST rewriter. Full layout continuation and
+unified callable syntax/metadata remain.
 
 ### Layout and expressions
 
@@ -307,18 +317,22 @@ located diagnostics, and the REPL. These remain the compatibility baseline.
 
 ## Recommended next implementation step
 
-Begin Phase 1 with the resolver before changing layout or unified call syntax.
+Continue Phase 1 with `CORE-CALL-003`: one token/layout pipeline for more-indented ungrouped call
+arguments while preserving indentation-delimited function bodies.
 
-1. Predeclare only function bindings per block and resolve all lexical references.
-2. Diagnose duplicates, unknown names, and use-before-initialization in the semantic phase while
-   preserving the stable codes established in Phase 0.
-3. Record lexical slots, captures, declaration links, and source spans in an analyzed-program model.
-4. Update the interpreter to consume resolver results without changing successful output.
-5. Cover recursion, shadowing, `^name = name`, closure capture, duplicates, undefined names, and
-   premature reads, then update their conformance evidence.
+1. Replace delimiter-depth logical-line joining with layout tokens or an equivalent structured line
+   stream that distinguishes a declaration body from an expression continuation.
+2. Implement more-indented ungrouped argument continuation using the extent and precedence rules in
+   `LANGUAGE.md`, without implementing trailing lambdas before lambda syntax exists.
+3. Preserve exact raw source spans and existing grouped/bracket continuation behavior.
+4. Feed the resulting AST through the resolver without adding layout-specific name-resolution paths.
+5. Add positive, ambiguity, malformed-layout, comment/blank-line, tab, and diagnostic tests plus a
+   runnable `.caret` example exercised by `test.sh`.
+6. Mark `CORE-CALL-003` implemented only for the supported non-lambda continuation subset; retain the
+   trailing-lambda portion as planned until Phase 3.
 
-The resolver unlocks reliable contracts/effects, lambdas, modules, compiler lowering, and static
-reflection metadata without duplicating name/capture logic across backends.
+This layout step removes the current `print`-specific ergonomics pressure and establishes the shared
+layout foundation needed by lambdas, `data`, formats, cycles, and rules.
 
 ## Explicit assumptions and allowed deferrals
 

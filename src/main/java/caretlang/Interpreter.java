@@ -26,27 +26,28 @@ final class Interpreter {
     }
 
     void execute(List<Stmt> program) {
-        executeBlock(program, globals);
+        Resolution resolution = Resolver.resolve(program, globals);
+        executeBlock(program, globals, resolution);
     }
 
     Value evalExpression(Expr expression) {
-        return eval(expression, globals, null);
+        Resolution resolution = Resolver.resolve(List.of(new ExprStmt(expression, expression.span())), globals);
+        return eval(expression, globals, null, resolution);
     }
 
-    private Value executeBlock(List<Stmt> statements, Environment env) {
-        SemanticValidator.validate(statements);
+    private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
         LinkedHashMap<String, Value> exports = new LinkedHashMap<>();
-        IdentityHashMap<FunctionDef, Value.FunctionValue> functions = prepareDeclarations(statements, env);
+        IdentityHashMap<FunctionDef, Value.FunctionValue> functions = prepareDeclarations(statements, env, resolution);
         Value last = Value.Missing.INSTANCE;
 
         for (Stmt statement : statements) {
             if (statement instanceof Assign(String name, boolean exported, Expr value1, SourceSpan ignored)) {
-                Value value = eval(value1, env, null);
-                env.define(name, value);
+                Value value = eval(value1, env, null, resolution);
+                env.initialize(name, value);
                 if (exported) exports.put(name, value);
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
-                last = eval(expression, env, null);
+                last = eval(expression, env, null, resolution);
             } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> body,
                                                         SourceSpan ignored)) {
                 last = functions.get((FunctionDef) statement);
@@ -57,10 +58,12 @@ final class Interpreter {
     }
 
     private IdentityHashMap<FunctionDef, Value.FunctionValue> prepareDeclarations(List<Stmt> statements,
-                                                                                   Environment env) {
+                                                                                   Environment env,
+                                                                                   Resolution resolution) {
         IdentityHashMap<FunctionDef, Value.FunctionValue> functions = new IdentityHashMap<>();
         for (Stmt statement : statements) {
-            if (statement instanceof FunctionDef function) declare(env, function.name(), function.span());
+            if (statement instanceof Assign assign) declare(env, assign.name(), assign.span());
+            else if (statement instanceof FunctionDef function) declare(env, function.name(), function.span());
         }
         for (Stmt statement : statements) {
             if (statement instanceof FunctionDef function) {
@@ -69,7 +72,7 @@ final class Interpreter {
                     for (int i = 0; i < function.params().size(); i++) {
                         parameters.define(function.params().get(i), args.get(i));
                     }
-                    return executeBlock(function.body(), new Environment(parameters));
+                    return executeBlock(function.body(), new Environment(parameters), resolution);
                 });
                 env.initialize(function.name(), value);
                 functions.put(function, value);
@@ -87,37 +90,39 @@ final class Interpreter {
         }
     }
 
-    private Value eval(Expr expr, Environment env, List<Value> holeArgs) {
+    private Value eval(Expr expr, Environment env, List<Value> holeArgs, Resolution resolution) {
         try {
             if (holeArgs == null) {
                 HoleAnalysis analysis = analyzeHoles(expr);
                 if (!analysis.indexes().isEmpty()) {
                     HoleShape shape = holeShape(expr, analysis.indexes());
-                    Expr captured = captureNonHoleParts(expr, env, analysis.containsHole());
+                    Expr captured = captureNonHoleParts(expr, env, analysis.containsHole(), resolution);
                     return new Value.HoleFunction(expr.toString(), shape.arity(),
-                            supplied -> eval(captured, env, supplied));
+                            supplied -> eval(captured, env, supplied, resolution));
                 }
             }
             Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
-            return evalInner(resolved, env);
+            return evalInner(resolved, env, resolution);
         } catch (StackOverflowError exhaustedStack) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
                     "Maximum Caret evaluation depth exceeded", expr.span());
         }
     }
 
-    private Value evalInner(Expr expr, Environment env) {
+    private Value evalInner(Expr expr, Environment env, Resolution resolution) {
         try {
-            return evalInnerUnchecked(expr, env);
+            return evalInnerUnchecked(expr, env, resolution);
         } catch (LangException error) {
             throw error.withSpanIfAbsent(expr.span());
         }
     }
 
-    private Value evalInnerUnchecked(Expr expr, Environment env) {
+    private Value evalInnerUnchecked(Expr expr, Environment env, Resolution resolution) {
         if (expr instanceof Literal(Value value1, SourceSpan ignored)) return value1;
-        if (expr instanceof Name(String name2, SourceSpan ignored)) {
-            Value value = env.get(name2);
+        if (expr instanceof Name nameExpression) {
+            Resolution.Binding binding = resolution.binding(nameExpression);
+            Value value = binding == null ? env.get(nameExpression.name())
+                    : env.getAt(binding.lexicalDepth(), binding.slot());
             if (value instanceof Value.Callable callable && callable.remainingArity() == 0) {
                 return invokeZero(callable, expr.span());
             }
@@ -127,7 +132,7 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Internal error: unresolved hole");
         }
         if (expr instanceof Unary(String operator1, Expr operand, SourceSpan ignored)) {
-            Value value = evalInner(operand, env);
+            Value value = evalInner(operand, env, resolution);
             return switch (operator1) {
                 case "-" -> finiteNumber(-number(value), "Numeric result is not finite");
                 case "not" -> new Value.Bool(!truth(value));
@@ -137,38 +142,38 @@ final class Interpreter {
         }
         if (expr instanceof Binary(String operator, Expr left1, Expr right1, SourceSpan ignored)) {
             if (operator.equals("and")) {
-                Value left = evalInner(left1, env);
-                return truth(left) ? evalInner(right1, env) : new Value.Bool(false);
+                Value left = evalInner(left1, env, resolution);
+                return truth(left) ? evalInner(right1, env, resolution) : new Value.Bool(false);
             }
             if (operator.equals("or")) {
-                Value left = evalInner(left1, env);
-                return truth(left) ? new Value.Bool(true) : new Value.Bool(truth(evalInner(right1, env)));
+                Value left = evalInner(left1, env, resolution);
+                return truth(left) ? new Value.Bool(true) : new Value.Bool(truth(evalInner(right1, env, resolution)));
             }
-            Value left = evalInner(left1, env);
-            Value right = evalInner(right1, env);
+            Value left = evalInner(left1, env, resolution);
+            Value right = evalInner(right1, env, resolution);
             return binary(operator, left, right);
         }
         if (expr instanceof Conditional(Expr condition1, Expr whenTrue, Expr whenFalse, SourceSpan ignored)) {
-            Value condition = evalInner(condition1, env);
+            Value condition = evalInner(condition1, env, resolution);
             return truth(condition)
-                    ? evalInner(whenTrue, env)
-                    : evalInner(whenFalse, env);
+                    ? evalInner(whenTrue, env, resolution)
+                    : evalInner(whenFalse, env, resolution);
         }
         if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
-            Value fn = evalInner(function, env);
-            Value argument = evalInner(argument1, env);
+            Value fn = evalInner(function, env, resolution);
+            Value argument = evalInner(argument1, env, resolution);
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
             return invoke(callable, argument, expr.span());
         }
         if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
-            Value target = evalInner(target2, env);
+            Value target = evalInner(target2, env, resolution);
             return field(target, field, optional1);
         }
         if (expr instanceof DynamicField(Expr target1, Expr name1, boolean optional, SourceSpan ignored)) {
-            Value target = evalInner(target1, env);
-            Value name = evalInner(name1, env);
+            Value target = evalInner(target1, env, resolution);
+            Value name = evalInner(name1, env, resolution);
             String fieldName = switch (name) {
                 case Value.Name n -> n.value();
                 case Value.Str text -> text.value();
@@ -181,13 +186,18 @@ final class Interpreter {
             // Reflection of a name observes the binding itself. In particular,
             // this is the escape hatch for referring to a zero-argument function
             // without triggering the normal implicit invocation on name reads.
-            Value targetValue = target instanceof Name(String name, SourceSpan ignoredNameSpan)
-                    ? env.get(name)
-                    : evalInner(target, env);
+            Value targetValue;
+            if (target instanceof Name nameExpression) {
+                Resolution.Binding binding = resolution.binding(nameExpression);
+                targetValue = binding == null ? env.get(nameExpression.name())
+                        : env.getAt(binding.lexicalDepth(), binding.slot());
+            } else {
+                targetValue = evalInner(target, env, resolution);
+            }
             return reflect(targetValue);
         }
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
-            return evalInner(expression, env);
+            return evalInner(expression, env, resolution);
         }
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }
@@ -513,9 +523,9 @@ final class Interpreter {
     }
 
     private Expr captureNonHoleParts(Expr expr, Environment env,
-                                     IdentityHashMap<Expr, Boolean> containsHole) {
+                                     IdentityHashMap<Expr, Boolean> containsHole, Resolution resolution) {
         return AstRewriter.rewrite(expr, candidate -> !containsHole.get(candidate)
-                ? Optional.of(new Literal(evalInner(candidate, env), candidate.span()))
+                ? Optional.of(new Literal(evalInner(candidate, env, resolution), candidate.span()))
                 : Optional.empty());
     }
 
