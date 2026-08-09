@@ -132,7 +132,8 @@ value = scope[
 ]~
 ```
 
-Ungrouped multiline arguments and trailing callable blocks remain unspecified.
+Ungrouped multiline arguments and trailing callable blocks are not implemented. Their planned
+layout rule is specified in the implementation roadmap below.
 
 `print` also has a statement form. The complete remainder of its logical line is parsed as one
 expression, so common output does not require grouping:
@@ -335,8 +336,39 @@ The parser will distinguish the two forms from the beginning of the expression:
   prefix call of that function. Later binary functions in the argument sequence do not change that
   initial choice.
 
-This is planned behavior and is not implemented by the current parser. The rules for declaring the
-precedence and associativity of named and symbolic binary functions still need to be specified.
+Named binary functions used in infix position have one fixed precedence level. They are
+left-associative, bind less tightly than additive operators, and bind more tightly than comparison
+operators. Thus `2 combine 3 + 4` means `2 combine (3 + 4)`, while `2 combine 3 < 10` means
+`(2 combine 3) < 10`. Parentheses are required when another grouping is intended.
+
+Built-in symbolic operators retain the precedence table documented above. Custom
+symbolic-operator declaration syntax remains an open design decision; the initial unified-callable
+implementation makes the existing symbolic operators callable in prefix form but must not invent
+new declaration syntax.
+
+This unified prefix/infix behavior is planned and is not implemented by the current parser.
+
+### Planned ungrouped multiline application
+
+Outside an explicit delimiter, a physical line indented more deeply than a non-definition
+expression continues that expression. Each continuation expression is the next whitespace-applied
+argument, and dedentation ends the call.
+
+```caret
+result = add
+  1
+  multiply
+    2
+    3
+```
+
+is equivalent to `result = add 1 (multiply 2 3)`. Blank and comment-only lines do not end a
+continuation. An empty function-definition right side still opens a function body and takes
+precedence over continuation parsing.
+
+Once lambdas are implemented, an indented trailing lambda is the final call argument. A definition
+or lambda body is delimited by its own indentation in the ordinary way. This rule is planned and is
+not implemented by the current layout preprocessor.
 
 ### Core semantic decisions
 
@@ -352,13 +384,15 @@ function-body declarations are nested inside the parameter scope so established 
 Equality is structural for scalar values and exported scopes. Callable values cannot be compared
 for equality. Collection equality will be structural when collections are implemented.
 
-`@function` produces metadata and is not a callable reflective reference. Reflected invocation is
-a separate planned facility.
+The current prototype's `@function` result is metadata and is not callable. The planned reification
+model extends that behavior: `@function` produces a callable reflective view. It suppresses the
+normal implicit invocation of a nullary binding, can be passed anywhere a callable is accepted, and
+exposes reflective fields such as `kind` and `remaining`. Bare nullary function names continue to
+invoke automatically. This is one reflective value rather than separate metadata and
+function-reference operators.
 
-The following decisions remain prerequisites for unified binary functions:
-
-- precedence and associativity for named functions used with infix notation; and
-- the complete operand/coercion rules for operators once collections and static types exist.
+The complete operand/coercion rules for operators once collections and static types exist remain a
+prerequisite for extending unified binary functions beyond the existing scalar operators.
 
 The self-interpreter may represent successful and failed operations as exported result scopes. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
@@ -476,6 +510,22 @@ Contracts placed before parameters constrain those parameters:
 ```
 
 `pure` is a built-in function contract.
+
+### Function result contracts
+
+Contracts immediately before a function name may contain both callable contracts and value/type
+contracts. Callable contracts constrain the function itself; value/type contracts constrain the
+function's result.
+
+```caret
+(pure Int) addOne (Int) value =
+  value + 1
+```
+
+Here `pure` constrains `addOne`, while `Int` constrains its result. Each contract's declared kind
+determines which target it accepts; using a contract that cannot constrain either target is a
+compile-time error. This avoids a separate result-contract punctuation form. Lambdas use the same
+contract classification and must not introduce lambda-specific result syntax.
 
 ### Purity and effects
 
@@ -1843,6 +1893,12 @@ This allows format composition to define both encoder and decoder behavior from 
 
 Primitive representation formats are themselves `Format` values.
 
+Binary primitive formats consume and produce a first-class immutable `Bytes` value. `Bytes` is
+distinct from Unicode text and from a general sequence of numbers: byte indexing counts octets,
+while text indexing continues to count Unicode code points. Standard pure conversions provide
+explicit interoperability with hexadecimal text, encoded text, and validated integer sequences;
+raw bytes are never smuggled through `String`.
+
 Examples may include:
 
 ```caret
@@ -2112,7 +2168,9 @@ MessageBody =
     3 FileMessage
 ```
 
-The exact surface syntax for declaring the alternatives may be refined separately.
+The surface syntax for declaring general alternatives remains unresolved and is tracked as
+`FORMAT-CHOICE-001` in `CONFORMANCE.md`. It must be specified before general choices are
+implemented.
 
 The semantic requirement is more important:
 
@@ -2411,7 +2469,9 @@ Encoding may also fail because:
 
 These failures should be represented explicitly rather than relying on exceptions for expected format mismatch.
 
-The exact result/error type may be specified separately.
+The concrete exported result/error shape remains unresolved and is tracked as
+`FORMAT-FAILURE-001` in `CONFORMANCE.md`. It must be specified before public `decode` and `encode`
+are implemented.
 
 Errors should be capable of carrying useful information such as:
 
@@ -3562,6 +3622,45 @@ The exact collection/scope update functions may be provided by the standard libr
 
 The important semantic rule is that each phase receives the complete current state and returns the complete next state.
 
+### Previous and next state views
+
+Cycle conditions, bodies, and preparation phases execute with a cycle-state view in addition to
+their ordinary lexical parameters.
+
+For every phase, unqualified state-field reads refer to the complete previous state. Name lookup
+checks local bindings and parameters first, then previous-state public fields, then the captured
+lexical parent. The reserved `next` binding denotes the state currently being constructed.
+
+A body or preparation phase begins with `next` structurally equal to its previous state. An exported
+assignment writes the new state:
+
+```caret
+^sum = sum + i
+```
+
+Unmentioned fields remain present in `next`. A later expression in the same phase can observe an
+earlier write explicitly:
+
+```caret
+^sum = sum + i
+^large = next.sum > 100
+```
+
+Reading `sum` in the second assignment still reads the previous state; `next.sum` reads the new
+value. Non-exported assignments remain local temporaries and do not become state fields.
+
+Each phase commits atomically. The body transforms `S0` into `S1`; preparation then receives `S1`
+as its previous state and transforms it into `S2`. No caller can observe a partially constructed
+state.
+
+A phase that performs exported state writes commits `next` as its result. A phase that performs no
+exported state writes may instead return an explicit complete state value, preserving the ordinary
+`S -> S` functions shown above. Mixing exported state writes with a different explicit state return
+is an error rather than an implicit merge.
+
+The condition receives the same previous-state read view but is read-only: it cannot perform
+exported state writes or access a changing `next` value. This preserves condition purity.
+
 ---
 
 ## Functional semantics
@@ -4610,6 +4709,12 @@ capture = rule
 
 It may call ordinary functions.
 
+Like an ordinary `cycle` transformation, an `E` block executes against persistent previous and
+next rule-cycle state. Unqualified state reads observe the previous state, `^field = value` writes
+the next state, and `next.field` observes writes already made by the current effect. Unmentioned
+fields carry forward. The complete next state becomes visible atomically after the selected rule's
+effect finishes and before applicability is reevaluated.
+
 Typical operations may include:
 
 ```caret
@@ -4878,6 +4983,10 @@ means:
 > Arbitrary ordering is semantically acceptable here.
 
 It does not mean that the runtime must randomize execution order.
+
+`unordered` is a built-in declaration contract, not a second annotation system. Like `pure`, it
+has compiler-recognized semantic behavior beyond an ordinary Boolean predicate. It is valid on a
+rule or ruleset declaration and invalid on unrelated values.
 
 ---
 
@@ -5529,6 +5638,20 @@ The runtime must retain sufficient trigger history to preserve this behavior.
 
 ## Object creation and destruction
 
+Objects in a rule cycle are persistent values with stable logical identities. An object version is
+an immutable public scope constructed with ordinary exported bindings:
+
+```caret
+player = object
+  ^health = 100
+  ^name = "Ada"
+```
+
+The cycle state stores the current version under an exported state field. Replacing that field with
+a newly constructed version preserves the object's logical identity; the previous version remains
+unchanged for any code that still holds it. Objects outside a cycle remain ordinary inert values and
+do not acquire autonomous behavior.
+
 Effects may create objects:
 
 ```caret
@@ -5544,6 +5667,11 @@ destroy enemy
 Created objects become part of the rule-cycle universe.
 
 Destroyed objects cease to participate after destruction becomes effective.
+
+Creation adds a new logical identity to the next persistent cycle state. Destruction removes that
+identity from the next state. Both changes commit at the effect boundary and alter traversal only at
+the next deterministic traversal boundary; neither operation reenters traversal while an object is
+being processed.
 
 The implementation must provide deterministic lifecycle behavior even though rule scheduling itself may intentionally be unordered.
 
@@ -5729,10 +5857,71 @@ Rulesets package reusable parameterized behavior.
 
 The `ruleCycle` `init` block assembles those reusable rule libraries with concrete objects and configuration, allowing systems such as games, interpreters, simulations, and workflows to be built primarily by composition rather than explicit control flow.
 
+## Planned modules and compilation
+
+### Import expressions
+
+A module is a Caret source file evaluated through an ordinary import expression:
+
+```caret
+math = import "lib/math.caret"
+```
+
+The path is resolved relative to the importing source file after normalizing `.` and `..`. The
+initial implementation requires the explicit file name and does not search a global package path.
+Successful module evaluation is cached by canonical source path for the lifetime of the program.
+Every importer receives the same immutable module scope containing only top-level `^` exports.
+Private bindings remain inaccessible through lookup and reflection.
+
+An import cycle is a located module diagnostic that reports the import chain. A module that fails to
+load or evaluate is not cached as successful. Importing the same canonical module again does not
+repeat its initialization effects.
+
+### Compiler target and compatibility
+
+The first compiler backend targets Java 21-compatible JVM class files. It can package a program and
+its Caret modules as a runnable or library JAR while using a versioned Caret runtime ABI.
+
+The Java tree-walking interpreter remains the reference implementation until differential tests
+establish parity. Interpreted and compiled execution must agree on:
+
+* values and structural equality;
+* evaluation and effect order;
+* missing versus null;
+* exported visibility and reflection;
+* contracts and effects;
+* stable diagnostic codes and source locations;
+* standard output and standard error; and
+* process exit status.
+
+The exact JVM class naming, public embedding ABI, and cross-version binary compatibility policy
+remain open design decisions. They do not change Caret source semantics.
+
+## Open specification decisions
+
+The following decisions remain unresolved and must be settled in `LANGUAGE.md` before their
+dependent implementation begins:
+
+* syntax for declaring new symbolic operators beyond the existing built-in symbols;
+* concrete SIMD type/lane spelling and floating-point reduction-order guarantees;
+* surface syntax for general format choices and pattern-derived discriminators;
+* the concrete exported shape of structured format success/failure values;
+* whether rule-cycle object traversal order is observable or deliberately unspecified; and
+* JVM class naming, embedding ABI, and binary compatibility across Caret versions.
+
+These are tracked as `unresolved` requirements in `CONFORMANCE.md`. No implementation may silently
+choose syntax or observable semantics for them.
+
 
 ## Not implemented
 
-- cycle primitive and immutable scope transitions
-- ungrouped multiline call arguments and trailing blocks
-- mutation and immutable scope-update expressions
-- modules, imports, compiler backend, bytecode, optimizer
+- unified prefix/infix callable operators and composition
+- ungrouped multiline call arguments and trailing lambdas
+- contracts, static types, effect inference, and ownership analysis
+- general collection/data syntax, first-class fields, and persistent updates
+- lambdas and higher-order standard collection operations
+- cycles and transactional previous/next state views
+- SIMD values and required vectorized application
+- bytes, formats, codecs, and structured format failures
+- contexts, rules, rulesets, persistent cycle objects, and rule cycles
+- modules, imports, JVM compiler backend, runtime ABI, and optimizer

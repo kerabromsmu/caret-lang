@@ -26,7 +26,8 @@ final class Lexer {
                 int tokenStart = i;
                 int start = ++i;
                 if (i >= source.length() || (!Character.isLetter(source.charAt(i)) && source.charAt(i) != '_'))
-                    throw error("Expected a name after '#'", positions, tokenStart, i);
+                    throw error(Diagnostic.Codes.LEX_INVALID_NAME, "Expected a name after '#'",
+                            positions, tokenStart, i);
                 i++;
                 while (i < source.length()) {
                     char d = source.charAt(i);
@@ -44,7 +45,8 @@ final class Lexer {
                     char d = source.charAt(i++);
                     if (d == '\\') {
                         if (i >= source.length()) {
-                            throw error("Incomplete string escape", positions, i - 1, i);
+                            throw error(Diagnostic.Codes.LEX_INVALID_ESCAPE,
+                                    "Incomplete string escape", positions, i - 1, i);
                         }
                         char e = source.charAt(i++);
                         switch (e) {
@@ -54,15 +56,18 @@ final class Lexer {
                             case '"' -> b.append('"');
                             case '\\' -> b.append('\\');
                             case 'u' -> i = appendUnicodeEscape(source, i, b, positions);
-                            default -> throw error("Unknown string escape: \\" + e,
+                            default -> throw error(Diagnostic.Codes.LEX_INVALID_ESCAPE,
+                                    "Unknown string escape: \\" + e,
                                     positions, i - 2, i);
                         }
                     } else if (d == '\n' || d == '\r') {
-                        throw error("Unterminated string", positions, tokenStart, i - 1);
+                        throw error(Diagnostic.Codes.LEX_UNTERMINATED_STRING,
+                                "Unterminated string", positions, tokenStart, i - 1);
                     } else b.append(d);
                 }
                 if (i >= source.length())
-                    throw error("Unterminated string", positions, tokenStart, i);
+                    throw error(Diagnostic.Codes.LEX_UNTERMINATED_STRING,
+                            "Unterminated string", positions, tokenStart, i);
                 i++;
                 tokens.add(token(Kind.STRING, b.toString(), positions, tokenStart, i));
                 continue;
@@ -72,7 +77,8 @@ final class Lexer {
                 boolean sawDot = false;
                 while (i < source.length() && (Character.isDigit(source.charAt(i)) || source.charAt(i) == '.')) {
                     if (source.charAt(i) == '.' && sawDot)
-                        throw error("Invalid number literal", positions, start, i + 1);
+                        throw error(Diagnostic.Codes.LEX_INVALID_NUMBER,
+                                "Invalid number literal", positions, start, i + 1);
                     if (source.charAt(i) == '.') sawDot = true;
                     i++;
                 }
@@ -100,7 +106,8 @@ final class Lexer {
                 i++;
                 continue;
             }
-            throw error("Unexpected character: " + c, positions, i, i + 1);
+            throw error(Diagnostic.Codes.LEX_UNEXPECTED_CHARACTER,
+                    "Unexpected character: " + c, positions, i, i + 1);
         }
         tokens.add(token(Kind.EOF, "", positions, i, i));
         return tokens;
@@ -110,8 +117,8 @@ final class Lexer {
         return new Token(kind, text, positions.span(start, end));
     }
 
-    private static LangException error(String message, PositionTable positions, int start, int end) {
-        return new LangException(Diagnostic.Phase.LEXER, "INVALID_TOKEN", message,
+    private static LangException error(String code, String message, PositionTable positions, int start, int end) {
+        return new LangException(Diagnostic.Phase.LEXER, code, message,
                 positions.span(start, end));
     }
 
@@ -119,13 +126,13 @@ final class Lexer {
                                            PositionTable positions) {
         int escapeStart = index - 2;
         if (index >= source.length() || source.charAt(index) != '{') {
-            throw error("Unicode escape must use \\u{...}", positions,
+            throw error(Diagnostic.Codes.LEX_INVALID_ESCAPE, "Unicode escape must use \\u{...}", positions,
                     escapeStart, Math.min(index + 1, source.length()));
         }
         int digitsStart = ++index;
         while (index < source.length() && source.charAt(index) != '}') index++;
         if (index >= source.length() || index == digitsStart) {
-            throw error("Invalid Unicode escape", positions,
+            throw error(Diagnostic.Codes.LEX_INVALID_ESCAPE, "Invalid Unicode escape", positions,
                     escapeStart, Math.min(index + 1, source.length()));
         }
         String digits = source.substring(digitsStart, index);
@@ -133,11 +140,11 @@ final class Lexer {
         try {
             codePoint = Integer.parseInt(digits, 16);
         } catch (NumberFormatException ignored) {
-            throw error("Invalid Unicode escape", positions,
+            throw error(Diagnostic.Codes.LEX_INVALID_ESCAPE, "Invalid Unicode escape", positions,
                     escapeStart, index + 1);
         }
         if (!Character.isValidCodePoint(codePoint) || codePoint >= 0xD800 && codePoint <= 0xDFFF) {
-            throw error("Invalid Unicode code point", positions,
+            throw error(Diagnostic.Codes.LEX_INVALID_ESCAPE, "Invalid Unicode code point", positions,
                     escapeStart, index + 1);
         }
         output.appendCodePoint(codePoint);

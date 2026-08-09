@@ -32,25 +32,16 @@ located diagnostics, and the REPL. These remain the compatibility baseline.
 - Maintain a feature conformance table mapping every normative `LANGUAGE.md` requirement to its
   implementation issue, tests, example, and status. A stage is complete only when its rows pass.
 
-## Phase 0 — Specification and conformance baseline
+## Phase 0 — Specification and conformance baseline (completed)
 
-1. Convert `LANGUAGE.md` into a conformance matrix grouped by implemented behavior, explicitly
-   planned behavior, deferred behavior, and unresolved design decisions.
-2. Add characterization tests for everything currently implemented, including precedence,
-   zero-argument invocation versus `@function`, eager partial capture, Unicode indexing, structural
-   scope equality, missing/null lookup, and test-runner behavior.
-3. Resolve contradictions before coding. Record the decision in `LANGUAGE.md`, then add a grammar or
-   semantic example. Initial blockers include:
-   - precedence/associativity declaration for named and symbolic infix functions;
-   - ungrouped multiline calls and trailing callable blocks;
-   - function result-contract syntax and stored nullary-lambda invocation;
-   - immutable scope/data updates and the permitted mutable state model;
-   - object construction/update/traversal semantics used by `ruleCycle`;
-   - module/import/export syntax and initialization rules;
-   - concrete primitive format byte/representation types;
-   - general `(unordered)` annotation integration with contracts; and
-   - compiler target, artifact format, and interpreter/compiler compatibility guarantees.
-4. Treat unresolved items as specification tasks, never as permission to invent syntax silently.
+- `CONFORMANCE.md` inventories implemented, planned, deferred, and unresolved requirements with
+  stable IDs and automated evidence.
+- Characterization tests cover the implemented precedence table, safe primitive failures, and
+  stable diagnostic phases/codes/locations alongside the existing core suites.
+- `LANGUAGE.md` records the resolved infix, multiline, function-reference/result-contract,
+  persistent state/object, module, bytes, unordered-contract, and JVM backend decisions.
+- Remaining open syntax or observable semantics are explicit `unresolved` conformance rows and may
+  not be invented during implementation.
 
 ## Phase 1 — Front end, binding semantics, and unified callables
 
@@ -314,25 +305,20 @@ located diagnostics, and the REPL. These remain the compatibility baseline.
 - Stage completion requires `./gradlew test`, `./test.sh`, all examples, differential tests available
   at that stage, and `git diff --check` to pass.
 
-## Recommended first implementation step
+## Recommended next implementation step
 
-Start with the Phase 0 conformance matrix and Phase 1 resolver—not rules, SIMD, or formats.
+Begin Phase 1 with the resolver before changing layout or unified call syntax.
 
-1. Give every `LANGUAGE.md` requirement a stable identifier and record implemented/planned/deferred/
-   unresolved status plus its tests and example.
-2. Add characterization tests for current block binding, closure, export, equality, and partial
-   behavior before changing environments.
-3. Add a resolver that predeclares only function bindings, resolves lexical references, diagnoses
-   duplicates and use-before-initialization, and records captures/source spans.
-4. Update the interpreter to consume resolver results without changing valid program output.
-5. Add direct-recursion, mutual-recursion, shadowing, `^name = name`, duplicate declaration,
-   duplicate parameter, undefined name, and premature read tests plus a runnable recursion example.
-6. Accept the step only when all existing tests/examples remain unchanged and every new diagnostic
-   has a stable code and exact location.
+1. Predeclare only function bindings per block and resolve all lexical references.
+2. Diagnose duplicates, unknown names, and use-before-initialization in the semantic phase while
+   preserving the stable codes established in Phase 0.
+3. Record lexical slots, captures, declaration links, and source spans in an analyzed-program model.
+4. Update the interpreter to consume resolver results without changing successful output.
+5. Cover recursion, shadowing, `^name = name`, closure capture, duplicates, undefined names, and
+   premature reads, then update their conformance evidence.
 
-This first step unlocks reliable contracts/effects, lambdas, modules, compiler lowering, and static
-reflection metadata; implementing later features without it would duplicate name/capture logic in
-the interpreter and backend.
+The resolver unlocks reliable contracts/effects, lambdas, modules, compiler lowering, and static
+reflection metadata without duplicating name/capture logic across backends.
 
 ## Explicit assumptions and allowed deferrals
 

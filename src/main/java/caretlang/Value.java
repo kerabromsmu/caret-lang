@@ -159,7 +159,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         public Value invokeZero() {
-            if (remainingArity() != 0) throw new LangException("Function still requires arguments: " + name);
+            if (remainingArity() != 0) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                        "Function still requires arguments: " + name, null);
+            }
             return implementation.apply(bound, null);
         }
 
@@ -170,7 +173,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 return implementation.apply(next, callSpan);
             }
             if (next.size() > params.size()) {
-                throw new LangException("Too many arguments for " + name);
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
+                        "Too many arguments for " + name, callSpan);
             }
             return new FunctionValue(name, params, next, implementation);
         }
@@ -206,7 +210,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             ArrayList<Value> next = new ArrayList<>(bound);
             next.add(argument);
             if (next.size() == arity) return implementation.apply(next);
-            if (next.size() > arity) throw new LangException("Too many arguments for partial expression");
+            if (next.size() > arity) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
+                        "Too many arguments for partial expression", callSpan);
+            }
             return new HoleFunction(display, arity, next, implementation);
         }
 

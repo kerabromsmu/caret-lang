@@ -4,11 +4,11 @@ public final class LangException extends RuntimeException {
     private final Diagnostic diagnostic;
 
     public LangException(String message) {
-        this(new Diagnostic(Diagnostic.Phase.RUNTIME, "RUNTIME_ERROR", message, null));
+        this(new Diagnostic(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.RUNTIME_ERROR, message, null));
     }
 
     LangException(String message, SourceSpan span) {
-        this(new Diagnostic(Diagnostic.Phase.RUNTIME, "RUNTIME_ERROR", message, span));
+        this(new Diagnostic(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.RUNTIME_ERROR, message, span));
     }
 
     LangException(Diagnostic.Phase phase, String code, String message, SourceSpan span) {

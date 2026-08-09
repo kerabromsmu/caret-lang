@@ -4,7 +4,46 @@ import java.util.List;
 
 record Diagnostic(Phase phase, String code, String message, SourceSpan primarySpan,
                   List<Related> related) {
-    enum Phase { LEXER, PARSER, RUNTIME }
+    enum Phase { LEXER, PARSER, SEMANTIC, RUNTIME, LOWERING, COMPILER }
+
+    static final class Codes {
+        private Codes() {}
+
+        static final String LEX_UNEXPECTED_CHARACTER = "LEX_UNEXPECTED_CHARACTER";
+        static final String LEX_INVALID_NAME = "LEX_INVALID_NAME";
+        static final String LEX_INVALID_NUMBER = "LEX_INVALID_NUMBER";
+        static final String LEX_UNTERMINATED_STRING = "LEX_UNTERMINATED_STRING";
+        static final String LEX_INVALID_ESCAPE = "LEX_INVALID_ESCAPE";
+        static final String PARSE_INVALID_SYNTAX = "PARSE_INVALID_SYNTAX";
+        static final String PARSE_UNEXPECTED_INDENT = "PARSE_UNEXPECTED_INDENT";
+        static final String PARSE_INVALID_EXPRESSION = "PARSE_INVALID_EXPRESSION";
+        static final String PARSE_UNCLOSED_DELIMITER = "PARSE_UNCLOSED_DELIMITER";
+        static final String PARSE_INVALID_HOLE = "PARSE_INVALID_HOLE";
+        static final String PARSE_INVALID_NUMBER = "PARSE_INVALID_NUMBER";
+        static final String DUPLICATE_DEFINITION = "DUPLICATE_DEFINITION";
+        static final String DUPLICATE_PARAMETER = "DUPLICATE_PARAMETER";
+        static final String UNKNOWN_NAME = "UNKNOWN_NAME";
+        static final String READ_BEFORE_INITIALIZATION = "READ_BEFORE_INITIALIZATION";
+        static final String NOT_CALLABLE = "NOT_CALLABLE";
+        static final String TOO_MANY_ARGUMENTS = "TOO_MANY_ARGUMENTS";
+        static final String INVALID_CONDITION = "INVALID_CONDITION";
+        static final String EXPECTED_NUMBER = "EXPECTED_NUMBER";
+        static final String EXPECTED_STRING = "EXPECTED_STRING";
+        static final String EXPECTED_SEQUENCE = "EXPECTED_SEQUENCE";
+        static final String EXPECTED_DICTIONARY = "EXPECTED_DICTIONARY";
+        static final String INVALID_DICTIONARY_KEY = "INVALID_DICTIONARY_KEY";
+        static final String DIVISION_BY_ZERO = "DIVISION_BY_ZERO";
+        static final String NON_FINITE_RESULT = "NON_FINITE_RESULT";
+        static final String INVALID_FIELD_TARGET = "INVALID_FIELD_TARGET";
+        static final String MISSING_FIELD = "MISSING_FIELD";
+        static final String INVALID_DYNAMIC_FIELD_NAME = "INVALID_DYNAMIC_FIELD_NAME";
+        static final String CALLABLE_EQUALITY = "CALLABLE_EQUALITY";
+        static final String MIXED_HOLE_STYLES = "MIXED_HOLE_STYLES";
+        static final String INVALID_ASSERTION = "INVALID_ASSERTION";
+        static final String INTERNAL_ERROR = "INTERNAL_ERROR";
+        static final String UNKNOWN_OPERATOR = "UNKNOWN_OPERATOR";
+        static final String RUNTIME_ERROR = "RUNTIME_ERROR";
+    }
 
     record Related(String message, SourceSpan span) {}
 

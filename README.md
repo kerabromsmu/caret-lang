@@ -16,7 +16,8 @@ interpreter. The current prototype supports:
 This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
 describes both the implemented language sketch and the larger planned language. Features described
 there as planned are not necessarily available in this prototype. [PLAN.md](PLAN.md) gives the
-implementation roadmap.
+implementation roadmap, and [CONFORMANCE.md](CONFORMANCE.md) maps specification requirements to
+their implementation status and automated evidence.
 
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.

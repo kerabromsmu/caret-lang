@@ -56,17 +56,19 @@ final class Interpreter {
     private IdentityHashMap<FunctionDef, Value.FunctionValue> prepareDeclarations(List<Stmt> statements,
                                                                                    Environment env) {
         IdentityHashMap<FunctionDef, Value.FunctionValue> functions = new IdentityHashMap<>();
-        HashSet<String> declarations = new HashSet<>();
+        LinkedHashMap<String, SourceSpan> declarations = new LinkedHashMap<>();
         for (Stmt statement : statements) {
             if (statement instanceof Assign(String name, boolean ignoredExport, Expr ignoredValue, SourceSpan span)) {
-                if (!declarations.add(name)) duplicateDefinition(name, span);
+                SourceSpan original = declarations.putIfAbsent(name, span);
+                if (original != null) duplicateDefinition(name, span, original);
             } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> ignoredBody,
                                                         SourceSpan span)) {
-                if (!declarations.add(name)) duplicateDefinition(name, span);
+                SourceSpan original = declarations.putIfAbsent(name, span);
+                if (original != null) duplicateDefinition(name, span, original);
                 HashSet<String> parameterNames = new HashSet<>();
                 for (String parameter : params) {
                     if (!parameterNames.add(parameter)) {
-                        throw new LangException(Diagnostic.Phase.RUNTIME, "DUPLICATE_PARAMETER",
+                        throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_PARAMETER,
                                 "Duplicate parameter: " + parameter, span);
                     }
                 }
@@ -95,14 +97,15 @@ final class Interpreter {
         try {
             env.declare(name);
         } catch (LangException error) {
-            throw new LangException(Diagnostic.Phase.RUNTIME, "DUPLICATE_DEFINITION",
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_DEFINITION,
                     error.detail(), span);
         }
     }
 
-    private void duplicateDefinition(String name, SourceSpan span) {
-        throw new LangException(Diagnostic.Phase.RUNTIME, "DUPLICATE_DEFINITION",
-                "Duplicate definition: " + name, span);
+    private void duplicateDefinition(String name, SourceSpan span, SourceSpan original) {
+        throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: " + name, span,
+                List.of(new Diagnostic.Related("First definition of " + name, original))));
     }
 
     private Value eval(Expr expr, Environment env, List<Value> holeArgs) {
@@ -134,14 +137,15 @@ final class Interpreter {
             return value;
         }
         if (expr instanceof Hole) {
-            throw new LangException("Internal error: unresolved hole");
+            throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Internal error: unresolved hole");
         }
         if (expr instanceof Unary(String operator1, Expr operand, SourceSpan ignored)) {
             Value value = evalInner(operand, env);
             return switch (operator1) {
                 case "-" -> finiteNumber(-number(value), "Numeric result is not finite");
                 case "not" -> new Value.Bool(!truth(value));
-                default -> throw new LangException("Unknown unary operator: " + operator1);
+                default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR,
+                        "Unknown unary operator: " + operator1);
             };
         }
         if (expr instanceof Binary(String operator, Expr left1, Expr right1, SourceSpan ignored)) {
@@ -167,7 +171,7 @@ final class Interpreter {
             Value fn = evalInner(function, env);
             Value argument = evalInner(argument1, env);
             if (!(fn instanceof Value.Callable callable)) {
-                throw new LangException("Value is not callable: " + fn);
+                throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
             return callable.apply(argument, expr.span());
         }
@@ -181,7 +185,8 @@ final class Interpreter {
             String fieldName = switch (name) {
                 case Value.Name n -> n.value();
                 case Value.Str text -> text.value();
-                default -> throw new LangException("Dynamic field name must be a name or string, got: " + name);
+                default -> throw runtime(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME,
+                        "Dynamic field name must be a name or string, got: " + name);
             };
             return field(target, fieldName, optional);
         }
@@ -197,7 +202,7 @@ final class Interpreter {
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
             return evalInner(expression, env);
         }
-        throw new LangException("Unknown expression: " + expr);
+        throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }
 
     private Value binary(String op, Value left, Value right) {
@@ -211,12 +216,16 @@ final class Interpreter {
             case "*" -> finiteNumber(number(left) * number(right), "Numeric result is not finite");
             case "/" -> {
                 double divisor = number(right);
-                if (divisor == 0.0) throw new LangException("Division by zero");
+                if (divisor == 0.0) {
+                    throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero");
+                }
                 yield finiteNumber(number(left) / divisor, "Numeric result is not finite");
             }
             case "%" -> {
                 double divisor = number(right);
-                if (divisor == 0.0) throw new LangException("Division by zero");
+                if (divisor == 0.0) {
+                    throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero");
+                }
                 yield finiteNumber(number(left) % divisor, "Numeric result is not finite");
             }
             case ">" -> new Value.Bool(number(left) > number(right));
@@ -225,13 +234,14 @@ final class Interpreter {
             case "<=" -> new Value.Bool(number(left) <= number(right));
             case "==" -> new Value.Bool(equalsValue(left, right));
             case "!=" -> new Value.Bool(!equalsValue(left, right));
-            default -> throw new LangException("Unknown operator: " + op);
+            default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
         };
     }
 
     private boolean equalsValue(Value a, Value b) {
         if (a instanceof Value.Callable || b instanceof Value.Callable) {
-            throw new LangException("Callable values cannot be compared for equality");
+            throw runtime(Diagnostic.Codes.CALLABLE_EQUALITY,
+                    "Callable values cannot be compared for equality");
         }
         if (a instanceof Value.Num(double value1) && b instanceof Value.Num(double value)) return value1 == value;
         return Objects.equals(a, b);
@@ -239,18 +249,19 @@ final class Interpreter {
 
     private double number(Value value) {
         if (value instanceof Value.Num(double value1)) return value1;
-        throw new LangException("Expected number, got: " + value);
+        throw runtime(Diagnostic.Codes.EXPECTED_NUMBER, "Expected number, got: " + value);
     }
 
     private Value.Num finiteNumber(double value, String message) {
-        if (!Double.isFinite(value)) throw new LangException(message);
+        if (!Double.isFinite(value)) throw runtime(Diagnostic.Codes.NON_FINITE_RESULT, message);
         return new Value.Num(value);
     }
 
     private boolean truth(Value value) {
         if (value instanceof Value.Bool(boolean value1)) return value1;
         if (value == Value.Null.INSTANCE || value == Value.Missing.INSTANCE) return false;
-        throw new LangException("Condition must be Boolean, null, or missing; got: " + value);
+        throw runtime(Diagnostic.Codes.INVALID_CONDITION,
+                "Condition must be Boolean, null, or missing; got: " + value);
     }
 
     private void installBuiltins() {
@@ -341,7 +352,8 @@ final class Interpreter {
                 (args, span) -> {
                     String name = text(args.get(0));
                     if (!(args.get(1) instanceof Value.Bool condition)) {
-                        throw new LangException("Assertion condition must be Boolean, got: " + args.get(1));
+                        throw runtime(Diagnostic.Codes.INVALID_ASSERTION,
+                                "Assertion condition must be Boolean, got: " + args.get(1));
                     }
                     reporter.record(name, condition, new Value.Bool(true), condition.value(), span);
                     return Value.Missing.INSTANCE;
@@ -363,17 +375,17 @@ final class Interpreter {
 
     private String text(Value value) {
         if (value instanceof Value.Str(String text)) return text;
-        throw new LangException("Expected string, got: " + value);
+        throw runtime(Diagnostic.Codes.EXPECTED_STRING, "Expected string, got: " + value);
     }
 
     private Value.Seq sequence(Value value) {
         if (value instanceof Value.Seq sequence) return sequence;
-        throw new LangException("Expected sequence, got: " + value);
+        throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE, "Expected sequence, got: " + value);
     }
 
     private Value.Dict dictionary(Value value) {
         if (value instanceof Value.Dict dictionary) return dictionary;
-        throw new LangException("Expected dictionary, got: " + value);
+        throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY, "Expected dictionary, got: " + value);
     }
 
     private OptionalInt index(Value value) {
@@ -394,18 +406,22 @@ final class Interpreter {
 
     private String requiredDictionaryKey(Value value) {
         String key = dictionaryKey(value);
-        if (key == null) throw new LangException("Dictionary key must be a name or string, got: " + value);
+        if (key == null) {
+            throw runtime(Diagnostic.Codes.INVALID_DICTIONARY_KEY,
+                    "Dictionary key must be a name or string, got: " + value);
+        }
         return key;
     }
 
     private Value field(Value target, String name, boolean optional) {
         if (!(target instanceof Value.Scope scope)) {
-            throw new LangException("Field access requires a scope, got: " + target);
+            throw runtime(Diagnostic.Codes.INVALID_FIELD_TARGET,
+                    "Field access requires a scope, got: " + target);
         }
         Optional<Value> value = scope.find(name);
         if (value.isPresent()) return value.get();
         if (optional) return Value.Missing.INSTANCE;
-        throw new LangException("Scope has no exported binding: " + name);
+        throw runtime(Diagnostic.Codes.MISSING_FIELD, "Scope has no exported binding: " + name);
     }
 
     private Value reflect(Value value) {
@@ -451,7 +467,8 @@ final class Interpreter {
         boolean numbered = indexes.stream().anyMatch(index -> index > 0);
         boolean ordinary = indexes.stream().anyMatch(index -> index == 0);
         if (numbered && ordinary) {
-            throw new LangException("Cannot mix numbered and unnumbered holes", expr.span());
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_HOLE_STYLES,
+                    "Cannot mix numbered and unnumbered holes", expr.span());
         }
         int arity = numbered ? indexes.stream().mapToInt(Integer::intValue).max().orElseThrow()
                 : indexes.size();
@@ -544,14 +561,22 @@ final class Interpreter {
         private int index;
         private HoleBinder(List<Value> values) { this.values = values; }
         Value next() {
-            if (index >= values.size()) throw new LangException("Not enough arguments for partial expression");
+            if (index >= values.size()) {
+                throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                        "Not enough arguments for partial expression");
+            }
             return values.get(index++);
         }
         Value at(int oneBasedIndex) {
             if (oneBasedIndex < 1 || oneBasedIndex > values.size()) {
-                throw new LangException("Not enough arguments for numbered partial expression");
+                throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                        "Not enough arguments for numbered partial expression");
             }
             return values.get(oneBasedIndex - 1);
         }
+    }
+
+    private static LangException runtime(String code, String message) {
+        return new LangException(Diagnostic.Phase.RUNTIME, code, message, null);
     }
 }

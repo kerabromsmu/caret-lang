@@ -27,7 +27,7 @@ final class Parser {
             Line line = lines.get(lineIndex);
             if (line.indent < indent) break;
             if (line.indent > indent) {
-                throw error(line, "Unexpected indentation");
+                throw error(line, Diagnostic.Codes.PARSE_UNEXPECTED_INDENT, "Unexpected indentation");
             }
             result.add(parseLine(line, indent));
         }
@@ -77,7 +77,8 @@ final class Parser {
                 String name = left.getFirst().text();
                 List<String> params = left.subList(1, left.size()).stream().map(Token::text).toList();
                 if (lineIndex >= lines.size() || lines.get(lineIndex).indent <= indent) {
-                    throw error(line, "Function body must be indented");
+                    throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                            "Function body must be indented");
                 }
                 int childIndent = lines.get(lineIndex).indent;
                 List<Stmt> body = parseBlock(childIndent);
@@ -94,7 +95,8 @@ final class Parser {
                 }
             }
 
-            throw error(line, "Invalid assignment or function definition");
+            throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                    "Invalid assignment or function definition");
         }
 
         Expr expression = new ExprParser(tokens.subList(0, tokens.size() - 1),
@@ -188,8 +190,8 @@ final class Parser {
         return depth;
     }
 
-    private LangException error(Line line, String message) {
-        return new LangException(Diagnostic.Phase.PARSER, "INVALID_SYNTAX",
+    private LangException error(Line line, String code, String message) {
+        return new LangException(Diagnostic.Phase.PARSER, code,
                 message + "\n  " + line.text, line.span);
     }
 
@@ -327,6 +329,9 @@ final class Parser {
                     continue;
                 }
                 if (match("[")) {
+                    if (atEnd()) {
+                        throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
+                    }
                     Expr name = conditional();
                     consume("]", "Expected ']'");
                     Token close = previous();
@@ -355,7 +360,7 @@ final class Parser {
                 try {
                     index = Integer.parseInt(hole.text().substring(1));
                 } catch (NumberFormatException ignored) {
-                    throw new LangException(Diagnostic.Phase.PARSER, "INVALID_HOLE",
+                    throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_HOLE,
                             "Numbered hole index is too large", hole.span());
                 }
                 return new Hole(index, hole.span());
@@ -363,6 +368,9 @@ final class Parser {
             if (matchKind(Kind.IDENT)) return new Name(previous().text(), previous().span());
             if (match("(")) {
                 Token open = previous();
+                if (atEnd()) {
+                    throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ')'");
+                }
                 Expr expr = conditional();
                 consume(")", "Expected ')'");
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
@@ -375,11 +383,11 @@ final class Parser {
             try {
                 value = Double.parseDouble(token.text());
             } catch (NumberFormatException ignored) {
-                throw new LangException(Diagnostic.Phase.PARSER, "INVALID_NUMBER",
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_NUMBER,
                         "Invalid number literal", token.span());
             }
             if (!Double.isFinite(value)) {
-                throw new LangException(Diagnostic.Phase.PARSER, "INVALID_NUMBER",
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_NUMBER,
                         "Number literal is outside the finite range", token.span());
             }
             return new Literal(new Value.Num(value), token.span());
@@ -412,18 +420,27 @@ final class Parser {
 
         private Token consume(Kind kind, String message) {
             if (peek().kind() == kind) return tokens.get(current++);
-            throw error(message);
+            throw error(codeForExpectedDelimiter(message), message);
         }
 
         private void consume(String text, String message) {
-            if (!match(text)) throw error(message);
+            if (!match(text)) throw error(codeForExpectedDelimiter(message), message);
+        }
+
+        private String codeForExpectedDelimiter(String message) {
+            return message.startsWith("Expected ')'") || message.startsWith("Expected ']'")
+                    ? Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER
+                    : Diagnostic.Codes.PARSE_INVALID_EXPRESSION;
         }
 
         private Token peek() { return tokens.get(current); }
         private Token previous() { return tokens.get(current - 1); }
         private boolean atEnd() { return peek().kind() == Kind.EOF; }
         private LangException error(String message) {
-            return new LangException(Diagnostic.Phase.PARSER, "INVALID_EXPRESSION", message, peek().span());
+            return error(Diagnostic.Codes.PARSE_INVALID_EXPRESSION, message);
+        }
+        private LangException error(String code, String message) {
+            return new LangException(Diagnostic.Phase.PARSER, code, message, peek().span());
         }
     }
 }
