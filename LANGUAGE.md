@@ -140,8 +140,9 @@ value = scope[
 ]~
 ```
 
-Ungrouped multiline arguments and trailing callable blocks are not implemented. Their planned
-layout rule is specified in the implementation roadmap below.
+More-indented ungrouped multiline arguments are implemented. Trailing callable blocks remain
+planned until lambda syntax is implemented; their layout rule is specified in the implementation
+roadmap below.
 
 `print` also has a statement form. The complete remainder of its logical line is parsed as one
 expression, so common output does not require grouping:
@@ -356,7 +357,7 @@ new declaration syntax.
 
 This unified prefix/infix behavior is planned and is not implemented by the current parser.
 
-### Planned ungrouped multiline application
+### Ungrouped multiline application
 
 Outside an explicit delimiter, a physical line indented more deeply than a non-definition
 expression continues that expression. Each continuation expression is the next whitespace-applied
@@ -374,9 +375,13 @@ is equivalent to `result = add 1 (multiply 2 3)`. Blank and comment-only lines d
 continuation. An empty function-definition right side still opens a function body and takes
 precedence over continuation parsing.
 
-Once lambdas are implemented, an indented trailing lambda is the final call argument. A definition
-or lambda body is delimited by its own indentation in the ordinary way. This rule is planned and is
-not implemented by the current layout preprocessor.
+Sibling continuation arguments use the same indentation. A deeper line continues the immediately
+preceding argument; dedenting to an indentation other than an established enclosing level is a
+located layout error. A continuation line is an expression and cannot contain a definition.
+
+Once lambdas are implemented, an indented trailing lambda will be the final call argument. A
+definition or lambda body is delimited by its own indentation in the ordinary way. This rule is
+planned and is not implemented by the current parser.
 
 ### Core semantic decisions
 

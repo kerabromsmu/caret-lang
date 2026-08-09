@@ -51,8 +51,8 @@ final class Parser {
         if (tokens.size() > 2 && tokens.getFirst().kind() == Kind.IDENT
                 && tokens.getFirst().text().equals("print")
                 && !tokens.get(1).text().equals("=")) {
-            Expr expression = new ExprParser(tokens.subList(1, tokens.size() - 1),
-                    tokens.getLast().span().end()).parse();
+            Expr expression = parseExpression(tokens.subList(1, tokens.size() - 1),
+                    tokens.getLast().span().end(), indent);
             Expr print = new Name("print", tokens.getFirst().span());
             Expr call = new Apply(print, expression, SourceSpan.cover(print.span(), expression.span()));
             return new ExprStmt(call, call.span());
@@ -64,7 +64,7 @@ final class Parser {
             List<Token> right = tokens.subList(eq + 1, tokens.size() - 1);
             DefinitionHeader header = definitionHeader(left);
             if (header != null && !right.isEmpty()) {
-                Expr expression = new ExprParser(right, tokens.getLast().span().end()).parse();
+                Expr expression = parseExpression(right, tokens.getLast().span().end(), indent);
                 if (header.parameters().isEmpty()) {
                     return new Assign(header.name(), header.exported(), expression,
                             SourceSpan.cover(left.getFirst().span(), expression.span()));
@@ -87,9 +87,42 @@ final class Parser {
                     "Invalid assignment or function definition");
         }
 
-        Expr expression = new ExprParser(tokens.subList(0, tokens.size() - 1),
-                tokens.getLast().span().end()).parse();
+        Expr expression = parseExpression(tokens.subList(0, tokens.size() - 1),
+                tokens.getLast().span().end(), indent);
         return new ExprStmt(expression, expression.span());
+    }
+
+    private Expr parseExpression(List<Token> tokens, SourcePosition end, int baseIndent) {
+        Expr expression = new ExprParser(tokens, end).parse();
+        return applyContinuations(expression, baseIndent);
+    }
+
+    private Expr applyContinuations(Expr function, int baseIndent) {
+        if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= baseIndent) return function;
+        int continuationIndent = lines.get(lineIndex).indent();
+        Expr result = function;
+        while (lineIndex < lines.size() && lines.get(lineIndex).indent() > baseIndent) {
+            LogicalLine line = lines.get(lineIndex);
+            if (line.indent() != continuationIndent) {
+                throw error(line, Diagnostic.Codes.PARSE_UNEXPECTED_INDENT,
+                        "Inconsistent continuation indentation");
+            }
+            Expr argument = parseContinuationArgument(line);
+            result = new Apply(result, argument, SourceSpan.cover(result.span(), argument.span()));
+        }
+        return result;
+    }
+
+    private Expr parseContinuationArgument(LogicalLine line) {
+        lineIndex++;
+        List<Token> tokens = Lexer.lex(line.text(), line.offset(), line.number(), line.column());
+        if (topLevelEquals(tokens) >= 0) {
+            throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                    "Continuation argument must be an expression");
+        }
+        Expr argument = new ExprParser(tokens.subList(0, tokens.size() - 1),
+                tokens.getLast().span().end()).parse();
+        return applyContinuations(argument, line.indent());
     }
 
     private DefinitionHeader definitionHeader(List<Token> tokens) {

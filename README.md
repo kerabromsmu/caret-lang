@@ -144,8 +144,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 ## Current limitations
 
 - A function definition must start at the beginning of a logical line.
-- Grouped expressions and dynamic lookups may span lines; ungrouped multiline calls and trailing
-  blocks remain unspecified.
+- Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
+  Trailing callable blocks remain unavailable until lambda syntax is implemented.
 - Values are dynamically checked; contracts, static types, nullable/optional type checking, and
   effect inference are not implemented.
 - General collection/data literals, first-class fields, formats, lambdas, cycles, SIMD, rules,

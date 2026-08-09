@@ -162,6 +162,74 @@ final class ParserTest {
     }
 
     @Test
+    void parsesIndentedUngroupedArgumentsAsNestedApplications() {
+        List<Stmt> program = new Parser("""
+                result = add
+                  1
+                  multiply
+                    2
+                    3
+                """).parseProgram();
+        Assign assignment = assertInstanceOf(Assign.class, program.getFirst());
+        Apply add = assertInstanceOf(Apply.class, assignment.value());
+        assertInstanceOf(Apply.class, add.function());
+        Apply multiply = assertInstanceOf(Apply.class, add.argument());
+        assertInstanceOf(Apply.class, multiply.function());
+        assertEquals(1, assignment.span().start().line());
+        assertEquals(5, assignment.span().end().line());
+    }
+
+    @Test
+    void blankAndCommentLinesDoNotEndUngroupedContinuation() {
+        Assign assignment = assertInstanceOf(Assign.class, new Parser("""
+                result = add
+                  1
+
+                  // still the same call
+                  2
+                """).parseProgram().getFirst());
+        assertInstanceOf(Apply.class, assignment.value());
+        assertEquals(5, assignment.span().end().line());
+    }
+
+    @Test
+    void emptyDefinitionRightSideTakesPrecedenceOverContinuation() {
+        FunctionDef function = assertInstanceOf(FunctionDef.class, new Parser("""
+                calculate =
+                  value = 1
+                  value
+                """).parseProgram().getFirst());
+        assertEquals(2, function.body().size());
+        assertInstanceOf(Assign.class, function.body().getFirst());
+    }
+
+    @Test
+    void acceptsTabsAsContinuationIndentation() {
+        Assign assignment = assertInstanceOf(Assign.class,
+                new Parser("result = identity\n\t42").parseProgram().getFirst());
+        assertInstanceOf(Apply.class, assignment.value());
+        assertEquals(2, assignment.span().end().line());
+    }
+
+    @Test
+    void rejectsDefinitionsAndInconsistentIndentationInsideContinuation() {
+        LangException definition = assertThrows(LangException.class, () -> new Parser("""
+                result = add
+                  value = 1
+                """).parseProgram());
+        assertTrue(definition.getMessage().contains("Continuation argument must be an expression"));
+        assertEquals(2, definition.span().start().line());
+
+        LangException indentation = assertThrows(LangException.class, () -> new Parser("""
+                result = add
+                    1
+                  2
+                """).parseProgram());
+        assertTrue(indentation.getMessage().contains("Inconsistent continuation indentation"));
+        assertEquals(3, indentation.span().start().line());
+    }
+
+    @Test
     void continuationIndentationDoesNotCreateABlock() {
         List<Stmt> program = new Parser("""
                 result = source[

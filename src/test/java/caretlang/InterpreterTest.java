@@ -330,6 +330,23 @@ final class InterpreterTest {
     }
 
     @Test
+    void evaluatesUngroupedMultilineCalls() {
+        assertEquals("7\n9\n", execute("""
+                add a b = a + b
+                multiply a b = a * b
+                result = add
+                  1
+                  multiply
+                    2
+                    3
+                print result
+                print add
+                  4
+                  5
+                """));
+    }
+
+    @Test
     void testAssertionsCollectFailuresAndReturnMissing() {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         PrintStream output = new PrintStream(bytes, true, StandardCharsets.UTF_8);

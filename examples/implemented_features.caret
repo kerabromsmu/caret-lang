@@ -122,6 +122,13 @@ print person[
   #name
 ]~
 
+// More-indented lines are ungrouped call arguments; nested indentation creates nested calls.
+ungroupedMultiline = add
+  10
+  scale
+    10
+print ungroupedMultiline
+
 // Text indexes count Unicode code points; slices use [start, end).
 unicodeText = "🙂ab"
 print textSize unicodeText

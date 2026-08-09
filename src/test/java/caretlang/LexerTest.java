@@ -80,4 +80,18 @@ final class LexerTest {
         assertEquals(4, tokens.stream().filter(token -> token.text().equals("(") || token.text().equals(")")
                 || token.kind() == Lexer.Kind.NUMBER).count());
     }
+
+    @Test
+    void logicalLinesRetainIndentationAcrossBlankAndCommentLines() {
+        List<Lexer.LogicalLine> lines = Lexer.logicalLines("""
+                call
+                  first
+
+                  // comment
+                  second
+                next
+                """);
+        assertEquals(List.of(0, 2, 2, 0), lines.stream().map(Lexer.LogicalLine::indent).toList());
+        assertEquals(List.of(1, 2, 5, 6), lines.stream().map(Lexer.LogicalLine::number).toList());
+    }
 }

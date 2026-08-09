@@ -122,6 +122,12 @@ multilineField = person[
 assertEqual "multiline grouped call" multiline 42
 assertEqual "multiline dynamic lookup" multilineField "Ada"
 
+ungroupedMultiline = add
+  10
+  scale
+    10
+assertEqual "ungrouped multiline call" ungroupedMultiline 30
+
 // Unicode code-point text primitives and safe conversion failures.
 unicodeText = "🙂ab"
 assertEqual "text size counts code points" (textSize unicodeText) 3
