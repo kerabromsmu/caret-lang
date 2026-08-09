@@ -106,6 +106,20 @@ final class ParserTest {
     }
 
     @Test
+    void rejectsReservedBindingAndParameterNames() {
+        for (String name : List.of("true", "false", "and", "or", "not", "_")) {
+            LangException binding = assertThrows(LangException.class,
+                    () -> new Parser(name + " = 1").parseProgram());
+            assertEquals(Diagnostic.Codes.PARSE_RESERVED_BINDING, binding.diagnostic().code());
+        }
+
+        LangException parameter = assertThrows(LangException.class,
+                () -> new Parser("identity true = true").parseProgram());
+        assertEquals(Diagnostic.Codes.PARSE_RESERVED_BINDING, parameter.diagnostic().code());
+        assertEquals(10, parameter.span().start().column());
+    }
+
+    @Test
     void rejectsMalformedOperatorsReflectionAndExports() {
         LangException operator = assertThrows(LangException.class,
                 () -> new Parser("value = true and").parseProgram());

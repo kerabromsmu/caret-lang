@@ -12,6 +12,7 @@ print #field
 #lineStartName
 print type 42
 print type #field
+print type ?
 
 // Strings support standard escapes and Unicode code-point escapes.
 escaped = "quote: \" slash: \\ tab: \t smile: \u{1F642}"

@@ -109,11 +109,14 @@ final class Interpreter {
     }
 
     private Value eval(Expr expr, Environment env, List<Value> holeArgs) {
-        if (containsHole(expr) && holeArgs == null) {
-            HoleShape shape = holeShape(expr);
-            Expr captured = captureNonHoleParts(expr, env);
-            return new Value.HoleFunction(expr.toString(), shape.arity(),
-                    supplied -> eval(captured, env, supplied));
+        if (holeArgs == null) {
+            HoleAnalysis analysis = analyzeHoles(expr);
+            if (!analysis.indexes().isEmpty()) {
+                HoleShape shape = holeShape(expr, analysis.indexes());
+                Expr captured = captureNonHoleParts(expr, env, analysis.containsHole());
+                return new Value.HoleFunction(expr.toString(), shape.arity(),
+                        supplied -> eval(captured, env, supplied));
+            }
         }
         Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
         return evalInner(resolved, env);
@@ -173,7 +176,12 @@ final class Interpreter {
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
-            return callable.apply(argument, expr.span());
+            try {
+                return callable.apply(argument, expr.span());
+            } catch (StackOverflowError exhaustedStack) {
+                throw runtime(Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
+                        "Maximum Caret call depth exceeded");
+            }
         }
         if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
             Value target = evalInner(target2, env);
@@ -270,22 +278,7 @@ final class Interpreter {
             return args.getFirst();
         }));
 
-        globals.define("type", new Value.FunctionValue("type", List.of("value"), args -> {
-            Value v = args.getFirst();
-            String name = switch (v) {
-                case Value.Num ignored -> "Number";
-                case Value.Str ignored -> "String";
-                case Value.Bool ignored -> "Boolean";
-                case Value.Name ignored -> "Name";
-                case Value.Null ignored -> "Nullable";
-                case Value.Missing ignored -> "Missing";
-                case Value.Scope ignored -> "Scope";
-                case Value.Seq ignored -> "Sequence";
-                case Value.Dict ignored -> "Dictionary";
-                case Value.Callable ignored -> "Function";
-            };
-            return new Value.Str(name);
-        }));
+        globals.define("type", new Value.FunctionValue("type", List.of("value"), args -> new Value.Str(kindOf(args.getFirst()))));
 
         globals.define("textSize", function("textSize", List.of("text"), args ->
                 new Value.Num(text(args.getFirst()).codePointCount(0, text(args.getFirst()).length()))));
@@ -426,44 +419,47 @@ final class Interpreter {
 
     private Value reflect(Value value) {
         LinkedHashMap<String, Value> metadata = new LinkedHashMap<>();
-        String kind;
         switch (value) {
-            case Value.Num ignored -> kind = "Number";
-            case Value.Str ignored -> kind = "String";
-            case Value.Bool ignored -> kind = "Boolean";
-            case Value.Name ignored -> kind = "Name";
-            case Value.Null ignored -> kind = "Null";
-            case Value.Missing ignored -> kind = "Missing";
+            case Value.Num ignored -> { }
+            case Value.Str ignored -> { }
+            case Value.Bool ignored -> { }
+            case Value.Name ignored -> { }
+            case Value.Null ignored -> { }
+            case Value.Missing ignored -> { }
             case Value.Scope scope -> {
-                kind = "Scope";
                 metadata.put("size", new Value.Num(scope.fields().size()));
                 metadata.put("names", new Value.Str(String.join(",", scope.fields().keySet())));
             }
-            case Value.Seq sequence -> {
-                kind = "Sequence";
-                metadata.put("size", new Value.Num(sequence.values().size()));
-            }
+            case Value.Seq sequence -> metadata.put("size", new Value.Num(sequence.values().size()));
             case Value.Dict dictionary -> {
-                kind = "Dictionary";
                 metadata.put("size", new Value.Num(dictionary.entries().size()));
                 metadata.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
             }
-            case Value.Callable callable -> {
-                kind = "Function";
-                metadata.put("remaining", new Value.Num(callable.remainingArity()));
-            }
+            case Value.Callable callable -> metadata.put("remaining", new Value.Num(callable.remainingArity()));
         }
-        metadata.putFirst("kind", new Value.Str(kind));
+        metadata.putFirst("kind", new Value.Str(kindOf(value)));
         return new Value.Scope(metadata);
     }
 
-    private boolean containsHole(Expr expr) { return countHoles(expr) > 0; }
+    private String kindOf(Value value) {
+        return switch (value) {
+            case Value.Num ignored -> "Number";
+            case Value.Str ignored -> "String";
+            case Value.Bool ignored -> "Boolean";
+            case Value.Name ignored -> "Name";
+            case Value.Null ignored -> "Null";
+            case Value.Missing ignored -> "Missing";
+            case Value.Scope ignored -> "Scope";
+            case Value.Seq ignored -> "Sequence";
+            case Value.Dict ignored -> "Dictionary";
+            case Value.Callable ignored -> "Function";
+        };
+    }
 
     private record HoleShape(int arity, boolean numbered) {}
+    private record HoleAnalysis(List<Integer> indexes, IdentityHashMap<Expr, Boolean> containsHole) {}
 
-    private HoleShape holeShape(Expr expr) {
-        ArrayList<Integer> indexes = new ArrayList<>();
-        collectHoles(expr, indexes);
+    private HoleShape holeShape(Expr expr, List<Integer> indexes) {
         boolean numbered = indexes.stream().anyMatch(index -> index > 0);
         boolean ordinary = indexes.stream().anyMatch(index -> index == 0);
         if (numbered && ordinary) {
@@ -475,62 +471,66 @@ final class Interpreter {
         return new HoleShape(arity, numbered);
     }
 
-    private void collectHoles(Expr expr, List<Integer> indexes) {
-        switch (expr) {
-            case Hole hole -> indexes.add(hole.index());
-            case Literal ignored -> { }
-            case Name ignored -> { }
-            case Unary unary -> collectHoles(unary.operand(), indexes);
-            case Binary binary -> { collectHoles(binary.left(), indexes); collectHoles(binary.right(), indexes); }
-            case Conditional conditional -> {
-                collectHoles(conditional.condition(), indexes);
-                collectHoles(conditional.whenTrue(), indexes);
-                collectHoles(conditional.whenFalse(), indexes);
-            }
-            case Apply apply -> { collectHoles(apply.function(), indexes); collectHoles(apply.argument(), indexes); }
-            case Field field -> collectHoles(field.target(), indexes);
-            case DynamicField field -> { collectHoles(field.target(), indexes); collectHoles(field.name(), indexes); }
-            case Reflect reflect -> collectHoles(reflect.target(), indexes);
-            case Group group -> collectHoles(group.expression(), indexes);
-        }
+    private HoleAnalysis analyzeHoles(Expr expr) {
+        ArrayList<Integer> indexes = new ArrayList<>();
+        IdentityHashMap<Expr, Boolean> containsHole = new IdentityHashMap<>();
+        markHoles(expr, indexes, containsHole);
+        return new HoleAnalysis(List.copyOf(indexes), containsHole);
     }
 
-    private Expr captureNonHoleParts(Expr expr, Environment env) {
-        if (!containsHole(expr)) return new Literal(evalInner(expr, env), expr.span());
+    private boolean markHoles(Expr expr, List<Integer> indexes,
+                              IdentityHashMap<Expr, Boolean> containsHole) {
+        boolean found = switch (expr) {
+            case Hole hole -> {
+                indexes.add(hole.index());
+                yield true;
+            }
+            case Literal ignored -> false;
+            case Name ignored -> false;
+            case Unary unary -> markHoles(unary.operand(), indexes, containsHole);
+            case Binary binary -> markHoles(binary.left(), indexes, containsHole)
+                    | markHoles(binary.right(), indexes, containsHole);
+            case Conditional conditional -> markHoles(conditional.condition(), indexes, containsHole)
+                    | markHoles(conditional.whenTrue(), indexes, containsHole)
+                    | markHoles(conditional.whenFalse(), indexes, containsHole);
+            case Apply apply -> markHoles(apply.function(), indexes, containsHole)
+                    | markHoles(apply.argument(), indexes, containsHole);
+            case Field field -> markHoles(field.target(), indexes, containsHole);
+            case DynamicField field -> markHoles(field.target(), indexes, containsHole)
+                    | markHoles(field.name(), indexes, containsHole);
+            case Reflect reflect -> markHoles(reflect.target(), indexes, containsHole);
+            case Group group -> markHoles(group.expression(), indexes, containsHole);
+        };
+        containsHole.put(expr, found);
+        return found;
+    }
+
+    private Expr captureNonHoleParts(Expr expr, Environment env,
+                                     IdentityHashMap<Expr, Boolean> containsHole) {
+        if (!containsHole.get(expr)) return new Literal(evalInner(expr, env), expr.span());
         return switch (expr) {
             case Hole hole -> hole;
             case Literal literal -> literal;
             case Name name -> name;
-            case Unary unary -> new Unary(unary.operator(), captureNonHoleParts(unary.operand(), env), unary.span());
-            case Binary binary -> new Binary(binary.operator(), captureNonHoleParts(binary.left(), env),
-                    captureNonHoleParts(binary.right(), env), binary.span());
-            case Conditional conditional -> new Conditional(captureNonHoleParts(conditional.condition(), env),
-                    captureNonHoleParts(conditional.whenTrue(), env),
-                    captureNonHoleParts(conditional.whenFalse(), env), conditional.span());
-            case Apply apply -> new Apply(captureNonHoleParts(apply.function(), env),
-                    captureNonHoleParts(apply.argument(), env), apply.span());
-            case Field field -> new Field(captureNonHoleParts(field.target(), env), field.field(), field.optional(),
-                    field.span());
-            case DynamicField field -> new DynamicField(captureNonHoleParts(field.target(), env),
-                    captureNonHoleParts(field.name(), env), field.optional(), field.span());
-            case Reflect reflect -> new Reflect(captureNonHoleParts(reflect.target(), env), reflect.span());
-            case Group group -> new Group(captureNonHoleParts(group.expression(), env), group.span());
-        };
-    }
-
-    private int countHoles(Expr expr) {
-        return switch (expr) {
-            case Hole ignored -> 1;
-            case Literal ignored -> 0;
-            case Name ignored -> 0;
-            case Unary u -> countHoles(u.operand());
-            case Binary b -> countHoles(b.left()) + countHoles(b.right());
-            case Conditional c -> countHoles(c.condition()) + countHoles(c.whenTrue()) + countHoles(c.whenFalse());
-            case Apply a -> countHoles(a.function()) + countHoles(a.argument());
-            case Field f -> countHoles(f.target());
-            case DynamicField f -> countHoles(f.target()) + countHoles(f.name());
-            case Reflect r -> countHoles(r.target());
-            case Group g -> countHoles(g.expression());
+            case Unary unary -> new Unary(unary.operator(),
+                    captureNonHoleParts(unary.operand(), env, containsHole), unary.span());
+            case Binary binary -> new Binary(binary.operator(),
+                    captureNonHoleParts(binary.left(), env, containsHole),
+                    captureNonHoleParts(binary.right(), env, containsHole), binary.span());
+            case Conditional conditional -> new Conditional(
+                    captureNonHoleParts(conditional.condition(), env, containsHole),
+                    captureNonHoleParts(conditional.whenTrue(), env, containsHole),
+                    captureNonHoleParts(conditional.whenFalse(), env, containsHole), conditional.span());
+            case Apply apply -> new Apply(captureNonHoleParts(apply.function(), env, containsHole),
+                    captureNonHoleParts(apply.argument(), env, containsHole), apply.span());
+            case Field field -> new Field(captureNonHoleParts(field.target(), env, containsHole),
+                    field.field(), field.optional(), field.span());
+            case DynamicField field -> new DynamicField(
+                    captureNonHoleParts(field.target(), env, containsHole),
+                    captureNonHoleParts(field.name(), env, containsHole), field.optional(), field.span());
+            case Reflect reflect -> new Reflect(captureNonHoleParts(reflect.target(), env, containsHole),
+                    reflect.span());
+            case Group group -> new Group(captureNonHoleParts(group.expression(), env, containsHole), group.span());
         };
     }
 

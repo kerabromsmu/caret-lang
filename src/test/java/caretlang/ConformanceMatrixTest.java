@@ -20,7 +20,7 @@ final class ConformanceMatrixTest {
         int requirements = 0;
 
         for (String line : markdown.lines().toList()) {
-            if (!line.matches("\\| [A-Z][A-Z0-9-]*-[0-9]{3} \\|.*")) continue;
+            if (!line.matches("\\| [A-Z][A-Z0-9-]*-[0-9]{3} +\\|.*")) continue;
             String[] cells = line.split("\\|", -1);
             assertTrue(cells.length >= 7, "Malformed conformance row: " + line);
             String id = cells[1].trim();

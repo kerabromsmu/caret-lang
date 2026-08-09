@@ -20,12 +20,14 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String PARSE_UNCLOSED_DELIMITER = "PARSE_UNCLOSED_DELIMITER";
         static final String PARSE_INVALID_HOLE = "PARSE_INVALID_HOLE";
         static final String PARSE_INVALID_NUMBER = "PARSE_INVALID_NUMBER";
+        static final String PARSE_RESERVED_BINDING = "PARSE_RESERVED_BINDING";
         static final String DUPLICATE_DEFINITION = "DUPLICATE_DEFINITION";
         static final String DUPLICATE_PARAMETER = "DUPLICATE_PARAMETER";
         static final String UNKNOWN_NAME = "UNKNOWN_NAME";
         static final String READ_BEFORE_INITIALIZATION = "READ_BEFORE_INITIALIZATION";
         static final String NOT_CALLABLE = "NOT_CALLABLE";
         static final String TOO_MANY_ARGUMENTS = "TOO_MANY_ARGUMENTS";
+        static final String CALL_DEPTH_EXCEEDED = "CALL_DEPTH_EXCEEDED";
         static final String INVALID_CONDITION = "INVALID_CONDITION";
         static final String EXPECTED_NUMBER = "EXPECTED_NUMBER";
         static final String EXPECTED_STRING = "EXPECTED_STRING";

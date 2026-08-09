@@ -104,6 +104,24 @@ final class MainTest {
     }
 
     @Test
+    void fileSystemFailuresAreReportedWithoutAStackTrace() throws Exception {
+        Path missing = temporaryDirectory.resolve("missing.caret");
+        Invocation invocation = run(missing);
+
+        assertEquals(1, invocation.exitCode());
+        assertTrue(invocation.error().contains("Cannot read Caret source file"));
+        assertTrue(invocation.error().contains(missing.toString()));
+        assertFalse(invocation.error().contains("Exception in thread"));
+    }
+
+    @Test
+    void rejectsExtraFileModeArguments() throws Exception {
+        Invocation invocation = run("one.caret", "two.caret");
+        assertEquals(1, invocation.exitCode());
+        assertEquals("Usage: caret <file> | caret test <file>\n", invocation.error());
+    }
+
+    @Test
     void testModeRunsOneFileAndCollectsAssertionFailures() throws Exception {
         Path program = temporaryDirectory.resolve("mixed-tests.caret");
         Files.writeString(program, """

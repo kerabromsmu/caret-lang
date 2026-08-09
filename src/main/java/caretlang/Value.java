@@ -67,65 +67,112 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     }
 
     final class Seq implements Value {
-        private final List<Value> values;
+        private final Seq parent;
+        private final Value appended;
+        private volatile List<Value> materialized;
 
         public Seq(Collection<? extends Value> values) {
-            this.values = List.copyOf(values);
+            this.parent = null;
+            this.appended = null;
+            this.materialized = List.copyOf(values);
+        }
+
+        private Seq(Seq parent, Value appended) {
+            this.parent = Objects.requireNonNull(parent);
+            this.appended = Objects.requireNonNull(appended);
         }
 
         public List<Value> values() {
-            return values;
+            List<Value> result = materialized;
+            if (result != null) return result;
+
+            ArrayDeque<Value> suffix = new ArrayDeque<>();
+            Seq cursor = this;
+            while (cursor.materialized == null) {
+                suffix.push(cursor.appended);
+                cursor = cursor.parent;
+            }
+            ArrayList<Value> combined = new ArrayList<>(cursor.materialized);
+            while (!suffix.isEmpty()) combined.add(suffix.pop());
+            result = List.copyOf(combined);
+            materialized = result;
+            return result;
         }
 
         public Seq appended(Value value) {
-            ArrayList<Value> result = new ArrayList<>(values);
-            result.add(value);
-            return new Seq(result);
+            return new Seq(this, value);
         }
 
         @Override public boolean equals(Object other) {
-            return other instanceof Seq sequence && values.equals(sequence.values);
+            return other instanceof Seq sequence && values().equals(sequence.values());
         }
 
-        @Override public int hashCode() { return values.hashCode(); }
+        @Override public int hashCode() { return values().hashCode(); }
 
         @Override public String toString() {
             StringJoiner joiner = new StringJoiner(", ", "[", "]");
-            values.forEach(value -> joiner.add(value.toString()));
+            values().forEach(value -> joiner.add(value.toString()));
             return joiner.toString();
         }
     }
 
     final class Dict implements Value {
-        private final LinkedHashMap<String, Value> entries;
+        private final Dict parent;
+        private final String addedKey;
+        private final Value addedValue;
+        private volatile Map<String, Value> materialized;
 
         public Dict(Map<String, Value> entries) {
-            this.entries = new LinkedHashMap<>(entries);
+            this.parent = null;
+            this.addedKey = null;
+            this.addedValue = null;
+            this.materialized = Collections.unmodifiableMap(new LinkedHashMap<>(entries));
+        }
+
+        private Dict(Dict parent, String key, Value value) {
+            this.parent = Objects.requireNonNull(parent);
+            this.addedKey = Objects.requireNonNull(key);
+            this.addedValue = Objects.requireNonNull(value);
         }
 
         public Map<String, Value> entries() {
-            return Collections.unmodifiableMap(entries);
+            Map<String, Value> result = materialized;
+            if (result != null) return result;
+
+            ArrayDeque<Dict> suffix = new ArrayDeque<>();
+            Dict cursor = this;
+            while (cursor.materialized == null) {
+                suffix.push(cursor);
+                cursor = cursor.parent;
+            }
+            LinkedHashMap<String, Value> combined = new LinkedHashMap<>(cursor.materialized);
+            while (!suffix.isEmpty()) {
+                Dict update = suffix.pop();
+                combined.put(update.addedKey, update.addedValue);
+            }
+            result = Collections.unmodifiableMap(combined);
+            materialized = result;
+            return result;
         }
 
         public Optional<Value> find(String key) {
-            return entries.containsKey(key) ? Optional.of(entries.get(key)) : Optional.empty();
+            Map<String, Value> values = entries();
+            return values.containsKey(key) ? Optional.of(values.get(key)) : Optional.empty();
         }
 
         public Dict put(String key, Value value) {
-            LinkedHashMap<String, Value> result = new LinkedHashMap<>(entries);
-            result.put(key, value);
-            return new Dict(result);
+            return new Dict(this, key, value);
         }
 
         @Override public boolean equals(Object other) {
-            return other instanceof Dict dictionary && entries.equals(dictionary.entries);
+            return other instanceof Dict dictionary && entries().equals(dictionary.entries());
         }
 
-        @Override public int hashCode() { return entries.hashCode(); }
+        @Override public int hashCode() { return entries().hashCode(); }
 
         @Override public String toString() {
             StringJoiner joiner = new StringJoiner(", ", "#[", "]");
-            entries.forEach((key, value) -> joiner.add("#" + key + " = " + value));
+            entries().forEach((key, value) -> joiner.add("#" + key + " = " + value));
             return joiner.toString();
         }
     }

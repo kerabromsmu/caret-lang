@@ -50,6 +50,7 @@ With Gradle:
 ```
 
 Language errors are written to standard error and return a nonzero process status.
+Missing or unreadable source files are reported as ordinary CLI errors without Java stack traces.
 
 ## REPL
 

@@ -39,30 +39,38 @@ final class JLineRepl {
                 + "Use Up/Down for history. Type exit or press Ctrl-D to exit.");
         output.flush();
         try {
-            while (true) {
-                String line;
-                try {
-                    line = reader.readLine("> ");
-                } catch (UserInterruptException ignored) {
-                    continue;
-                } catch (EndOfFileException ignored) {
-                    break;
-                }
-
-                if (line.isBlank()) continue;
-                if (line.trim().equals("exit")) break;
-                try {
-                    interpreter.execute(new Parser(line).parseProgram());
-                    output.flush();
-                } catch (LangException languageError) {
-                    error.println("Error: " + languageError.getMessage());
-                    error.flush();
-                }
-            }
+            runLoop(() -> reader.readLine("> "), interpreter, output, error);
         } finally {
             saveHistory(reader, history, historyFile, error);
         }
         return 0;
+    }
+
+    static void runLoop(LineInput input, Interpreter interpreter, PrintStream output, PrintStream error) {
+        while (true) {
+            String line;
+            try {
+                line = input.read();
+            } catch (UserInterruptException ignored) {
+                continue;
+            } catch (EndOfFileException ignored) {
+                break;
+            }
+            if (line == null || line.trim().equals("exit")) break;
+            if (line.isBlank()) continue;
+            try {
+                interpreter.execute(new Parser(line).parseProgram());
+                output.flush();
+            } catch (LangException languageError) {
+                error.println("Error: " + languageError.getMessage());
+                error.flush();
+            }
+        }
+    }
+
+    @FunctionalInterface
+    interface LineInput {
+        String read();
     }
 
     static LineReader createReader(Terminal terminal, CaretHistory history, Path historyFile, PrintStream error) {

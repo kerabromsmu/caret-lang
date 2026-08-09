@@ -31,9 +31,21 @@ public final class Main {
             return runTests(Path.of(args[1]), output, error);
         }
 
+        if (args.length > 1) {
+            error.println("Usage: caret <file> | caret test <file>");
+            return 1;
+        }
+
         Interpreter interpreter = new Interpreter(output);
-        if (args.length > 0) {
-            String source = Files.readString(Path.of(args[0]));
+        if (args.length == 1) {
+            Path program = Path.of(args[0]);
+            final String source;
+            try {
+                source = Files.readString(program);
+            } catch (IOException fileError) {
+                error.println("Error: Cannot read Caret source file " + program + ": " + fileError.getMessage());
+                return 1;
+            }
             try {
                 interpreter.execute(new Parser(source).parseProgram());
             } catch (LangException e) {
@@ -45,28 +57,24 @@ public final class Main {
 
         output.println("Caret prototype REPL. Enter one-line expressions or assignments. Type exit or press Ctrl-D to exit.");
         Scanner scanner = new Scanner(input);
-        while (true) {
+        JLineRepl.runLoop(() -> {
             output.print("> ");
             output.flush();
-            if (!scanner.hasNextLine()) break;
-            String line = scanner.nextLine();
-            if (line.isBlank()) continue;
-            if (line.trim().equals("exit")) break;
-            try {
-                interpreter.execute(new Parser(line).parseProgram());
-                output.flush();
-            } catch (LangException e) {
-                error.println("Error: " + e.getMessage());
-                error.flush();
-            }
-        }
+            return scanner.hasNextLine() ? scanner.nextLine() : null;
+        }, interpreter, output, error);
         return 0;
     }
 
     private static int runTests(Path program, PrintStream output, PrintStream error) throws IOException {
         TestReporter reporter = new TestReporter(output);
         Interpreter interpreter = new Interpreter(output, reporter);
-        String source = Files.readString(program);
+        final String source;
+        try {
+            source = Files.readString(program);
+        } catch (IOException fileError) {
+            error.println("Error: Cannot read Caret test file " + program + ": " + fileError.getMessage());
+            return 1;
+        }
         try {
             interpreter.execute(new Parser(source).parseProgram());
         } catch (LangException e) {

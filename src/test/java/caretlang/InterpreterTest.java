@@ -51,6 +51,25 @@ final class InterpreterTest {
     }
 
     @Test
+    void typeAndReflectionUseTheSameRuntimeKindNames() {
+        assertEquals("Null\nMissing\nNumber\n", execute("""
+                print type ?
+                print type ~
+                print type 1
+                """));
+    }
+
+    @Test
+    void excessiveRecursionProducesALocatedLanguageDiagnostic() {
+        LangException error = assertThrows(LangException.class, () -> execute("""
+                recurse n = n == 0 & 0 ! recurse (n - 1)
+                print recurse 100000
+                """));
+        assertEquals(Diagnostic.Codes.CALL_DEPTH_EXCEEDED, error.diagnostic().code());
+        assertNotNull(error.span());
+    }
+
+    @Test
     void reflectionRefersToFunctionsWithoutInvokingThem() {
         assertEquals("Function\n0\nFunction\n1\n", execute("""
                 zero =
@@ -230,6 +249,19 @@ final class InterpreterTest {
                 print dictGet complete #missing
                 print dictGet complete #first
                 print (@complete).names
+                """));
+    }
+
+    @Test
+    void persistentCollectionsKeepOlderValuesAndDictionaryReplacementOrder() {
+        assertEquals("[1]\n[1, 2]\n[#first, #second]\n22\n", execute("""
+                first = seqAdd seqEmpty 1
+                second = seqAdd first 2
+                print first
+                print second
+                dictionary = dictPut (dictPut (dictPut dictEmpty #first 1) #second 2) #first 22
+                print dictKeys dictionary
+                print dictGet dictionary #first
                 """));
     }
 

@@ -15,6 +15,9 @@ true false  Boolean
 
 Null and missing are separate runtime values.
 
+`type value` returns the concrete runtime kind name used by reflection, including `"Null"` for
+`?` and `"Missing"` for `~`.
+
 Number literals start with a digit and may contain at most one decimal point. Malformed number
 literals are reported as language errors rather than leaking a Java numeric-conversion exception.
 Numbers must remain finite. Literals outside the finite range and arithmetic producing a non-finite
@@ -75,6 +78,9 @@ makePerson name age =
   ^name = name
   ^age = age
 ```
+
+The constant/operator spellings `true`, `false`, `and`, `or`, `not`, `_`, and numbered holes such
+as `_1` are reserved and cannot be used as binding or parameter names.
 
 Indentation defines a multiline function body. If a body contains exported bindings (`^`), calling the function returns an immutable scope containing those exports. Otherwise it returns the final expression or assigned value.
 

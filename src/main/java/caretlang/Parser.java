@@ -59,6 +59,7 @@ final class Parser {
             int offset = exported ? 1 : 0;
 
             if (!exported && left.size() > 1 && left.stream().allMatch(t -> t.kind() == Kind.IDENT) && !right.isEmpty()) {
+                requireBindable(left);
                 String name = left.getFirst().text();
                 List<String> params = left.subList(1, left.size()).stream().map(Token::text).toList();
                 Expr expression = new ExprParser(right, tokens.getLast().span().end()).parse();
@@ -68,12 +69,14 @@ final class Parser {
             }
 
             if (left.size() == offset + 1 && left.get(offset).kind() == Kind.IDENT && !right.isEmpty()) {
+                requireBindable(left.get(offset));
                 Expr expression = new ExprParser(right, tokens.getLast().span().end()).parse();
                 return new Assign(left.get(offset).text(), exported, expression,
                         SourceSpan.cover(left.getFirst().span(), expression.span()));
             }
 
             if (!exported && !left.isEmpty() && left.stream().allMatch(t -> t.kind() == Kind.IDENT) && right.isEmpty()) {
+                requireBindable(left);
                 String name = left.getFirst().text();
                 List<String> params = left.subList(1, left.size()).stream().map(Token::text).toList();
                 if (lineIndex >= lines.size() || lines.get(lineIndex).indent <= indent) {
@@ -88,6 +91,7 @@ final class Parser {
             if (left.size() == offset + 1 && left.get(offset).kind() == Kind.IDENT && right.isEmpty()) {
                 // Zero-argument function with an indented body.
                 if (!exported && lineIndex < lines.size() && lines.get(lineIndex).indent > indent) {
+                    requireBindable(left.get(offset));
                     String name = left.get(offset).text();
                     int childIndent = lines.get(lineIndex).indent;
                     List<Stmt> body = parseBlock(childIndent);
@@ -107,6 +111,19 @@ final class Parser {
     private SourceSpan functionSpan(List<Token> header, List<Stmt> body) {
         SourceSpan start = header.getFirst().span();
         return SourceSpan.cover(start, body.getLast().span());
+    }
+
+    private void requireBindable(List<Token> names) {
+        names.forEach(this::requireBindable);
+    }
+
+    private void requireBindable(Token token) {
+        String name = token.text();
+        if (Set.of("true", "false", "and", "or", "not").contains(name)
+                || name.equals("_") || name.matches("_[1-9][0-9]*")) {
+            throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_RESERVED_BINDING,
+                    "Reserved spelling cannot be used as a binding name: " + name, token.span());
+        }
     }
 
     private int topLevelEquals(List<Token> tokens) {
@@ -135,11 +152,11 @@ final class Parser {
                 indent += line.charAt(i) == '\t' ? 2 : 1;
             }
             int contentOffset = first.start() + leadingCharacters;
-            int depth = delimiterDelta(trimmed);
+            int depth = Lexer.continuationDelimiterDelta(trimmed);
             PhysicalLine last = first;
             while (depth > 0 && physicalIndex + 1 < physicalLines.size()) {
                 last = physicalLines.get(++physicalIndex);
-                depth += delimiterDelta(source.substring(last.start(), last.end()));
+                depth += Lexer.continuationDelimiterDelta(source.substring(last.start(), last.end()));
             }
 
             String lastText = source.substring(last.start(), last.end()).stripTrailing();
@@ -168,26 +185,6 @@ final class Parser {
             start = next;
         }
         return lines;
-    }
-
-    private static int delimiterDelta(String text) {
-        int depth = 0;
-        boolean string = false;
-        boolean escaped = false;
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (string) {
-                if (escaped) escaped = false;
-                else if (c == '\\') escaped = true;
-                else if (c == '"') string = false;
-                continue;
-            }
-            if (c == '"') string = true;
-            else if (c == '/' && i + 1 < text.length() && text.charAt(i + 1) == '/') break;
-            else if (c == '(' || c == '[') depth++;
-            else if (c == ')' || c == ']') depth--;
-        }
-        return depth;
     }
 
     private LangException error(Line line, String code, String message) {

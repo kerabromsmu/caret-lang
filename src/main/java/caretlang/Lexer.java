@@ -113,6 +113,27 @@ final class Lexer {
         return tokens;
     }
 
+    /** Returns delimiter depth while applying the same string/comment boundaries as tokenization. */
+    static int continuationDelimiterDelta(String source) {
+        int depth = 0;
+        boolean string = false;
+        boolean escaped = false;
+        for (int i = 0; i < source.length(); i++) {
+            char c = source.charAt(i);
+            if (string) {
+                if (escaped) escaped = false;
+                else if (c == '\\') escaped = true;
+                else if (c == '"') string = false;
+                continue;
+            }
+            if (c == '"') string = true;
+            else if (c == '/' && i + 1 < source.length() && source.charAt(i + 1) == '/') break;
+            else if (c == '(' || c == '[') depth++;
+            else if (c == ')' || c == ']') depth--;
+        }
+        return depth;
+    }
+
     private static Token token(Kind kind, String text, PositionTable positions, int start, int end) {
         return new Token(kind, text, positions.span(start, end));
     }
