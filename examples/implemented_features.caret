@@ -113,6 +113,7 @@ print (@person).names
 print (@factorial).kind
 print (@factorial).remaining
 factorialReference = @factorial
+print type factorialReference
 print factorialReference == @factorial
 print factorialReference == @add
 print (@+).kind
@@ -160,6 +161,7 @@ print seqGet sequence 0
 print seqGet sequence 1
 print seqGet sequence 99
 print (sequence == seqAdd (seqAdd seqEmpty "first") ~)
+print (seqAdd seqEmpty (-0) == seqAdd seqEmpty 0)
 print (@sequence).kind
 print (@sequence).size
 

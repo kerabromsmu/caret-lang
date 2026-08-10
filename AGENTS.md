@@ -141,6 +141,8 @@ Expected reflection failures such as a missing binding must produce `~` or a str
 * Do not use reflection from the Java implementation as a substitute for implementing Caret reflection semantics.
 * Run the full test suite after changes.
 * Update `LANGUAGE.md` whenever observable language behavior changes.
+* Update `WEB_INTRODUCTION.md` whenever a language feature is added or altered so the public-facing
+  description and examples remain accurate.
 * Include representative Caret programs as integration tests.
 * For every newly implemented language feature, add or extend a runnable `.caret` example that
   demonstrates the feature, and exercise that example from the integration test suite.

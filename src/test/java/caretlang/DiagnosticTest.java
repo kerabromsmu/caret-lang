@@ -20,7 +20,7 @@ final class DiagnosticTest {
 
         LangException runtime = assertThrows(LangException.class, () -> execute("print 1 / 0"));
         assertDiagnostic(runtime, Diagnostic.Phase.RUNTIME,
-                Diagnostic.Codes.DIVISION_BY_ZERO, 1, 7);
+                Diagnostic.Codes.DIVISION_BY_ZERO, 1, 11);
 
         LangException unknown = assertThrows(LangException.class, () -> execute("print absent"));
         assertDiagnostic(unknown, Diagnostic.Phase.RUNTIME,

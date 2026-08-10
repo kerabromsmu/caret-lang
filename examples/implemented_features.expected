@@ -56,6 +56,7 @@ Scope
 name,age
 Function
 1
+Function
 true
 false
 Function
@@ -80,6 +81,7 @@ ab
 first
 ~
 ~
+true
 true
 Sequence
 2

@@ -96,7 +96,7 @@ final class Interpreter {
         }
     }
 
-    private Value eval(Expr expr, Environment env, List<Value> holeArgs, Resolution resolution) {
+    private Value eval(Expr expr, Environment env, List<Value.Argument> holeArgs, Resolution resolution) {
         try {
             if (holeArgs == null) {
                 HoleAnalysis analysis = analyzeHoles(expr);
@@ -157,7 +157,7 @@ final class Interpreter {
             }
             Value left = evalInner(left1, env, resolution);
             Value right = evalInner(right1, env, resolution);
-            return applyBinaryOperator(operator, left, right, expr.span());
+            return applyBinaryOperator(operator, left, left1.span(), right, right1.span(), expr.span());
         }
         if (expr instanceof Conditional(Expr condition1, Expr whenTrue, Expr whenFalse, SourceSpan ignored)) {
             Value condition = evalInner(condition1, env, resolution);
@@ -171,7 +171,7 @@ final class Interpreter {
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
-            return invoke(callable, argument, expr.span());
+            return invoke(callable, new Value.Argument(argument, argument1.span()), expr.span());
         }
         if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
             Value target = evalInner(target2, env, resolution);
@@ -208,7 +208,7 @@ final class Interpreter {
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }
 
-    private Value invoke(Value.Callable callable, Value argument, SourceSpan span) {
+    private Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan span) {
         return withinCallDepth(span, () -> callable.apply(argument, span));
     }
 
@@ -232,47 +232,55 @@ final class Interpreter {
         }
     }
 
-    private Value applyBinaryOperator(String operator, Value left, Value right, SourceSpan span) {
+    private Value applyBinaryOperator(String operator, Value left, SourceSpan leftSpan,
+                                      Value right, SourceSpan rightSpan, SourceSpan span) {
         Value value = globals.get(operator);
         if (!(value instanceof Value.Callable callable)) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                     "Binary operator is not callable: " + operator, span);
         }
-        Value partial = invoke(callable, left, span);
+        Value partial = invoke(callable, new Value.Argument(left, leftSpan), span);
         if (!(partial instanceof Value.Callable remaining)) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                     "Binary operator did not retain its second parameter: " + operator, span);
         }
-        return invoke(remaining, right, span);
+        return invoke(remaining, new Value.Argument(right, rightSpan), span);
     }
 
-    private Value binaryOperation(String op, Value left, Value right) {
+    private Value binaryOperation(String op, List<Value.Argument> arguments, SourceSpan callSpan) {
+        Value.Argument leftArgument = arguments.get(0);
+        Value.Argument rightArgument = arguments.get(1);
+        Value left = leftArgument.value();
+        Value right = rightArgument.value();
         return switch (op) {
             case "+" -> {
                 if (left instanceof Value.Str || right instanceof Value.Str)
                     yield new Value.Str(left.toString() + right);
-                yield finiteNumber(number(left) + number(right), "Numeric result is not finite");
+                yield finiteNumber(number(leftArgument) + number(rightArgument),
+                        "Numeric result is not finite", callSpan);
             }
-            case "-" -> finiteNumber(number(left) - number(right), "Numeric result is not finite");
-            case "*" -> finiteNumber(number(left) * number(right), "Numeric result is not finite");
+            case "-" -> finiteNumber(number(leftArgument) - number(rightArgument),
+                    "Numeric result is not finite", callSpan);
+            case "*" -> finiteNumber(number(leftArgument) * number(rightArgument),
+                    "Numeric result is not finite", callSpan);
             case "/" -> {
-                double divisor = number(right);
+                double divisor = number(rightArgument);
                 if (divisor == 0.0) {
-                    throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero");
+                    throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero", rightArgument.span());
                 }
-                yield finiteNumber(number(left) / divisor, "Numeric result is not finite");
+                yield finiteNumber(number(leftArgument) / divisor, "Numeric result is not finite", callSpan);
             }
             case "%" -> {
-                double divisor = number(right);
+                double divisor = number(rightArgument);
                 if (divisor == 0.0) {
-                    throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero");
+                    throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero", rightArgument.span());
                 }
-                yield finiteNumber(number(left) % divisor, "Numeric result is not finite");
+                yield finiteNumber(number(leftArgument) % divisor, "Numeric result is not finite", callSpan);
             }
-            case ">" -> new Value.Bool(number(left) > number(right));
-            case ">=" -> new Value.Bool(number(left) >= number(right));
-            case "<" -> new Value.Bool(number(left) < number(right));
-            case "<=" -> new Value.Bool(number(left) <= number(right));
+            case ">" -> new Value.Bool(number(leftArgument) > number(rightArgument));
+            case ">=" -> new Value.Bool(number(leftArgument) >= number(rightArgument));
+            case "<" -> new Value.Bool(number(leftArgument) < number(rightArgument));
+            case "<=" -> new Value.Bool(number(leftArgument) <= number(rightArgument));
             case "==" -> new Value.Bool(equalsValue(left, right));
             case "!=" -> new Value.Bool(!equalsValue(left, right));
             default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
@@ -285,7 +293,30 @@ final class Interpreter {
                     "Callable values cannot be compared for equality");
         }
         if (a instanceof Value.Num(double value1) && b instanceof Value.Num(double value)) return value1 == value;
+        if (a instanceof Value.Scope left && b instanceof Value.Scope right) {
+            return equalsFields(left.fields(), right.fields());
+        }
+        if (a instanceof Value.Seq left && b instanceof Value.Seq right) {
+            List<Value> leftValues = left.values();
+            List<Value> rightValues = right.values();
+            if (leftValues.size() != rightValues.size()) return false;
+            for (int i = 0; i < leftValues.size(); i++) {
+                if (!equalsValue(leftValues.get(i), rightValues.get(i))) return false;
+            }
+            return true;
+        }
+        if (a instanceof Value.Dict left && b instanceof Value.Dict right) {
+            return equalsFields(left.entries(), right.entries());
+        }
         return Objects.equals(a, b);
+    }
+
+    private boolean equalsFields(Map<String, Value> left, Map<String, Value> right) {
+        if (!left.keySet().equals(right.keySet())) return false;
+        for (String key : left.keySet()) {
+            if (!equalsValue(left.get(key), right.get(key))) return false;
+        }
+        return true;
     }
 
     private double number(Value value) {
@@ -293,8 +324,19 @@ final class Interpreter {
         throw runtime(Diagnostic.Codes.EXPECTED_NUMBER, "Expected number, got: " + value);
     }
 
+    private double number(Value.Argument argument) {
+        if (argument.value() instanceof Value.Num(double value)) return value;
+        throw runtime(Diagnostic.Codes.EXPECTED_NUMBER,
+                "Expected number, got: " + argument.value(), argument.span());
+    }
+
     private Value.Num finiteNumber(double value, String message) {
         if (!Double.isFinite(value)) throw runtime(Diagnostic.Codes.NON_FINITE_RESULT, message);
+        return new Value.Num(value);
+    }
+
+    private Value.Num finiteNumber(double value, String message, SourceSpan span) {
+        if (!Double.isFinite(value)) throw runtime(Diagnostic.Codes.NON_FINITE_RESULT, message, span);
         return new Value.Num(value);
     }
 
@@ -306,9 +348,10 @@ final class Interpreter {
     }
 
     private void installBuiltins() {
-        for (String operator : List.of("+", "-", "*", "/", "%", "==", "!=", ">", ">=", "<", "<=")) {
-            globals.define(operator, function(operator, List.of("left", "right"), args ->
-                    binaryOperation(operator, args.get(0), args.get(1))));
+        for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
+            String operator = descriptor.spelling();
+            globals.define(operator, locatedFunction(operator, List.of("left", "right"),
+                    (args, span) -> binaryOperation(operator, args, span)));
         }
 
         globals.define("print", new Value.FunctionValue("print", List.of("value"), args -> {
@@ -318,9 +361,11 @@ final class Interpreter {
 
         globals.define("type", new Value.FunctionValue("type", List.of("value"), args -> new Value.Str(kindOf(args.getFirst()))));
 
-        globals.define("textSize", function("textSize", List.of("text"), args ->
-                new Value.Num(text(args.getFirst()).codePointCount(0, text(args.getFirst()).length()))));
-        globals.define("textAt", function("textAt", List.of("text", "index"), args -> {
+        globals.define("textSize", locatedFunction("textSize", List.of("text"), (args, ignored) -> {
+            String value = text(args.getFirst());
+            return new Value.Num(value.codePointCount(0, value.length()));
+        }));
+        globals.define("textAt", locatedFunction("textAt", List.of("text", "index"), (args, ignored) -> {
             String value = text(args.get(0));
             OptionalInt index = index(args.get(1));
             int size = value.codePointCount(0, value.length());
@@ -328,7 +373,7 @@ final class Interpreter {
             int offset = value.offsetByCodePoints(0, index.getAsInt());
             return new Value.Str(new String(Character.toChars(value.codePointAt(offset))));
         }));
-        globals.define("textSlice", function("textSlice", List.of("text", "start", "end"), args -> {
+        globals.define("textSlice", locatedFunction("textSlice", List.of("text", "start", "end"), (args, ignored) -> {
             String value = text(args.get(0));
             OptionalInt start = index(args.get(1));
             OptionalInt end = index(args.get(2));
@@ -339,42 +384,42 @@ final class Interpreter {
             int to = value.offsetByCodePoints(0, end.getAsInt());
             return new Value.Str(value.substring(from, to));
         }));
-        globals.define("textNumber", function("textNumber", List.of("text"), args -> {
+        globals.define("textNumber", locatedFunction("textNumber", List.of("text"), (args, ignored) -> {
             try {
                 double number = Double.parseDouble(text(args.getFirst()));
                 return Double.isFinite(number) ? new Value.Num(number) : Value.Missing.INSTANCE;
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException invalidNumber) {
                 return Value.Missing.INSTANCE;
             }
         }));
-        globals.define("numberText", function("numberText", List.of("number"), args ->
+        globals.define("numberText", locatedFunction("numberText", List.of("number"), (args, ignored) ->
                 new Value.Str(new Value.Num(number(args.getFirst())).toString())));
 
         globals.define("seqEmpty", function("seqEmpty", List.of(), args -> new Value.Seq(List.of())));
-        globals.define("seqAdd", function("seqAdd", List.of("sequence", "value"), args ->
-                sequence(args.getFirst()).appended(args.get(1))));
-        globals.define("seqGet", function("seqGet", List.of("sequence", "index"), args -> {
-            List<Value> values = sequence(args.get(0)).values();
+        globals.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) ->
+                sequence(args.getFirst()).appended(args.get(1).value())));
+        globals.define("seqGet", locatedFunction("seqGet", List.of("sequence", "index"), (args, ignored) -> {
+            Value.Seq values = sequence(args.get(0));
             OptionalInt index = index(args.get(1));
-            return index.isPresent() && index.getAsInt() < values.size()
-                    ? values.get(index.getAsInt()) : Value.Missing.INSTANCE;
+            return index.isPresent() ? values.find(index.getAsInt()).orElse(Value.Missing.INSTANCE)
+                    : Value.Missing.INSTANCE;
         }));
-        globals.define("seqSize", function("seqSize", List.of("sequence"), args ->
-                new Value.Num(sequence(args.getFirst()).values().size())));
+        globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
+                new Value.Num(sequence(args.getFirst()).size())));
 
         globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dict(Map.of())));
-        globals.define("dictPut", function("dictPut", List.of("dictionary", "key", "value"), args ->
-                dictionary(args.getFirst()).put(requiredDictionaryKey(args.get(1)), args.get(2))));
-        globals.define("dictGet", function("dictGet", List.of("dictionary", "key"), args -> {
+        globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
+                dictionary(args.getFirst()).put(requiredDictionaryKey(args.get(1)), args.get(2).value())));
+        globals.define("dictGet", locatedFunction("dictGet", List.of("dictionary", "key"), (args, ignored) -> {
             String key = dictionaryKey(args.get(1));
             return key == null ? Value.Missing.INSTANCE
                     : dictionary(args.get(0)).find(key).orElse(Value.Missing.INSTANCE);
         }));
-        globals.define("dictHas", function("dictHas", List.of("dictionary", "key"), args -> {
+        globals.define("dictHas", locatedFunction("dictHas", List.of("dictionary", "key"), (args, ignored) -> {
             String key = dictionaryKey(args.get(1));
-            return new Value.Bool(key != null && dictionary(args.get(0)).entries().containsKey(key));
+            return new Value.Bool(key != null && dictionary(args.get(0)).containsKey(key));
         }));
-        globals.define("dictKeys", function("dictKeys", List.of("dictionary"), args -> new Value.Seq(
+        globals.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> new Value.Seq(
                 dictionary(args.getFirst()).entries().keySet().stream().map(Value.Name::new).toList())));
     }
 
@@ -382,9 +427,10 @@ final class Interpreter {
         globals.define("assert", new Value.FunctionValue("assert", List.of("name", "condition"),
                 (args, span) -> {
                     String name = text(args.get(0));
-                    if (!(args.get(1) instanceof Value.Bool condition)) {
+                    if (!(args.get(1).value() instanceof Value.Bool condition)) {
                         throw runtime(Diagnostic.Codes.INVALID_ASSERTION,
-                                "Assertion condition must be Boolean, got: " + args.get(1));
+                                "Assertion condition must be Boolean, got: " + args.get(1).value(),
+                                args.get(1).span());
                     }
                     reporter.record(name, condition, new Value.Bool(true), condition.value(), span);
                     return Value.Missing.INSTANCE;
@@ -392,8 +438,8 @@ final class Interpreter {
         globals.define("assertEqual", new Value.FunctionValue("assertEqual", List.of("name", "actual", "expected"),
                 (args, span) -> {
                     String name = text(args.get(0));
-                    Value actual = args.get(1);
-                    Value expected = args.get(2);
+                    Value actual = args.get(1).value();
+                    Value expected = args.get(2).value();
                     reporter.record(name, actual, expected, equalsValue(actual, expected), span);
                     return Value.Missing.INSTANCE;
                 }));
@@ -404,42 +450,50 @@ final class Interpreter {
         return new Value.FunctionValue(name, parameters, implementation);
     }
 
-    private String text(Value value) {
-        if (value instanceof Value.Str(String text)) return text;
-        throw runtime(Diagnostic.Codes.EXPECTED_STRING, "Expected string, got: " + value);
+    private Value.FunctionValue locatedFunction(String name, List<String> parameters,
+            java.util.function.BiFunction<List<Value.Argument>, SourceSpan, Value> implementation) {
+        return new Value.FunctionValue(name, parameters, implementation);
     }
 
-    private Value.Seq sequence(Value value) {
-        if (value instanceof Value.Seq sequence) return sequence;
-        throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE, "Expected sequence, got: " + value);
+    private String text(Value.Argument argument) {
+        if (argument.value() instanceof Value.Str(String text)) return text;
+        throw runtime(Diagnostic.Codes.EXPECTED_STRING,
+                "Expected string, got: " + argument.value(), argument.span());
     }
 
-    private Value.Dict dictionary(Value value) {
-        if (value instanceof Value.Dict dictionary) return dictionary;
-        throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY, "Expected dictionary, got: " + value);
+    private Value.Seq sequence(Value.Argument argument) {
+        if (argument.value() instanceof Value.Seq sequence) return sequence;
+        throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
+                "Expected sequence, got: " + argument.value(), argument.span());
     }
 
-    private OptionalInt index(Value value) {
-        if (!(value instanceof Value.Num(double number)) || !Double.isFinite(number)
+    private Value.Dict dictionary(Value.Argument argument) {
+        if (argument.value() instanceof Value.Dict dictionary) return dictionary;
+        throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
+                "Expected dictionary, got: " + argument.value(), argument.span());
+    }
+
+    private OptionalInt index(Value.Argument argument) {
+        if (!(argument.value() instanceof Value.Num(double number)) || !Double.isFinite(number)
                 || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) {
             return OptionalInt.empty();
         }
         return OptionalInt.of((int) number);
     }
 
-    private String dictionaryKey(Value value) {
-        return switch (value) {
+    private String dictionaryKey(Value.Argument argument) {
+        return switch (argument.value()) {
             case Value.Name name -> name.value();
             case Value.Str text -> text.value();
             default -> null;
         };
     }
 
-    private String requiredDictionaryKey(Value value) {
-        String key = dictionaryKey(value);
+    private String requiredDictionaryKey(Value.Argument argument) {
+        String key = dictionaryKey(argument);
         if (key == null) {
             throw runtime(Diagnostic.Codes.INVALID_DICTIONARY_KEY,
-                    "Dictionary key must be a name or string, got: " + value);
+                    "Dictionary key must be a name or string, got: " + argument.value(), argument.span());
         }
         return key;
     }
@@ -474,9 +528,9 @@ final class Interpreter {
                 metadata.put("names", new Value.Str(String.join(",", scope.fields().keySet())));
             }
             case Value.Reflective reflective -> metadata.putAll(reflective.fields());
-            case Value.Seq sequence -> metadata.put("size", new Value.Num(sequence.values().size()));
+            case Value.Seq sequence -> metadata.put("size", new Value.Num(sequence.size()));
             case Value.Dict dictionary -> {
-                metadata.put("size", new Value.Num(dictionary.entries().size()));
+                metadata.put("size", new Value.Num(dictionary.size()));
                 metadata.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
             }
             case Value.Callable ignored -> throw new AssertionError("Handled above");
@@ -494,7 +548,7 @@ final class Interpreter {
             case Value.Null ignored -> "Null";
             case Value.Missing ignored -> "Missing";
             case Value.Scope ignored -> "Scope";
-            case Value.FunctionReference ignored -> "FunctionReference";
+            case Value.FunctionReference ignored -> "Function";
             case Value.Reflective ignored -> "Reflective";
             case Value.Seq ignored -> "Sequence";
             case Value.Dict ignored -> "Dictionary";
@@ -526,27 +580,11 @@ final class Interpreter {
 
     private boolean markHoles(Expr expr, List<Integer> indexes,
                               IdentityHashMap<Expr, Boolean> containsHole) {
-        boolean found = switch (expr) {
-            case Hole hole -> {
-                indexes.add(hole.index());
-                yield true;
-            }
-            case Literal ignored -> false;
-            case Name ignored -> false;
-            case Unary unary -> markHoles(unary.operand(), indexes, containsHole);
-            case Binary binary -> markHoles(binary.left(), indexes, containsHole)
-                    | markHoles(binary.right(), indexes, containsHole);
-            case Conditional conditional -> markHoles(conditional.condition(), indexes, containsHole)
-                    | markHoles(conditional.whenTrue(), indexes, containsHole)
-                    | markHoles(conditional.whenFalse(), indexes, containsHole);
-            case Apply apply -> markHoles(apply.function(), indexes, containsHole)
-                    | markHoles(apply.argument(), indexes, containsHole);
-            case Field field -> markHoles(field.target(), indexes, containsHole);
-            case DynamicField field -> markHoles(field.target(), indexes, containsHole)
-                    | markHoles(field.name(), indexes, containsHole);
-            case Reflect reflect -> markHoles(reflect.target(), indexes, containsHole);
-            case Group group -> markHoles(group.expression(), indexes, containsHole);
-        };
+        boolean found = expr instanceof Hole;
+        if (expr instanceof Hole hole) indexes.add(hole.index());
+        for (Expr child : AstTraversal.children(expr)) {
+            found |= markHoles(child, indexes, containsHole);
+        }
         containsHole.put(expr, found);
         return found;
     }
@@ -560,22 +598,26 @@ final class Interpreter {
 
     private Expr bindHoles(Expr expr, HoleBinder holes) {
         return AstRewriter.rewrite(expr, candidate -> candidate instanceof Hole(int index, SourceSpan span)
-                ? Optional.of(new Literal(index == 0 ? holes.next() : holes.at(index), span))
+                ? Optional.of(holes.literal(index, span))
                 : Optional.empty());
     }
 
     private static final class HoleBinder {
-        private final List<Value> values;
+        private final List<Value.Argument> values;
         private int index;
-        private HoleBinder(List<Value> values) { this.values = values; }
-        Value next() {
+        private HoleBinder(List<Value.Argument> values) { this.values = values; }
+        Literal literal(int oneBasedIndex, SourceSpan ignoredHoleSpan) {
+            Value.Argument argument = oneBasedIndex == 0 ? next() : at(oneBasedIndex);
+            return new Literal(argument.value(), argument.span());
+        }
+        Value.Argument next() {
             if (index >= values.size()) {
                 throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
                         "Not enough arguments for partial expression");
             }
             return values.get(index++);
         }
-        Value at(int oneBasedIndex) {
+        Value.Argument at(int oneBasedIndex) {
             if (oneBasedIndex < 1 || oneBasedIndex > values.size()) {
                 throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
                         "Not enough arguments for numbered partial expression");
@@ -586,5 +628,9 @@ final class Interpreter {
 
     private static LangException runtime(String code, String message) {
         return new LangException(Diagnostic.Phase.RUNTIME, code, message, null);
+    }
+
+    private static LangException runtime(String code, String message, SourceSpan span) {
+        return new LangException(Diagnostic.Phase.RUNTIME, code, message, span);
     }
 }

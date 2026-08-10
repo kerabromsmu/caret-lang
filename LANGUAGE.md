@@ -15,8 +15,8 @@ true false  Boolean
 
 Null and missing are separate runtime values.
 
-`type value` returns the concrete runtime kind name used by reflection, including `"Null"` for
-`?` and `"Missing"` for `~`.
+`type value` returns the public runtime kind name used by reflection, including `"Null"` for `?`,
+`"Missing"` for `~`, and `"Function"` for a non-callable function reference produced by `@`.
 
 Number literals start with a digit and may contain at most one decimal point. Malformed number
 literals are reported as language errors rather than leaking a Java numeric-conversion exception.
@@ -36,6 +36,8 @@ beginning of a line; `#` is not a comment marker.
 Lexical, parse, and runtime errors include the one-based line and column of the smallest relevant
 source expression. Columns count raw source characters. A tab therefore advances the displayed
 column by one, although a leading tab still contributes two spaces to indentation depth.
+Built-in argument validation retains individual argument spans, so an invalid operand points to
+that operand rather than the complete call.
 
 Internally, errors retain their phase, a stable diagnostic code, message, primary source span, and
 related source spans. The CLI renders the primary location in the compact form below and follows it
@@ -409,8 +411,11 @@ scope are errors. Parameters and declarations in a function body may shadow oute
 function-body declarations are nested inside the parameter scope so established forms such as
 `^name = name` export a parameter under the same name. Parent lookup is lexical.
 
-Equality is structural for scalar values, exported scopes, and collections. Callable values cannot
-be compared for equality. Function references compare by the identity of their referenced callable.
+Equality is recursive and structural for scalar values, exported scopes, and collections. Scalar
+numeric equality therefore has the same result when numbers are nested in data; for example, `-0`
+and `0` compare equal both directly and inside a sequence. Encountering a callable anywhere in
+either compared structure is a `CALLABLE_EQUALITY` error. Function references compare by the
+identity of their referenced callable.
 
 `@function` produces a non-callable reflective function reference. It suppresses normal implicit
 invocation of a nullary binding and exposes `kind` and `remaining`; bare nullary function names
@@ -444,50 +449,205 @@ The first Caret-written interpreter does not depend on static types, loops, muta
 lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
 immutable collections, tagged exported scopes, and the planned text operations are sufficient.
 
-## Contracts
+## Contracts, Type Derivation, and Collections
 
-A contract constrains a declaration or parameter. Contracts are written in parentheses immediately before the binding they constrain.
+### Overview
 
-```caret
-(Int) count
+Caret does not distinguish fundamentally between types, interfaces, refinement types, and value contracts.
 
-(Int positive) amount
+A type is a **contract**.
 
-(pure) normalize text =
-  ...
+A contract behaves as a predicate over values:
+
+```text
+Contract : Value -> Boolean
 ```
 
-Multiple contracts are listed inside the same parentheses:
+A value satisfies a type when it satisfies the corresponding contract.
 
-```caret
-(Int positive nonZero) amount
+Contracts may also derive from other contracts. This creates a hierarchy of logical implication:
+
+```text
+Int -> Number -> Comparable -> Eq
 ```
 
-This means that all listed contracts must hold.
+meaning:
+
+```text
+Int x => Number x
+Number x => Comparable x
+Comparable x => Eq x
+```
+
+Behavior is not stored inside contracts.
+
+Operations are ordinary Caret functions whose parameter contracts determine which values they accept.
+
+Collections use one common literal syntax:
+
+```caret
+[1 2 3]
+```
+
+The literal itself does not mean `List`, `Array`, `Set`, or another particular representation.
+
+Its specific collection contract and representation are determined by inference and surrounding constraints.
+
+---
+
+# Contracts
+
+## Contract definition
+
+`contract` constructs a contract.
+
+A base contract with no additional value restriction may be defined as:
+
+```caret
+Eq = contract ~
+```
+
+Here `~` means that the contract introduces no additional value predicate of its own.
+
+Membership in such a base contract is established through derivation from that contract.
+
+For example:
+
+```caret
+Eq = contract ~
+
+Number = contract Eq
+
+Int = contract Number
+```
+
+establishes:
+
+```text
+Int -> Number -> Eq
+```
+
+An `Int` therefore satisfies all three contracts.
+
+---
+
+## Contracts as predicates
+
+Every contract may be used as a Boolean membership predicate:
+
+```caret
+Int value
+Number value
+Eq value
+```
 
 Conceptually:
 
-```caret
-(A B C) x
+```text
+Int value -> Boolean
 ```
 
-requires:
+A contract may therefore be used anywhere an ordinary pure unary Boolean function is appropriate.
+
+The compiler may determine membership statically when sufficient type information is available.
+
+It does not need to execute a runtime predicate when derivation already proves membership.
+
+---
+
+## Contract composition
+
+`contract` may combine multiple contracts:
 
 ```caret
-A x
-B x
-C x
+Number =
+  contract Eq Comparable Arithmetic
 ```
 
-A contract may carry additional compile-time semantics beyond its Boolean result.
+This means that every `Number` also satisfies:
 
-### Contract functions
+```text
+Eq
+Comparable
+Arithmetic
+```
 
-Any function may be used as a value contract when it:
+Conceptually:
 
-* takes exactly one argument;
-* returns `Bool`;
-* is pure.
+```text
+Number x
+    =>
+Eq x
+and Comparable x
+and Arithmetic x
+```
+
+Multiple derivation is therefore ordinary contract composition.
+
+No separate multiple-inheritance mechanism is required.
+
+For example:
+
+```caret
+Integer =
+  contract Number Integral
+
+Float =
+  contract Number Fractional
+```
+
+establishes:
+
+```text
+Integer -> Number
+Integer -> Integral
+
+Float -> Number
+Float -> Fractional
+```
+
+and transitively all contracts derived by `Number`.
+
+---
+
+## Type derivation
+
+Type derivation is contract inclusion.
+
+For example:
+
+```caret
+Eq = contract ~
+
+Comparable =
+  contract Eq
+
+Arithmetic =
+  contract Eq
+
+Number =
+  contract Comparable Arithmetic
+
+Int =
+  contract Number Integral
+
+Float =
+  contract Number Fractional
+```
+
+This creates a graph rather than requiring a strict inheritance tree.
+
+A contract may derive from any number of other contracts.
+
+There is no object-layout diamond problem because derivation does not copy or embed base objects.
+
+If several derivation paths lead to `Eq`, the resulting value simply satisfies `Eq`.
+
+---
+
+## Refinement predicates
+
+Ordinary pure unary Boolean functions may participate in contracts.
 
 Example:
 
@@ -495,78 +655,919 @@ Example:
 positive x =
   x > 0
 
-(Int positive) amount
+PositiveInt =
+  contract Int positive
 ```
 
-The compiler may evaluate such contracts at compile time whenever the argument is known and the contract is compile-time evaluable.
+Conceptually:
 
-If the compiler can prove a contract false, compilation fails.
+```text
+PositiveInt x
+    =
+Int x
+and positive x
+```
 
-If the compiler cannot prove a runtime value satisfies a value contract, a runtime contract check may be retained.
-
-Contract functions must not have observable side effects.
-
-### Types as contracts
-
-Type names behave as contracts.
+The same constraint may also be written directly on a binding:
 
 ```caret
-(Int) value
-(String) name
+(Int positive) count
+```
+
+Named derived contracts are useful when a combination is reused:
+
+```caret
+SmallPositiveInt =
+  contract Int positive small
+```
+
+Thus Caret uses the same mechanism for:
+
+* base types;
+* derived types;
+* refinement types;
+* interfaces/capabilities;
+* user-defined validation constraints.
+
+---
+
+## Contracts do not contain operations
+
+A contract does not contain a method table or list of allowed operations.
+
+For example:
+
+```caret
+Eq = contract ~
+```
+
+does not itself declare `eq`.
+
+Equality is an ordinary function defined separately:
+
+```caret
+(Boolean) eq (Eq) a (Eq) b =
+  false
+```
+
+Specific contracts may provide more specialized implementations:
+
+```caret
+(Boolean) eq (Int) a (Int) b =
+  primitiveIntEq a b
+
+(Boolean) eq (Float) a (Float) b =
+  primitiveFloatEq a b
+
+(Boolean) eq (String) a (String) b =
+  primitiveStringEq a b
+```
+
+Likewise:
+
+```caret
+(Boolean) lt (Comparable) a (Comparable) b =
+  ...
+
+(Int) add (Int) a (Int) b =
+  ...
+
+(Float) add (Float) a (Float) b =
+  ...
+```
+
+Operations belong to functions, not types.
+
+---
+
+## Functional polymorphism
+
+Several definitions of the same function may specialize different parameter contracts.
+
+For example:
+
+```caret
+(Boolean) eq (Eq) a (Eq) b =
+  false
+
+(Boolean) eq (Number) a (Number) b =
+  numericEq a b
+
+(Boolean) eq (Int) a (Int) b =
+  primitiveIntEq a b
+```
+
+When calling:
+
+```caret
+eq 10 20
+```
+
+the most specific applicable implementation is selected.
+
+Here that is:
+
+```caret
+eq (Int) a (Int) b
+```
+
+This provides functional polymorphism through contract-based dispatch.
+
+There is no privileged receiver object.
+
+Dispatch may therefore depend on several arguments:
+
+```caret
+add (Int) a (Float) b =
+  ...
+
+add (Float) a (Int) b =
+  ...
+
+add (Float) a (Float) b =
+  ...
+```
+
+If exactly one most-specific implementation exists, it is used.
+
+If several incomparable implementations are equally applicable, the call is ambiguous and must produce a compile-time diagnostic where determinable.
+
+Function dispatch must not arbitrarily choose between ambiguous implementations.
+
+---
+
+# Collections
+
+## General collection contract
+
+`Collection` is the fundamental contract for values containing zero or more elements.
+
+More specific collection contracts derive from it.
+
+Conceptually:
+
+```text
+Collection
+    List
+    Array
+    Set
+    Dictionary
+    Queue
+    Packed
+    ...
+```
+
+These relationships need not form a traditional OO hierarchy.
+
+Specific collection properties may be expressed through additional contracts such as:
+
+```text
+Ordered
+Indexed
+Unique
+Keyed
+FixedSize
+Mutable
+Contiguous
+Packed
+Sorted
+Persistent
+```
+
+A collection type may derive from several such contracts.
+
+For example, conceptually:
+
+```text
+Array T
+    -> Collection T
+    -> Ordered
+    -> Indexed
+
+Set T
+    -> Collection T
+    -> Unique
+
+Packed T
+    -> Collection T
+    -> Contiguous
+    -> Packed
+```
+
+---
+
+## Parameterized collection contracts
+
+Collection contracts may be parameterized.
+
+Examples:
+
+```caret
+Collection Int
+List String
+Array Float
+Set String
+Dictionary String Int
+Packed Byte
 ```
 
 Conceptually:
 
 ```caret
-Int value
-String name
+Collection element
 ```
 
-produce Boolean type-membership tests.
+produces a contract requiring every collection element to satisfy `element`.
 
-Types additionally provide static type information to the compiler.
-
-Nullable and optional modifiers participate in the same type-contract syntax:
+Thus:
 
 ```caret
-(String?) value      // may be null
-(String~) value      // may be missing
-(String?~) value     // may be missing or null
+(Collection Number) values
 ```
 
-### Function contracts
+means:
 
-Contracts placed immediately before a function name constrain the function itself.
+> `values` is a collection whose elements all satisfy `Number`.
+
+Parameterized collection types should use the normal Caret contract/function model rather than requiring a separate generic-type language.
+
+---
+
+# Collection literals
+
+## Universal collection syntax
+
+Caret has one collection literal syntax:
 
 ```caret
-(pure) calculate x =
-  ...
+[1 2 3]
 ```
 
-Contracts placed before parameters constrain those parameters:
+Square brackets mean:
+
+> construct a collection containing these expressions.
+
+They do **not** specifically mean list or array.
+
+The collection's more specific contract may come from context:
 
 ```caret
-(pure) calculate (Int positive) x =
-  ...
+(List Int) a =
+  [1 2 3]
+
+(Array Int) b =
+  [1 2 3]
+
+(Set Int) c =
+  [1 2 3]
+
+(Packed Int32) d =
+  [1 2 3]
 ```
 
-`pure` is a built-in function contract.
+The same literal syntax is used in every case.
 
-### Function result contracts
+Different contracts may result in different behavior and physical representation.
 
-Contracts immediately before a function name may contain both callable contracts and value/type
-contracts. Callable contracts constrain the function itself; value/type contracts constrain the
-function's result.
+---
+
+## Empty collection
+
+An empty collection is:
 
 ```caret
-(pure Int) addOne (Int) value =
-  value + 1
+[]
 ```
 
-Here `pure` constrains `addOne`, while `Int` constrains its result. Each contract's declared kind
-determines which target it accepts; using a contract that cannot constrain either target is a
-compile-time error. This avoids a separate result-contract punctuation form. Lambdas use the same
-contract classification and must not introduce lambda-specific result syntax.
+Its element contract cannot be inferred from its contents.
+
+It may therefore obtain its type from context:
+
+```caret
+(List Int) values = []
+
+(Set String) names = []
+
+(Packed Byte) buffer = []
+```
+
+Without sufficient context it may remain a generic empty collection until additional constraints determine its element type.
+
+---
+
+## Heterogeneous collections
+
+Collections may contain values of different types:
+
+```caret
+[
+  10
+  "hello"
+  true
+  3.14
+]
+```
+
+The inferred element contract is conceptually a union of the possible element contracts:
+
+```text
+Int | String | Boolean | Float
+```
+
+Caret must not require the programmer to explicitly use `Any` merely because a collection is heterogeneous.
+
+Individual elements retain enough metadata to determine their actual contracts and representation where required.
+
+---
+
+## Homogeneous collections
+
+A collection such as:
+
+```caret
+[1 2 3 4]
+```
+
+may infer a common element contract:
+
+```text
+Int
+```
+
+Conceptually, the collection can carry that information once:
+
+```text
+Collection
+    element contract: Int
+
+    values:
+        1
+        2
+        3
+        4
+```
+
+The implementation need not repeat identical type metadata for every element.
+
+---
+
+## Collection expressions
+
+Elements inside `[]` are ordinary Caret expressions.
+
+Example:
+
+```caret
+[
+  10
+  calculate x
+  transform value
+]
+```
+
+No separate collection-expression language is introduced.
+
+Multi-line literals are allowed:
+
+```caret
+[
+  first
+  second
+  calculate third
+]
+```
+
+Parentheses remain the normal grouping mechanism where expression boundaries would otherwise be ambiguous.
+
+---
+
+# Named fields and dictionaries
+
+## Named elements
+
+`^` may construct named elements inside a collection:
+
+```caret
+person =
+  [
+    ^name "Alice"
+    ^age 42
+    ^active true
+  ]
+```
+
+Conceptually these are first-class field values:
+
+```text
+Field("name", "Alice")
+Field("age", 42)
+Field("active", true)
+```
+
+The collection may therefore satisfy a record-like or dictionary-like contract.
+
+Static member access may be used where the field is known:
+
+```caret
+person.name
+person.age
+```
+
+---
+
+## Dynamic keys
+
+For keys that cannot be expressed as static identifiers, ordinary field construction may be used:
+
+```caret
+[
+  field "first name" "Alice"
+  field "age" 42
+]
+```
+
+or:
+
+```caret
+[
+  field key1 value1
+  field key2 value2
+]
+```
+
+A dictionary is therefore still fundamentally a collection.
+
+Conceptually:
+
+```text
+Dictionary K V
+    -> Collection (Field K V)
+    -> Keyed
+```
+
+Caret does not require a separate `{ key: value }` literal syntax.
+
+---
+
+## Nested collections
+
+Collections may contain collections:
+
+```caret
+people =
+  [
+    [
+      ^name "Alice"
+      ^age 32
+    ]
+
+    [
+      ^name "Bob"
+      ^age 41
+    ]
+  ]
+```
+
+or arbitrary heterogeneous nested structures:
+
+```caret
+[
+  10
+  "hello"
+
+  [
+    ^x 20
+    ^y 30
+  ]
+
+  true
+]
+```
+
+No separate object, record, JSON, or array literal syntax is required.
+
+---
+
+# Collection metadata
+
+## Logical versus physical metadata
+
+Caret distinguishes between:
+
+1. **semantic/type metadata** — what contracts a value satisfies;
+2. **representation metadata** — how a value is physically laid out.
+
+These are related but not identical.
+
+For example:
+
+```caret
+(Collection Number) values
+```
+
+guarantees that every element satisfies `Number`.
+
+It does not necessarily imply that every element has the same representation.
+
+The collection may contain:
+
+```caret
+[1 2.5 100 3.14]
+```
+
+where some values are represented as integers and others as floating-point values.
+
+---
+
+## Per-element metadata
+
+A heterogeneous collection may require metadata for each element.
+
+Conceptually:
+
+```text
+[
+    { type: Int,     value: 10 }
+    { type: String,  value: "hello" }
+    { type: Boolean, value: true }
+]
+```
+
+This is a semantic model only.
+
+The runtime is not required to physically store a complete descriptor beside every value.
+
+It may use:
+
+* compact tags;
+* descriptor tables;
+* separate storage areas;
+* compiler-known static information;
+* other equivalent representations.
+
+The observable semantics must only preserve sufficient information to recover each element's relevant type and representation.
+
+---
+
+## Shared collection metadata
+
+When every element shares the same relevant metadata, that metadata may belong to the collection instead of every element.
+
+For example:
+
+```caret
+(Collection Int) values =
+  [1 2 3 4]
+```
+
+may conceptually be represented as:
+
+```text
+element contract: Int
+
+values:
+    1
+    2
+    3
+    4
+```
+
+rather than:
+
+```text
+Int 1
+Int 2
+Int 3
+Int 4
+```
+
+This sharing is semantically invisible and may be performed automatically.
+
+---
+
+## Contract-homogeneous but representation-heterogeneous collections
+
+A common contract does not necessarily provide enough information to remove all per-element metadata.
+
+For example:
+
+```caret
+(Collection Number) values =
+  [1 2.5 3 4.5]
+```
+
+has a common semantic contract:
+
+```text
+Number
+```
+
+but its elements may have more specific contracts:
+
+```text
+Int
+Float
+Int
+Float
+```
+
+and may therefore require different representations.
+
+The collection may store `Number` as shared metadata while retaining enough per-element information to distinguish the concrete numeric forms.
+
+---
+
+# Packed collections
+
+## Shared representation
+
+A packed collection has a uniform statically known element representation.
+
+Example:
+
+```caret
+(Packed Byte) bytes =
+  [12 48 91 255]
+```
+
+The representation may contain only the element data:
+
+```text
+0C 30 5B FF
+```
+
+with the common element representation stored once as collection metadata.
+
+Individual elements require no separate type or layout descriptor.
+
+---
+
+## Packed versus homogeneous
+
+A homogeneous semantic contract is weaker than a packed representation.
+
+For example:
+
+```caret
+(Collection Number) values
+```
+
+does not imply packed storage.
+
+Even:
+
+```caret
+(Collection Int) values
+```
+
+need not necessarily promise a particular physical width or layout if `Int` has implementation-dependent representation.
+
+By contrast:
+
+```caret
+(Packed Int32) values
+```
+
+requires a concrete uniform representation.
+
+Conceptually:
+
+```text
+Packed T => Collection T
+```
+
+but:
+
+```text
+Collection T !=> Packed T
+```
+
+---
+
+## Packed structural values
+
+Packed elements need not be primitive scalars.
+
+A structural type may have a shared layout.
+
+For example, conceptually:
+
+```text
+Vertex
+    position : 3 × Float32
+    normal   : 3 × Float32
+    uv       : 2 × Float32
+```
+
+Then:
+
+```caret
+(Packed Vertex) vertices
+```
+
+may carry one common descriptor:
+
+```text
+stride      32 bytes
+position    offset 0
+normal      offset 12
+uv          offset 24
+```
+
+while the collection storage contains only packed vertex records.
+
+This is suitable for:
+
+* GPU buffers;
+* SIMD processing;
+* native interop;
+* audio buffers;
+* binary I/O;
+* memory mapping;
+* network buffers.
+
+---
+
+## Metadata placement rule
+
+The semantic rule is:
+
+> A collection may provide metadata that applies to every element. An element requires additional metadata only when the collection-level metadata is insufficient to determine that element's relevant type or representation.
+
+Examples:
+
+```caret
+[1 2 3]
+```
+
+may use one shared `Int` descriptor.
+
+```caret
+[1 2.0 3]
+```
+
+may share `Number` while retaining information distinguishing `Int` from `Float`.
+
+```caret
+[1 "two" true]
+```
+
+requires heterogeneous element information.
+
+```caret
+(Packed Int32) [1 2 3]
+```
+
+has a complete common element layout and needs no per-element representation metadata.
+
+---
+
+# Relationship to formats
+
+Contracts and physical representation are separate concepts.
+
+A contract describes:
+
+```text
+which values are valid
+```
+
+A layout describes:
+
+```text
+how values are represented in memory
+```
+
+A `Format` describes:
+
+```text
+logical value <-> external representation
+```
+
+These concepts may cooperate without being collapsed into one abstraction.
+
+For example, a packed collection may use a shared representation compatible with a `Format`, but being a `Packed` collection does not itself make the collection a `Format`.
+
+This separation allows the compiler to optimize memory layout without changing logical contract semantics.
+
+---
+
+# Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. `contract` as the fundamental type-definition mechanism.
+2. Base/tag contracts:
+
+```caret
+Eq = contract ~
+```
+
+3. Contract derivation:
+
+```caret
+Number = contract Eq Comparable
+```
+
+4. Multiple derivation.
+5. Contracts usable as membership predicates.
+6. Ordinary pure predicates used as refinements.
+7. Derived refinement contracts:
+
+```caret
+PositiveInt = contract Int positive
+```
+
+8. Separate function definitions for operations.
+9. Contract-based function specialization and most-specific dispatch.
+10. Ambiguity diagnostics for incomparable applicable function implementations.
+11. A general `Collection` contract.
+12. Parameterized collection contracts.
+13. A universal square-bracket collection literal:
+
+```caret
+[1 2 3]
+```
+
+14. Empty collection literals:
+
+```caret
+[]
+```
+
+15. Homogeneous collections.
+16. Heterogeneous collections.
+17. Nested collections.
+18. Named fields with `^`.
+19. Dynamic fields through ordinary `field` construction.
+20. Dictionary-like collections using field elements.
+21. Shared collection-level element metadata.
+22. Per-element metadata where required.
+23. Distinction between common semantic contract and common physical representation.
+24. Packed collections with uniform representation metadata.
+25. Compiler/runtime freedom to optimize metadata representation without changing observable semantics.
+
+The initial implementation may postpone:
+
+* sophisticated automatic memory-layout optimization;
+* GPU-specific layout attributes;
+* structure-of-arrays transformations;
+* compressed runtime type tags;
+* zero-copy format views;
+* advanced generic constraint inference.
+
+These later features must preserve the fundamental distinction between contract membership, element-specific metadata, and shared collection representation.
+
+---
+
+# Design principle
+
+Caret uses one conceptual system for type constraints:
+
+```text
+type
+interface
+refinement
+capability
+    -> Contract
+```
+
+Derivation means logical inclusion:
+
+```text
+Derived x => Base x
+```
+
+Behavior remains outside the type hierarchy and is expressed through ordinary polymorphic functions.
+
+Collections likewise use one literal form:
+
+```caret
+[...]
+```
+
+The literal specifies its elements, not its container implementation.
+
+Contracts determine whether the resulting value behaves as a:
+
+```text
+List
+Array
+Set
+Dictionary
+Packed buffer
+heterogeneous collection
+...
+```
+
+and the runtime stores metadata at the narrowest level necessary:
+
+```text
+shared by collection when possible
+per element only when necessary
+```
+
+This allows the same collection abstraction to range from fully heterogeneous structured data to tightly packed GPU-compatible buffers without introducing separate literal syntaxes or unrelated collection models.
 
 ### Purity and effects
 
@@ -1016,685 +2017,6 @@ simd 8 Float
 ```
 
 requests that logical lane width specifically. The compiler may use one or more hardware vector operations to implement it where necessary, or reject it when the target cannot support the required semantics.
-
-## Collections and Data Literals
-
-### Collection
-
-`Collection` is the general contract for values that contain zero or more elements.
-
-Concrete collection types such as lists, arrays, sets, dictionaries, queues, and similar structures are refinements or derivative types of `Collection`.
-
-Conceptually:
-
-```text
-Collection E
-  List E
-  Array E
-  Set E
-  Dictionary K V
-  Queue E
-  ...
-```
-
-Concrete collection types may impose additional contracts such as:
-
-```text
-ordered
-indexed
-unique
-keyed
-fixedSize
-mutable
-contiguous
-sorted
-```
-
-For example, conceptually:
-
-```text
-List
-  Collection
-  ordered
-
-Array
-  Collection
-  ordered
-  indexed
-  fixedSize
-  contiguous
-
-Set
-  Collection
-  unique
-
-Dictionary
-  Collection
-  keyed
-```
-
-These properties should be treated structurally where possible rather than requiring nominal inheritance.
-
-A user-defined type may satisfy `Collection` and other collection contracts without extending a specific built-in implementation class.
-
-### Heterogeneous collections
-
-Collections are not required to contain values of one concrete type.
-
-For example:
-
-```caret
-data
-  10
-  "hello"
-  true
-  3.14
-```
-
-is a valid heterogeneous collection.
-
-The compiler should infer an element contract capable of representing all contained values, conceptually similar to:
-
-```text
-Collection (Int | String | Bool | Float)
-```
-
-A homogeneous collection is simply a collection whose inferred or declared element contract is narrower:
-
-```text
-Collection Int
-List String
-Array Float
-```
-
-Heterogeneous collections must not require an `Any` escape type merely because their elements differ.
-
-### Dictionaries
-
-A dictionary is a specialized collection with keyed entries.
-
-Conceptually:
-
-```text
-Dictionary K V
-```
-
-may be treated structurally as:
-
-```text
-Collection (Entry K V)
-```
-
-where an entry exposes:
-
-```caret
-entry.key
-entry.value
-```
-
-Generic collection functionality should operate on dictionaries consistently through their entries unless a more specific dictionary operation is requested.
-
-### Fixed heterogeneous structures
-
-A heterogeneous collection is distinct from a tuple or other fixed structural product.
-
-For example:
-
-```text
-Collection (Int | String)
-```
-
-means that its size may vary and each element satisfies either `Int` or `String`.
-
-A fixed structure conceptually equivalent to:
-
-```text
-(Int String Bool)
-```
-
-instead guarantees:
-
-* exactly three positions;
-* position 0 is `Int`;
-* position 1 is `String`;
-* position 2 is `Bool`.
-
-Do not implement tuples merely as heterogeneous collections if doing so would lose these structural guarantees.
-
----
-
-## `data` expressions
-
-`data` constructs a general heterogeneous collection.
-
-Its indented child expressions become collection elements.
-
-Example:
-
-```caret
-values =
-  data
-    10
-    "hello"
-    true
-    calculate x
-```
-
-Each child is an ordinary Caret expression.
-
-There is no separate lexical or expression language inside a `data` block.
-
-Normal Caret rules continue to apply to:
-
-* string literals;
-* numeric literals;
-* Boolean values;
-* null and missing values;
-* function application;
-* conditionals;
-* function composition;
-* partial application;
-* nested expressions.
-
-This is important: `data` must not introduce YAML-like implicit string parsing or a separate "data mode."
-
-Strings remain ordinary quoted Caret strings:
-
-```caret
-data
-  "hello"
-  "text containing spaces"
-  "true"
-  "42"
-```
-
-The values `"true"` and `"42"` above remain strings because they are explicitly quoted.
-
-Ordinary unquoted literals retain their normal meanings:
-
-```caret
-data
-  true
-  42
-  3.14
-  ?
-  ~
-```
-
-### Computed values
-
-Functions and arbitrary expressions may be used directly inside data definitions.
-
-Example:
-
-```caret
-person =
-  data
-    ^name displayName user
-    ^age calculateAge user
-    ^active user.enabled and accountValid user
-```
-
-No interpolation or escape syntax such as `$` is required.
-
-The expression following a field name is evaluated using ordinary Caret semantics.
-
-For example:
-
-```caret
-^name "Alice"
-```
-
-and:
-
-```caret
-^name getName user
-```
-
-differ only in the expression used to calculate the field value.
-
----
-
-## Named fields
-
-`^name expression` constructs a named field.
-
-Example:
-
-```caret
-person =
-  data
-    ^name "Alice"
-    ^age 42
-    ^active true
-```
-
-The resulting value exposes the named members:
-
-```caret
-person.name
-person.age
-person.active
-```
-
-Conceptually:
-
-```caret
-^age 42
-```
-
-constructs a field equivalent to:
-
-```text
-Field("age", 42)
-```
-
-The `^` marker therefore means that the following identifier becomes the externally visible name of the constructed field.
-
-This is related to the existing use of `^` for exported bindings in returned scopes: in both cases, `^` marks a binding or value as a named member of the surrounding structure.
-
-### Fields are values
-
-A field should be usable as a first-class value rather than existing only as parser metadata inside `data`.
-
-For example:
-
-```caret
-ageField user =
-  ^age calculateAge user
-```
-
-may be inserted into a collection:
-
-```caret
-person =
-  data
-    ^name user.name
-    ageField user
-```
-
-A `data` collection containing a field exposes that field as a named member.
-
-### Dynamic field names
-
-`^name` is syntax for a statically written field name.
-
-Dynamic names use an ordinary constructor function:
-
-```caret
-field name value
-```
-
-For example:
-
-```caret
-field "age" 42
-```
-
-is semantically equivalent to:
-
-```caret
-^age 42
-```
-
-A dynamically calculated name is therefore possible:
-
-```caret
-name = calculateFieldName input
-
-value =
-  field name calculateValue input
-```
-
-Do not introduce a separate `#name` syntax for field names.
-
-Field names are represented using ordinary string values unless a stronger `Name` contract is introduced later.
-
----
-
-## Nested data
-
-A `data` expression may contain another `data` expression.
-
-Example:
-
-```caret
-person =
-  data
-    ^name "Alice"
-    ^address data
-      ^street "Example Street 12"
-      ^city "Stockholm"
-      ^country "Sweden"
-```
-
-This creates a nested collection.
-
-The nested value is accessible normally:
-
-```caret
-person.address.city
-```
-
-Collections of structures require no special list-item syntax.
-
-Example:
-
-```caret
-people =
-  data
-    data
-      ^name "Alice"
-      ^age 32
-
-    data
-      ^name "Bob"
-      ^age 41
-```
-
-The outer `data` value contains two unnamed elements, each of which is itself a structured `data` value.
-
-Do not require YAML-style `-` markers.
-
----
-
-## Named and unnamed elements
-
-A `data` collection may contain unnamed elements:
-
-```caret
-values =
-  data
-    10
-    "hello"
-    true
-```
-
-It may contain named fields:
-
-```caret
-point =
-  data
-    ^x 10
-    ^y 20
-```
-
-The general collection representation may also support both forms in the same collection:
-
-```caret
-mixed =
-  data
-    ^version 2
-    "payload"
-    ^checksum calculateChecksum source
-```
-
-The language should not require separate "object" and "array" literal syntaxes merely because elements are named or unnamed.
-
-Instead, `data` constructs one general heterogeneous collection representation capable of containing fields and ordinary values.
-
-Libraries or more specific collection contracts may prohibit mixed named and unnamed elements where appropriate.
-
----
-
-## Field access
-
-A statically known field is accessed using ordinary member syntax:
-
-```caret
-person.name
-```
-
-Dynamic field lookup uses ordinary indexed lookup with a string:
-
-```caret
-name = "age"
-person[name]
-```
-
-Safe optional dynamic lookup follows the ordinary optional-access rules:
-
-```caret
-person[name]~
-```
-
-A missing field and a field whose value is null must remain distinguishable.
-
-For example:
-
-```caret
-person["email"]~
-```
-
-may produce:
-
-```text
-~
-```
-
-when the field does not exist, while an existing nullable field may contain:
-
-```text
-?
-```
-
----
-
-## Conditional fields
-
-Because expressions inside `data` use normal Caret syntax, conditionals may determine field values.
-
-Example:
-
-```caret
-response =
-  data
-    ^name user.name
-    ^email user.hasEmail & user.email ! ~
-```
-
-Here the `email` field always exists, but its value may be missing.
-
-Caret may also permit a conditional whose selected expression is itself a field:
-
-```caret
-response =
-  data
-    ^name user.name
-
-    user.hasEmail &
-      ^email user.email
-```
-
-This has different semantics: when the condition is false, the `email` field itself is absent from the resulting structure.
-
-The implementation must preserve the distinction between:
-
-```caret
-^email ~
-```
-
-and no `email` field at all.
-
----
-
-## Contracts on data
-
-Normal contracts may constrain a complete data expression:
-
-```caret
-(Person) alice =
-  data
-    ^name "Alice"
-    ^age 32
-```
-
-The compiler should validate statically known data against the contract wherever possible.
-
-For example, if `Person` requires an `Int` field named `age`, this should fail during compilation:
-
-```caret
-(Person) alice =
-  data
-    ^name "Alice"
-    ^age "thirty-two"
-```
-
-Contracts may also constrain collections:
-
-```caret
-(Collection Int) numbers =
-  data
-    1
-    2
-    3
-```
-
-The contract-expression parser must treat:
-
-```caret
-(Collection Int)
-```
-
-as application of the `Collection` contract/type constructor to `Int`, not merely as two unrelated contracts.
-
----
-
-## Relationship to scopes
-
-Structured `data` values and returned scopes may share structural behavior.
-
-For example:
-
-```caret
-makePerson user =
-  internal = loadInternal user
-  ^name = internal.name
-  ^age = internal.age
-```
-
-and:
-
-```caret
-person =
-  data
-    ^name user.name
-    ^age user.age
-```
-
-both produce values exposing:
-
-```caret
-person.name
-person.age
-```
-
-However, a runtime scope may additionally have:
-
-* lexical bindings;
-* lifecycle;
-* ownership;
-* resource behavior;
-* executable members;
-* mutable state.
-
-A `data` collection should remain primarily a data value unless additional contracts explicitly give it such behavior.
-
-Do not automatically treat every structured `data` value as a live lexical scope.
-
----
-
-## Relationship to formats
-
-Formats decode into and encode from ordinary Caret data structures.
-
-For example, a decoded packet containing fields:
-
-```text
-length
-type
-payload
-```
-
-should produce a value structurally equivalent to:
-
-```caret
-data
-  ^length 128
-  ^type 2
-  ^payload bytes
-```
-
-The format subsystem must not require a separate special-purpose record representation.
-
-A format may therefore operate bidirectionally between:
-
-```text
-representation ↔ ordinary Caret data
-```
-
-This allows the same data value to be represented using different formats such as:
-
-* binary protocols;
-* JSON;
-* CBOR;
-* compressed representations;
-* encrypted representations;
-* network packet formats;
-* file formats.
-
-The in-memory data model remains independent of its serialized representation.
-
----
-
-## Implementation requirements
-
-The first implementation should support at minimum:
-
-1. `Collection` as a general collection contract.
-2. Heterogeneous `data` collections.
-3. Named fields using:
-
-```caret
-^name expression
-```
-
-4. First-class field values.
-5. Dynamic field creation through:
-
-```caret
-field name value
-```
-
-6. Nested `data` expressions.
-7. Ordinary function calls and expressions as field values.
-8. Static field access:
-
-```caret
-value.name
-```
-
-9. Dynamic field lookup:
-
-```caret
-value[name]
-value[name]~
-```
-
-10. Correct distinction between absent fields, `~`, and `?`.
-11. Type/contract inference across heterogeneous elements.
-12. Contract validation of statically known data.
-
-Do not implement:
-
-* implicit unquoted strings;
-* YAML-style parsing rules;
-* comma-separated object syntax;
-* mandatory curly braces;
-* special interpolation syntax inside `data`;
-* separate JSON-like object and array literal systems.
-
-The goal is for structured data construction to remain a direct extension of ordinary Caret expressions rather than a separate embedded language.
 
 ## Formats
 

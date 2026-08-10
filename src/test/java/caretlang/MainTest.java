@@ -172,7 +172,7 @@ final class MainTest {
 
         assertEquals(1, invocation.exitCode());
         assertEquals("PASS: first\n", invocation.output());
-        assertTrue(invocation.error().contains("Error: Line 2, column 22: Division by zero"));
+        assertTrue(invocation.error().contains("Error: Line 2, column 26: Division by zero"));
         assertFalse(invocation.output().contains("Summary:"));
     }
 

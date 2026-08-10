@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -52,10 +53,14 @@ final class InterpreterTest {
 
     @Test
     void typeAndReflectionUseTheSameRuntimeKindNames() {
-        assertEquals("Null\nMissing\nNumber\n", execute("""
+        assertEquals("Null\nMissing\nNumber\nFunction\nFunction\n", execute("""
+                identity value = value
+                reference = @identity
                 print type ?
                 print type ~
                 print type 1
+                print type reference
+                print reference.kind
                 """));
     }
 
@@ -219,7 +224,7 @@ final class InterpreterTest {
                 """));
 
         assertDiagnostic("print (1).absent~", "Field access requires a scope", 1, 7);
-        assertDiagnostic("print 1 + true", "Expected number", 1, 7);
+        assertDiagnostic("print 1 + true", "Expected number", 1, 11);
         assertDiagnostic("print 1 2", "Value is not callable", 1, 7);
         assertDiagnostic("print 1 & true ! false", "Condition must be Boolean", 1, 7);
     }
@@ -287,8 +292,8 @@ final class InterpreterTest {
 
     @Test
     void rejectsInvalidNumericResultsAndCallableEquality() {
-        assertDiagnostic("print 1 / 0", "Division by zero", 1, 7);
-        assertDiagnostic("print 1 % 0", "Division by zero", 1, 7);
+        assertDiagnostic("print 1 / 0", "Division by zero", 1, 11);
+        assertDiagnostic("print 1 % 0", "Division by zero", 1, 11);
         assertDiagnostic("identity x = x\nprint identity == identity",
                 "Callable values cannot be compared for equality", 2, 7);
     }
@@ -352,14 +357,29 @@ final class InterpreterTest {
 
     @Test
     void collectionEqualityIsStructural() {
-        assertEquals("true\ntrue\n", execute("""
+        assertEquals("true\ntrue\ntrue\ntrue\n", execute("""
                 left = seqAdd seqEmpty 1
                 right = seqAdd seqEmpty 1
                 print left == right
                 first = dictPut dictEmpty #value left
                 second = dictPut dictEmpty "value" right
                 print first == second
+                print (-0 == 0)
+                print seqAdd seqEmpty (-0) == seqAdd seqEmpty 0
                 """));
+
+        for (String container : List.of(
+                "seqAdd seqEmpty identity",
+                "dictPut dictEmpty #callable identity",
+                "make identity")) {
+            assertDiagnostic("""
+                    identity value = value
+                    make value =
+                      ^nested = value
+                    print %s == %s
+                    """.formatted(container, container),
+                    "Callable values cannot be compared for equality", 4, 7);
+        }
     }
 
     @Test
@@ -446,7 +466,7 @@ final class InterpreterTest {
         LangException condition = assertThrows(LangException.class, () -> interpreter.execute(
                 new Parser("assert \"boolean required\" 1").parseProgram()));
         assertEquals(1, condition.span().start().line());
-        assertEquals(1, condition.span().start().column());
+        assertEquals(27, condition.span().start().column());
         assertTrue(condition.getMessage().contains("Assertion condition must be Boolean"));
     }
 

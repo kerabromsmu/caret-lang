@@ -110,6 +110,7 @@ assertEqual "scope reflection names" (@person).names "name,age"
 assertEqual "function reflection kind" (@factorial).kind "Function"
 assertEqual "function reflection remaining arity" (@factorial).remaining 1
 factorialReference = @factorial
+assertEqual "function reference type matches reflected kind" (type factorialReference) factorialReference.kind
 assert "function references use target identity" (factorialReference == @factorial)
 assertEqual "different function references are unequal" (factorialReference == @add) false
 assertEqual "operator reference kind" (@+).kind "Function"
@@ -160,6 +161,7 @@ assertEqual "sequence first element" (seqGet sequence 0) "first"
 assertEqual "sequence present missing element" (seqGet sequence 1) ~
 assertEqual "sequence invalid index" (seqGet sequence 99) ~
 assert "sequence structural equality" (sequence == sameSequence)
+assert "nested numeric equality follows scalar equality" (seqAdd seqEmpty (-0) == seqAdd seqEmpty 0)
 assertEqual "sequence reflection kind" (@sequence).kind "Sequence"
 assertEqual "sequence reflection size" (@sequence).size 2
 

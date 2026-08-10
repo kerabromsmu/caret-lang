@@ -1,15 +1,7 @@
 package caretlang;
 
-record SourcePosition(int offset, int line, int column) {
-    SourcePosition {
-        if (offset < 0) throw new IllegalArgumentException("offset must be non-negative");
-        if (line < 1) throw new IllegalArgumentException("line must be one-based");
-        if (column < 1) throw new IllegalArgumentException("column must be one-based");
-    }
-}
-
-record SourceSpan(SourcePosition start, SourcePosition end) {
-    SourceSpan {
+public record SourceSpan(SourcePosition start, SourcePosition end) {
+    public SourceSpan {
         if (end.offset() < start.offset()) throw new IllegalArgumentException("span end precedes start");
     }
 

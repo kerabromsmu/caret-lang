@@ -98,12 +98,12 @@ final class Lexer {
                 continue;
             }
             String two = i + 1 < source.length() ? source.substring(i, i + 2) : "";
-            if (List.of("==", "!=", ">=", "<=").contains(two)) {
+            if (LanguageSyntax.isMultiCharacterSymbol(two)) {
                 tokens.add(token(Kind.SYMBOL, two, positions, i, i + 2));
                 i += 2;
                 continue;
             }
-            if ("()[]@+-*/%^=<>.&!?~".indexOf(c) >= 0) {
+            if (LanguageSyntax.isSingleCharacterSymbol(c)) {
                 tokens.add(token(Kind.SYMBOL, Character.toString(c), positions, i, i + 1));
                 i++;
                 continue;

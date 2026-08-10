@@ -3,7 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 CARET_TEST_TMP=$(mktemp -d /tmp/caret-tests.XXXXXX)
 trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
-./run.sh examples/demo.caret > "$CARET_TEST_TMP/output.txt"
+./gradlew --quiet installDist
+CARET_LAUNCHER=build/install/caret-lang-prototype/bin/caret-lang-prototype
+"$CARET_LAUNCHER" examples/demo.caret > "$CARET_TEST_TMP/output.txt"
 cat > "$CARET_TEST_TMP/expected.txt" <<'EXPECTED'
 true
 false
@@ -20,10 +22,10 @@ name,count
 EXPECTED
 diff -u "$CARET_TEST_TMP/expected.txt" "$CARET_TEST_TMP/output.txt"
 
-./run.sh examples/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
+"$CARET_LAUNCHER" examples/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
 diff -u examples/implemented_features.expected "$CARET_TEST_TMP/implemented-features-output.txt"
 
-./run.sh test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
+"$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value
 PASS: null remains distinct from missing
@@ -32,7 +34,7 @@ Summary: 3 tests, 3 passed, 0 failed
 EXPECTED
 diff -u "$CARET_TEST_TMP/testing-expected.txt" "$CARET_TEST_TMP/testing-output.txt"
 
-./run.sh test examples/implemented_features_test.caret \
+"$CARET_LAUNCHER" test examples/implemented_features_test.caret \
   > "$CARET_TEST_TMP/implemented-features-test-output.txt"
 
 cat > "$CARET_TEST_TMP/language.caret" <<'CARET'
@@ -84,7 +86,7 @@ print (@made).size
 print (@made).names
 CARET
 
-./run.sh "$CARET_TEST_TMP/language.caret" > "$CARET_TEST_TMP/language-output.txt"
+"$CARET_LAUNCHER" "$CARET_TEST_TMP/language.caret" > "$CARET_TEST_TMP/language-output.txt"
 cat > "$CARET_TEST_TMP/language-expected.txt" <<'EXPECTED'
 7
 9
@@ -118,7 +120,7 @@ make =
 value = make
 print value.absent
 CARET
-if ./run.sh "$CARET_TEST_TMP/required-field.caret" > "$CARET_TEST_TMP/required-field.out" 2>&1; then
+if "$CARET_LAUNCHER" "$CARET_TEST_TMP/required-field.caret" > "$CARET_TEST_TMP/required-field.out" 2>&1; then
   printf 'Required missing field unexpectedly succeeded.\n' >&2
   exit 1
 fi

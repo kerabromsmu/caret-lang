@@ -144,8 +144,7 @@ final class Parser {
 
     private void requireBindable(Token token) {
         String name = token.text();
-        if (Set.of("true", "false", "and", "or", "not").contains(name)
-                || name.equals("_") || name.matches("_[1-9][0-9]*")) {
+        if (LanguageSyntax.isReservedBinding(name)) {
             throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_RESERVED_BINDING,
                     "Reserved spelling cannot be used as a binding name: " + name, token.span());
         }
@@ -168,8 +167,6 @@ final class Parser {
     }
 
     private static final class ExprParser {
-        private static final Set<String> BINARY_OPERATOR_VALUES = Set.of(
-                "+", "-", "*", "/", "%", "==", "!=", ">", ">=", "<", "<=");
         private final List<Token> tokens;
         private final List<Expr> continuationArguments;
         private int current;
@@ -232,7 +229,7 @@ final class Parser {
 
         private Expr equality() {
             Expr expr = comparison();
-            while (match("==", "!=")) {
+            while (matchOperators(LanguageSyntax.Precedence.EQUALITY)) {
                 String op = previous().text();
                 Expr right = comparison();
                 expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
@@ -242,7 +239,7 @@ final class Parser {
 
         private Expr comparison() {
             Expr expr = term();
-            while (match(">", ">=", "<", "<=")) {
+            while (matchOperators(LanguageSyntax.Precedence.COMPARISON)) {
                 String op = previous().text();
                 Expr right = term();
                 expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
@@ -252,7 +249,7 @@ final class Parser {
 
         private Expr term() {
             Expr expr = factor();
-            while (match("+", "-")) {
+            while (matchOperators(LanguageSyntax.Precedence.ADDITIVE)) {
                 String op = previous().text();
                 Expr right = factor();
                 expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
@@ -262,7 +259,7 @@ final class Parser {
 
         private Expr factor() {
             Expr expr = unary();
-            while (match("*", "/", "%")) {
+            while (matchOperators(LanguageSyntax.Precedence.MULTIPLICATIVE)) {
                 String op = previous().text();
                 Expr right = unary();
                 expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
@@ -331,7 +328,8 @@ final class Parser {
         }
 
         private Expr primary() {
-            if (peek().kind() == Kind.SYMBOL && BINARY_OPERATOR_VALUES.contains(peek().text())) {
+            if (peek().kind() == Kind.SYMBOL
+                    && LanguageSyntax.binaryOperatorSpellings().contains(peek().text())) {
                 Token operator = tokens.get(current++);
                 return new Name(operator.text(), operator.span());
             }
@@ -385,7 +383,7 @@ final class Parser {
         private boolean canStartAtom(Token token) {
             if (token.kind() == Kind.NUMBER || token.kind() == Kind.STRING || token.kind() == Kind.NAME) return true;
             if (token.kind() == Kind.IDENT) {
-                return !Set.of("and", "or", "not").contains(token.text());
+                return LanguageSyntax.canStartApplicationArgument(token.text());
             }
             return Set.of("(", "?", "~").contains(token.text());
         }
@@ -395,7 +393,7 @@ final class Parser {
             int index = current + 1;
             Token firstOperand = index < tokens.size() ? tokens.get(index) : tokens.getLast();
             while (index < tokens.size() && tokens.get(index).kind() != Kind.EOF
-                    && !BINARY_OPERATOR_VALUES.contains(tokens.get(index).text())) {
+                    && !LanguageSyntax.binaryOperatorSpellings().contains(tokens.get(index).text())) {
                 int end = postfixAtomEnd(index);
                 if (end == index) break;
                 operands++;
@@ -453,6 +451,12 @@ final class Parser {
                 if (peek().text().equals(text)) { current++; return true; }
             }
             return false;
+        }
+
+        private boolean matchOperators(LanguageSyntax.Precedence precedence) {
+            if (!LanguageSyntax.operatorsAt(precedence).contains(peek().text())) return false;
+            current++;
+            return true;
         }
 
         private boolean matchIdent(String text) {

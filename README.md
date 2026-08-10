@@ -104,8 +104,9 @@ assert "addition succeeds" (add 2 3 == 5)
 assertEqual "addition result" (add 2 3) 5
 ```
 
-`assert` requires a Boolean condition. `assertEqual` compares values using Caret's normal
-structural equality. Assertion mismatches are collected, reported with their source locations, and
+`assert` requires a Boolean condition. `assertEqual` compares values using Caret's recursive
+structural equality; callable values cannot be compared even when nested in data. Assertion
+mismatches are collected, reported with their source locations, and
 produce a nonzero exit status after the summary. A test file with no assertions also fails.
 
 Assertion arguments are evaluated eagerly. A lexer, parser, or runtime error while evaluating a
@@ -158,7 +159,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 
 Lexer, parser, and runtime errors report one-based line and column locations. Source spans use raw
 character columns; a tab counts as one source character in diagnostics while leading tabs retain the
-prototype's two-space indentation width.
+prototype's two-space indentation width. Built-in type errors identify the invalid argument rather
+than only the enclosing call.
 
 For example:
 
@@ -193,5 +195,6 @@ print (@source).names
 
 `@scope`, `@sequence`, and `@dictionary` expose basic metadata such as `kind`, `size`, and, where
 applicable, `names`. `@function` returns a non-callable function reference exposing `kind` and
-remaining arity. References compare by target identity. Reflection exposes only public or exported
+remaining arity. Both `type (@function)` and `(@function).kind` report `"Function"`. References
+compare by target identity. Reflection exposes only public or exported
 bindings and does not invoke a reflected function.
