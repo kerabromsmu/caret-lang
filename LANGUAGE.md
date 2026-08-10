@@ -6299,7 +6299,7 @@ Example:
 r = @root
 ```
 
-The root may expose metadata and bindings such as:
+The root may eventually expose metadata and bindings such as:
 
 ```caret
 @root.code
@@ -6308,7 +6308,8 @@ The root may expose metadata and bindings such as:
 @root.functions
 ```
 
-The exact standard metadata fields may grow over time.
+These names are illustrative until the minimum public root/code metadata schema is settled. New
+standard metadata may be added compatibly over time after that initial schema is defined.
 
 `@root` must be available from anywhere in Caret code unless the current execution environment explicitly restricts access to particular root metadata.
 
@@ -7295,22 +7296,45 @@ dependent implementation begins:
 * concrete SIMD type/lane spelling and floating-point reduction-order guarantees;
 * surface syntax for general format choices and pattern-derived discriminators;
 * the concrete exported shape of structured format success/failure values;
-* whether rule-cycle object traversal order is observable or deliberately unspecified; and
-* JVM class naming, embedding ABI, and binary compatibility across Caret versions.
+* whether rule-cycle object traversal order is observable or deliberately unspecified;
+* JVM class naming, embedding ABI, and binary compatibility across Caret versions;
+* whether `root` is reserved or shadowable, how bare `root` behaves, and whether `@root` is a
+  dedicated syntactic form;
+* whether `@root.code` is special shorthand for `(@root).code` or changes the general precedence of
+  reflection and field access;
+* the minimum public shapes, identity/equality rules, and source-location visibility of `Root`,
+  `Code`, and `CodeElement` values;
+* which code snapshot `@root.code` exposes in files, imported modules, tests, incremental REPL
+  submissions, and nested environments;
+* the deterministic canonicalization and semantic-equivalence rules for
+  `parse(toString(code)) ≈ code`;
+* concrete `sandbox` syntax, accepted code/module inputs, return and failure values, initialization,
+  and import-cache behavior;
+* how sandbox roots are constructed or evolved and how unavailable bindings and metadata are
+  observed;
+* the representation of capability configuration and the identity/equality semantics of references
+  projected across sandbox boundaries.
 
 These are tracked as `unresolved` requirements in `CONFORMANCE.md`. No implementation may silently
 choose syntax or observable semantics for them.
+
+Source-exact and comment-preserving reconstruction, fine-grained metadata permissions, dynamic
+language-feature unlocking, revocable capability proxies, resource quotas, operating-system or
+hardware isolation, and sophisticated static information-flow analysis are explicitly deferred.
+Their later implementation must not weaken root substitution or permit authority amplification.
 
 
 ## Not implemented
 
 - function composition
-- ungrouped multiline call arguments and trailing lambdas
+- trailing lambdas
 - contracts, static types, effect inference, and ownership analysis
-- general collection/data syntax, first-class fields, and persistent updates
+- universal collection literals, first-class fields, contract-selected representations, and persistent updates
 - lambdas and higher-order standard collection operations
 - cycles and transactional previous/next state views
 - SIMD values and required vectorized application
 - bytes, formats, codecs, and structured format failures
 - contexts, rules, rulesets, persistent cycle objects, and rule cycles
 - modules, imports, JVM compiler backend, runtime ABI, and optimizer
+- environment-relative `@root`, structured program reification, canonical code serialization, and quines
+- sandbox execution, capability isolation, reflective membranes, and nested sandboxes

@@ -176,6 +176,18 @@ functions, with the most-specific applicable implementation selected from contra
 definitions. None of this contract, dispatch, or literal syntax is implemented by the current
 prototype yet.
 
+## Environment-relative reflection
+
+Caret plans to let programs reflect on the environment visible to them through `@root`. Its code
+will be represented as ordinary structured Caret values and convertible to canonical Caret source,
+making semantic program reification and canonical quines possible.
+
+The same model anchors sandboxing. A plugin, tutorial, test, or nested script will see a substituted
+root containing only the libraries and capabilities supplied by its host. Reflection must respect
+that boundary, and declaring an effect will describe an action without granting permission to
+perform it. The metadata schema, canonicalization rules, and sandbox syntax remain under design;
+these features are not available in the prototype.
+
 ## An evolving language experiment
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
@@ -183,7 +195,8 @@ supports lexical closures, direct and mutual recursion, partial application, exp
 language-owned reflection, persistent collections, source-located diagnostics, a REPL, and native
 test assertions.
 
-Contracts, contract-based dispatch, universal collection literals, modules, lambdas, mutation, and a compiler backend
+Contracts, contract-based dispatch, universal collection literals, modules, root reification,
+sandboxing, lambdas, mutation, and a compiler backend
 remain future work. The prototype exists to make the language's ideas executable and testable while
 its larger design evolves.
 

@@ -27,6 +27,12 @@ surrounding contracts determine whether a value is a list, set, dictionary, pack
 representation. Named fields are first-class collection elements. These facilities are design
 targets, not features of the current prototype.
 
+The specification also plans environment-relative reflection through `@root`. A program will be
+able to inspect a visibility-filtered, structured representation of its code and serialize that code
+to canonical Caret syntax. Sandboxes will substitute a smaller visible root and expose only selected
+libraries and capabilities; effect declarations will not grant authority. The concrete root metadata,
+serialization rules, and sandbox syntax remain open design work and are not implemented.
+
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
 
@@ -163,6 +169,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - There is no mutation, immutable scope-update syntax, object model, module system, compiler
   backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, and function-arity metadata.
+- Environment-relative `@root`, program-code reification, canonical quines, and capability-based
+  sandbox execution are not implemented.
 
 ## Diagnostics
 

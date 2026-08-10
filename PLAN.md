@@ -30,6 +30,8 @@ baseline.
   consumes the same form so semantics cannot drift.
 - Give every public value kind a language-owned descriptor and reflective view. Never use Java
   reflection as Caret reflection.
+- Pass an explicit execution environment through interpretation, imports, tests, REPL sessions, and
+  compiled entry points. Reflection and authority are always relative to that environment.
 - Assign stable diagnostic phase/code/span data before expanding error messages. All new syntax and
   semantic failures must be testable without matching vague prose.
 - Maintain a feature conformance table mapping every normative `LANGUAGE.md` requirement to its
@@ -43,6 +45,8 @@ baseline.
   stable diagnostic phases/codes/locations alongside the existing core suites.
 - The redesigned contract/derivation, functional-dispatch, and universal-collection model is
   reconciled across the public introduction, conformance matrix, and this roadmap.
+- The root-reification and sandbox model is inventoried with explicit blockers for syntax, metadata,
+  canonicalization, execution semantics, and capability projection.
 - `LANGUAGE.md` records the resolved infix, multiline, function-reference/result-contract,
   persistent state/object, module, bytes, contract, collection, and JVM backend decisions.
 - Remaining open syntax or observable semantics are explicit `unresolved` conformance rows and may
@@ -265,7 +269,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Extend reflection across rules, contexts, rulesets, cycle state, dependencies, and public object
   interfaces without exposing private bindings.
 
-## Phase 9 — Modules, separate compilation, backend, and optimization
+## Phase 9 — Modules, execution roots, and program reification
 
 ### Modules
 
@@ -275,6 +279,36 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Compile/cache modules independently using a versioned semantic interface containing public names,
   types/contracts, effects, formats, and reflection descriptors.
 
+### Execution roots and code values
+
+- Give file execution, imports, tests, and REPL sessions an explicit execution-environment object
+  containing the visible root, code snapshot, libraries, language capabilities, and runtime
+  capabilities. Do not derive Caret authority from process-global Java state.
+- Implement the settled `@root` syntax as an environment-relative reference. Preserve ordinary
+  export/privacy rules and filter every root/code descriptor through the current environment.
+- Reify analyzed source as language-owned `Code`/`CodeElement` values with stable public descriptors
+  for bindings, functions, parameters, contracts, expressions, imports, and later constructs.
+- Implement canonical code serialization only after the public code schema and equivalence rules are
+  settled. Require parse/serialize/parse structural equivalence and a canonical quine fixture.
+
+## Phase 10 — Sandboxes and capability isolation
+
+- Implement the settled `sandbox` operation using a child execution environment with a substituted
+  root, selected libraries, language-feature permissions, and explicit runtime capabilities. Keep
+  normal imports semantically distinct.
+- Support direct, filtered, and virtual capabilities. Treat effect declarations as descriptions,
+  never authority grants, and report unavailable authority through the settled language failure
+  model.
+- Project references crossing the boundary through a reflective membrane that cannot expose host
+  roots, private captures, native implementation state, hidden code, or other capabilities.
+- Support nested sandboxes with child authority bounded by parent authority unless the outer host
+  explicitly injects an additional capability.
+- Define and test a threat model covering name lookup, reflection, code metadata, imports, effects,
+  retained references, nested environments, and interpreter/compiler parity. Keep revocation,
+  quotas, OS/process isolation, and advanced information-flow enforcement deferred.
+
+## Phase 11 — Compiler backend and optimization
+
 ### Compiler backend
 
 - Define a lowered typed/effect-checked IR shared with the interpreter. Preserve source maps and
@@ -282,7 +316,8 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   and rule scheduling.
 - Implement bytecode or the target chosen in Phase 0, a runtime ABI for all Caret value kinds, module
   linking, and executable CLI commands. Compiled and interpreted programs must share observable
-  values, evaluation order, missing/null behavior, errors, effects, and reflection.
+  values, evaluation order, missing/null behavior, errors, effects, environment-relative reflection,
+  code visibility, and sandbox authority boundaries.
 - Add differential tests that run every conformance example in both modes and compare stdout,
   stderr, exit status, values, and stable diagnostic codes/locations.
 
@@ -295,7 +330,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   order for unordered rules, merge null with missing, execute an unselected conditional branch, or
   change effect/contract behavior.
 
-## Phase 10 — Tooling, standard library, and release hardening
+## Phase 12 — Tooling, standard library, and release hardening
 
 - Build standard-library modules for identity, collection transforms/reductions, field manipulation,
   common contracts, formats/codecs, cycle helpers, and reusable rulesets using ordinary Caret where
@@ -303,11 +338,12 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Expose formatter/parser services, semantic queries, inferred contracts/effects, reflection
   descriptors, module navigation, and unordered-rule warnings for editor integration.
 - Extend the REPL for multiline constructs, modules, type/contract/effect inspection, compiled-mode
-  parity, and structured display of collections, formats, SIMD, rules, and diagnostics.
+  parity, environment-root inspection, sandboxed sessions, and structured display of collections,
+  formats, SIMD, rules, code metadata, and diagnostics.
 - Add fuzz/property tests for lexer/parser layout, Unicode, numeric finiteness, persistent
   collections, encode/decode round trips, optimizer equivalence, and scheduler stability.
-- Establish performance suites for parsing, closures/partials, collection updates, cycles, SIMD, formats,
-  rule propagation, module compilation, startup, and REPL latency.
+- Establish performance suites for parsing, closures/partials, collection updates, cycles, SIMD,
+  formats, rule propagation, module compilation, code serialization, sandbox startup, and REPL latency.
 - Version the language and runtime ABI only after the complete conformance suite passes on supported
   platforms.
 
@@ -321,6 +357,8 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   related spans when two declarations/contracts/rules conflict.
 - Interaction tests combine each new feature with null/missing, exports, lookup, reflection,
   closures, partials, contracts/effects, collections, and modules as relevant.
+- Sandbox stages require adversarial tests for hidden-name lookup, reflective traversal, code
+  visibility, imports, capability retention, nested authority, and interpreter/compiler parity.
 - Stage completion requires `./gradlew test`, `./test.sh`, all examples, differential tests available
   at that stage, and `git diff --check` to pass.
 

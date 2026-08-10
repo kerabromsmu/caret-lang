@@ -20,6 +20,10 @@ Read `README.md` and `LANGUAGE.md` before making architectural or syntactic chan
 8. Immutable and functional programming should be supported without making mutable programming impossible.
 9. Do not add Java-like ceremony to the Caret language syntax.
 10. Do not silently invent syntax when the specification is unresolved. Document the issue and propose alternatives.
+11. Reflection is relative to the execution environment visible to the current code and must not
+    cross sandbox visibility or authority boundaries.
+12. Effect declarations describe observable behavior but do not grant authority. A child sandbox
+    must not amplify the authority available to its parent.
 
 ## Established syntax
 
@@ -130,6 +134,17 @@ Known names should retain as much static type information as possible. Runtime-g
 
 Expected reflection failures such as a missing binding must produce `~` or a structured result, not an exception.
 
+### Planned root reflection and sandbox isolation
+
+The planned `@root` form denotes the root of the current Caret execution environment, not an
+unconditional process-global root. In a sandbox it must resolve to the substituted sandbox root.
+Program/code metadata must expose only code and references visible in that environment.
+
+The exact `@root` parsing, metadata schema, canonical serialization rules, and `sandbox` surface
+syntax remain unresolved in `LANGUAGE.md`; do not invent them during implementation. Regardless of
+the eventual syntax, reflection must not reveal hidden host roots, private captures, native
+implementation details, hidden code, or unexposed capabilities.
+
 ## Implementation rules
 
 * Use Java 21.
@@ -139,6 +154,11 @@ Expected reflection failures such as a missing binding must produce `~` or a str
 * Diagnostics must include line and column information.
 * Do not catch broad exceptions and convert them into vague interpreter errors.
 * Do not use reflection from the Java implementation as a substitute for implementing Caret reflection semantics.
+* Represent program reification with language-owned descriptors; never expose Java AST/runtime
+  objects directly as Caret code metadata.
+* Treat sandbox and capability changes as security-sensitive. Document the threat model and add
+  adversarial interpreter/compiler tests for name lookup, reflection, imports, effects, retained
+  references, and nested sandboxes before marking the feature implemented.
 * Run the full test suite after changes.
 * Update `LANGUAGE.md` whenever observable language behavior changes.
 * Update `WEB_INTRODUCTION.md` whenever a language feature is added or altered so the public-facing
