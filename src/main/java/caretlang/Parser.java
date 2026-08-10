@@ -10,10 +10,12 @@ import java.util.*;
 final class Parser {
     private record DefinitionHeader(String name, List<String> parameters, boolean exported) {}
     private final List<LogicalLine> lines;
+    private final Map<String, Integer> declaredArities;
     private int lineIndex;
 
     Parser(String source) {
         this.lines = Lexer.logicalLines(source);
+        this.declaredArities = discoverDeclaredArities(lines);
     }
 
     List<Stmt> parseProgram() {
@@ -93,7 +95,29 @@ final class Parser {
     }
 
     private Expr parseExpression(List<Token> tokens, SourcePosition end, int baseIndent) {
-        return new ExprParser(tokens, end, continuationArguments(baseIndent)).parse();
+        return new ExprParser(tokens, end, continuationArguments(baseIndent), declaredArities).parse();
+    }
+
+    private static Map<String, Integer> discoverDeclaredArities(List<LogicalLine> lines) {
+        LinkedHashMap<String, Integer> result = new LinkedHashMap<>();
+        for (LogicalLine line : lines) {
+            List<Token> tokens = Lexer.lex(line.text(), line.offset(), line.number(), line.column());
+            int equals = -1;
+            int depth = 0;
+            for (int i = 0; i < tokens.size() - 1; i++) {
+                String spelling = tokens.get(i).text();
+                if (spelling.equals("(") || spelling.equals("[")) depth++;
+                else if (spelling.equals(")") || spelling.equals("]")) depth--;
+                else if (spelling.equals("=") && depth == 0) { equals = i; break; }
+            }
+            if (equals < 1) continue;
+            int start = tokens.getFirst().text().equals("^") ? 1 : 0;
+            List<Token> header = tokens.subList(start, equals);
+            if (!header.isEmpty() && header.stream().allMatch(token -> token.kind() == Kind.IDENT)) {
+                result.putIfAbsent(header.getFirst().text(), header.size() - 1);
+            }
+        }
+        return Map.copyOf(result);
     }
 
     private List<Expr> continuationArguments(int baseIndent) {
@@ -169,22 +193,25 @@ final class Parser {
     private static final class ExprParser {
         private final List<Token> tokens;
         private final List<Expr> continuationArguments;
+        private final Map<String, Integer> declaredArities;
         private int current;
 
         ExprParser(List<Token> tokens) {
             this(tokens, tokens.isEmpty()
                     ? new SourcePosition(0, 1, 1)
-                    : tokens.getLast().span().end());
+                    : tokens.getLast().span().end(), List.of(), Map.of());
         }
 
         ExprParser(List<Token> tokens, SourcePosition end) {
-            this(tokens, end, List.of());
+            this(tokens, end, List.of(), Map.of());
         }
 
-        ExprParser(List<Token> tokens, SourcePosition end, List<Expr> continuationArguments) {
+        ExprParser(List<Token> tokens, SourcePosition end, List<Expr> continuationArguments,
+                   Map<String, Integer> declaredArities) {
             this.tokens = new ArrayList<>(tokens);
             this.tokens.add(new Token(Kind.EOF, "", SourceSpan.point(end)));
             this.continuationArguments = List.copyOf(continuationArguments);
+            this.declaredArities = declaredArities;
         }
 
         Expr parse() {
@@ -238,36 +265,60 @@ final class Parser {
         }
 
         private Expr comparison() {
-            Expr expr = term();
+            Expr expr = namedInfix();
             while (matchOperators(LanguageSyntax.Precedence.COMPARISON)) {
                 String op = previous().text();
-                Expr right = term();
+                Expr right = namedInfix();
                 expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
             }
             return expr;
         }
 
+        private Expr namedInfix() {
+            Expr expr = term(true);
+            while (peek().kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(peek().text())
+                    && canStartAtom(peekNext())) {
+                Token function = tokens.get(current++);
+                Expr right = term(true);
+                expr = new NamedInfix(expr, new Name(function.text(), function.span()), right,
+                        SourceSpan.cover(expr.span(), right.span()));
+            }
+            return expr;
+        }
+
         private Expr term() {
-            Expr expr = factor();
+            return term(false);
+        }
+
+        private Expr term(boolean namedInfixOperand) {
+            Expr expr = factor(namedInfixOperand);
             while (matchOperators(LanguageSyntax.Precedence.ADDITIVE)) {
                 String op = previous().text();
-                Expr right = factor();
+                Expr right = factor(namedInfixOperand);
                 expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
             }
             return expr;
         }
 
         private Expr factor() {
-            Expr expr = unary();
+            return factor(false);
+        }
+
+        private Expr factor(boolean namedInfixOperand) {
+            Expr expr = unary(namedInfixOperand);
             while (matchOperators(LanguageSyntax.Precedence.MULTIPLICATIVE)) {
                 String op = previous().text();
-                Expr right = unary();
+                Expr right = unary(namedInfixOperand);
                 expr = new Binary(op, expr, right, SourceSpan.cover(expr.span(), right.span()));
             }
             return expr;
         }
 
         private Expr unary() {
+            return unary(false);
+        }
+
+        private Expr unary(boolean namedInfixOperand) {
             if (peek().text().equals("-") && !prefixOrReferenceMinus() && match("-")) {
                 Token operator = previous();
                 Expr operand = unary();
@@ -283,12 +334,23 @@ final class Parser {
                 Expr operand = unary();
                 return new Unary("not", operand, SourceSpan.cover(operator.span(), operand.span()));
             }
-            return application();
+            return application(namedInfixOperand);
         }
 
-        private Expr application() {
+        private Expr application(boolean namedInfixOperand) {
             Expr expr = postfix();
+            if (namedInfixOperand && expr instanceof Name name
+                    && isUnknownCallable(name.name()) && peek().kind() == Kind.IDENT
+                    && LanguageSyntax.canBeNamedInfix(peek().text()) && canStartAtom(peekNext())) {
+                Expr middle = postfix();
+                Expr last = postfix();
+                expr = new AmbiguousCall(expr, middle, last, SourceSpan.cover(expr.span(), last.span()));
+            }
             while (canStartAtom(peek())) {
+                if (namedInfixOperand && isValueLed(expr)
+                        && (!(expr instanceof Name) || isDeclaredInfixCandidate(peek()))
+                        && peek().kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(peek().text())
+                        && canStartAtom(peekNext())) break;
                 Expr argument = postfix();
                 expr = new Apply(expr, argument, SourceSpan.cover(expr.span(), argument.span()));
             }
@@ -298,6 +360,27 @@ final class Parser {
                 }
             }
             return expr;
+        }
+
+        private boolean isValueLed(Expr expression) {
+            if (expression instanceof Name name) {
+                return isUnknownCallable(name.name());
+            }
+            return !(expression instanceof Apply) && !(expression instanceof Group);
+        }
+
+        private boolean isUnknownCallable(String name) {
+            return !LanguageSyntax.isBuiltinCallable(name) && declaredArities.getOrDefault(name, 0) <= 0;
+        }
+
+        private boolean isDeclaredInfixCandidate(Token token) {
+            return token.kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(token.text())
+                    && declaredArities.containsKey(token.text());
+        }
+
+        private Token peekNext() {
+            int next = Math.min(current + 1, tokens.size() - 1);
+            return tokens.get(next);
         }
 
         private Expr postfix() {

@@ -41,8 +41,10 @@ baseline.
   stable IDs and automated evidence.
 - Characterization tests cover the implemented precedence table, safe primitive failures, and
   stable diagnostic phases/codes/locations alongside the existing core suites.
+- The redesigned contract/derivation, functional-dispatch, and universal-collection model is
+  reconciled across the public introduction, conformance matrix, and this roadmap.
 - `LANGUAGE.md` records the resolved infix, multiline, function-reference/result-contract,
-  persistent state/object, module, bytes, unordered-contract, and JVM backend decisions.
+  persistent state/object, module, bytes, contract, collection, and JVM backend decisions.
 - Remaining open syntax or observable semantics are explicit `unresolved` conformance rows and may
   not be invented during implementation.
 
@@ -59,7 +61,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 ### Layout and expressions
 
 - Extend the structured logical-line engine already used by grouped expressions, dynamic lookups,
-  ungrouped multiline argument lists, and indented bodies to lambdas, `data`, `format`, `cycle`,
+  ungrouped multiline argument lists, and indented bodies to lambdas, collection literals, `format`, `cycle`,
   rules, and trailing blocks as those constructs are implemented.
 - Preserve raw source columns and complete spans through desugaring. Add recovery boundaries so one
   malformed declaration does not erase useful later diagnostics in compiler mode.
@@ -93,15 +95,20 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ### Contract and type model
 
-- Parse contracts before bindings, functions, and parameters, including multiple contracts and
-  nullable/optional type modifiers (`T?`, `T~`, `T?~`). Represent them explicitly rather than as
-  ordinary calls lost after parsing.
-- Introduce built-in scalar/value type contracts and a structural type/contract model for scopes,
-  collections, data, callables, SIMD values, formats, rules, and cycles as those kinds arrive.
-- Allow a pure unary Boolean function as a value contract. Evaluate compile-time-known contracts;
-  retain runtime checks only when proof is unavailable.
-- Implement function/result contracts once the Phase 0 syntax is settled. Contract failures identify
-  the declaration/call and the failing contract with related spans.
+- Parse `contract` construction, derivation lists, refinements, contracts before bindings and
+  parameters, and nullable/optional modifiers (`T?`, `T~`, `T?~`) into source-spanned semantic forms.
+- Represent derivation as a checked logical-inclusion graph supporting multiple bases. Reject cycles
+  and retain enough provenance to explain failed membership and invalid derivation.
+- Make every contract a pure unary membership predicate. Allow ordinary pure Boolean predicates as
+  refinements, evaluate statically provable membership, and retain runtime checks when proof is
+  unavailable.
+- Implement parameterized contracts through ordinary contract/function application, beginning with
+  collection element contracts rather than introducing a separate generic-type subsystem.
+- Group same-named function definitions into overload sets. Select the unique most-specific
+  implementation across all parameter contracts and diagnose incomparable applicable definitions.
+- Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
+  callables, SIMD values, formats, rules, and cycles as those kinds arrive. Contract failures identify
+  the declaration/call and failing contract with related spans.
 
 ### Effects and purity
 
@@ -119,7 +126,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   or ownership analysis that may update state in place only when no observable alias can distinguish
   it.
 - Keep ownership an optimization initially; results must match persistent semantics with the
-  optimization disabled. This foundation later supports efficient cycles, data updates, SIMD memory,
+  optimization disabled. This foundation later supports efficient cycles, collection updates, SIMD memory,
   and compiled execution.
 
 ## Phase 3 — Lambdas and higher-order programming
@@ -135,31 +142,32 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   `any`, `all`) using the unified callable/effect model.
 - Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 
-## Phase 4 — General collections, `data`, fields, and state updates
+## Phase 4 — Universal collections, fields, and state updates
 
 ### Collection protocol and literals
 
-- Generalize existing sequences/dictionaries behind the structural `Collection` contract while
-  keeping persistent semantics and insertion-ordered dictionary keys.
-- Implement heterogeneous collection contract inference and structural equality. Preserve string
-  and name values as one dictionary key space and distinguish absent keys from present `~` values.
-- Add the collection/data syntax specified in `LANGUAGE.md` without introducing JSON/YAML rules,
-  commas, mandatory braces, implicit strings, or special interpolation.
+- Generalize existing sequences/dictionaries behind `Collection` and capability contracts while
+  keeping persistent semantics and insertion-ordered dictionary fields.
+- Implement the universal `[...]` literal, including empty, homogeneous, heterogeneous, and nested
+  values. Infer content contracts and apply contextual contracts without assigning a fixed container
+  meaning to square brackets.
+- Preserve semantic element contracts independently from physical representation metadata. Share
+  metadata at collection level when possible and retain per-element metadata where required.
 
-### Data and fields
+### Fields and dictionary-like collections
 
-- Add first-class `data` values containing named and unnamed elements, nested data, computed values,
-  conditional fields, and ordinary expressions.
-- Implement `^name expression` fields and `field name value` dynamic field creation as first-class
-  field values. Preserve insertion order and field identity/descriptor metadata.
+- Implement `^name expression` fields and `field name value` dynamic construction as first-class
+  collection elements. Dictionary-like values are collections of fields, not a separate `data` kind.
+- Support named and unnamed elements, computed values, conditional fields, and nested collections.
 - Support static and dynamic access, optional lookup, and exact missing/null/present-`~` behavior.
-- Validate statically known data against structural contracts and retain dynamic checks when needed.
-- Define conversions/relationships between exported scopes and `data` without making all data an
-  executable scope.
+- Validate statically known collections against structural contracts and retain dynamic checks when
+  needed. Keep named-field collections distinct from executable exported scopes.
+- Add packed collections only after representation analysis can require uniform layouts. Integrate
+  later with SIMD and formats without changing observable contract membership.
 
 ### Updates and controlled mutation
 
-- Implement the immutable scope/data update syntax settled in Phase 0, including nested updates and
+- Implement immutable scope/collection update syntax, including nested updates and
   shape/contract checking.
 - Add mutable bindings or objects only to the degree specified, with explicit aliasing and closure
   capture semantics. Expected missing/update failures return structured results or `~` where the
@@ -182,7 +190,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 - Implement `cycle` as an expression over an initial state, pure unary condition, unary body, and
   unary prepare transformation. Support omitted body/prepare forms exactly as specified.
-- Accept named functions, lambdas, partials, structured scopes, and `data` as phase values. Enforce a
+- Accept named functions, lambdas, partials, structured scopes, and collections as phase values. Enforce a
   stable state shape and compatible contracts across iterations.
 - Infer phase effects while requiring the condition to remain pure. Lower to an internal loop/tail
   recursion without mandatory immutable copying, preserving functional observable semantics.
@@ -200,7 +208,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   mismatch, or target limitations.
 - Support composition, partial application, lambda mapping, and reductions using the same callable
   metadata. Specify reduction order and floating-point reproducibility.
-- Add aligned/unaligned load/store lowering internally while exposing ordinary collection/data APIs;
+- Add aligned/unaligned load/store lowering internally while exposing ordinary collection APIs;
   provide a portable fallback only where it preserves the explicit `::` contract.
 - Test multiple lane widths and hardware capability profiles in interpreter/emulation and compiler
   modes; never make program meaning depend on host vector width.
@@ -211,7 +219,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   success/failure results. Implement empty formats and ordinary functional construction.
 - Implement primitive byte/integer formats, `field format "name"`, constants/signatures, nested
   formats, fixed/prior-field repetition, conditions, choices, constraints, and `>>` composition.
-- Decode structured formats into ordinary `data` and encode compatible `data`, resolving earlier
+- Decode structured formats into ordinary collections and encode compatible collections, resolving earlier
   fields and derivable values consistently in both directions.
 - Implement `decode`, `encode`, and pure explicit `codec decode encode format`; distinguish
   representation transformations from logical-value transformations.
@@ -289,16 +297,16 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Phase 10 — Tooling, standard library, and release hardening
 
-- Build standard-library modules for identity, collection transforms/reductions, data manipulation,
+- Build standard-library modules for identity, collection transforms/reductions, field manipulation,
   common contracts, formats/codecs, cycle helpers, and reusable rulesets using ordinary Caret where
   feasible.
 - Expose formatter/parser services, semantic queries, inferred contracts/effects, reflection
   descriptors, module navigation, and unordered-rule warnings for editor integration.
 - Extend the REPL for multiline constructs, modules, type/contract/effect inspection, compiled-mode
-  parity, and structured display of data, formats, SIMD, rules, and diagnostics.
+  parity, and structured display of collections, formats, SIMD, rules, and diagnostics.
 - Add fuzz/property tests for lexer/parser layout, Unicode, numeric finiteness, persistent
   collections, encode/decode round trips, optimizer equivalence, and scheduler stability.
-- Establish performance suites for parsing, closures/partials, data updates, cycles, SIMD, formats,
+- Establish performance suites for parsing, closures/partials, collection updates, cycles, SIMD, formats,
   rule propagation, module compilation, startup, and REPL latency.
 - Version the language and runtime ABI only after the complete conformance suite passes on supported
   platforms.
@@ -312,24 +320,23 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Negative tests assert stable diagnostic phase/code and exact one-based line/column, including
   related spans when two declarations/contracts/rules conflict.
 - Interaction tests combine each new feature with null/missing, exports, lookup, reflection,
-  closures, partials, contracts/effects, collections/data, and modules as relevant.
+  closures, partials, contracts/effects, collections, and modules as relevant.
 - Stage completion requires `./gradlew test`, `./test.sh`, all examples, differential tests available
   at that stage, and `git diff --check` to pass.
 
 ## Recommended next implementation step
 
-Continue Phase 1 with fixed-precedence named infix calls (`CORE-INFIX-001`). Unified symbolic
-callables and non-callable function references are now implemented by `CORE-INFIX-002` and
-`CORE-CALL-004`.
+Phase 0 documentation reconciliation and fixed-precedence named infix calls (`CORE-INFIX-001`) are
+complete. Next implement `>>` composition (`CORE-COMP-001`) on the shared callable representation.
 
-1. Resolve the grammar boundary that distinguishes a named infix call from whitespace application,
-   while retaining the specified precedence between comparison and addition.
-2. Parse and evaluate named binary infix calls through the existing callable application path.
-3. Require exactly the documented callable behavior and produce located diagnostics for invalid
-   infix targets or arity.
-4. Add precedence, associativity, partial-application interaction, multiline, and failure tests.
-5. Extend the runnable example, native Caret test, language reference, and conformance evidence.
-6. Then implement `>>` composition (`CORE-COMP-001`) on the shared callable representation.
+1. Parse `>>` at its specified precedence and preserve complete operand spans.
+2. Represent composition as an ordinary callable retaining compatible arity, partial state, and
+   source-owned diagnostics.
+3. Invoke the left callable and pass its result to the right callable without bypassing call-depth,
+   contract, effect, or reflection hooks.
+4. Add associativity, grouping, partial application, nullary behavior, incompatible-callable, and
+   call-depth tests.
+5. Extend the runnable example, Caret-native suite, language reference, and conformance evidence.
 
 ## Explicit assumptions and allowed deferrals
 

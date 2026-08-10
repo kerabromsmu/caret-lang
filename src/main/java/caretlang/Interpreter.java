@@ -159,6 +159,34 @@ final class Interpreter {
             Value right = evalInner(right1, env, resolution);
             return applyBinaryOperator(operator, left, left1.span(), right, right1.span(), expr.span());
         }
+        if (expr instanceof NamedInfix(Expr leftExpression, Expr functionExpression,
+                                       Expr rightExpression, SourceSpan ignored)) {
+            Value left = evalInner(leftExpression, env, resolution);
+            Value function = rawValue(functionExpression, env, resolution);
+            Value right = evalInner(rightExpression, env, resolution);
+            return invokeNamedInfix(left, leftExpression.span(), function, functionExpression,
+                    right, rightExpression.span(), expr.span());
+        }
+        if (expr instanceof AmbiguousCall(Expr firstExpression, Expr middleExpression,
+                                          Expr lastExpression, SourceSpan ignored)) {
+            Value first = rawValue(firstExpression, env, resolution);
+            if (first instanceof Value.Callable callable && callable.remainingArity() > 0) {
+                Value middle = evalInner(middleExpression, env, resolution);
+                Value partial = invoke(callable,
+                        new Value.Argument(middle, middleExpression.span()), expr.span());
+                if (!(partial instanceof Value.Callable remaining)) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
+                            "Callable accepts fewer than two arguments", lastExpression.span());
+                }
+                Value last = evalInner(lastExpression, env, resolution);
+                return invoke(remaining, new Value.Argument(last, lastExpression.span()), expr.span());
+            }
+            Value left = first instanceof Value.Callable callable ? invokeZero(callable, firstExpression.span()) : first;
+            Value function = rawValue(middleExpression, env, resolution);
+            Value right = evalInner(lastExpression, env, resolution);
+            return invokeNamedInfix(left, firstExpression.span(), function, middleExpression,
+                    right, lastExpression.span(), expr.span());
+        }
         if (expr instanceof Conditional(Expr condition1, Expr whenTrue, Expr whenFalse, SourceSpan ignored)) {
             Value condition = evalInner(condition1, env, resolution);
             return truth(condition)
@@ -206,6 +234,36 @@ final class Interpreter {
             return evalInner(expression, env, resolution);
         }
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
+    }
+
+    private Value invokeNamedInfix(Value left, SourceSpan leftSpan, Value function,
+                                   Expr functionExpression, Value right, SourceSpan rightSpan,
+                                   SourceSpan callSpan) {
+            String functionName = functionExpression instanceof Name name ? name.name() : function.toString();
+            if (!(function instanceof Value.Callable callable)) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_CALLABLE,
+                        "Named infix target is not callable: " + functionName,
+                        functionExpression.span());
+            }
+            if (callable.remainingArity() != 2) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_INFIX_ARITY,
+                        "Named infix function must take exactly two arguments: " + functionName,
+                        functionExpression.span());
+            }
+            Value partial = invoke(callable, new Value.Argument(left, leftSpan), callSpan);
+            return invoke((Value.Callable) partial,
+                    new Value.Argument(right, rightSpan), callSpan);
+    }
+
+    private Value rawValue(Expr expression, Environment env, Resolution resolution) {
+        return expression instanceof Name name ? bindingValue(name, env, resolution)
+                : evalInner(expression, env, resolution);
+    }
+
+    private Value bindingValue(Name expression, Environment env, Resolution resolution) {
+        Resolution.Binding binding = resolution.binding(expression);
+        return binding == null ? env.get(expression.name())
+                : env.getAt(binding.lexicalDepth(), binding.slot());
     }
 
     private Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan span) {

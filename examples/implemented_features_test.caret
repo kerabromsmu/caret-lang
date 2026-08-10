@@ -140,6 +140,10 @@ ungroupedMultiline = add
     10
 assertEqual "ungrouped multiline call" ungroupedMultiline 30
 
+joinDigits left right = left * 10 + right
+assertEqual "named infix call" (2 joinDigits 3) 23
+assertEqual "named infix is left associative" (1 joinDigits 2 joinDigits 3) 123
+
 // Unicode code-point text primitives and safe conversion failures.
 unicodeText = "🙂ab"
 assertEqual "text size counts code points" (textSize unicodeText) 3

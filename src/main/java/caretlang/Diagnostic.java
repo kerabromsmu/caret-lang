@@ -26,6 +26,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String UNKNOWN_NAME = "UNKNOWN_NAME";
         static final String READ_BEFORE_INITIALIZATION = "READ_BEFORE_INITIALIZATION";
         static final String NOT_CALLABLE = "NOT_CALLABLE";
+        static final String INVALID_INFIX_ARITY = "INVALID_INFIX_ARITY";
         static final String TOO_MANY_ARGUMENTS = "TOO_MANY_ARGUMENTS";
         static final String CALL_DEPTH_EXCEEDED = "CALL_DEPTH_EXCEEDED";
         static final String INVALID_CONDITION = "INVALID_CONDITION";

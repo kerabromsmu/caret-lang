@@ -35,6 +35,14 @@ double x + square y
 means `(double x) + (square y)`. Parentheses are still available whenever explicit grouping makes an
 expression clearer.
 
+Binary functions can also be written between their arguments. Named infix calls are
+left-associative and have one fixed precedence between comparison and addition:
+
+```caret
+combine left right = left * 10 + right
+value = 1 combine 2 combine 3
+```
+
 ## Indentation defines structure
 
 Multiline function bodies are introduced by indentation rather than braces. The final value in a
@@ -157,6 +165,17 @@ print seqGet items 0
 print dictGet settings #theme
 ```
 
+The planned language generalizes these primitives into a single collection model. One `[...]`
+literal can describe a list, set, dictionary, packed buffer, or heterogeneous structure; surrounding
+contracts select its behavior and representation. Named fields are ordinary first-class collection
+elements rather than a separate object or JSON notation.
+
+Caret likewise plans to use contracts as one common model for types, interfaces, refinements, and
+capabilities. Contracts form derivation graphs and work as predicates. Behavior remains in ordinary
+functions, with the most-specific applicable implementation selected from contract-specialized
+definitions. None of this contract, dispatch, or literal syntax is implemented by the current
+prototype yet.
+
 ## An evolving language experiment
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
@@ -164,7 +183,7 @@ supports lexical closures, direct and mutual recursion, partial application, exp
 language-owned reflection, persistent collections, source-located diagnostics, a REPL, and native
 test assertions.
 
-Static contracts and types, modules, collection literals, lambdas, mutation, and a compiler backend
+Contracts, contract-based dispatch, universal collection literals, modules, lambdas, mutation, and a compiler backend
 remain future work. The prototype exists to make the language's ideas executable and testable while
 its larger design evolves.
 

@@ -6,6 +6,7 @@ interpreter. The current prototype supports:
 - finite numbers, strings, Booleans, null (`?`), missing (`~`), and name values (`#name`);
 - indentation-delimited functions, lexical closures, direct and mutual recursion;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
+- fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
 - exported immutable scopes, required/optional field access, and dynamic lookup;
 - arbitrary partial application with ordinary and numbered holes;
@@ -18,6 +19,13 @@ describes both the implemented language sketch and the larger planned language. 
 there as planned are not necessarily available in this prototype. [PLAN.md](PLAN.md) gives the
 implementation roadmap, and [CONFORMANCE.md](CONFORMANCE.md) maps specification requirements to
 their implementation status and automated evidence.
+
+The planned language uses one contract system for types, interfaces, refinements, and capabilities.
+Contracts form derivation graphs and act as predicates, while ordinary functions provide behavior
+through contract-based multiple dispatch. Collections likewise have one universal `[...]` literal:
+surrounding contracts determine whether a value is a list, set, dictionary, packed buffer, or another
+representation. Named fields are first-class collection elements. These facilities are design
+targets, not features of the current prototype.
 
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
@@ -149,7 +157,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
   Trailing callable blocks remain unavailable until lambda syntax is implemented.
 - Values are dynamically checked; contracts, static types, nullable/optional type checking, and
   effect inference are not implemented.
-- General collection/data literals, first-class fields, formats, lambdas, cycles, SIMD, rules,
+- Universal collection literals, contract-selected representations, first-class fields, formats,
+  lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - There is no mutation, immutable scope-update syntax, object model, module system, compiler
   backend, bytecode, or optimizer.

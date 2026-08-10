@@ -38,6 +38,50 @@ final class InterpreterTest {
     }
 
     @Test
+    void callsNamedBinaryFunctionsInFixedPrecedenceInfixForm() {
+        assertEquals("9\n10\n123\n7\n8\n", execute("""
+                combine left right = left * 10 + right
+                add left right = left + right
+                left = 4
+                operation = add
+                print 2 add 3 + 4
+                print 2 add 3 < 10 & 10 ! 0
+                print 1 combine 2 combine 3
+                print left operation 3
+                addFive = 5 add _
+                print addFive 3
+                """));
+    }
+
+    @Test
+    void resolvesCallableParametersAsPrefixOrInfixFromRuntimeArity() {
+        assertEquals("5\n5\n", execute("""
+                add left right = left + right
+                applyInfix left operation right = left operation right
+                applyPrefix operation left right = operation left right
+                print applyInfix 2 add 3
+                print applyPrefix add 2 3
+                """));
+    }
+
+    @Test
+    void namedInfixCallsRequireCallableBinaryTargets() {
+        LangException arity = assertThrows(LangException.class, () -> execute("""
+                unary value = value
+                print 1 unary 2
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_INFIX_ARITY, arity.diagnostic().code());
+        assertEquals(9, arity.span().start().column());
+
+        LangException target = assertThrows(LangException.class, () -> execute("""
+                value = 1
+                print 1 value 2
+                """));
+        assertEquals(Diagnostic.Codes.NOT_CALLABLE, target.diagnostic().code());
+        assertEquals(9, target.span().start().column());
+    }
+
+    @Test
     void reflectionDoesNotExposePrivateLocals() {
         String output = execute("""
                 make =

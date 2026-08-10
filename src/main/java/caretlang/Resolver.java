@@ -1,6 +1,7 @@
 package caretlang;
 
 import caretlang.Ast.Apply;
+import caretlang.Ast.AmbiguousCall;
 import caretlang.Ast.Assign;
 import caretlang.Ast.Binary;
 import caretlang.Ast.Conditional;
@@ -13,6 +14,7 @@ import caretlang.Ast.Group;
 import caretlang.Ast.Hole;
 import caretlang.Ast.Literal;
 import caretlang.Ast.Name;
+import caretlang.Ast.NamedInfix;
 import caretlang.Ast.Reflect;
 import caretlang.Ast.Stmt;
 import caretlang.Ast.Unary;
@@ -103,6 +105,16 @@ final class Resolver {
                 resolveExpr(binary.left(), scope, functionBody, deferred);
                 resolveExpr(binary.right(), scope, functionBody,
                         deferred || binary.operator().equals("and") || binary.operator().equals("or"));
+            }
+            case NamedInfix infix -> {
+                resolveExpr(infix.left(), scope, functionBody, deferred);
+                resolveExpr(infix.function(), scope, functionBody, deferred);
+                resolveExpr(infix.right(), scope, functionBody, deferred);
+            }
+            case AmbiguousCall call -> {
+                resolveExpr(call.first(), scope, functionBody, deferred);
+                resolveExpr(call.middle(), scope, functionBody, deferred);
+                resolveExpr(call.last(), scope, functionBody, deferred);
             }
             case Conditional conditional -> {
                 resolveExpr(conditional.condition(), scope, functionBody, deferred);

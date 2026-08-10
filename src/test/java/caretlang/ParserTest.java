@@ -19,6 +19,19 @@ final class ParserTest {
     }
 
     @Test
+    void parsesNamedInfixAtItsFixedPrecedence() {
+        NamedInfix call = assertInstanceOf(NamedInfix.class, expression("2 combine 3 + 4"));
+        assertEquals("combine", assertInstanceOf(Name.class, call.function()).name());
+        assertInstanceOf(Binary.class, call.right());
+
+        Binary comparison = assertInstanceOf(Binary.class, expression("2 combine 3 < 10"));
+        assertInstanceOf(NamedInfix.class, comparison.left());
+
+        NamedInfix chained = assertInstanceOf(NamedInfix.class, expression("1 combine 2 combine 3"));
+        assertInstanceOf(NamedInfix.class, chained.left());
+    }
+
+    @Test
     void parsesSymbolicOperatorsAsPrefixCallableValues() {
         for (String operator : List.of("+", "*", "/", "%", "==", "!=", ">", ">=", "<", "<=")) {
             Apply outer = assertInstanceOf(Apply.class, expression(operator + " 6 2"));
@@ -58,6 +71,15 @@ final class ParserTest {
         assertEquals("print", name.name());
         Apply add = assertInstanceOf(Apply.class, print.argument());
         assertInstanceOf(Apply.class, add.function());
+    }
+
+    @Test
+    void printTreatsANamedInfixExpressionAsItsSingleArgument() {
+        ExprStmt statement = assertInstanceOf(ExprStmt.class,
+                new Parser("print 2 add 3").parseProgram().getFirst());
+        Apply print = assertInstanceOf(Apply.class, statement.expression());
+        assertEquals("print", assertInstanceOf(Name.class, print.function()).name());
+        assertInstanceOf(NamedInfix.class, print.argument());
     }
 
     @Test

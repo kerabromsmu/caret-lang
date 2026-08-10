@@ -277,11 +277,12 @@ From lower to higher precedence:
 3. `and`
 4. equality `== !=`
 5. comparison `< <= > >=`
-6. addition `+ -`
-7. multiplication `* / %`
-8. unary `- not @`
-9. function application
-10. field and dynamic lookup
+6. named binary infix functions
+7. addition `+ -`
+8. multiplication `* / %`
+9. unary `- not @`
+10. function application
+11. field and dynamic lookup
 
 ## Implementation roadmap
 
@@ -329,7 +330,7 @@ Collection literal syntax is not required for the initial self-interpreter.
 
 ### Unified binary functions and operators
 
-A binary operator and a function taking two parameters are planned to be the same kind of callable
+A binary operator and a function taking two parameters are the same kind of callable
 value. Either may be called with prefix notation or placed between its arguments with infix
 notation:
 
@@ -362,7 +363,9 @@ symbolic-operator declaration syntax remains an open design decision; the initia
 implementation makes the existing symbolic operators callable in prefix form but must not invent
 new declaration syntax.
 
-This unified prefix/infix behavior is planned and is not implemented by the current parser.
+Named infix calls are represented separately while parsing but invoke the same callable values as
+prefix application. A non-callable infix target or a callable whose remaining arity is not two
+produces a located runtime diagnostic.
 
 ### Ungrouped multiline application
 
@@ -388,9 +391,9 @@ Sibling continuation arguments use the same indentation. A deeper line continues
 preceding argument; dedenting to an indentation other than an established enclosing level is a
 located layout error. A continuation line is an expression and cannot contain a definition.
 
-Once lambdas are implemented, an indented trailing lambda will be the final call argument. A
-definition or lambda body is delimited by its own indentation in the ordinary way. This rule is
-planned and is not implemented by the current parser.
+More-indented application is implemented by the current parser. Once lambdas are implemented, an
+indented trailing lambda will be the final call argument; its body will be delimited by its own
+indentation in the ordinary way.
 
 ### Core semantic decisions
 
@@ -6278,7 +6281,7 @@ choose syntax or observable semantics for them.
 
 ## Not implemented
 
-- unified prefix/infix callable operators and composition
+- function composition
 - ungrouped multiline call arguments and trailing lambdas
 - contracts, static types, effect inference, and ownership analysis
 - general collection/data syntax, first-class fields, and persistent updates

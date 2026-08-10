@@ -142,6 +142,11 @@ ungroupedMultiline = add
     10
 print ungroupedMultiline
 
+// Named binary functions also use fixed-precedence, left-associative infix notation.
+joinDigits left right = left * 10 + right
+print 2 joinDigits 3
+print 1 joinDigits 2 joinDigits 3
+
 // Text indexes count Unicode code points; slices use [start, end).
 unicodeText = "🙂ab"
 print textSize unicodeText
