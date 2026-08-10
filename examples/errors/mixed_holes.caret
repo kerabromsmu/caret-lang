@@ -1,0 +1,2 @@
+add left right = left + right
+invalid = add _ _1

@@ -5,6 +5,22 @@ CARET_TEST_TMP=$(mktemp -d /tmp/caret-tests.XXXXXX)
 trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
 ./gradlew --quiet installDist
 CARET_LAUNCHER=build/install/caret-lang-prototype/bin/caret-lang-prototype
+
+expect_failure() {
+  local source_file=$1
+  local expected_text=$2
+  local output_file
+  output_file="$CARET_TEST_TMP/$(basename "$source_file").out"
+  if "$CARET_LAUNCHER" "$source_file" > "$output_file" 2>&1; then
+    printf 'Expected failure succeeded: %s\n' "$source_file" >&2
+    exit 1
+  fi
+  grep -F "$expected_text" "$output_file" >/dev/null
+  if grep -F 'Exception' "$output_file" >/dev/null; then
+    printf 'Java exception leaked from: %s\n' "$source_file" >&2
+    exit 1
+  fi
+}
 "$CARET_LAUNCHER" examples/demo.caret > "$CARET_TEST_TMP/output.txt"
 cat > "$CARET_TEST_TMP/expected.txt" <<'EXPECTED'
 true
@@ -114,15 +130,21 @@ answer,nothing
 EXPECTED
 diff -u "$CARET_TEST_TMP/language-expected.txt" "$CARET_TEST_TMP/language-output.txt"
 
-cat > "$CARET_TEST_TMP/required-field.caret" <<'CARET'
-make =
-  ^present = true
-value = make
-print value.absent
-CARET
-if "$CARET_LAUNCHER" "$CARET_TEST_TMP/required-field.caret" > "$CARET_TEST_TMP/required-field.out" 2>&1; then
-  printf 'Required missing field unexpectedly succeeded.\n' >&2
-  exit 1
-fi
-grep -F 'Scope has no exported binding: absent' "$CARET_TEST_TMP/required-field.out" >/dev/null
+expect_failure examples/errors/duplicate_definition.caret 'Line 2, column 1: Duplicate definition: value'
+grep -F 'Note: Line 1, column 1: First definition of value' \
+  "$CARET_TEST_TMP/duplicate_definition.caret.out" >/dev/null
+expect_failure examples/errors/reserved_binding.caret 'Line 1, column 1: Reserved spelling cannot be used as a binding name: true'
+expect_failure examples/errors/read_before_initialization.caret 'Line 1, column 9: Binding read before initialization: second'
+expect_failure examples/errors/unknown_name.caret 'Line 1, column 7: Unknown name: absent'
+expect_failure examples/errors/required_missing_field.caret 'Line 5, column 7: Scope has no exported binding: absent'
+expect_failure examples/errors/invalid_dynamic_key.caret 'Line 5, column 7: Dynamic field name must be a name or string'
+expect_failure examples/errors/division_by_zero.caret 'Line 1, column 11: Division by zero'
+expect_failure examples/errors/remainder_by_zero.caret 'Line 1, column 11: Division by zero'
+expect_failure examples/errors/non_finite_result.caret 'Line 1, column 7: Numeric result is not finite'
+expect_failure examples/errors/invalid_escape.caret 'Line 1, column 17: Unknown string escape: \q'
+expect_failure examples/errors/mixed_holes.caret 'Line 2, column 11: Cannot mix numbered and unnumbered holes'
+expect_failure examples/errors/callable_equality.caret 'Line 2, column 7: Callable values cannot be compared for equality'
+expect_failure examples/errors/non_callable_infix.caret 'Line 2, column 9: Named infix target is not callable: value'
+expect_failure examples/errors/invalid_infix_arity.caret 'Line 2, column 9: Named infix function must take exactly two arguments: identity'
+expect_failure examples/errors/call_depth.caret 'Maximum Caret evaluation depth exceeded'
 printf 'All prototype tests passed.\n'

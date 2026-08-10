@@ -143,6 +143,16 @@ assertEqual "ungrouped multiline call" ungroupedMultiline 30
 joinDigits left right = left * 10 + right
 assertEqual "named infix call" (2 joinDigits 3) 23
 assertEqual "named infix is left associative" (1 joinDigits 2 joinDigits 3) 123
+assertEqual "named infix binds below addition" (2 joinDigits 3 + 4) 27
+assert "named infix binds above comparison" (2 joinDigits 3 < 30)
+
+applyInfix left operation right = left operation right
+applyPrefix operation left right = operation left right
+assertEqual "callable parameter in infix position" (applyInfix 2 add 3) 5
+assertEqual "callable parameter in prefix position" (applyPrefix add 2 3) 5
+
+joinLater = joinDigits _ _
+assertEqual "multiple ordinary holes fill left to right" (joinLater 4 5) 45
 
 // Unicode code-point text primitives and safe conversion failures.
 unicodeText = "🙂ab"
@@ -158,9 +168,12 @@ assertEqual "numberText formats a number" (numberText 12.5) "12.5"
 emptySequence = seqEmpty
 sequence = seqAdd (seqAdd emptySequence "first") ~
 sameSequence = seqAdd (seqAdd seqEmpty "first") ~
+extendedSequence = seqAdd sequence "third"
 
 assertEqual "empty sequence size" (seqSize emptySequence) 0
 assertEqual "sequence append is persistent" (seqSize sequence) 2
+assertEqual "earlier sequence remains unchanged" (seqSize sequence) 2
+assertEqual "extended sequence has new element" (seqSize extendedSequence) 3
 assertEqual "sequence first element" (seqGet sequence 0) "first"
 assertEqual "sequence present missing element" (seqGet sequence 1) ~
 assertEqual "sequence invalid index" (seqGet sequence 99) ~
@@ -174,6 +187,7 @@ emptyDictionary = dictEmpty
 oneEntry = dictPut emptyDictionary #present 1
 dictionary = dictPut oneEntry "missingValue" ~
 sameDictionary = dictPut (dictPut dictEmpty "present" 1) #missingValue ~
+replacedDictionary = dictPut dictionary #present 2
 
 assertEqual "empty dictionary remains unchanged" (dictHas emptyDictionary #present) false
 assert "dictionary has string-normalized key" (dictHas dictionary "present")
@@ -182,15 +196,13 @@ assertEqual "dictionary name lookup" (dictGet dictionary #present) 1
 assertEqual "dictionary present missing lookup" (dictGet dictionary "missingValue") ~
 assertEqual "dictionary absent lookup" (dictGet dictionary #absent) ~
 assertEqual "dictionary insertion-ordered keys" (dictKeys dictionary) (seqAdd (seqAdd seqEmpty #present) #missingValue)
+assertEqual "dictionary replacement changes the new value" (dictGet replacedDictionary #present) 2
+assertEqual "dictionary replacement preserves key order" (dictKeys replacedDictionary) (dictKeys dictionary)
+assertEqual "earlier dictionary remains unchanged" (dictGet dictionary #present) 1
+assert "nested dictionary and sequence equality is structural" (dictPut dictEmpty #nested sequence == dictPut dictEmpty "nested" sequence)
 assert "dictionary structural equality" (dictionary == sameDictionary)
 assertEqual "dictionary reflection kind" (@dictionary).kind "Dictionary"
 assertEqual "dictionary reflection size" (@dictionary).size 2
 assertEqual "dictionary reflection names" (@dictionary).names "present,missingValue"
 
-// Expected diagnostics cannot yet be isolated by the eager v1 test runner:
-// absentName
-// person.absent
-// 1 / 0
-// 1 % 0
-// add _ _1
-// factorial == factorial
+// Expected failures are isolated in examples/errors/ and exercised by test.sh.

@@ -146,6 +146,18 @@ print ungroupedMultiline
 joinDigits left right = left * 10 + right
 print 2 joinDigits 3
 print 1 joinDigits 2 joinDigits 3
+print 2 joinDigits 3 + 4
+print (2 joinDigits 3 < 30)
+
+// Callable parameters use the same runtime prefix/infix selection rule.
+applyInfix left operation right = left operation right
+applyPrefix operation left right = operation left right
+print applyInfix 2 add 3
+print applyPrefix add 2 3
+
+// Multiple ordinary holes are filled from left to right.
+joinLater = joinDigits _ _
+print joinLater 4 5
 
 // Text indexes count Unicode code points; slices use [start, end).
 unicodeText = "🙂ab"
@@ -160,8 +172,10 @@ print numberText 12.5
 // Sequences are immutable and use safe indexed lookup.
 emptySequence = seqEmpty
 sequence = seqAdd (seqAdd emptySequence "first") ~
+extendedSequence = seqAdd sequence "third"
 print seqSize emptySequence
 print seqSize sequence
+print seqSize extendedSequence
 print seqGet sequence 0
 print seqGet sequence 1
 print seqGet sequence 99
@@ -174,6 +188,7 @@ print (@sequence).size
 emptyDictionary = dictEmpty
 oneEntry = dictPut emptyDictionary #present 1
 dictionary = dictPut oneEntry "missingValue" ~
+replacedDictionary = dictPut dictionary #present 2
 print dictHas emptyDictionary #present
 print dictHas dictionary "present"
 print dictHas dictionary #missingValue
@@ -181,14 +196,11 @@ print dictGet dictionary #present
 print dictGet dictionary "missingValue"
 print dictGet dictionary #absent
 print dictKeys dictionary
+print dictGet replacedDictionary #present
+print dictKeys replacedDictionary
+print (dictPut dictEmpty #nested sequence == dictPut dictEmpty "nested" sequence)
 print (@dictionary).kind
 print (@dictionary).size
 print (@dictionary).names
 
-// Expected diagnostics are demonstrated without aborting this runnable example:
-// absentName                         // unknown name
-// person.absent                     // required missing field
-// 1 / 0                             // division by zero
-// 1 % 0                             // remainder by zero
-// add _ _1                          // mixed numbered and ordinary holes
-// factorial == factorial            // callable equality is undefined
+// Executable diagnostic examples live in examples/errors/ and are indexed by examples/README.md.
