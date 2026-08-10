@@ -6243,6 +6243,1029 @@ An import cycle is a located module diagnostic that reports the import chain. A 
 load or evaluate is not cached as successful. Importing the same canonical module again does not
 repeat its initialization effects.
 
+## `@root`, Program Reification, Quines, and Sandboxes
+
+### Overview
+
+Caret programs are reflectable from within themselves.
+
+The special reference:
+
+```caret
+@root
+```
+
+refers to the root of the Caret execution environment visible to the current code.
+
+The root exposes reflective metadata about that environment, including its code representation.
+
+For example:
+
+```caret
+@root.code
+```
+
+is the program's code represented as structured Caret data containing references to definitions, functions, parameters, expressions, contracts, rules, and other program elements.
+
+Because code is representable as data and may be converted back into canonical Caret text, a simple Caret quine may be written as:
+
+```caret
+print toString @root.code
+```
+
+The output need not preserve the exact original source text.
+
+It must reproduce a canonical Caret program equivalent to the code represented by `@root.code`.
+
+The meaning of `root` is relative to the current execution environment.
+
+Inside a sandbox, `@root` refers to the sandbox root rather than to the host application's root.
+
+This provides the foundation for Caret's sandbox and capability-isolation model.
+
+---
+
+# `@root`
+
+## Root reference
+
+`root` represents the root scope of the current Caret execution environment.
+
+`@root` returns a reference to that root rather than evaluating any binding contained in it.
+
+Example:
+
+```caret
+r = @root
+```
+
+The root may expose metadata and bindings such as:
+
+```caret
+@root.code
+@root.name
+@root.contracts
+@root.functions
+```
+
+The exact standard metadata fields may grow over time.
+
+`@root` must be available from anywhere in Caret code unless the current execution environment explicitly restricts access to particular root metadata.
+
+---
+
+## Root is environment-relative
+
+`root` does not necessarily mean the physical top-level application process.
+
+It means:
+
+> the root of the Caret universe visible to the currently executing code.
+
+For ordinary application code:
+
+```text
+visible root = application root
+```
+
+For sandboxed plugin code:
+
+```text
+visible root = plugin sandbox root
+```
+
+For a tutorial REPL:
+
+```text
+visible root = tutorial environment
+```
+
+For a test:
+
+```text
+visible root = test environment
+```
+
+Therefore code using:
+
+```caret
+@root
+```
+
+does not need to know whether it executes directly in a host application or inside one or more sandbox layers.
+
+---
+
+# Program code metadata
+
+## `.code`
+
+The root exposes the program through:
+
+```caret
+@root.code
+```
+
+`.code` is a structured representation of Caret code.
+
+It is not required to be the original source text.
+
+Conceptually:
+
+```text
+@root.code : Collection CodeElement
+```
+
+Code elements may represent:
+
+* bindings;
+* functions;
+* parameters;
+* contracts;
+* expressions;
+* literals;
+* collections;
+* rules;
+* rulesets;
+* cycles;
+* imports;
+* sandboxes;
+* other language constructs.
+
+The representation should preserve the semantic structure necessary to reconstruct equivalent Caret code.
+
+---
+
+## Code as data
+
+Program code participates in the ordinary Caret value model.
+
+Code elements may therefore be:
+
+* stored;
+* traversed;
+* filtered;
+* transformed;
+* inspected;
+* passed to functions;
+* compared where appropriate;
+* converted to textual representation.
+
+Reflection should expose references rather than duplicating runtime objects unnecessarily.
+
+For example, a function code element may expose information such as:
+
+```text
+name
+parameters
+contracts
+body
+effects
+source metadata
+```
+
+subject to the current environment's visibility and sandbox permissions.
+
+---
+
+## Canonical textual form
+
+The standard polymorphic conversion:
+
+```caret
+toString value
+```
+
+may have a specialization for Caret code.
+
+Conceptually:
+
+```caret
+(String) toString (Code) code =
+  ...
+```
+
+It converts the structured code representation into canonical Caret syntax.
+
+Canonicalization may normalize:
+
+* whitespace;
+* indentation;
+* line breaks;
+* redundant parentheses;
+* equivalent formatting;
+* other non-semantic source differences.
+
+For example, source such as:
+
+```caret
+x=1
+```
+
+may canonicalize to:
+
+```caret
+x = 1
+```
+
+The canonical representation must preserve program meaning, not original textual formatting.
+
+Comments and other source-only information need not be reproduced unless separately represented as code metadata.
+
+---
+
+# Quines
+
+## Canonical quine
+
+Because the running program can access its own structured code and convert that code to canonical Caret text, a Caret quine may be:
+
+```caret
+print toString @root.code
+```
+
+Conceptually:
+
+```text
+@root
+    ↓
+.code
+    ↓
+structured representation of current program
+    ↓
+toString
+    ↓
+canonical Caret source
+    ↓
+print
+```
+
+The result is a canonical representation of the program.
+
+The output is not required to be byte-for-byte identical to the source file from which the program was loaded.
+
+It is sufficient that parsing the generated canonical code reconstructs the same relevant program structure.
+
+---
+
+## Quine property
+
+For canonical code serialization, the desired relationship is conceptually:
+
+```text
+parse(toString(@root.code))
+    ≈
+@root.code
+```
+
+where `≈` means semantic/code-structure equivalence rather than exact source-text identity.
+
+Thus differences in:
+
+```text
+whitespace
+comments
+formatting
+redundant grouping
+```
+
+do not invalidate the quine.
+
+---
+
+# Sandboxes
+
+## Overview
+
+`sandbox` evaluates or imports Caret code in a restricted execution environment.
+
+Unlike a normal import, sandboxed code does not inherit unrestricted visibility into the host root.
+
+Instead, the host constructs a sandbox root and chooses what the sandbox may observe and use.
+
+Conceptually:
+
+```caret
+plugin =
+  sandbox pluginCode environment
+```
+
+The sandboxed code sees:
+
+```caret
+@root
+```
+
+as `environment`, or as a root constructed from that environment.
+
+It cannot access the host application's root merely by referring to `@root`.
+
+---
+
+## Root substitution
+
+The fundamental sandbox operation is root substitution.
+
+Conceptually:
+
+```text
+host root
+    |
+    +-- sandbox environment
+            |
+            +-- sandbox @root
+```
+
+If the host exposes:
+
+```caret
+environment =
+  [
+    ^log safeLog
+    ^files pluginFiles
+    ^clock safeClock
+  ]
+```
+
+then sandboxed code may observe:
+
+```caret
+@root.log
+@root.files
+@root.clock
+```
+
+Bindings not exposed through the sandbox root are not part of the sandbox's observable environment.
+
+For example:
+
+```caret
+@root.database
+@root.internalState
+```
+
+should behave as unavailable if those bindings were not exposed.
+
+The preferred security model is absence of authority rather than unrestricted authority combined with repeated global permission checks.
+
+---
+
+# Sandbox capabilities
+
+## Exposed program capabilities
+
+A sandbox may expose selected host functions, objects, rulesets, data, or services.
+
+For example:
+
+```caret
+environment =
+  [
+    ^print sandboxPrint
+    ^clock sandboxClock
+    ^storage sandboxStorage
+  ]
+```
+
+The sandbox receives only those capabilities.
+
+It should not be able to discover unrelated host capabilities through ordinary reflection.
+
+---
+
+## Libraries
+
+The host may select which libraries are visible inside a sandbox.
+
+For example, a sandbox may expose:
+
+```text
+collections
+math
+string utilities
+rule system
+```
+
+while omitting:
+
+```text
+filesystem
+network
+process control
+native interop
+```
+
+Libraries unavailable to the sandbox should behave as absent rather than globally accessible but forbidden.
+
+---
+
+## Language features
+
+A sandbox may also restrict language-level features.
+
+Examples of potentially controllable features include:
+
+```text
+reflection
+dynamic evaluation
+native interop
+unsafe memory access
+thread/process creation
+filesystem access
+network access
+```
+
+Restrictions on actual language features cannot always be implemented merely by hiding bindings from `@root`.
+
+The sandbox evaluator/compiler may therefore receive a language-feature capability set in addition to its visible root.
+
+Conceptually:
+
+```text
+Sandbox
+    root
+    permitted language features
+    permitted runtime capabilities
+```
+
+The exact configuration syntax may be defined separately.
+
+---
+
+# Isolation layers
+
+## Capability mediation
+
+A host may expose a capability directly:
+
+```caret
+^files systemFiles
+```
+
+or through an isolation layer:
+
+```caret
+^files restrictedFiles allowedDirectory
+```
+
+Sandboxed code still operates through the normal filesystem contract.
+
+The implementation provided by the host determines what access is actually possible.
+
+Conceptually:
+
+```text
+sandbox request
+      ↓
+isolation layer
+      ↓
+policy check
+      ↓
+real resource or replacement
+```
+
+---
+
+## Filtered access
+
+A filesystem isolation layer may inspect requested paths:
+
+```caret
+open path
+```
+
+and conceptually perform:
+
+```caret
+openRestricted path =
+  allowed path &
+    systemOpen path
+  !
+    accessDenied path
+```
+
+If access is allowed, the request is forwarded.
+
+Otherwise the operation fails according to the normal Caret error model.
+
+The unrestricted `systemOpen` capability is not exposed to the sandbox.
+
+---
+
+## Virtualized resources
+
+An isolation layer may replace the underlying resource entirely.
+
+For example:
+
+```caret
+^files virtualFileSystem
+```
+
+may make:
+
+```caret
+open "example.txt"
+```
+
+operate on an in-memory filesystem rather than the operating-system filesystem.
+
+The same principle may apply to:
+
+* network connections;
+* clock/time;
+* randomness;
+* databases;
+* environment variables;
+* GUI objects;
+* clipboard;
+* GPU devices;
+* process control.
+
+Sandboxed code should normally depend on contracts and behavior rather than on whether the supplied implementation is physical, filtered, simulated, or virtual.
+
+---
+
+# Effects and sandbox authority
+
+Caret effects and sandbox permissions are related but distinct.
+
+An effect contract describes what kind of observable action a function may perform.
+
+For example:
+
+```caret
+(fs) load path =
+  read path
+```
+
+means that `load` may cause a filesystem effect.
+
+It does not grant unrestricted filesystem authority.
+
+Inside different environments, the same effect may be backed by different capabilities:
+
+```text
+host:
+    fs -> operating-system filesystem
+
+plugin:
+    fs -> restricted plugin directory
+
+tutorial:
+    fs -> virtual in-memory filesystem
+```
+
+Therefore:
+
+```text
+effect
+    describes what kind of effect occurs
+
+sandbox capability
+    determines what authority or implementation is available
+```
+
+A sandbox must not treat an effect declaration itself as permission.
+
+---
+
+# Reflection across sandbox boundaries
+
+## Reflective membrane
+
+Caret reflection must respect sandbox boundaries.
+
+Exposing a host reference to a sandbox must not allow the sandbox to navigate through reflection back into arbitrary host state.
+
+For example, if the host exposes:
+
+```caret
+^log hostLog
+```
+
+the sandbox may be permitted to inspect metadata such as:
+
+```caret
+@log.name
+@log.parameters
+@log.result
+```
+
+without being permitted to inspect:
+
+```text
+private host lexical scope
+host root
+unexposed closure captures
+native implementation internals
+unexposed capabilities
+```
+
+The sandbox boundary therefore acts as a reflective membrane.
+
+---
+
+## Reference projection
+
+A reference crossing into a sandbox may be projected into a restricted reflective view.
+
+Conceptually:
+
+```text
+host reference
+      ↓
+sandbox projection
+      ↓
+allowed callable behavior
+allowed metadata
+allowed reachable references
+```
+
+Reflection from the projected reference must remain within the authority of the sandbox.
+
+A sandbox must not be escapable merely because Caret supports reification.
+
+---
+
+## Sandboxed `.code`
+
+Inside sandboxed code:
+
+```caret
+@root.code
+```
+
+refers to the code visible in that sandbox environment.
+
+It must not automatically reveal the complete host program.
+
+Depending on sandbox configuration, it may represent:
+
+* only the sandboxed module;
+* the sandboxed module plus explicitly exposed code;
+* a filtered code view;
+* no code metadata at all if reflection has been restricted.
+
+Thus the standard quine:
+
+```caret
+print toString @root.code
+```
+
+inside a sandbox reproduces the canonical code visible to that sandbox, not the host's hidden source.
+
+---
+
+# Revocable capabilities
+
+## Persistent references
+
+Removing a binding from the sandbox root does not necessarily revoke references already obtained from it.
+
+For example:
+
+```caret
+files = @root.files
+```
+
+may retain a reference after `files` is later removed from the root.
+
+Therefore simple root modification is sufficient for granting capabilities but not always for revocation.
+
+---
+
+## Mediated revocation
+
+Capabilities that must be revocable should be exposed through a mediation object whose policy can change.
+
+Conceptually:
+
+```text
+sandbox
+   ↓
+capability proxy
+   ↓
+current policy
+   ↓
+resource
+```
+
+When permission is revoked, existing references to the proxy remain valid references but deny operations according to the new policy.
+
+This is particularly relevant for:
+
+* plugins;
+* long-running scripts;
+* dynamically changing permissions.
+
+---
+
+# Nested sandboxes
+
+Sandboxes may contain additional sandboxes.
+
+Conceptually:
+
+```text
+host root
+    ↓
+plugin sandbox root
+    ↓
+script sandbox root
+```
+
+A child sandbox may normally expose only capabilities available to its parent.
+
+The general authority rule should be:
+
+```text
+child authority <= parent authority
+```
+
+A sandbox must not be able to grant authority it does not possess unless the host runtime explicitly supplies that authority from outside the parent environment.
+
+This allows plugins themselves to safely host untrusted Caret code.
+
+---
+
+# Tutorial and REPL environments
+
+A Caret tutorial may use a sandboxed REPL.
+
+Conceptually:
+
+```text
+tutorial host
+     |
+     +-- sandbox
+           |
+           +-- REPL
+           +-- student @root
+           +-- controlled input/output
+           +-- virtual resources
+           +-- currently unlocked features
+```
+
+The initial environment may expose only a small subset:
+
+```caret
+[
+  ^print tutorialPrint
+  ^Int Int
+  ^Boolean Boolean
+]
+```
+
+As the learner progresses, additional features may become available:
+
+```text
+arithmetic
+functions
+collections
+contracts
+reflection
+rules
+virtual filesystem
+...
+```
+
+The student's:
+
+```caret
+@root
+```
+
+always reflects the environment currently available to that REPL.
+
+---
+
+## Tutorial isolation layer
+
+Input and output may be mediated by the tutorial application.
+
+For example, `print` may actually refer to:
+
+```caret
+^print tutorialPrint
+```
+
+rather than unrestricted process output.
+
+`tutorialPrint` may:
+
+* capture the learner's output;
+* compare it against lesson requirements;
+* display feedback;
+* update lesson progress;
+* unlock additional capabilities.
+
+Similarly, a virtual resource may enforce the state of the tutorial without changing the language syntax seen by the learner.
+
+---
+
+## Progressive capability exposure
+
+A tutorial may progressively expand the sandbox root.
+
+Conceptually:
+
+```text
+lesson 1:
+    arithmetic + print
+
+lesson 2:
+    functions
+
+lesson 3:
+    collections
+
+lesson 4:
+    contracts
+
+lesson 5:
+    reflection
+
+lesson 6:
+    virtual filesystem
+```
+
+This allows the available programming environment itself to become part of the teaching progression.
+
+If permissions only increase, simple capability addition may be sufficient.
+
+If capabilities may later be revoked, revocable mediation objects should be used.
+
+---
+
+# Relationship to normal import
+
+Normal import and sandbox import have different trust assumptions.
+
+A normal import integrates code into the ordinary program environment according to normal visibility rules.
+
+Conceptually:
+
+```caret
+import module
+```
+
+means:
+
+> load this code as part of my normal Caret program environment.
+
+A sandbox:
+
+```caret
+sandbox module environment
+```
+
+means:
+
+> evaluate this code under a substituted root and restricted authority.
+
+The precise module-loading syntax may be refined separately, but the semantic distinction must remain.
+
+---
+
+# Security principle
+
+Sandbox security must be based primarily on capability possession.
+
+Sandboxed code should be unable to perform an operation when it possesses no path to the corresponding capability.
+
+For example, code without access to an unrestricted filesystem function must not be able to manufacture that access merely by:
+
+* naming it;
+* reflecting over unrelated objects;
+* traversing `@root`;
+* inspecting closure internals;
+* accessing hidden native state.
+
+Sandbox isolation therefore applies to both ordinary name resolution and reflection.
+
+---
+
+# Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. Global availability of:
+
+```caret
+@root
+```
+
+relative to the current execution environment.
+
+2. Structured program metadata:
+
+```caret
+@root.code
+```
+
+3. A first-class code representation suitable for traversal and reflection.
+
+4. Polymorphic:
+
+```caret
+toString code
+```
+
+producing canonical Caret syntax.
+
+5. The canonical quine:
+
+```caret
+print toString @root.code
+```
+
+6. Canonical rather than exact-source reconstruction.
+
+7. A `sandbox` execution/import mechanism.
+
+8. Root substitution for sandboxed code.
+
+9. Explicit exposure of selected host bindings.
+
+10. Restricted library visibility.
+
+11. Ability to expose filtered or virtual resource implementations.
+
+12. Separation between effect contracts and actual sandbox authority.
+
+13. Reflection that respects sandbox boundaries.
+
+14. Sandboxed `@root.code` that does not reveal hidden host code.
+
+15. Support for nested sandboxes.
+
+16. Child sandboxes unable to automatically exceed parent authority.
+
+The initial implementation may postpone:
+
+* source-exact code reconstruction;
+* comment-preserving serialization;
+* fine-grained per-metadata-field permissions;
+* dynamic language-feature unlocking;
+* revocable capability proxies;
+* operating-system process isolation;
+* hardware-enforced sandboxing;
+* sophisticated static information-flow analysis.
+
+These later features must preserve the fundamental rule that a sandbox substitutes the visible root and restricts the authority reachable from that root.
+
+---
+
+# Design principle
+
+`@root` means:
+
+> the root of the Caret environment visible to this code.
+
+The normal application root may expose the entire program.
+
+A sandbox may expose only a controlled subset.
+
+Code reflection follows the same boundary.
+
+Therefore:
+
+```caret
+print toString @root.code
+```
+
+is always a quine for the program environment visible to the caller, reconstructed in canonical Caret syntax.
+
+A sandbox does not merely hide names.
+
+It defines a smaller Caret universe consisting of selected:
+
+```text
+code
+bindings
+libraries
+language capabilities
+runtime capabilities
+resources
+```
+
+and may mediate those capabilities through filtered or virtual implementations.
+
+This allows the same mechanism to support:
+
+* plugins;
+* embedded scripting;
+* REPLs;
+* tutorials;
+* tests;
+* virtualized environments;
+* restricted automation;
+* nested execution environments
+
+without weakening Caret's reflection model.
+
+
 ### Compiler target and compatibility
 
 The first compiler backend targets Java 21-compatible JVM class files. It can package a program and
