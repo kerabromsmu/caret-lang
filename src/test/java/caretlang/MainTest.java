@@ -122,6 +122,18 @@ final class MainTest {
     }
 
     @Test
+    void hostCatalogMessagesHaveExactOutput() {
+        assertEquals("Usage: caret test <file>\n", run("test").error());
+        assertEquals("Error: Cannot read Caret test file sample.caret: unavailable",
+                HostMessageCatalog.TEST_READ_FAILURE.format(Path.of("sample.caret"), "unavailable"));
+        assertEquals("Error: Caret REPL requires an interactive terminal. "
+                        + "Run ./repl.sh from a terminal window.",
+                HostMessageCatalog.REPL_TERMINAL_REQUIRED.format());
+        assertEquals("Warning: Cannot write REPL history at history; using in-memory history: denied",
+                HostMessageCatalog.REPL_HISTORY_WRITE.format(Path.of("history"), "denied"));
+    }
+
+    @Test
     void testModeRunsOneFileAndCollectsAssertionFailures() throws Exception {
         Path program = temporaryDirectory.resolve("mixed-tests.caret");
         Files.writeString(program, """

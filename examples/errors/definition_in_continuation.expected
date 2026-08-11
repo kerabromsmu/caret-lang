@@ -1,0 +1,2 @@
+Error: Line 2, column 3: Continuation argument must be an expression
+  nested = 1

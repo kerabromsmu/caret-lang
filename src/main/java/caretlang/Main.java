@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.util.Scanner;
 
 public final class Main {
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         if (args.length == 0) {
             String userHome = System.getProperty("user.home");
             Path historyFile = userHome == null
@@ -25,14 +25,14 @@ public final class Main {
     static int run(String[] args, InputStream input, PrintStream output, PrintStream error) {
         if (args.length > 0 && args[0].equals("test")) {
             if (args.length != 2) {
-                error.println("Usage: caret test <file>");
+                error.println(HostMessageCatalog.TEST_USAGE.format());
                 return 1;
             }
             return runFile(Path.of(args[1]), output, error, true);
         }
 
         if (args.length > 1) {
-            error.println("Usage: caret <file> | caret test <file>");
+            error.println(HostMessageCatalog.FILE_USAGE.format());
             return 1;
         }
 
@@ -58,8 +58,9 @@ public final class Main {
         try {
             source = Files.readString(program);
         } catch (IOException fileError) {
-            String kind = testMode ? "test file " : "source file ";
-            error.println("Error: Cannot read Caret " + kind + program + ": " + fileError.getMessage());
+            HostMessageCatalog message = testMode ? HostMessageCatalog.TEST_READ_FAILURE
+                    : HostMessageCatalog.SOURCE_READ_FAILURE;
+            error.println(message.format(program, fileError.getMessage()));
             return 1;
         }
         try {

@@ -3,8 +3,10 @@
 The example suite mirrors every requirement currently marked `implemented` in
 [`CONFORMANCE.md`](../CONFORMANCE.md). Successful behavior is demonstrated by
 [`implemented_features.caret`](implemented_features.caret) and asserted by
-[`implemented_features_test.caret`](implemented_features_test.caret). Each file under `errors/`
-contains one intentional failure and is exercised by `test.sh`.
+[`implemented_features_test.caret`](implemented_features_test.caret). Each `.caret` file under
+`errors/` contains one intentional failure, has an adjacent `.expected` file containing its exact
+stderr, and is exercised by `test.sh`. [The diagnostic matrix](../DIAGNOSTICS.md) also records
+variants that require focused Java or host-level tests.
 
 | Conformance requirements | Example coverage |
 |---|---|

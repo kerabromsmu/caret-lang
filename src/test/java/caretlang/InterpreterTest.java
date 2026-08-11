@@ -114,9 +114,11 @@ final class InterpreterTest {
     @Test
     void compositionUsesTheOrdinaryCallDepthGuard() {
         String source = "identity value = value\npipeline = identity"
-                + " >> identity".repeat(1_100) + "\nprint pipeline 1\n";
+                + " >> identity".repeat(300) + "\nprint pipeline 1\n";
         LangException error = assertThrows(LangException.class, () -> execute(source));
         assertEquals(Diagnostic.Codes.CALL_DEPTH_EXCEEDED, error.diagnostic().code());
+        assertEquals(DiagnosticCatalog.CALL_DEPTH, error.catalogEntry());
+        assertEquals("Maximum Caret call depth exceeded", error.detail());
     }
 
     @Test

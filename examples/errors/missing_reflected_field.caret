@@ -1,0 +1,2 @@
+identity value = value
+print (@identity).absent

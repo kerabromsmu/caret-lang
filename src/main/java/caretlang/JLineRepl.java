@@ -23,8 +23,7 @@ final class JLineRepl {
         try (Terminal terminal = TerminalBuilder.builder().system(true).dumb(false).build()) {
             return run(terminal, interpreter, output, error, historyFile);
         } catch (IOException terminalError) {
-            error.println("Error: Caret REPL requires an interactive terminal. "
-                    + "Run ./repl.sh from a terminal window.");
+            error.println(HostMessageCatalog.REPL_TERMINAL_REQUIRED.format());
             error.flush();
             return 1;
         }
@@ -110,8 +109,9 @@ final class JLineRepl {
 
     private static void warn(PrintStream error, String operation, Path historyFile, Throwable cause) {
         if (cause instanceof UncheckedIOException unchecked) cause = unchecked.getCause();
-        error.println("Warning: Cannot " + operation + " REPL history at " + historyFile
-                + "; using in-memory history: " + cause.getMessage());
+        HostMessageCatalog message = operation.equals("read") ? HostMessageCatalog.REPL_HISTORY_READ
+                : HostMessageCatalog.REPL_HISTORY_WRITE;
+        error.println(message.format(historyFile, cause.getMessage()));
         error.flush();
     }
 

@@ -8,14 +8,28 @@ CARET_LAUNCHER=build/install/caret-lang-prototype/bin/caret-lang-prototype
 
 expect_failure() {
   local source_file=$1
-  local expected_text=$2
   local output_file
   output_file="$CARET_TEST_TMP/$(basename "$source_file").out"
   if "$CARET_LAUNCHER" "$source_file" > "$output_file" 2>&1; then
     printf 'Expected failure succeeded: %s\n' "$source_file" >&2
     exit 1
   fi
-  grep -F "$expected_text" "$output_file" >/dev/null
+  local expected_file="${source_file%.caret}.expected"
+  diff -u "$expected_file" "$output_file"
+  if grep -F 'Exception' "$output_file" >/dev/null; then
+    printf 'Java exception leaked from: %s\n' "$source_file" >&2
+    exit 1
+  fi
+}
+
+expect_test_failure() {
+  local source_file=$1
+  local output_file="$CARET_TEST_TMP/$(basename "$source_file").out"
+  if "$CARET_LAUNCHER" test "$source_file" > "$output_file" 2>&1; then
+    printf 'Expected test failure succeeded: %s\n' "$source_file" >&2
+    exit 1
+  fi
+  diff -u "${source_file%.caret}.expected" "$output_file"
   if grep -F 'Exception' "$output_file" >/dev/null; then
     printf 'Java exception leaked from: %s\n' "$source_file" >&2
     exit 1
@@ -150,4 +164,32 @@ expect_failure examples/errors/non_callable_composition.caret 'Line 3, column 12
 expect_failure examples/errors/invalid_composition_arity.caret 'Line 3, column 24: Composition right operand must be a callable requiring exactly one argument'
 expect_failure examples/errors/nullary_composition.caret 'Line 3, column 12: Composition left operand must be a callable requiring at least one argument'
 expect_failure examples/errors/call_depth.caret 'Maximum Caret evaluation depth exceeded'
+expect_failure examples/errors/unexpected_character.caret unused
+expect_failure examples/errors/invalid_number.caret unused
+expect_failure examples/errors/unterminated_string.caret unused
+expect_failure examples/errors/invalid_unicode_form.caret unused
+expect_failure examples/errors/invalid_unicode_escape.caret unused
+expect_failure examples/errors/invalid_unicode_code_point.caret unused
+expect_failure examples/errors/unexpected_indent.caret unused
+expect_failure examples/errors/missing_function_body.caret unused
+expect_failure examples/errors/invalid_definition.caret unused
+expect_failure examples/errors/unclosed_delimiter.caret unused
+expect_failure examples/errors/non_finite_literal.caret unused
+expect_failure examples/errors/invalid_expression.caret unused
+expect_failure examples/errors/duplicate_parameter.caret unused
+expect_failure examples/errors/not_callable.caret unused
+expect_failure examples/errors/invalid_condition.caret unused
+expect_failure examples/errors/expected_number.caret unused
+expect_failure examples/errors/expected_string.caret unused
+expect_failure examples/errors/expected_sequence.caret unused
+expect_failure examples/errors/expected_dictionary.caret unused
+expect_failure examples/errors/invalid_dictionary_key.caret unused
+expect_failure examples/errors/invalid_field_target.caret unused
+expect_failure examples/errors/missing_reflected_field.caret unused
+expect_test_failure examples/errors/invalid_assertion.caret
+expect_failure examples/errors/incomplete_escape.caret unused
+expect_failure examples/errors/inconsistent_continuation_indent.caret unused
+expect_failure examples/errors/definition_in_continuation.caret unused
+expect_failure examples/errors/invalid_numbered_hole.caret unused
+expect_failure examples/errors/ambiguous_call_arity.caret unused
 printf 'All prototype tests passed.\n'

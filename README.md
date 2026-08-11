@@ -19,7 +19,8 @@ This is deliberately a language experiment, not a production compiler. [LANGUAGE
 describes both the implemented language sketch and the larger planned language. Features described
 there as planned are not necessarily available in this prototype. [PLAN.md](PLAN.md) gives the
 implementation roadmap, and [CONFORMANCE.md](CONFORMANCE.md) maps specification requirements to
-their implementation status and automated evidence.
+their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS.md) inventories
+every current diagnostic message variant and its exact fixture or focused test evidence.
 
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
 Contracts form derivation graphs and act as predicates, while ordinary functions provide behavior

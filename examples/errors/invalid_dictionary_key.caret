@@ -1,0 +1,1 @@
+print dictPut dictEmpty 1 2

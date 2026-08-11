@@ -133,6 +133,15 @@ final class ParserTest {
     }
 
     @Test
+    void rejectsExcessiveExpressionNesting() {
+        String source = "value = " + "(".repeat(20_000) + "1" + ")".repeat(20_000);
+        LangException error = assertThrows(LangException.class, () -> new Parser(source).parseProgram());
+        assertEquals(DiagnosticCatalog.PARSE_NESTING_DEPTH, error.catalogEntry());
+        assertEquals("Maximum expression nesting depth exceeded", error.detail());
+        assertEquals("Line 1, column 1: Maximum expression nesting depth exceeded", error.getMessage());
+    }
+
+    @Test
     void rejectsMissingConditionalTrueBranch() {
         LangException error = assertThrows(LangException.class,
                 () -> new Parser("value = true & ! false").parseProgram());

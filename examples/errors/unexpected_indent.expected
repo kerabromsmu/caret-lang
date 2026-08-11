@@ -1,0 +1,2 @@
+Error: Line 1, column 3: Unexpected indentation
+  print 1

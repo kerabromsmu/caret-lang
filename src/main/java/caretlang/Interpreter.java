@@ -6,7 +6,9 @@ import java.io.PrintStream;
 import java.util.*;
 
 final class Interpreter {
-    private static final int MAX_CALL_DEPTH = 1_000;
+    // Keep the language-owned guard below typical JVM stack limits so diagnostics do not depend on
+    // host stack size or whether a StackOverflowError happens first.
+    private static final int MAX_CALL_DEPTH = 256;
     private final Environment globals = new Environment(null);
     private final PrintStream output;
     private int callDepth;
