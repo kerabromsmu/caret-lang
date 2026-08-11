@@ -90,7 +90,7 @@ made = factory
 print made.answer
 print made.nothing
 print made.absent~
-field = #answer
+field = "answer"
 print made[field]
 print made["absent"]~
 
@@ -137,7 +137,7 @@ expect_failure examples/errors/reserved_binding.caret 'Line 1, column 1: Reserve
 expect_failure examples/errors/read_before_initialization.caret 'Line 1, column 9: Binding read before initialization: second'
 expect_failure examples/errors/unknown_name.caret 'Line 1, column 7: Unknown name: absent'
 expect_failure examples/errors/required_missing_field.caret 'Line 5, column 7: Scope has no exported binding: absent'
-expect_failure examples/errors/invalid_dynamic_key.caret 'Line 5, column 7: Dynamic field name must be a name or string'
+expect_failure examples/errors/invalid_dynamic_key.caret 'Line 5, column 7: Dynamic field name must be a string'
 expect_failure examples/errors/division_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/remainder_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/non_finite_result.caret 'Line 1, column 7: Numeric result is not finite'

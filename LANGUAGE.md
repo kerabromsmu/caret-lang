@@ -10,7 +10,6 @@ This file describes the prototype as it currently behaves, not a final language 
 true false  Boolean
 ?           null
 ~           missing
-#count      name value
 ```
 
 Null and missing are separate runtime values.
@@ -28,8 +27,8 @@ Strings recognize `\\`, `\"`, `\n`, `\r`, `\t`, and Unicode code-point escapes w
 
 ## Comments
 
-`//` introduces a line comment. `#name` is always a name value, including when it appears at the
-beginning of a line; `#` is not a comment marker.
+`//` introduces a line comment. Field names and other identifiers represented as data use ordinary
+strings rather than a separate name-literal syntax.
 
 ## Diagnostics
 
@@ -142,7 +141,7 @@ result = (
 )
 
 value = scope[
-  #field
+  "field"
 ]~
 ```
 
@@ -238,13 +237,12 @@ Scopes are immutable in this prototype.
 ## Dynamic lookup
 
 ```text
-field = #count
+field = "count"
 a[field]~
-a[#count]~
 a["count"]~
 ```
 
-Dynamic names can be name values or strings. The `~` suffix makes a missing binding a normal result instead of an error.
+Dynamic names are strings. The `~` suffix makes a missing binding a normal result instead of an error.
 
 ## Reflection
 
@@ -326,8 +324,8 @@ dictHas dictionary key
 dictKeys dictionary
 ```
 
-Dictionary keys accept strings and name values as the same logical key space, and key iteration
-preserves insertion order. `dictHas` distinguishes an absent key from a present key whose value is
+Dictionary keys are strings, and key iteration preserves insertion order. `dictHas` distinguishes
+an absent key from a present key whose value is
 `~`.
 Collection literal syntax is not required for the initial self-interpreter.
 
@@ -2385,7 +2383,7 @@ and encodes such a value back into the corresponding representation.
 
 Field names are ordinary strings.
 
-Do not require `#name` syntax.
+No separate name-literal syntax is required.
 
 ---
 
@@ -4797,7 +4795,7 @@ C  Context
 A  Active state
 T  Trigger
 E  Effect
-N  Name
+N  Name (string-literal ID)
 ```
 
 All CATEN components are optional.
@@ -4820,7 +4818,7 @@ capture = rule
   E
     move selectedPiece target
     destroy targetPiece
-  N capture
+  N "capture"
 ```
 
 The components are:
@@ -4830,7 +4828,7 @@ C  context in which the rule can apply
 A  whether the rule is active
 T  condition or event that triggers application
 E  changes caused by the rule
-N  optional identity
+N  optional string-literal ID
 ```
 
 The canonical documentation order is CATEN.
@@ -5136,13 +5134,14 @@ An effect involving networking, file access, GUI state, or other externally obse
 
 ## Name
 
-`N` optionally identifies a rule.
+`N` optionally identifies a rule with a string literal. It does not accept a bare identifier or an
+arbitrary runtime string expression.
 
 Example:
 
 ```caret
 rule
-  N capture
+  N "capture"
   T validCapture
   E capturePiece
 ```
@@ -5158,16 +5157,16 @@ capture = rule
 the implementation should normally infer:
 
 ```text
-N capture
+N "capture"
 ```
 
-unless another explicit identity is supplied.
+unless another explicit string-literal ID is supplied.
 
 Binding name and rule identity are conceptually distinct:
 
 ```caret
 r = rule
-  N capture
+  N "capture"
   ...
 ```
 
@@ -6156,7 +6155,7 @@ C Context
 A Active
 T Trigger
 E Effect
-N Name
+N Name (string-literal ID)
 ```
 
 3. Persistent up/down contexts.
@@ -6653,8 +6652,8 @@ plugin = sandbox source environment
 The host changes the exposed environment atomically:
 
 ```caret
-expose environment #clock restrictedClock
-hide environment #filesystem
+expose environment "clock" restrictedClock
+hide environment "filesystem"
 ```
 
 Every sandbox sharing the handle observes a completed update on its next boundary lookup. Separate
@@ -6669,7 +6668,7 @@ Exports are accessed like imported-module exports, and all plugin metadata is re
 
 ```caret
 plugin.function arguments
-plugin[#dynamic]~
+plugin["dynamic"]~
 @plugin.kind
 @plugin.state
 @plugin.names
@@ -8687,8 +8686,8 @@ diagnostics. The planned standard library defines an exact outer error shape equ
 ```caret
 ErrorShape =
   template [
-    ^code (Name) _
-    ^phase (Name) _
+    ^code (String) _
+    ^phase (String) _
     ^message (String) _
     ^location _
     ^related (Collection) _

@@ -70,7 +70,7 @@ final class MainTest {
                 print source.count~
                 print source.enabled~
 
-                field = #count
+                field = "count"
                 print source[field]~
                 print @source
                 """);
@@ -188,7 +188,7 @@ final class MainTest {
     }
 
     @Test
-    void replKeepsStateAndStopsAtExitCommand() throws Exception {
+    void replKeepsStateAndStopsAtExitCommand() {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         ByteArrayOutputStream error = new ByteArrayOutputStream();
         int exitCode = Main.run(
@@ -211,7 +211,7 @@ final class MainTest {
         return run(program.toString());
     }
 
-    private Invocation run(String... args) throws Exception {
+    private Invocation run(String... args) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         ByteArrayOutputStream error = new ByteArrayOutputStream();
         int exitCode = Main.run(

@@ -1,7 +1,7 @@
 // Caret-native tests for every successfully executable feature in the prototype.
 // Run with: ./run.sh test examples/implemented_features_test.caret
 
-// Scalar values, name values, type inspection, and string escapes.
+// Scalar values, type inspection, and string escapes.
 assertEqual "integer number" 42 42
 assertEqual "decimal number" 3.5 3.5
 assertEqual "string value" "text" "text"
@@ -10,10 +10,7 @@ assertEqual "Boolean false" false false
 assertEqual "null value" ? ?
 assertEqual "missing value" ~ ~
 assertEqual "null and missing differ" (? == ~) false
-assertEqual "name value" #field #field
-assertEqual "line-start name value" #lineStartName #lineStartName
 assertEqual "number type" (type 42) "Number"
-assertEqual "name type" (type #field) "Name"
 assertEqual "null type" (type ?) "Null"
 assertEqual "escaped string" "quote: \" slash: \\ tab: \t smile: \u{1F642}" "quote: \" slash: \\ tab: \t smile: 🙂"
 
@@ -91,17 +88,17 @@ makePerson name age =
 
 person = makePerson "Ada" 36
 samePerson = makePerson "Ada" 36
-fieldName = #name
+fieldName = "name"
 
 assertEqual "required exported field" person.name "Ada"
 assertEqual "second exported field" person.age 36
 assertEqual "private binding is hidden" person.privateAge~ ~
 assertEqual "optional absent field" person.phone~ ~
 assert "exported scopes compare structurally" (person == samePerson)
-assertEqual "dynamic name lookup" person[fieldName]~ "Ada"
+assertEqual "dynamic field lookup" person[fieldName]~ "Ada"
 assertEqual "dynamic string lookup" person["age"]~ 36
-assertEqual "required dynamic lookup" person[#age] 36
-assertEqual "optional dynamic lookup" person[#phone]~ ~
+assertEqual "required dynamic lookup" person["age"] 36
+assertEqual "optional dynamic lookup" person["phone"]~ ~
 
 // Reflection exposes only public metadata and does not invoke functions.
 assertEqual "scope reflection kind" (@person).kind "Scope"
@@ -119,7 +116,6 @@ assertEqual "function reference optional metadata" factorialReference.absent~ ~
 assertEqual "null reflection kind" (@?).kind "Null"
 assertEqual "missing reflection kind" (@~).kind "Missing"
 assertEqual "number reflection kind" (@42).kind "Number"
-assertEqual "name reflection kind" (@#field).kind "Name"
 
 // Explicit grouping and dynamic lookup may span physical lines.
 multiline = (
@@ -128,7 +124,7 @@ multiline = (
     22
 )
 multilineField = person[
-  #name
+  "name"
 ]~
 
 assertEqual "multiline grouped call" multiline 42
@@ -182,24 +178,24 @@ assert "nested numeric equality follows scalar equality" (seqAdd seqEmpty (-0) =
 assertEqual "sequence reflection kind" (@sequence).kind "Sequence"
 assertEqual "sequence reflection size" (@sequence).size 2
 
-// Persistent insertion-ordered dictionaries with normalized name/string keys.
+// Persistent insertion-ordered dictionaries with string keys.
 emptyDictionary = dictEmpty
-oneEntry = dictPut emptyDictionary #present 1
+oneEntry = dictPut emptyDictionary "present" 1
 dictionary = dictPut oneEntry "missingValue" ~
-sameDictionary = dictPut (dictPut dictEmpty "present" 1) #missingValue ~
-replacedDictionary = dictPut dictionary #present 2
+sameDictionary = dictPut (dictPut dictEmpty "present" 1) "missingValue" ~
+replacedDictionary = dictPut dictionary "present" 2
 
-assertEqual "empty dictionary remains unchanged" (dictHas emptyDictionary #present) false
-assert "dictionary has string-normalized key" (dictHas dictionary "present")
-assert "dictionary distinguishes present missing value" (dictHas dictionary #missingValue)
-assertEqual "dictionary name lookup" (dictGet dictionary #present) 1
+assertEqual "empty dictionary remains unchanged" (dictHas emptyDictionary "present") false
+assert "dictionary has key" (dictHas dictionary "present")
+assert "dictionary distinguishes present missing value" (dictHas dictionary "missingValue")
+assertEqual "dictionary lookup" (dictGet dictionary "present") 1
 assertEqual "dictionary present missing lookup" (dictGet dictionary "missingValue") ~
-assertEqual "dictionary absent lookup" (dictGet dictionary #absent) ~
-assertEqual "dictionary insertion-ordered keys" (dictKeys dictionary) (seqAdd (seqAdd seqEmpty #present) #missingValue)
-assertEqual "dictionary replacement changes the new value" (dictGet replacedDictionary #present) 2
+assertEqual "dictionary absent lookup" (dictGet dictionary "absent") ~
+assertEqual "dictionary insertion-ordered keys" (dictKeys dictionary) (seqAdd (seqAdd seqEmpty "present") "missingValue")
+assertEqual "dictionary replacement changes the new value" (dictGet replacedDictionary "present") 2
 assertEqual "dictionary replacement preserves key order" (dictKeys replacedDictionary) (dictKeys dictionary)
-assertEqual "earlier dictionary remains unchanged" (dictGet dictionary #present) 1
-assert "nested dictionary and sequence equality is structural" (dictPut dictEmpty #nested sequence == dictPut dictEmpty "nested" sequence)
+assertEqual "earlier dictionary remains unchanged" (dictGet dictionary "present") 1
+assert "nested dictionary and sequence equality is structural" (dictPut dictEmpty "nested" sequence == dictPut dictEmpty "nested" sequence)
 assert "dictionary structural equality" (dictionary == sameDictionary)
 assertEqual "dictionary reflection kind" (@dictionary).kind "Dictionary"
 assertEqual "dictionary reflection size" (@dictionary).size 2

@@ -100,12 +100,6 @@ final class ParserTest {
     }
 
     @Test
-    void parsesNameValueAtBeginningOfLine() {
-        Literal literal = assertInstanceOf(Literal.class, expression("#count"));
-        assertEquals(new Value.Name("count"), literal.value());
-    }
-
-    @Test
     void multilineFunctionSpanCoversItsBody() {
         List<Stmt> program = new Parser("make n =\n  hidden = n\n  ^value = hidden\n").parseProgram();
         FunctionDef function = assertInstanceOf(FunctionDef.class, program.getFirst());
@@ -143,7 +137,7 @@ final class ParserTest {
         assertTrue(field.getMessage().contains("Expected field name"));
 
         LangException dynamic = assertThrows(LangException.class,
-                () -> new Parser("value = scope[#name").parseProgram());
+                () -> new Parser("value = scope[\"name\"").parseProgram());
         assertTrue(dynamic.getMessage().contains("Expected ']'"));
     }
 
@@ -307,7 +301,7 @@ final class ParserTest {
     void continuationIndentationDoesNotCreateABlock() {
         List<Stmt> program = new Parser("""
                 result = source[
-                    #field
+                    "field"
                   ]~
                 next = 2
                 """).parseProgram();

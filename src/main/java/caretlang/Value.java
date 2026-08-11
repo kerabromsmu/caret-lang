@@ -6,7 +6,7 @@ import java.util.function.Function;
 
 @SuppressWarnings("NullableProblems")
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Name, Value.Reflective, Value.Seq, Value.Dict, Value.Callable {
+        Value.Reflective, Value.Seq, Value.Dict, Value.Callable {
 
     record Argument(Value value, SourceSpan span) {
         public Argument {
@@ -28,10 +28,6 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
     record Bool(boolean value) implements Value {
         @Override public String toString() { return Boolean.toString(value); }
-    }
-
-    record Name(String value) implements Value {
-        @Override public String toString() { return "#" + value; }
     }
 
     enum Null implements Value {
@@ -191,7 +187,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Seq builtKeys = new Seq(List.of());
             for (Map.Entry<String, Value> entry : checked.entrySet()) {
                 builtRoot = putNode(builtRoot, entry.getKey(), entry.getValue());
-                builtKeys = builtKeys.appended(new Name(entry.getKey()));
+                builtKeys = builtKeys.appended(new Str(entry.getKey()));
             }
             this.root = builtRoot;
             this.keys = builtKeys;
@@ -209,7 +205,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
             LinkedHashMap<String, Value> combined = new LinkedHashMap<>();
             for (Value key : keys.values()) {
-                String name = ((Name) key).value();
+                String name = ((Str) key).value();
                 combined.put(name, find(name).orElseThrow());
             }
             result = Collections.unmodifiableMap(combined);
@@ -231,7 +227,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Objects.requireNonNull(key);
             Objects.requireNonNull(value);
             boolean present = containsKey(key);
-            return new Dict(putNode(root, key, value), present ? keys : keys.appended(new Name(key)));
+            return new Dict(putNode(root, key, value), present ? keys : keys.appended(new Str(key)));
         }
 
         public boolean containsKey(String key) { return find(key).isPresent(); }

@@ -30,10 +30,10 @@ final class LanguageConformanceTest {
                 print textAt "a" 2
                 print textSlice "abc" 2 1
                 print textNumber "not-a-number"
-                values = dictPut dictEmpty #present ~
+                values = dictPut dictEmpty "present" ~
                 print dictHas values "present"
-                print dictGet values #present
-                print dictHas values #absent
+                print dictGet values "present"
+                print dictHas values "absent"
                 """));
     }
 

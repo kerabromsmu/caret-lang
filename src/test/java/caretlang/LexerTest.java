@@ -8,14 +8,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class LexerTest {
     @Test
-    void recordsTokenSpansAndRecognizesLineStartName() {
-        List<Lexer.Token> tokens = Lexer.lex("#count // ignored", 20, 3, 5);
-
-        Lexer.Token name = tokens.getFirst();
-        assertEquals(Lexer.Kind.NAME, name.kind());
-        assertEquals("count", name.text());
-        assertEquals(new SourcePosition(20, 3, 5), name.span().start());
-        assertEquals(new SourcePosition(26, 3, 11), name.span().end());
+    void rejectsRemovedNameLiteralSyntax() {
+        LangException error = assertThrows(LangException.class,
+                () -> Lexer.lex("#count", 20, 3, 5));
+        assertEquals(Diagnostic.Codes.LEX_UNEXPECTED_CHARACTER, error.diagnostic().code());
+        assertEquals(new SourcePosition(20, 3, 5), error.span().start());
     }
 
     @Test
@@ -44,13 +41,6 @@ final class LexerTest {
         LangException error = assertThrows(LangException.class, () -> Lexer.lex("  \"unfinished"));
         assertEquals(3, error.span().start().column());
         assertTrue(error.getMessage().contains("Unterminated string"));
-    }
-
-    @Test
-    void reportsNameLiteralsWithoutNames() {
-        LangException error = assertThrows(LangException.class, () -> Lexer.lex("#"));
-        assertEquals(1, error.span().start().column());
-        assertTrue(error.getMessage().contains("Expected a name after '#'"));
     }
 
     @Test

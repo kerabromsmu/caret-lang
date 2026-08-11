@@ -1,6 +1,6 @@
 // Every currently implemented Caret language feature in one runnable program.
 
-// Values: finite numbers, strings, Booleans, null, missing, and name values.
+// Values: finite numbers, strings, Booleans, null, and missing.
 print 42
 print 3.5
 print "text"
@@ -8,10 +8,7 @@ print true
 print false
 print ?
 print ~
-print #field
-#lineStartName
 print type 42
-print type #field
 print type ?
 
 // Strings support standard escapes and Unicode code-point escapes.
@@ -99,12 +96,12 @@ print person.privateAge~
 print person.phone~
 print (person == samePerson)
 
-// Name/string dynamic lookup and safe missing lookup.
-fieldName = #name
+// String dynamic lookup and safe missing lookup.
+fieldName = "name"
 print person[fieldName]~
 print person["age"]~
-print person[#age]
-print person[#phone]~
+print person["age"]
+print person["phone"]~
 
 // Reflection exposes value kind and public metadata without invoking functions.
 print (@person).kind
@@ -122,7 +119,6 @@ print factorialReference.absent~
 print (@?).kind
 print (@~).kind
 print (@42).kind
-print (@#field).kind
 
 // Grouped expressions and dynamic lookups may span physical lines.
 multiline = (
@@ -132,7 +128,7 @@ multiline = (
 )
 print multiline
 print person[
-  #name
+  "name"
 ]~
 
 // More-indented lines are ungrouped call arguments; nested indentation creates nested calls.
@@ -184,21 +180,21 @@ print (seqAdd seqEmpty (-0) == seqAdd seqEmpty 0)
 print (@sequence).kind
 print (@sequence).size
 
-// Dictionaries are immutable, ordered, and normalize string/name keys.
+// Dictionaries are immutable, ordered, and use string keys.
 emptyDictionary = dictEmpty
-oneEntry = dictPut emptyDictionary #present 1
+oneEntry = dictPut emptyDictionary "present" 1
 dictionary = dictPut oneEntry "missingValue" ~
-replacedDictionary = dictPut dictionary #present 2
-print dictHas emptyDictionary #present
+replacedDictionary = dictPut dictionary "present" 2
+print dictHas emptyDictionary "present"
 print dictHas dictionary "present"
-print dictHas dictionary #missingValue
-print dictGet dictionary #present
+print dictHas dictionary "missingValue"
+print dictGet dictionary "present"
 print dictGet dictionary "missingValue"
-print dictGet dictionary #absent
+print dictGet dictionary "absent"
 print dictKeys dictionary
-print dictGet replacedDictionary #present
+print dictGet replacedDictionary "present"
 print dictKeys replacedDictionary
-print (dictPut dictEmpty #nested sequence == dictPut dictEmpty "nested" sequence)
+print (dictPut dictEmpty "nested" sequence == dictPut dictEmpty "nested" sequence)
 print (@dictionary).kind
 print (@dictionary).size
 print (@dictionary).names

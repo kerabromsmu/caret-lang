@@ -271,8 +271,9 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 - Add persistent `Context` values, idempotent `raise`/`lower`, and transient `rise`/`fall` fronts over
   Boolean context expressions.
-- Add first-class `Rule` values with unique optional CATEN clauses, defaults, inferred/explicit name,
-  runtime active state, edge-trigger history, effect block, and implicit application context.
+- Add first-class `Rule` values with unique optional CATEN clauses, defaults, inferred or explicit
+  string-literal IDs for `N`, runtime active state, edge-trigger history, effect block, and implicit
+  application context.
 - Implement gate semantics: `C` and `A` permit application but never replay a trigger missed while
   gated. Require `C` and `T` purity; propagate ordinary effects from `E`.
 - Implement `activate`/`deactivate`, implicit context rise/effect/fall, reevaluation after each effect,

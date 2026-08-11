@@ -30,7 +30,7 @@ final class InterpreterTest {
                 print value.first
                 print value.second
                 print value.absent~
-                print value[#first]~
+                print value["first"]~
                 print (@value).names
                 """;
 
@@ -274,7 +274,7 @@ final class InterpreterTest {
     }
 
     @Test
-    void dynamicLookupRequiresANameOrString() {
+    void dynamicLookupRequiresAString() {
         LangException error = assertThrows(LangException.class, () -> execute("""
                 make =
                   ^value = 1
@@ -283,7 +283,7 @@ final class InterpreterTest {
                 """));
         assertEquals(4, error.span().start().line());
         assertEquals(7, error.span().start().column());
-        assertTrue(error.getMessage().contains("Dynamic field name must be a name or string"));
+        assertTrue(error.getMessage().contains("Dynamic field name must be a string"));
     }
 
     @Test
@@ -376,26 +376,26 @@ final class InterpreterTest {
                 print seqGet values 5
 
                 base = dictEmpty
-                withFirst = dictPut base #first 1
+                withFirst = dictPut base "first" 1
                 complete = dictPut withFirst "missing" ~
-                print dictHas base #first
+                print dictHas base "first"
                 print dictHas complete "missing"
-                print dictGet complete #missing
-                print dictGet complete #first
+                print dictGet complete "missing"
+                print dictGet complete "first"
                 print (@complete).names
                 """));
     }
 
     @Test
     void persistentCollectionsKeepOlderValuesAndDictionaryReplacementOrder() {
-        assertEquals("[1]\n[1, 2]\n[#first, #second]\n22\n", execute("""
+        assertEquals("[1]\n[1, 2]\n[first, second]\n22\n", execute("""
                 first = seqAdd seqEmpty 1
                 second = seqAdd first 2
                 print first
                 print second
-                dictionary = dictPut (dictPut (dictPut dictEmpty #first 1) #second 2) #first 22
+                dictionary = dictPut (dictPut (dictPut dictEmpty "first" 1) "second" 2) "first" 22
                 print dictKeys dictionary
-                print dictGet dictionary #first
+                print dictGet dictionary "first"
                 """));
     }
 
@@ -405,7 +405,7 @@ final class InterpreterTest {
                 left = seqAdd seqEmpty 1
                 right = seqAdd seqEmpty 1
                 print left == right
-                first = dictPut dictEmpty #value left
+                first = dictPut dictEmpty "value" left
                 second = dictPut dictEmpty "value" right
                 print first == second
                 print (-0 == 0)
@@ -414,7 +414,7 @@ final class InterpreterTest {
 
         for (String container : List.of(
                 "seqAdd seqEmpty identity",
-                "dictPut dictEmpty #callable identity",
+                "dictPut dictEmpty \"callable\" identity",
                 "make identity")) {
             assertDiagnostic("""
                     identity value = value
@@ -441,7 +441,7 @@ final class InterpreterTest {
                   ^answer = 42
                 scope = make
                 print scope[
-                  #answer
+                  "answer"
                 ]~
                 """));
     }

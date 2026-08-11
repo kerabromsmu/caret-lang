@@ -208,12 +208,10 @@ final class Interpreter {
         if (expr instanceof DynamicField(Expr target1, Expr name1, boolean optional, SourceSpan ignored)) {
             Value target = evalInner(target1, env, resolution);
             Value name = evalInner(name1, env, resolution);
-            String fieldName = switch (name) {
-                case Value.Name n -> n.value();
-                case Value.Str text -> text.value();
-                default -> throw runtime(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME,
-                        "Dynamic field name must be a name or string, got: " + name);
-            };
+            if (!(name instanceof Value.Str(String fieldName))) {
+                throw runtime(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME,
+                        "Dynamic field name must be a string, got: " + name);
+            }
             return field(target, fieldName, optional);
         }
         if (expr instanceof Reflect(Expr target, SourceSpan ignored)) {
@@ -478,7 +476,7 @@ final class Interpreter {
             return new Value.Bool(key != null && dictionary(args.get(0)).containsKey(key));
         }));
         globals.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> new Value.Seq(
-                dictionary(args.getFirst()).entries().keySet().stream().map(Value.Name::new).toList())));
+                dictionary(args.getFirst()).entries().keySet().stream().map(Value.Str::new).toList())));
     }
 
     private void installTestBuiltins(TestReporter reporter) {
@@ -540,18 +538,14 @@ final class Interpreter {
     }
 
     private String dictionaryKey(Value.Argument argument) {
-        return switch (argument.value()) {
-            case Value.Name name -> name.value();
-            case Value.Str text -> text.value();
-            default -> null;
-        };
+        return argument.value() instanceof Value.Str(String text) ? text : null;
     }
 
     private String requiredDictionaryKey(Value.Argument argument) {
         String key = dictionaryKey(argument);
         if (key == null) {
             throw runtime(Diagnostic.Codes.INVALID_DICTIONARY_KEY,
-                    "Dictionary key must be a name or string, got: " + argument.value(), argument.span());
+                    "Dictionary key must be a string, got: " + argument.value(), argument.span());
         }
         return key;
     }
@@ -578,7 +572,6 @@ final class Interpreter {
             case Value.Num ignored -> { }
             case Value.Str ignored -> { }
             case Value.Bool ignored -> { }
-            case Value.Name ignored -> { }
             case Value.Null ignored -> { }
             case Value.Missing ignored -> { }
             case Value.Scope scope -> {
@@ -602,7 +595,6 @@ final class Interpreter {
             case Value.Num ignored -> "Number";
             case Value.Str ignored -> "String";
             case Value.Bool ignored -> "Boolean";
-            case Value.Name ignored -> "Name";
             case Value.Null ignored -> "Null";
             case Value.Missing ignored -> "Missing";
             case Value.Scope ignored -> "Scope";

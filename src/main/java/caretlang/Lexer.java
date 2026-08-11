@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class Lexer {
-    enum Kind { NUMBER, STRING, IDENT, NAME, SYMBOL, EOF }
+    enum Kind { NUMBER, STRING, IDENT, SYMBOL, EOF }
     record Token(Kind kind, String text, SourceSpan span) {}
     record LogicalLine(int indent, String text, int number, int offset, int column, SourceSpan span) {}
     private record PhysicalLine(int start, int end, int number) {}
@@ -22,21 +22,6 @@ final class Lexer {
             if (Character.isWhitespace(c)) { i++; continue; }
             if (c == '/' && i + 1 < source.length() && source.charAt(i + 1) == '/') {
                 while (i < source.length() && source.charAt(i) != '\n' && source.charAt(i) != '\r') i++;
-                continue;
-            }
-            if (c == '#') {
-                int tokenStart = i;
-                int start = ++i;
-                if (i >= source.length() || (!Character.isLetter(source.charAt(i)) && source.charAt(i) != '_'))
-                    throw error(Diagnostic.Codes.LEX_INVALID_NAME, "Expected a name after '#'",
-                            positions, tokenStart, i);
-                i++;
-                while (i < source.length()) {
-                    char d = source.charAt(i);
-                    if (!Character.isLetterOrDigit(d) && d != '_') break;
-                    i++;
-                }
-                tokens.add(token(Kind.NAME, source.substring(start, i), positions, tokenStart, i));
                 continue;
             }
             if (c == '"') {

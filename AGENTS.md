@@ -127,9 +127,8 @@ mixed in one partial expression.
 ### Reflection
 
 ```caret
-#name          // a name value
 @value         // reflective view
-value[#name]~  // safe dynamic lookup
+value["name"]~ // safe dynamic lookup
 ```
 
 Reflection exposes only public or exported bindings.

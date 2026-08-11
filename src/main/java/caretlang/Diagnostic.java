@@ -10,7 +10,6 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         private Codes() {}
 
         static final String LEX_UNEXPECTED_CHARACTER = "LEX_UNEXPECTED_CHARACTER";
-        static final String LEX_INVALID_NAME = "LEX_INVALID_NAME";
         static final String LEX_INVALID_NUMBER = "LEX_INVALID_NUMBER";
         static final String LEX_UNTERMINATED_STRING = "LEX_UNTERMINATED_STRING";
         static final String LEX_INVALID_ESCAPE = "LEX_INVALID_ESCAPE";

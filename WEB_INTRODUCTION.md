@@ -137,11 +137,11 @@ for simple cases.
 
 ## Reflection belongs to the language
 
-Caret treats reflection as a normal language operation. A name value begins with `#`, while `@`
-produces a reflective view:
+Caret treats reflection as a normal language operation. Field names represented as data are ordinary
+strings, while `@` produces a reflective view:
 
 ```caret
-field = #name
+field = "name"
 print person[field]~
 print (@person).kind
 print (@person).names
@@ -159,10 +159,10 @@ produce new values rather than mutating existing ones, and equality is structura
 
 ```caret
 items = seqAdd (seqAdd seqEmpty "first") "second"
-settings = dictPut dictEmpty #theme "dark"
+settings = dictPut dictEmpty "theme" "dark"
 
 print seqGet items 0
-print dictGet settings #theme
+print dictGet settings "theme"
 ```
 
 The planned language generalizes these primitives into a single collection model. One `[...]`

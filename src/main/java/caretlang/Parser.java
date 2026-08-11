@@ -418,7 +418,6 @@ final class Parser {
             }
             if (matchKind(Kind.NUMBER)) return numberLiteral(previous());
             if (matchKind(Kind.STRING)) return new Literal(new Value.Str(previous().text()), previous().span());
-            if (matchKind(Kind.NAME)) return new Literal(new Value.Name(previous().text()), previous().span());
             if (matchIdent("true")) return new Literal(new Value.Bool(true), previous().span());
             if (matchIdent("false")) return new Literal(new Value.Bool(false), previous().span());
             if (match("?")) return new Literal(Value.Null.INSTANCE, previous().span());
@@ -464,7 +463,7 @@ final class Parser {
         }
 
         private boolean canStartAtom(Token token) {
-            if (token.kind() == Kind.NUMBER || token.kind() == Kind.STRING || token.kind() == Kind.NAME) return true;
+            if (token.kind() == Kind.NUMBER || token.kind() == Kind.STRING) return true;
             if (token.kind() == Kind.IDENT) {
                 return LanguageSyntax.canStartApplicationArgument(token.text());
             }

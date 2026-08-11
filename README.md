@@ -3,7 +3,7 @@
 Caret is an experimental concise programming language implemented as a Java 21 tree-walking
 interpreter. The current prototype supports:
 
-- finite numbers, strings, Booleans, null (`?`), missing (`~`), and name values (`#name`);
+- finite numbers, strings, Booleans, null (`?`), and missing (`~`);
 - indentation-delimited functions, lexical closures, direct and mutual recursion;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
@@ -189,8 +189,8 @@ For example:
 Error: Line 1, column 7: Unknown name: absent
 ```
 
-Line comments start with `//`. A leading `#` is not a comment marker: `#count` is a name value even
-when it appears at the beginning of a line.
+Line comments start with `//`. Field names represented as data use ordinary strings; Caret has no
+separate name-literal syntax.
 
 ## Built-ins
 
@@ -202,13 +202,13 @@ The ordinary runtime provides:
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
 
 Invalid text indexes, sequence indexes, slices, and numeric text conversions return `~`. Dictionary
-keys may be strings or name values; `dictHas` distinguishes an absent key from a present key whose
+keys are strings; `dictHas` distinguishes an absent key from a present key whose
 value is `~`.
 
 ## Reflection currently implemented
 
 ```text
-field = #count
+field = "count"
 print source[field]~
 print (@source).kind
 print (@source).names
