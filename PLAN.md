@@ -45,12 +45,12 @@ baseline.
   stable diagnostic phases/codes/locations alongside the existing core suites.
 - The redesigned contract/derivation, functional-dispatch, and universal-collection model is
   reconciled across the public introduction, conformance matrix, and this roadmap.
-- The root-reification and sandbox model is inventoried with explicit blockers for syntax, metadata,
-  canonicalization, execution semantics, and capability projection.
+- Root/module reification, canonical code equivalence, sandbox construction/lifecycle, SIMD
+  grouping, general choices, unordered object traversal, and the initial JVM ABI are specified.
 - `LANGUAGE.md` records the resolved infix, multiline, function-reference/result-contract,
   persistent state/object, module, bytes, contract, collection, and JVM backend decisions.
-- Remaining open syntax or observable semantics are explicit `unresolved` conformance rows and may
-  not be invented during implementation.
+- The remaining open result templates and non-portable external serialization are explicit
+  `unresolved` conformance rows and may not be invented during implementation.
 
 ## Phase 1 — Front end, binding semantics, and unified callables
 
@@ -204,14 +204,16 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Phase 6 — SIMD values and lifted execution
 
-- Introduce portable SIMD scalar/lane types and Boolean masks with explicit lane counts/contracts.
+- Introduce fixed-arity `Simd native Scalar` and `Simd lanes Scalar` contracts and Boolean masks.
 - Lift supported pure numeric scalar operations and functions lane-wise. Implement mask selection so
   vector conditionals do not inherit scalar lazy-branch semantics incorrectly.
 - Implement explicit `::` SIMD application as a semantic requirement: either produce verified SIMD
   execution or a clear compile-time diagnostic explaining impurity, unsupported operations, lane
   mismatch, or target limitations.
 - Support composition, partial application, lambda mapping, and reductions using the same callable
-  metadata. Specify reduction order and floating-point reproducibility.
+  metadata. Implement inherited environment-scoped `simdOption grouping`, defaulting to
+  language-defined `pairwise` and allowing target-dependent `hardware`; keep strict left grouping
+  available through scalar `fold`.
 - Add aligned/unaligned load/store lowering internally while exposing ordinary collection APIs;
   provide a portable fallback only where it preserves the explicit `::` contract.
 - Test multiple lane widths and hardware capability profiles in interpreter/emulation and compiler
@@ -222,7 +224,8 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Add immutable `Format` values representing bidirectional relations plus explicit structured
   success/failure results. Implement empty formats and ordinary functional construction.
 - Implement primitive byte/integer formats, `field format "name"`, constants/signatures, nested
-  formats, fixed/prior-field repetition, conditions, choices, constraints, and `>>` composition.
+  formats, fixed/prior-field repetition, conditions, general `selector ==` choices, constraints,
+  and `>>` composition.
 - Decode structured formats into ordinary collections and encode compatible collections, resolving earlier
   fields and derivable values consistently in both directions.
 - Implement `decode`, `encode`, and pure explicit `codec decode encode format`; distinguish
@@ -284,18 +287,26 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Give file execution, imports, tests, and REPL sessions an explicit execution-environment object
   containing the visible root, code snapshot, libraries, language capabilities, and runtime
   capabilities. Do not derive Caret authority from process-global Java state.
-- Implement the settled `@root` syntax as an environment-relative reference. Preserve ordinary
-  export/privacy rules and filter every root/code descriptor through the current environment.
+- Implement reserved metadata-only `@root` and `@module` reflective primaries. Make them equal only
+  in the root module, keep their descriptors non-callable, and preserve ordinary export authority
+  even though visible module code includes private semantic declarations.
 - Reify analyzed source as language-owned `Code`/`CodeElement` values with stable public descriptors
   for bindings, functions, parameters, contracts, expressions, imports, and later constructs.
-- Implement canonical code serialization only after the public code schema and equivalence rules are
-  settled. Require parse/serialize/parse structural equivalence and a canonical quine fixture.
+- Implement canonical code serialization with alpha-normalized private names, proven-safe ordering,
+  logical import paths, portable external descriptors, declared dependency resolution, and no
+  source metadata. Require parse/serialize/parse structural equivalence and canonical quine/module
+  fixtures; first resolve serialization of host capabilities without portable identities.
 
 ## Phase 10 — Sandboxes and capability isolation
 
-- Implement the settled `sandbox` operation using a child execution environment with a substituted
-  root, selected libraries, language-feature permissions, and explicit runtime capabilities. Keep
-  normal imports semantically distinct.
+- Implement `sandbox source environment` for module paths and semantic `Code`, returning a stable
+  `Sandbox` handle backed by a `SandboxEnvironment`. Keep normal imports semantically distinct and
+  evaluated module caches private to each environment generation.
+- Implement atomic `expose`/`hide`, current-environment lookup at every boundary operation, and
+  bounded authority inheritance for nested environment handles.
+- Implement effectful `terminate`, `unload`, and stop-first `reload`. Discard resumable state,
+  invalidate all old-generation references without rebinding, preserve copied immutable values,
+  and leave a failed reload unloaded but retryable from retained configuration.
 - Support direct, filtered, and virtual capabilities. Treat effect declarations as descriptions,
   never authority grants, and report unavailable authority through the settled language failure
   model.
@@ -314,8 +325,11 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Define a lowered typed/effect-checked IR shared with the interpreter. Preserve source maps and
   diagnostic spans through closure conversion, pattern/conditional lowering, cycles, formats, SIMD,
   and rule scheduling.
-- Implement bytecode or the target chosen in Phase 0, a runtime ABI for all Caret value kinds, module
-  linking, and executable CLI commands. Compiled and interpreted programs must share observable
+- Implement Java 21-compatible bytecode behind opaque generated class names, a documented embedding
+  facade, and a versioned runtime ABI that rejects incompatible artifacts and requires recompilation.
+  Keep the semantic module/interface model backend-independent for future non-JVM and self-hosted
+  implementations. Cover all Caret value kinds, module linking, and executable CLI commands.
+  Compiled and interpreted programs must share observable
   values, evaluation order, missing/null behavior, errors, effects, environment-relative reflection,
   code visibility, and sandbox authority boundaries.
 - Add differential tests that run every conformance example in both modes and compare stdout,

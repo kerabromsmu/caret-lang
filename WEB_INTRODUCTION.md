@@ -178,15 +178,18 @@ prototype yet.
 
 ## Environment-relative reflection
 
-Caret plans to let programs reflect on the environment visible to them through `@root`. Its code
-will be represented as ordinary structured Caret values and convertible to canonical Caret source,
-making semantic program reification and canonical quines possible.
+Caret plans to let programs reflect on the environment visible to them through metadata-only
+`@root`, and on the current module through `@module`. A root module can detect that relationship
+with `@module == @root`. Complete semantic module code will be represented as immutable structured
+Caret values and convertible to canonical, implementation-independent Caret source, making program
+reification and canonical quines possible.
 
-The same model anchors sandboxing. A plugin, tutorial, test, or nested script will see a substituted
-root containing only the libraries and capabilities supplied by its host. Reflection must respect
-that boundary, and declaring an effect will describe an action without granting permission to
-perform it. The metadata schema, canonicalization rules, and sandbox syntax remain under design;
-these features are not available in the prototype.
+The same model anchors sandboxing. `sandbox source environment` creates a plugin environment whose
+exposed names can be changed atomically by its host. Reflection respects that boundary, and
+declaring an effect describes an action without granting permission to perform it. Reloading starts
+a fresh generation: immutable values already obtained remain values, while all old-generation
+references become invalid. These features are specified future work and are not available in the
+prototype.
 
 ## An evolving language experiment
 

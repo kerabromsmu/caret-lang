@@ -24,6 +24,10 @@ Read `README.md` and `LANGUAGE.md` before making architectural or syntactic chan
     cross sandbox visibility or authority boundaries.
 12. Effect declarations describe observable behavior but do not grant authority. A child sandbox
     must not amplify the authority available to its parent.
+13. `@root` and `@module` are metadata-only references, not hidden scope objects or capability
+    invocation paths.
+14. Code visibility and binding authority are distinct: the initial module-code reflection model
+    exposes complete semantic code for a visible module without exposing its private bindings.
 
 ## Established syntax
 
@@ -134,16 +138,19 @@ Known names should retain as much static type information as possible. Runtime-g
 
 Expected reflection failures such as a missing binding must produce `~` or a structured result, not an exception.
 
-### Planned root reflection and sandbox isolation
+### Planned root/module reflection and sandbox isolation
 
 The planned `@root` form denotes the root of the current Caret execution environment, not an
 unconditional process-global root. In a sandbox it must resolve to the substituted sandbox root.
 Program/code metadata must expose only code and references visible in that environment.
 
-The exact `@root` parsing, metadata schema, canonical serialization rules, and `sandbox` surface
-syntax remain unresolved in `LANGUAGE.md`; do not invent them during implementation. Regardless of
-the eventual syntax, reflection must not reveal hidden host roots, private captures, native
-implementation details, hidden code, or unexposed capabilities.
+`@root` and `@module` are reserved metadata-only reflective primaries. The planned sandbox form is
+`sandbox source environment`, with atomic environment exposure and explicit lifecycle functions.
+Follow the settled metadata, code-equality, serialization, lifecycle, and reference-invalidation
+rules in `LANGUAGE.md`; do not invent the remaining structured result forms or serialization for
+host capabilities without portable identities. Reflection must not reveal host roots, private
+captures, native implementation details, code outside the visible module environment, or unexposed
+capabilities.
 
 ## Implementation rules
 

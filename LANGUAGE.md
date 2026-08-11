@@ -358,10 +358,15 @@ left-associative, bind less tightly than additive operators, and bind more tight
 operators. Thus `2 combine 3 + 4` means `2 combine (3 + 4)`, while `2 combine 3 < 10` means
 `(2 combine 3) < 10`. Parentheses are required when another grouping is intended.
 
-Built-in symbolic operators retain the precedence table documented above. Custom
-symbolic-operator declaration syntax remains an open design decision; the initial unified-callable
-implementation makes the existing symbolic operators callable in prefix form but must not invent
-new declaration syntax.
+Built-in symbolic operators retain the precedence table documented above. User-defined symbolic
+operators are deliberately unsupported for now; language extensions use named infix functions.
+A later language version may add a quoted-symbol declaration resembling:
+
+```caret
+`#-!` x y = f x y
+```
+
+That spelling is only a design direction and is not valid Caret syntax.
 
 Named infix calls are represented separately while parsing but invoke the same callable values as
 prefix application. A non-callable infix target or a callable whose remaining arity is not two
@@ -1756,20 +1761,38 @@ Ordinary pure numeric functions should be usable on both scalar values and SIMD 
 A native-width SIMD value is written:
 
 ```caret
-(simd Float) values
+(Simd native Float32) values
 ```
 
-The number of lanes is chosen appropriately for the compilation target.
+`Simd` has fixed arity: its first argument is a width selector and its second is the scalar
+contract. `native` is a built-in compile-time width selector, not an omitted argument or partial
+application. The number of lanes is chosen appropriately for the compilation target.
 
 An explicit lane count may be written:
 
 ```caret
-(simd 8 Float) values
+(Simd 8 Float32) values
 ```
 
 This represents exactly eight `Float` lanes.
 
-`simd` is a type constructor and participates in the normal contract/type syntax.
+`Simd` is a capitalized contract constructor and participates in normal contract syntax.
+
+### Floating-point reduction grouping
+
+SIMD floating-point reductions read the active execution-environment grouping option when the
+reduction begins. The default is `pairwise`:
+
+```caret
+simdOption grouping pairwise
+simdOption grouping hardware
+```
+
+`pairwise` uses the language-defined pairwise grouping. `hardware` permits target-dependent
+grouping and therefore target-dependent floating-point results. The option is inherited by a child
+environment at construction, remains current within that environment, and may subsequently be
+changed there without changing its parent. Strict left-to-right reduction remains available through
+an explicit scalar `fold`; it is not the SIMD default.
 
 ### Lane-wise operations
 
@@ -1806,13 +1829,13 @@ positive = values > 0
 If `values` is:
 
 ```caret
-simd Float
+Simd native Float32
 ```
 
 then `positive` is conceptually:
 
 ```caret
-simd Bool
+Simd native Boolean
 ```
 
 Caret's ordinary conditional expression operates lane-wise when its condition is a SIMD Boolean value:
@@ -2001,14 +2024,15 @@ The compiler/runtime is responsible for handling:
 * remainder elements;
 * target instruction sets such as AVX, AVX2, AVX-512, NEON, or equivalent facilities.
 
-Low-level architecture-specific SIMD facilities may exist separately, but they are not part of the ordinary `simd` / `::` programming model.
+Low-level architecture-specific SIMD facilities may exist separately, but they are not part of the
+ordinary `Simd` / `::` programming model.
 
 ### Portability
 
 Code using:
 
 ```caret
-simd Float
+Simd native Float32
 ```
 
 is portable across targets with different native SIMD widths.
@@ -2016,7 +2040,7 @@ is portable across targets with different native SIMD widths.
 Code using an explicit width:
 
 ```caret
-simd 8 Float
+Simd 8 Float32
 ```
 
 requests that logical lane width specifically. The compiler may use one or more hardware vector operations to implement it where necessary, or reject it when the target cannot support the required semantics.
@@ -2514,29 +2538,23 @@ The compiler/runtime should derive both directions from the same condition where
 
 ---
 
-## Choices and pattern matching
+## General choices and format selection
 
-Formats may describe alternatives based on data patterns or discriminators.
-
-Conceptually:
-
-```caret
-choice selector alternatives
-```
-
-For example:
+Caret has a general choice expression. It is also used by formats to describe alternatives based on
+data patterns or discriminators:
 
 ```caret
-MessageBody =
-  choice kind
-    1 TextMessage
-    2 ImageMessage
-    3 FileMessage
+kind ==
+  1 & TextMessage
+  2 & ImageMessage
+  3 & FileMessage
+  ! UnknownMessage
 ```
 
-The surface syntax for declaring general alternatives remains unresolved and is tracked as
-`FORMAT-CHOICE-001` in `CONFORMANCE.md`. It must be specified before general choices are
-implemented.
+The selector is evaluated once. Case labels are evaluated and compared from top to bottom using
+ordinary equality; only the selected result expression is evaluated. The optional `!` fallback is
+unique and must be last. A choice with no matching case and no fallback evaluates to `~`.
+Statically recognizable duplicate labels are diagnostics.
 
 The semantic requirement is more important:
 
@@ -2544,6 +2562,10 @@ The semantic requirement is more important:
 * encoding may use the logical value to determine which representation and discriminator are required.
 
 Where the relationship is deterministic in both directions, the user should not have to write separate selection logic for encoding and decoding.
+
+For a format, deterministic literal cases may derive the encoded discriminator. A fallback may not
+invent a discriminator: it must use one already known from the logical value or produce the
+structured format mismatch defined by the eventual format-result model.
 
 Pattern matching in formats should therefore be treated relationally where practical.
 
@@ -6039,7 +6061,11 @@ identity from the next state. Both changes commit at the effect boundary and alt
 the next deterministic traversal boundary; neither operation reenters traversal while an object is
 being processed.
 
-The implementation must provide deterministic lifecycle behavior even though rule scheduling itself may intentionally be unordered.
+Rule-cycle object traversal order is deliberately unspecified and is not observable language
+behavior. Each traversal operates on a stable membership snapshot and visits every identity in that
+snapshot exactly once. Creation and destruction take effect at the next documented traversal
+boundary. Code requiring cross-object order must express it through contexts, triggers, or chains.
+An implementation may use a stable internal order, but programs and tests must not depend on it.
 
 The initial implementation should avoid uncontrolled traversal reentrancy when an object is created during another object's propagation.
 
@@ -6235,8 +6261,12 @@ math = import "lib/math.caret"
 
 The path is resolved relative to the importing source file after normalizing `.` and `..`. The
 initial implementation requires the explicit file name and does not search a global package path.
-Successful module evaluation is cached by canonical source path for the lifetime of the program.
-Every importer receives the same immutable module scope containing only top-level `^` exports.
+Successful module evaluation is cached by canonical source path for the lifetime of one execution
+environment generation. Every importer in that environment receives the same immutable module
+scope containing only top-level `^` exports. Sandboxes evaluate modules independently: immutable
+parsed or compiled artifacts may be shared, but evaluated modules, initialization effects,
+bindings, and mutable runtime state may not cross environment boundaries. Reloading a sandbox
+creates a fresh module-evaluation cache.
 Private bindings remain inaccessible through lookup and reflection.
 
 An import cycle is a located module diagnostic that reports the import chain. A module that fails to
@@ -6244,6 +6274,81 @@ load or evaluate is not cached as successful. Importing the same canonical modul
 repeat its initialization effects.
 
 ## `@root`, Program Reification, Quines, and Sandboxes
+
+### Normative reference model
+
+`@root` and `@module` are synthetic, metadata-only reflection references. Neither corresponds to an
+ordinary scope object and neither is callable. Bare `root` and `module` are reserved, invalid as
+expressions, and cannot be defined as bindings or parameters. The parser recognizes each special
+reference as a primary expression, so compact access such as `@root.code` and `@module.code` is
+valid without changing the precedence of ordinary `@value` reflection and field access.
+
+`@root` identifies the root metadata of the current execution environment. `@module` identifies
+the module containing the currently executing code. They compare equal exactly when that module is
+loaded as the root module:
+
+```caret
+@module == @root
+```
+
+The initial metadata common to these references consists of `kind`, `name`, visible binding
+`names`, and semantic `code`. Future catalogs such as `functions`, `contracts`, and `modules` may
+be added, but their entries are non-callable descriptors; ordinary bindings remain the invocation
+path.
+
+An imported module may be reflected through its binding:
+
+```caret
+math = import "lib/math.caret"
+print toString @math.code
+```
+
+For the initial language, imported-module code is always visible and contains complete semantic
+code, including private declarations and literal values. This grants information, not authority:
+private bindings remain inaccessible and non-invocable. Programs must not embed secrets in source
+under the assumption that private module code is hidden. Fine-grained code visibility is deferred.
+
+### Code values, snapshots, and equality
+
+`Code` and `CodeElement` are immutable structural semantic values. They contain no source text,
+comments, formatting, source paths, offsets, line/column locations, or original grouping. An
+implementation may retain spans privately for diagnostics, but must not expose them as code
+metadata. Live reflective references retain identity equality; obtaining structural `.code` from a
+reference does not change that identity.
+
+The code of a file module contains the whole admitted analyzed unit, including declarations that
+occur later in source order. A REPL root contains all prior successful submissions plus the current
+submission provisionally while it evaluates, permitting a quine; a failed submission contributes
+neither code nor bindings. Tests have no special root: separately executed test programs have
+separate roots, while tests run by one central program share that program's root. Nested
+environments apply their own visibility boundary.
+
+`toString Code` recursively serializes the complete semantic structure of that code unit. Imports
+remain semantic import references and never inline imported module bodies; those bodies are
+available separately through the imported module's reflection reference. Built-in and native
+operations appear as portable semantic external references containing their language identity,
+contract, and effects, never a JVM class, Java method, native address, or backend body.
+The semantic code graph preserves shared references rather than duplicating referenced definitions;
+canonical text emits each definition once and uses canonical references at every other occurrence.
+
+Structural code equality and canonical serialization:
+
+* compare binding relationships rather than parameter and private-local spelling;
+* preserve every externally or reflectively observable name, including exports, fields, contracts,
+  module bindings, metadata names, and dynamic lookup targets;
+* may reorder elements only when semantic analysis proves them independent, using a
+  language-defined structural order; and
+* retain source/evaluation order whenever independence cannot be proved.
+
+Canonical serialization assigns deterministic names to alpha-equivalent private bindings. Import
+paths are normalized logical paths: `.` and `..` are resolved lexically, `/` is the separator on
+every platform, and absolute host filesystem paths are never emitted. Canonical code declares the
+portable imports and semantic dependencies required to parse it; missing or incompatible
+dependencies are located diagnostics. The form is shared by all Caret implementations rather than
+being JVM- or process-specific.
+
+The result of serializing code that refers to a dynamically supplied host capability without a
+portable semantic identity remains unresolved.
 
 ### Overview
 
@@ -6289,9 +6394,8 @@ This provides the foundation for Caret's sandbox and capability-isolation model.
 
 ## Root reference
 
-`root` represents the root scope of the current Caret execution environment.
-
-`@root` returns a reference to that root rather than evaluating any binding contained in it.
+`@root` represents the metadata of the current Caret execution environment. There is no
+corresponding ordinary `root` object or binding.
 
 Example:
 
@@ -6299,7 +6403,7 @@ Example:
 r = @root
 ```
 
-The root may eventually expose metadata and bindings such as:
+The root may eventually expose additional metadata catalogs such as:
 
 ```caret
 @root.code
@@ -6308,10 +6412,11 @@ The root may eventually expose metadata and bindings such as:
 @root.functions
 ```
 
-These names are illustrative until the minimum public root/code metadata schema is settled. New
-standard metadata may be added compatibly over time after that initial schema is defined.
+`kind`, `name`, `names`, and `code` are the settled minimum schema. Additional catalogs contain
+non-callable descriptors, not callable bindings or ambient capabilities.
 
-`@root` must be available from anywhere in Caret code unless the current execution environment explicitly restricts access to particular root metadata.
+`@root` is available from anywhere in Caret code. Its contents are relative to, and filtered by,
+the current execution environment.
 
 ---
 
@@ -6371,11 +6476,7 @@ The root exposes the program through:
 
 It is not required to be the original source text.
 
-Conceptually:
-
-```text
-@root.code : Collection CodeElement
-```
+Conceptually, `@root.code` is a `Code` value whose elements are `CodeElement` values.
 
 Code elements may represent:
 
@@ -6422,10 +6523,9 @@ parameters
 contracts
 body
 effects
-source metadata
 ```
 
-subject to the current environment's visibility and sandbox permissions.
+Code contains semantic references only and no source metadata.
 
 ---
 
@@ -6471,7 +6571,7 @@ x = 1
 
 The canonical representation must preserve program meaning, not original textual formatting.
 
-Comments and other source-only information need not be reproduced unless separately represented as code metadata.
+Comments and other source-only information are not represented as code metadata.
 
 ---
 
@@ -6536,6 +6636,72 @@ do not invalidate the quine.
 
 # Sandboxes
 
+## Construction, environment updates, and access
+
+The shared construction form is:
+
+```caret
+plugin = sandbox source environment
+```
+
+`source` may be a module path or semantic `Code`, selected through ordinary contract dispatch.
+`environment` is a stable `SandboxEnvironment` handle and the result is a stable `Sandbox` handle.
+The host changes the exposed environment atomically:
+
+```caret
+expose environment #clock restrictedClock
+hide environment #filesystem
+```
+
+Every sandbox sharing the handle observes a completed update on its next boundary lookup. Separate
+handles isolate updates. A child inherits the parent's available authority at construction and may
+expose only authority reachable through the parent unless an outer host explicitly injects more.
+Plugin-to-host lookup dereferences the currently exposed binding on every call or access; an
+in-progress operation keeps the target resolved when that operation began. Hidden or incompatible
+bindings produce the normal structured unavailable-capability result and disappear from subsequent
+root metadata.
+
+Exports are accessed like imported-module exports, and all plugin metadata is reached by reflection:
+
+```caret
+plugin.function arguments
+plugin[#dynamic]~
+@plugin.kind
+@plugin.state
+@plugin.names
+@plugin.code
+```
+
+`@plugin` metadata is non-callable. The exact structured failure/result values remain unresolved
+until the general template-based result model is specified.
+
+## Lifecycle and boundary values
+
+The host controls a sandbox with effectful functions:
+
+```caret
+terminate plugin
+unload plugin
+reload plugin
+```
+
+`terminate` stops execution, invalidates all references from that generation, and discards runtime
+state. It provides no resumable state by default. `unload` terminates if necessary and additionally
+releases loaded or compiled resources. The stable sandbox handle retains its source descriptor,
+environment handle, and lifecycle metadata.
+
+`reload` is stop-first: it terminates the old generation and invalidates its references before
+initializing a fresh generation with a fresh module cache. It never restores the old generation.
+If initialization fails, the sandbox becomes unloaded, its exports are unavailable, and a later
+`reload` performs a complete fresh load using the retained source and environment configuration.
+
+Reload never rebinds old references automatically. This includes saved functions, direct exports,
+and references derived through fields, collections, or computations. The host must look up an
+export again to obtain a reference from the new generation. References to the same target may be
+equal within one generation; references from different generations are unequal. Immutable values
+already obtained from a plugin remain ordinary valid values after reload. If such a value contains
+references, the container remains valid but those old-generation references are invalid.
+
 ## Overview
 
 `sandbox` evaluates or imports Caret code in a restricted execution environment.
@@ -6551,13 +6717,8 @@ plugin =
   sandbox pluginCode environment
 ```
 
-The sandboxed code sees:
-
-```caret
-@root
-```
-
-as `environment`, or as a root constructed from that environment.
+The sandboxed code sees `@root` as metadata describing the environment constructed from
+`environment`; it is not the environment handle or an ordinary capability scope.
 
 It cannot access the host application's root merely by referring to `@root`.
 
@@ -6588,12 +6749,12 @@ environment =
   ]
 ```
 
-then sandboxed code may observe:
+then sandboxed code may use the ordinary visible bindings:
 
 ```caret
-@root.log
-@root.files
-@root.clock
+log
+files
+clock
 ```
 
 Bindings not exposed through the sandbox root are not part of the sandbox's observable environment.
@@ -6601,8 +6762,8 @@ Bindings not exposed through the sandbox root are not part of the sandbox's obse
 For example:
 
 ```caret
-@root.database
-@root.internalState
+database
+internalState
 ```
 
 should behave as unavailable if those bindings were not exposed.
@@ -6689,7 +6850,8 @@ Sandbox
     permitted runtime capabilities
 ```
 
-The exact configuration syntax may be defined separately.
+The initial configuration is the `SandboxEnvironment` handle updated through atomic `expose` and
+`hide`. More declarative configuration syntax may be added later.
 
 ---
 
@@ -6901,12 +7063,9 @@ refers to the code visible in that sandbox environment.
 
 It must not automatically reveal the complete host program.
 
-Depending on sandbox configuration, it may represent:
-
-* only the sandboxed module;
-* the sandboxed module plus explicitly exposed code;
-* a filtered code view;
-* no code metadata at all if reflection has been restricted.
+It represents the sandbox root module and semantic references to modules and external capabilities
+admitted to that environment. Import statements do not recursively inline module bodies. It never
+contains the hidden host program. Fine-grained metadata filtering is deferred.
 
 Thus the standard quine:
 
@@ -6922,17 +7081,22 @@ inside a sandbox reproduces the canonical code visible to that sandbox, not the 
 
 ## Persistent references
 
-Removing a binding from the sandbox root does not necessarily revoke references already obtained from it.
+Removing a name from a `SandboxEnvironment` atomically revokes subsequent boundary lookup through
+that name.
 
 For example:
 
 ```caret
-files = @root.files
+files = exposedFiles
 ```
 
-may retain a reference after `files` is later removed from the root.
+does not preserve access through the environment after the corresponding name is hidden. Boundary
+operations dereference the currently exposed host environment. Immutable values already copied into
+the sandbox remain values; revoking access to resources reachable through an independently retained
+reference requires resource-specific mediation.
 
-Therefore simple root modification is sufficient for granting capabilities but not always for revocation.
+Thus `hide` revokes environment-mediated access, while revoking independent resource references may
+still require mediation.
 
 ---
 
@@ -7284,39 +7448,31 @@ establish parity. Interpreted and compiled execution must agree on:
 * standard output and standard error; and
 * process exit status.
 
-The exact JVM class naming, public embedding ABI, and cross-version binary compatibility policy
-remain open design decisions. They do not change Caret source semantics.
+Generated JVM class names are opaque backend implementation details. Java hosts use a documented
+embedding facade rather than generated classes directly. Every artifact declares its Caret runtime
+ABI version; an incompatible runtime rejects it clearly and recompilation is required across an
+incompatible ABI change.
+
+This ABI is specific to the initial JVM backend and is not part of Caret source semantics. Caret's
+portable semantic module/interface model is shared across backends. The long-term language must be
+conceptually and practically independent of the JVM, support other platforms, and permit a
+self-hosted implementation.
 
 ## Open specification decisions
 
 The following decisions remain unresolved and must be settled in `LANGUAGE.md` before their
 dependent implementation begins:
 
-* syntax for declaring new symbolic operators beyond the existing built-in symbols;
-* concrete SIMD type/lane spelling and floating-point reduction-order guarantees;
-* surface syntax for general format choices and pattern-derived discriminators;
 * the concrete exported shape of structured format success/failure values;
-* whether rule-cycle object traversal order is observable or deliberately unspecified;
-* JVM class naming, embedding ABI, and binary compatibility across Caret versions;
-* whether `root` is reserved or shadowable, how bare `root` behaves, and whether `@root` is a
-  dedicated syntactic form;
-* whether `@root.code` is special shorthand for `(@root).code` or changes the general precedence of
-  reflection and field access;
-* the minimum public shapes, identity/equality rules, and source-location visibility of `Root`,
-  `Code`, and `CodeElement` values;
-* which code snapshot `@root.code` exposes in files, imported modules, tests, incremental REPL
-  submissions, and nested environments;
-* the deterministic canonicalization and semantic-equivalence rules for
-  `parse(toString(code)) ≈ code`;
-* concrete `sandbox` syntax, accepted code/module inputs, return and failure values, initialization,
-  and import-cache behavior;
-* how sandbox roots are constructed or evolved and how unavailable bindings and metadata are
-  observed;
-* the representation of capability configuration and the identity/equality semantics of references
-  projected across sandbox boundaries.
+* the structured result values used by sandbox construction, lifecycle operations, and unavailable
+  capabilities; and
+* how canonical serialization represents a dynamically supplied host function or capability that
+  has no portable semantic identity.
 
-These are tracked as `unresolved` requirements in `CONFORMANCE.md`. No implementation may silently
-choose syntax or observable semantics for them.
+These narrow issues are tracked as `unresolved` requirements in `CONFORMANCE.md`. No implementation
+may silently choose syntax or observable semantics for them. User-defined symbolic operators,
+fine-grained module-code visibility, and resumable sandbox state are deferred rather than unresolved
+requirements for the initial language.
 
 Source-exact and comment-preserving reconstruction, fine-grained metadata permissions, dynamic
 language-feature unlocking, revocable capability proxies, resource quotas, operating-system or

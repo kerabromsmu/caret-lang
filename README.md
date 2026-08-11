@@ -169,8 +169,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - There is no mutation, immutable scope-update syntax, object model, module system, compiler
   backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, and function-arity metadata.
-- Environment-relative `@root`, program-code reification, canonical quines, and capability-based
-  sandbox execution are not implemented.
+- Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
+  quines, and `sandbox source environment` execution are specified but not implemented.
 
 ## Diagnostics
 
