@@ -104,7 +104,7 @@ final class MainTest {
     }
 
     @Test
-    void fileSystemFailuresAreReportedWithoutAStackTrace() throws Exception {
+    void fileSystemFailuresAreReportedWithoutAStackTrace() {
         Path missing = temporaryDirectory.resolve("missing.caret");
         Invocation invocation = run(missing);
 
@@ -115,7 +115,7 @@ final class MainTest {
     }
 
     @Test
-    void rejectsExtraFileModeArguments() throws Exception {
+    void rejectsExtraFileModeArguments() {
         Invocation invocation = run("one.caret", "two.caret");
         assertEquals(1, invocation.exitCode());
         assertEquals("Usage: caret <file> | caret test <file>\n", invocation.error());
@@ -207,7 +207,7 @@ final class MainTest {
         assertEquals("", error.toString(StandardCharsets.UTF_8));
     }
 
-    private Invocation run(Path program) throws Exception {
+    private Invocation run(Path program) {
         return run(program.toString());
     }
 
