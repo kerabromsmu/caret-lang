@@ -49,9 +49,9 @@ baseline.
   grouping, general choices, unordered object traversal, and the initial JVM ABI are specified.
 - `LANGUAGE.md` records the resolved infix, multiline, function-reference/result-contract,
   persistent state/object, module, bytes, contract, collection, and JVM backend decisions.
-- The shared structured-error payload is specified through `ErrorTemplate`. Public result envelopes
-  and non-portable external serialization remain explicit `unresolved` conformance rows and may not
-  be invented during implementation.
+- The shared structured-error payload is specified through `ErrorTemplate`, and the parameterized
+  `Result` contract defines the public success/failure envelope. Dynamically supplied host
+  capabilities remain environment bindings rather than serialized code dependencies.
 
 ## Phase 1 — Front end, binding semantics, and unified callables
 
@@ -247,9 +247,9 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Phase 7 — First-class bidirectional formats
 
-- Add immutable `Format` values representing bidirectional relations. Expected failures carry an
-  `ErrorTemplate` payload; settle the still-unresolved success/failure envelope before exposing the
-  public `decode` and `encode` APIs. Implement empty formats and ordinary functional construction.
+- Add immutable `Format` values representing bidirectional relations. `decode` and `encode` return
+  `Result`, with expected failures carrying an `ErrorTemplate` payload. Implement empty formats and
+  ordinary functional construction.
 - Implement primitive byte/integer formats, `field format "name"`, constants/signatures, nested
   formats, fixed/prior-field repetition, conditions, general `selector ==` choices, constraints,
   and `>>` composition.
@@ -322,23 +322,25 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Reify analyzed source as language-owned `Code`/`CodeElement` values with stable public descriptors
   for bindings, functions, parameters, contracts, expressions, imports, and later constructs.
 - Implement canonical code serialization with alpha-normalized private names, proven-safe ordering,
-  logical import paths, portable external descriptors, declared dependency resolution, and no
-  source metadata. Require parse/serialize/parse structural equivalence and canonical quine/module
-  fixtures; first resolve serialization of host capabilities without portable identities.
+  logical import paths, portable language dependencies, and no source metadata. Keep dynamically
+  supplied environment implementations out of canonical code and require compatible bindings when
+  re-executing it. Require parse/serialize/parse structural equivalence and canonical quine/module
+  fixtures.
 
 ## Phase 10 — Sandboxes and capability isolation
 
-- Implement `sandbox source environment` for module paths and semantic `Code`, returning a stable
-  `Sandbox` handle backed by a `SandboxEnvironment`. Keep normal imports semantically distinct and
-  evaluated module caches private to each environment generation.
-- Implement atomic `expose`/`hide`, current-environment lookup at every boundary operation, and
-  bounded authority inheritance for nested environment handles.
+- Implement `sandbox source environment` for module paths and semantic `Code`, returning `Result
+  Sandbox` with a stable sandbox handle and an immutable exported environment snapshot. Keep normal
+  imports semantically distinct and evaluated module caches private to each generation.
+- Implement atomic, validate-then-install `swapEnv`, current-environment lookup at every boundary
+  operation, mediated named capability references, and bounded authority inheritance. Preserve the
+  running generation and state; failed swaps retain the previous snapshot.
 - Implement effectful `terminate`, `unload`, and stop-first `reload`. Discard resumable state,
   invalidate all old-generation references without rebinding, preserve copied immutable values,
   and leave a failed reload unloaded but retryable from retained configuration.
 - Support direct, filtered, and virtual capabilities. Treat effect declarations as descriptions,
-  never authority grants, and report unavailable authority through `ErrorTemplate`; settle the
-  sandbox operation result envelope before exposing the public lifecycle API.
+  never authority grants, and report unavailable authority through `Result` and `ErrorTemplate`.
+  Apply the same boundary result envelope to construction, lifecycle, swaps, and exported calls.
 - Project references crossing the boundary through a reflective membrane that cannot expose host
   roots, private captures, native implementation state, hidden code, or other capabilities.
 - Support nested sandboxes with child authority bounded by parent authority unless the outer host

@@ -28,8 +28,8 @@ representation. Named fields are first-class collection elements. These faciliti
 targets, not features of the current prototype. A collection expression containing holes will be an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
 or a concrete fixed collection, to the planned `template` function creates an exact structural
-contract. The same mechanism defines a standard structured error payload while leaving public
-success/failure result envelopes as an open design decision.
+contract. The same mechanism defines a standard structured error payload, while a generic
+three-field `Result` contract supplies the planned public success/failure envelope.
 
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code

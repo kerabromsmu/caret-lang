@@ -1059,9 +1059,9 @@ Parentheses remain the normal grouping mechanism where expression boundaries wou
 ```caret
 person =
   [
-    ^name "Alice"
-    ^age 42
-    ^active true
+    ^name = "Alice"
+    ^age = 42
+    ^active = true
   ]
 ```
 
@@ -1126,13 +1126,13 @@ Collections may contain collections:
 people =
   [
     [
-      ^name "Alice"
-      ^age 32
+      ^name = "Alice"
+      ^age = 32
     ]
 
     [
-      ^name "Bob"
-      ^age 41
+      ^name = "Bob"
+      ^age = 41
     ]
   ]
 ```
@@ -1145,8 +1145,8 @@ or arbitrary heterogeneous nested structures:
   "hello"
 
   [
-    ^x 20
-    ^y 30
+    ^x = 20
+    ^y = 30
   ]
 
   true
@@ -2375,8 +2375,8 @@ decodes into a value structurally equivalent to:
 
 ```caret
 data
-  ^x 10.0
-  ^y 20.0
+  ^x = 10.0
+  ^y = 20.0
 ```
 
 and encodes such a value back into the corresponding representation.
@@ -2859,9 +2859,9 @@ Encoding may also fail because:
 These failures should be represented explicitly rather than relying on exceptions for expected format mismatch.
 
 Each failure payload satisfies the standard `ErrorTemplate`; a format-specific exact template
-describes its `details` field. The enclosing success/failure result envelope remains unresolved and
-is tracked as `FORMAT-FAILURE-001` in `CONFORMANCE.md`. It must be specified before public `decode`
-and `encode` are implemented.
+describes its `details` field. Both operations return `Result ValueContract`, as defined in the
+structured-error section. A successful decode or encode places its logical value or representation
+in `value`; an expected mismatch or other format failure places the structured error in `error`.
 
 Errors should be capable of carrying useful information such as:
 
@@ -2926,9 +2926,9 @@ may decode to:
 
 ```caret
 data
-  ^length 128
-  ^type 2
-  ^payload payloadBytes
+  ^length = 128
+  ^type = 2
+  ^payload = payloadBytes
 ```
 
 The format subsystem must not introduce a separate object model for decoded data.
@@ -3703,8 +3703,8 @@ Example:
 ```caret
 operations =
   data
-    ^double (x -> x * 2)
-    ^positive (x -> x > 0)
+    ^double = (x -> x * 2)
+    ^positive = (x -> x > 0)
 ```
 
 The resulting fields contain ordinary function values.
@@ -3946,8 +3946,8 @@ Example:
 ```caret
 initial =
   data
-    ^i 0
-    ^sum 0
+    ^i = 0
+    ^sum = 0
 
 result =
   cycle initial condition body prepare
@@ -3972,8 +3972,8 @@ Example state:
 
 ```caret
 data
-  ^i 0
-  ^sum 0
+  ^i = 0
+  ^sum = 0
 ```
 
 The cycle may transform this scope at every step.
@@ -4004,8 +4004,8 @@ produces a final state equivalent to:
 
 ```caret
 data
-  ^i 10
-  ^sum 45
+  ^i = 10
+  ^sum = 45
 ```
 
 The exact collection/scope update functions may be provided by the standard library.
@@ -4155,8 +4155,8 @@ For example:
 ```caret
 initial =
   data
-    ^i 0
-    ^sum 0
+    ^i = 0
+    ^sum = 0
 
 condition s =
   s.i < 10
@@ -4214,7 +4214,7 @@ Conceptually:
 ```caret
 initial =
   data
-    ^i 0
+    ^i = 0
 
 condition s =
   s.i < 10
@@ -4248,8 +4248,8 @@ with value:
 ```caret
 initial =
   data
-    ^i 1
-    ^total 1
+    ^i = 1
+    ^total = 1
 
 condition s =
   s.i <= 10
@@ -4334,8 +4334,8 @@ For example, if the initial state is:
 
 ```caret
 data
-  ^i 0
-  ^sum 0
+  ^i = 0
+  ^sum = 0
 ```
 
 then `body` and `prepare` should normally return values exposing compatible fields:
@@ -4349,16 +4349,16 @@ A transformation that sometimes returns:
 
 ```caret
 data
-  ^i 1
+  ^i = 1
 ```
 
 and sometimes:
 
 ```caret
 data
-  ^i 1
-  ^sum 10
-  ^error "..."
+  ^i = 1
+  ^sum = 10
+  ^error = "..."
 ```
 
 introduces variant state shapes.
@@ -4582,8 +4582,8 @@ For example:
 
 ```caret
 data
-  ^done false
-  ^state ...
+  ^done = false
+  ^state = ...
 ```
 
 with:
@@ -5767,10 +5767,10 @@ game =
   ruleCycle
     init
       player = object
-        ^health 100
+        ^health = 100
 
       enemy = object
-        ^health 50
+        ^health = 50
 
       gameOver = rule
         T player.health <= 0
@@ -6350,8 +6350,10 @@ portable imports and semantic dependencies required to parse it; missing or inco
 dependencies are located diagnostics. The form is shared by all Caret implementations rather than
 being JVM- or process-specific.
 
-The result of serializing code that refers to a dynamically supplied host capability without a
-portable semantic identity remains unresolved.
+Dynamically supplied host functions and capabilities are not serialized as code or dependency
+implementations. Canonical source refers to their exposed binding names normally and requires a
+compatible environment when evaluated again. Reflection and serialization reveal no host body,
+native identity, origin, or private capture.
 
 ### Overview
 
@@ -6648,21 +6650,34 @@ plugin = sandbox source environment
 ```
 
 `source` may be a module path or semantic `Code`, selected through ordinary contract dispatch.
-`environment` is a stable `SandboxEnvironment` handle and the result is a stable `Sandbox` handle.
-The host changes the exposed environment atomically:
+`environment` is an immutable exported scope. `sandbox` returns `Result Sandbox`; on success its
+`value` is the stable `Sandbox` handle used below. Named members use the universal exported-field
+syntax:
 
 ```caret
-expose environment "clock" restrictedClock
-hide environment "filesystem"
+environment =
+  ^clock = restrictedClock
 ```
 
-Every sandbox sharing the handle observes a completed update on its next boundary lookup. Separate
-handles isolate updates. A child inherits the parent's available authority at construction and may
-expose only authority reachable through the parent unless an outer host explicitly injects more.
-Plugin-to-host lookup dereferences the currently exposed binding on every call or access; an
-in-progress operation keeps the target resolved when that operation began. Hidden or incompatible
-bindings produce the normal structured unavailable-capability result and disappear from subsequent
-root metadata.
+The host may atomically replace the complete environment snapshot without stopping the plugin:
+
+```caret
+swapEnv plugin environment2
+```
+
+`swapEnv` validates the replacement before installing it. Failure leaves the previous environment
+installed. Success changes neither sandbox identity nor generation, plugin state, module state, or
+plugin-export references. The new snapshot is visible at the next environment-boundary lookup; an
+in-progress host operation finishes against the target resolved when it began. Consequently a host
+function called by the plugin may itself invoke `swapEnv`, and the plugin observes the replacement
+after that boundary call returns. `@root.names` and related environment metadata change atomically
+with the snapshot; `@root.code` does not, because exposed host bindings are not sandbox code.
+
+Environment-derived callable references are mediated named references. Calling one after a swap
+resolves its name through the current snapshot, using the replacement target or producing an
+unavailable-capability failure when absent. Values already copied across the boundary remain values.
+A child may receive only authority reachable through its parent unless an outer host explicitly
+injects more authority.
 
 Exports are accessed like imported-module exports, and all plugin metadata is reached by reflection:
 
@@ -6675,8 +6690,17 @@ plugin["dynamic"]~
 @plugin.code
 ```
 
-`@plugin` metadata is non-callable. Sandbox failure payloads satisfy `ErrorTemplate`, with an exact
-sandbox-specific template for `details`. The enclosing operation result envelope remains unresolved.
+`@plugin` metadata is non-callable. Projected host functions reveal only arity, argument contracts,
+and their result contract. They do not reveal their implementation, origin, captures, native nature,
+or host identity. Effect information may participate in static checking but grants no authority.
+
+Sandbox construction, `swapEnv`, lifecycle operations, and host-to-plugin exported calls return
+`Result ValueContract`. Sandbox failure payloads satisfy `ErrorTemplate`, with an exact
+sandbox-specific template for `details`. Successful void-like operations use `~` as their value.
+If an exported plugin function itself returns a `Result`, that application result remains nested in
+the boundary result; results are not flattened implicitly. Inside the sandbox, exposed host
+functions retain their ordinary signatures. An unavailable capability aborts the current boundary
+operation and becomes the failed result observed by the host.
 
 ## Lifecycle and boundary values
 
@@ -6686,17 +6710,19 @@ The host controls a sandbox with effectful functions:
 terminate plugin
 unload plugin
 reload plugin
+swapEnv plugin environment2
 ```
 
 `terminate` stops execution, invalidates all references from that generation, and discards runtime
 state. It provides no resumable state by default. `unload` terminates if necessary and additionally
 releases loaded or compiled resources. The stable sandbox handle retains its source descriptor,
-environment handle, and lifecycle metadata.
+currently installed environment snapshot, and lifecycle metadata.
 
 `reload` is stop-first: it terminates the old generation and invalidates its references before
 initializing a fresh generation with a fresh module cache. It never restores the old generation.
 If initialization fails, the sandbox becomes unloaded, its exports are unavailable, and a later
-`reload` performs a complete fresh load using the retained source and environment configuration.
+`reload` performs a complete fresh load using the retained source and currently installed
+environment snapshot.
 
 Reload never rebinds old references automatically. This includes saved functions, direct exports,
 and references derived through fields, collections, or computations. The host must look up an
@@ -6745,11 +6771,9 @@ If the host exposes:
 
 ```caret
 environment =
-  [
-    ^log safeLog
-    ^files pluginFiles
-    ^clock safeClock
-  ]
+  ^log = safeLog
+  ^files = pluginFiles
+  ^clock = safeClock
 ```
 
 then sandboxed code may use the ordinary visible bindings:
@@ -6785,11 +6809,9 @@ For example:
 
 ```caret
 environment =
-  [
-    ^print sandboxPrint
-    ^clock sandboxClock
-    ^storage sandboxStorage
-  ]
+  ^print = sandboxPrint
+  ^clock = sandboxClock
+  ^storage = sandboxStorage
 ```
 
 The sandbox receives only those capabilities.
@@ -6853,8 +6875,8 @@ Sandbox
     permitted runtime capabilities
 ```
 
-The initial configuration is the `SandboxEnvironment` handle updated through atomic `expose` and
-`hide`. More declarative configuration syntax may be added later.
+The initial configuration is an immutable exported scope. `swapEnv` may atomically replace that
+complete snapshot while preserving the running sandbox generation.
 
 ---
 
@@ -6865,13 +6887,13 @@ The initial configuration is the `SandboxEnvironment` handle updated through ato
 A host may expose a capability directly:
 
 ```caret
-^files systemFiles
+^files = systemFiles
 ```
 
 or through an isolation layer:
 
 ```caret
-^files restrictedFiles allowedDirectory
+^files = restrictedFiles allowedDirectory
 ```
 
 Sandboxed code still operates through the normal filesystem contract.
@@ -6925,7 +6947,7 @@ An isolation layer may replace the underlying resource entirely.
 For example:
 
 ```caret
-^files virtualFileSystem
+^files = virtualFileSystem
 ```
 
 may make:
@@ -7007,7 +7029,7 @@ Exposing a host reference to a sandbox must not allow the sandbox to navigate th
 For example, if the host exposes:
 
 ```caret
-^log hostLog
+^log = hostLog
 ```
 
 the sandbox may be permitted to inspect metadata such as:
@@ -7066,9 +7088,11 @@ refers to the code visible in that sandbox environment.
 
 It must not automatically reveal the complete host program.
 
-It represents the sandbox root module and semantic references to modules and external capabilities
-admitted to that environment. Import statements do not recursively inline module bodies. It never
-contains the hidden host program. Fine-grained metadata filtering is deferred.
+It represents only the sandbox root module and its semantic references to visible Caret modules.
+Import statements do not recursively inline module bodies. Exposed environment declarations and
+implementations are not code inside the sandbox and are omitted. It never contains the hidden host
+program, host function bodies, private captures, native identities, or origins. Changing the active
+environment therefore does not change `@root.code`.
 
 Thus the standard quine:
 
@@ -7084,8 +7108,8 @@ inside a sandbox reproduces the canonical code visible to that sandbox, not the 
 
 ## Persistent references
 
-Removing a name from a `SandboxEnvironment` atomically revokes subsequent boundary lookup through
-that name.
+Replacing the environment with a snapshot that omits a name atomically revokes subsequent boundary
+lookup through that name.
 
 For example:
 
@@ -7098,8 +7122,8 @@ operations dereference the currently exposed host environment. Immutable values 
 the sandbox remain values; revoking access to resources reachable through an independently retained
 reference requires resource-specific mediation.
 
-Thus `hide` revokes environment-mediated access, while revoking independent resource references may
-still require mediation.
+Thus `swapEnv` revokes environment-mediated access, while revoking independent resource references
+may still require mediation.
 
 ---
 
@@ -7179,9 +7203,9 @@ The initial environment may expose only a small subset:
 
 ```caret
 [
-  ^print tutorialPrint
-  ^Int Int
-  ^Boolean Boolean
+  ^print = tutorialPrint
+  ^Int = Int
+  ^Boolean = Boolean
 ]
 ```
 
@@ -7215,7 +7239,7 @@ Input and output may be mediated by the tutorial application.
 For example, `print` may actually refer to:
 
 ```caret
-^print tutorialPrint
+^print = tutorialPrint
 ```
 
 rather than unrestricted process output.
@@ -7795,9 +7819,9 @@ Example:
 ```caret
 Person =
   template [
-    ^name (String) _
-    ^age (Int positive) _
-    ^active true
+    ^name = (String) _
+    ^age = (Int positive) _
+    ^active = true
   ]
 ```
 
@@ -7805,9 +7829,9 @@ A matching value may be:
 
 ```caret
 [
-  ^name "Alice"
-  ^age 42
-  ^active true
+  ^name = "Alice"
+  ^age = 42
+  ^active = true
 ]
 ```
 
@@ -7863,9 +7887,9 @@ Example:
 ```caret
 Person =
   template [
-    ^name (String) _
+    ^name = (String) _
 
-    ^position
+    ^position =
       [
         (Float) _
         (Float) _
@@ -7882,8 +7906,8 @@ A matching value is:
 
 ```caret
 [
-  ^name "Alice"
-  ^position [
+  ^name = "Alice"
+  ^position = [
     10.0
     20.0
   ]
@@ -7903,8 +7927,8 @@ Point =
 
 Person =
   template [
-    ^name (String) _
-    ^position (Point) _
+    ^name = (String) _
+    ^position = (Point) _
   ]
 ```
 
@@ -8230,13 +8254,13 @@ Similarly:
 
 ```caret
 template [
-  ^opcode 1
-  ^arg (Int) _
+  ^opcode = 1
+  ^arg = (Int) _
 ]
 
 template [
-  ^opcode 2
-  ^arg (Int) _
+  ^opcode = 2
+  ^arg = (Int) _
 ]
 ```
 
@@ -8661,7 +8685,7 @@ _                 unrestricted variable position
 (Contract) _      constrained variable position
 value             fixed-value requirement
 collection        nested structural requirement
-^name ...         named structural member
+^name = ...       named structural member
 ```
 
 Templates reuse ordinary:
@@ -8686,18 +8710,53 @@ diagnostics. The planned standard library defines an exact outer error shape equ
 ```caret
 ErrorShape =
   template [
-    ^code (String) _
-    ^phase (String) _
-    ^message (String) _
-    ^location _
-    ^related (Collection) _
-    ^cause _
-    ^details (Collection) _
+    ^code = (String) _
+    ^phase = (String) _
+    ^message = (String) _
+    ^location = _
+    ^related = (Collection) _
+    ^cause = _
+    ^details = (Collection) _
   ]
 
 ErrorTemplate =
   contract ErrorShape validErrorMembers
 ```
+
+The standard parameterized result contract has exactly three exported fields:
+
+```caret
+Result ValueContract =
+  contract (template [
+    ^ok = (Boolean) _
+    ^value = _
+    ^error = _
+  ]) (validResult ValueContract)
+```
+
+A successful result is:
+
+```caret
+[
+  ^ok = true
+  ^value = value
+  ^error = ~
+]
+```
+
+A failed result is:
+
+```caret
+[
+  ^ok = false
+  ^value = ~
+  ^error = error
+]
+```
+
+`validResult` requires a successful `value` to satisfy `ValueContract` and requires a failed
+`error` to satisfy `ErrorTemplate`. The `ok` discriminator is authoritative because `~` is a valid
+successful value. Results do not flatten or propagate implicitly.
 
 Every field is present. `location` and `cause` contain `~` when unavailable; a present cause must
 itself satisfy `ErrorTemplate`. `related` is an empty collection when there are no related
@@ -8709,13 +8768,14 @@ human-readable, and `location` is the primary source or representation location.
 domain-specific information. Formats, sandboxes, contracts, and other subsystems may define exact
 templates for their `details` values, but they do not add fields to the outer error shape.
 
-Expected failures of operations such as decoding or sandbox lifecycle calls return values satisfying
-`ErrorTemplate`. Lexer, parser, semantic, and aborting runtime errors retain the same fields in their
-language-owned diagnostic descriptors and render them consistently, but remain control-flow events
-rather than ordinary catchable return values. Unexpected host exceptions and implementation faults
-must not be silently reclassified as expected failures.
+Expected failures of operations such as decoding or sandbox lifecycle calls return a failed
+`Result` whose `error` satisfies `ErrorTemplate`. Lexer, parser, semantic, and aborting runtime
+errors retain the same fields in their language-owned diagnostic descriptors and render them
+consistently, but remain control-flow events rather than ordinary catchable return values.
+Unexpected host exceptions and implementation faults must not be silently reclassified as expected
+failures.
 
-`ErrorTemplate` settles the failure payload, not the enclosing success/failure result protocol.
+`ErrorTemplate` defines failure payloads, while `Result` defines the common enclosing protocol.
 Public APIs that must return either success or failure still require a separately specified result
 envelope; no union, exception-catching, or propagation syntax is implied here.
 
@@ -8747,21 +8807,12 @@ portable semantic module/interface model is shared across backends. The long-ter
 conceptually and practically independent of the JVM, support other platforms, and permit a
 self-hosted implementation.
 
-## Open specification decisions
+## Deferred specification work
 
-The following decisions remain unresolved and must be settled in `LANGUAGE.md` before their
-dependent implementation begins:
-
-* the success/failure result envelope used by public format operations;
-* the success/failure result envelope used by sandbox construction, lifecycle operations, and
-  unavailable capabilities; and
-* how canonical serialization represents a dynamically supplied host function or capability that
-  has no portable semantic identity.
-
-These narrow issues are tracked as `unresolved` requirements in `CONFORMANCE.md`. No implementation
-may silently choose syntax or observable semantics for them. User-defined symbolic operators,
-fine-grained module-code visibility, and resumable sandbox state are deferred rather than unresolved
-requirements for the initial language.
+The public format and sandbox result envelope, serialization of dynamically supplied capabilities,
+and environment replacement semantics are specified above. User-defined symbolic operators,
+fine-grained module-code visibility, and resumable sandbox state remain deferred for the initial
+language.
 
 Source-exact and comment-preserving reconstruction, fine-grained metadata permissions, dynamic
 language-feature unlocking, revocable capability proxies, resource quotas, operating-system or

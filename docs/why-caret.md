@@ -208,19 +208,20 @@ behavior may be observable; the declaration does not grant access to a filesyste
 could receive the real filesystem in a trusted application, a restricted directory in a plugin, or
 an in-memory filesystem in a tutorial.
 
-Reflection is intended to obey the same boundary. A callable projected into a sandbox may expose
-its public parameter, result, and effect metadata without exposing private host captures, native
-implementation details, or a route back to the host root. Inside the sandbox, the quine prints only
-the code visible in that environment.
+Reflection is intended to obey the same boundary. A callable projected into a sandbox exposes only
+its arity, argument contracts, and result contract—not whether it is native, its host captures, its
+implementation, or a route back to the host root. Inside the sandbox, the quine prints only the
+plugin code visible there, not the supplied environment.
 
 The lifecycle design is also explicit. Reload stops the old generation first and invalidates its
 references; it does not silently make saved references point into the new generation. Immutable
-values already copied out remain values. Environment-mediated names can be hidden atomically, while
-revoking independently retained resource references requires a mediation object.
+values already copied out remain values. A running plugin can atomically swap its immutable
+environment snapshot without reloading; mediated names then resolve through the new snapshot, while
+revoking independently retained resource references still requires a mediation object.
 
 This is a coherent basis for plugins, application automation, and controlled REPLs, but it is not a
 security product today. Sandboxing, reflective membranes, modules, lifecycle APIs, and even the
-public success/failure result envelope remain unimplemented or unresolved. Practical adoption would
+public success/failure result envelope remain unimplemented. Practical adoption would
 need an embedding API, resource limits, adversarial security testing, dependable host
 interoperability, and probably process or stronger isolation for hostile code. Capability
 revocation, safe FFI, signing and distribution, and operational monitoring might become priorities

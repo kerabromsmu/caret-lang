@@ -186,8 +186,9 @@ introducing a separate record or schema type system.
 Caret also plans a standard `ErrorTemplate` carrying a stable code, phase, message, locations,
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return
-values. None of this contract, dispatch, literal, or template syntax is implemented by the current
-prototype yet.
+values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
+operations share one explicit envelope. None of this contract, dispatch, literal, template, or
+result syntax is implemented by the current prototype yet.
 
 ## Environment-relative reflection
 
@@ -197,12 +198,13 @@ with `@module == @root`. Complete semantic module code will be represented as im
 Caret values and convertible to canonical, implementation-independent Caret source, making program
 reification and canonical quines possible.
 
-The same model anchors sandboxing. `sandbox source environment` creates a plugin environment whose
-exposed names can be changed atomically by its host. Reflection respects that boundary, and
-declaring an effect describes an action without granting permission to perform it. Reloading starts
-a fresh generation: immutable values already obtained remain values, while all old-generation
-references become invalid. These features are specified future work and are not available in the
-prototype.
+The same model anchors sandboxing. `sandbox source environment` accepts an immutable exported scope;
+the host can atomically replace that complete snapshot with `swapEnv` without restarting the plugin.
+Reflection respects that boundary, and canonical sandbox code excludes exposed host implementations.
+Declaring an effect describes an action without granting permission to perform it. Reloading, unlike
+an environment swap, starts a fresh generation: immutable values already obtained remain values,
+while all old-generation references become invalid. These features are specified future work and
+are not available in the prototype.
 
 ## An evolving language experiment
 
