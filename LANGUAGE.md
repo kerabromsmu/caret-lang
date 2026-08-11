@@ -7430,6 +7430,1169 @@ This allows the same mechanism to support:
 
 without weakening Caret's reflection model.
 
+## Templates
+
+### Overview
+
+A **template** is a contract describing the structure and contents of a collection.
+
+A template is constructed by applying `template` to a collection containing:
+
+* holes;
+* contracted holes;
+* fixed values;
+* named fields;
+* nested templates or collections.
+
+Example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+`Point` is a contract describing a two-element collection whose elements both satisfy `Float`.
+
+Therefore:
+
+```caret
+Point [10.0 20.0]
+```
+
+is true, while:
+
+```caret
+Point [10.0 "hello"]
+```
+
+is false.
+
+Templates use the ordinary Caret contract system.
+
+They do not introduce a separate type system.
+
+---
+
+# Template construction
+
+The general form is:
+
+```caret
+template collection
+```
+
+For example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+`template` examines the structure of the supplied collection and constructs a contract requiring another collection to have compatible structure and values.
+
+Conceptually:
+
+```text
+template : Collection -> Contract
+```
+
+The resulting value may therefore be used anywhere an ordinary contract may be used.
+
+For example:
+
+```caret
+(Point) position
+```
+
+or:
+
+```caret
+(Collection Point) positions
+```
+
+---
+
+# Holes
+
+## Unconstrained holes
+
+A plain hole:
+
+```caret
+_
+```
+
+represents a position whose value may vary freely.
+
+Example:
+
+```caret
+Pair =
+  template [
+    _
+    _
+  ]
+```
+
+matches any two-element collection:
+
+```caret
+[1 2]
+["a" true]
+[person 42]
+```
+
+provided the collection has the required shape.
+
+---
+
+## Contracted holes
+
+Normal Caret contract syntax may constrain a hole:
+
+```caret
+(Int) _
+```
+
+Example:
+
+```caret
+IntegerPair =
+  template [
+    (Int) _
+    (Int) _
+  ]
+```
+
+matches:
+
+```caret
+[10 20]
+[-1 42]
+```
+
+but not:
+
+```caret
+[10 "twenty"]
+```
+
+Multiple contracts use the normal Caret contract syntax:
+
+```caret
+PositiveIntegerPair =
+  template [
+    (Int positive) _
+    (Int positive) _
+  ]
+```
+
+No template-specific constraint syntax is required.
+
+---
+
+# Fixed values
+
+A template element that is not a hole represents a fixed-value requirement.
+
+Example:
+
+```caret
+Header =
+  template [
+    0xCA
+    0xFE
+    (Int) _
+  ]
+```
+
+matches:
+
+```caret
+[0xCA 0xFE 100]
+```
+
+but not:
+
+```caret
+[0xCA 0xFF 100]
+```
+
+Conceptually, a fixed element:
+
+```caret
+42
+```
+
+requires:
+
+```text
+eq actual 42
+```
+
+using the applicable polymorphic equality operation.
+
+Thus a template may combine exact-value requirements and contract requirements.
+
+---
+
+# Template semantics
+
+For:
+
+```caret
+T =
+  template [
+    fixed
+    (Contract) _
+    _
+  ]
+```
+
+a candidate collection satisfies `T` when:
+
+1. it has the required collection shape;
+2. the first element equals `fixed`;
+3. the second element satisfies `Contract`;
+4. the third element exists but is otherwise unrestricted.
+
+Conceptually:
+
+```text
+T value =
+    Collection value
+    and shape value == templateShape
+    and eq value[0] fixed
+    and Contract value[1]
+```
+
+with no additional value constraint on `value[2]`.
+
+The compiler may perform these checks statically when sufficient information is known.
+
+Runtime validation is required only where the contract cannot be proven statically.
+
+---
+
+# Shape
+
+A template describes collection **shape** as well as element constraints.
+
+For a positional collection:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+the shape includes:
+
+```text
+element count: 2
+
+position 0:
+    Float hole
+
+position 1:
+    Float hole
+```
+
+Therefore a three-element collection does not satisfy `Point`:
+
+```caret
+Point [1.0 2.0 3.0]
+```
+
+is false.
+
+Likewise:
+
+```caret
+Point [1.0]
+```
+
+is false.
+
+For positional templates, element count and position are part of the template contract.
+
+---
+
+# Named fields
+
+Templates may describe named structured collections using ordinary `^` fields.
+
+Example:
+
+```caret
+Person =
+  template [
+    ^name (String) _
+    ^age (Int positive) _
+    ^active true
+  ]
+```
+
+A matching value may be:
+
+```caret
+[
+  ^name "Alice"
+  ^age 42
+  ^active true
+]
+```
+
+The template requires:
+
+```text
+name:
+    satisfies String
+
+age:
+    satisfies Int
+    satisfies positive
+
+active:
+    equals true
+```
+
+Field names are part of the template structure.
+
+The template system does not require a separate record-schema syntax.
+
+---
+
+# Dynamic fields
+
+Templates may use ordinary field values where dynamic keys are required.
+
+For example, where appropriate:
+
+```caret
+template [
+  field key (String) _
+]
+```
+
+uses the same first-class field mechanism as ordinary collection construction.
+
+Templates do not introduce another dictionary representation.
+
+---
+
+# Nested templates
+
+Templates may contain nested collection structure.
+
+Example:
+
+```caret
+Person =
+  template [
+    ^name (String) _
+
+    ^position
+      [
+        (Float) _
+        (Float) _
+      ]
+  ]
+```
+
+The nested collection contributes recursively to the outer template shape.
+
+A matching value is:
+
+```caret
+[
+  ^name "Alice"
+  ^position [
+    10.0
+    20.0
+  ]
+]
+```
+
+The implementation should recursively derive structural constraints from nested collection values.
+
+Where a reusable nested contract is preferable, an explicitly defined template may be used:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+
+Person =
+  template [
+    ^name (String) _
+    ^position (Point) _
+  ]
+```
+
+Both forms participate in the ordinary contract system.
+
+---
+
+# Templates are contracts
+
+The result of `template` is a normal Caret contract.
+
+For example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+may be used as:
+
+```caret
+(Point) p
+```
+
+or:
+
+```caret
+(Collection Point) points
+```
+
+or as part of another contract:
+
+```caret
+VisiblePoint =
+  contract Point visible
+```
+
+Templates therefore participate in:
+
+* contract derivation;
+* parameter contracts;
+* return contracts;
+* collection element contracts;
+* polymorphic function dispatch;
+* runtime contract checks;
+* static contract inference.
+
+No separate "template type" mechanism is required.
+
+---
+
+# Template derivation
+
+Templates may participate in ordinary derived contracts.
+
+Example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+
+NonZeroPoint =
+  contract Point nonZero
+```
+
+Conceptually:
+
+```text
+NonZeroPoint value
+    =
+Point value
+and nonZero value
+```
+
+Likewise, a structural template may derive from or be combined with other collection-related contracts.
+
+---
+
+# Collections of template-shaped values
+
+Templates are particularly useful as common metadata for homogeneous structural collections.
+
+For example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+
+(Collection Point) points =
+  [
+    [1.0 2.0]
+    [3.0 4.0]
+    [5.0 6.0]
+  ]
+```
+
+Every element has the same template shape.
+
+The runtime therefore does not need to repeat the full structural metadata for every point.
+
+Conceptually:
+
+```text
+collection metadata:
+
+    element contract:
+        Point
+
+    Point shape:
+        two Float positions
+
+values:
+
+    [1.0 2.0]
+    [3.0 4.0]
+    [5.0 6.0]
+```
+
+The template may be stored once as common collection metadata.
+
+---
+
+# Templates and metadata
+
+A template may describe more precise structural metadata than a broad element contract.
+
+For example:
+
+```caret
+(Collection Number) values
+```
+
+only establishes that every element satisfies `Number`.
+
+By contrast:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+establishes:
+
+* collection arity;
+* element positions;
+* element contracts;
+* structural nesting;
+* named fields where present;
+* fixed values where present.
+
+A collection whose elements all satisfy the same template can therefore share this metadata.
+
+The semantic rule is:
+
+> When every element of a collection has the same template shape, the template may serve as shared element metadata for the entire collection.
+
+The physical metadata representation remains an implementation detail.
+
+---
+
+# Templates and packed collections
+
+A template may also provide the structural information required for a packed representation.
+
+For example:
+
+```caret
+Point =
+  template [
+    (Float32) _
+    (Float32) _
+  ]
+```
+
+then:
+
+```caret
+(Packed Point) points =
+  [
+    [1.0 2.0]
+    [3.0 4.0]
+    [5.0 6.0]
+  ]
+```
+
+may be represented physically as:
+
+```text
+Float32 Float32
+Float32 Float32
+Float32 Float32
+```
+
+with the `Point` layout descriptor stored once for the collection.
+
+Conceptually:
+
+```text
+element layout:
+
+    position 0:
+        Float32
+        offset 0
+
+    position 1:
+        Float32
+        offset 4
+
+stride:
+    8 bytes
+```
+
+followed by packed values.
+
+The template itself describes logical structure.
+
+`Packed` additionally requires that this structure have a uniform concrete physical representation.
+
+Therefore:
+
+```text
+template shape
+    !=
+packed layout
+```
+
+but a sufficiently concrete template may allow a packed layout to be derived.
+
+---
+
+# Heterogeneous template collections
+
+A collection may also contain templates themselves.
+
+For example:
+
+```caret
+patterns =
+  [
+    template [1 _ _]
+    template [2 _ _]
+    template [3 _ _]
+  ]
+```
+
+These templates share the same structural form:
+
+```text
+three positions
+
+position 0:
+    fixed value
+
+position 1:
+    hole
+
+position 2:
+    hole
+```
+
+Only the fixed value differs between instances.
+
+The runtime may therefore share the common template metadata across the collection.
+
+Conceptually:
+
+```text
+collection metadata:
+
+    element kind:
+        Template
+
+    common template shape:
+        [Fixed Hole Hole]
+
+elements:
+
+    fixed value = 1
+    fixed value = 2
+    fixed value = 3
+```
+
+This allows collections of structurally equivalent templates to be represented efficiently.
+
+---
+
+# Template shape metadata
+
+Two templates may have the same metadata shape while containing different fixed values.
+
+For example:
+
+```caret
+template [1 _ _]
+template [2 _ _]
+template [100 _ _]
+```
+
+share the structural descriptor:
+
+```text
+[
+    Fixed
+    Hole
+    Hole
+]
+```
+
+Similarly:
+
+```caret
+template [
+  ^opcode 1
+  ^arg (Int) _
+]
+
+template [
+  ^opcode 2
+  ^arg (Int) _
+]
+```
+
+share:
+
+```text
+fields:
+
+opcode:
+    fixed-value position
+
+arg:
+    Int hole
+```
+
+while the fixed `opcode` value differs.
+
+An implementation may factor common template structure into collection-level metadata.
+
+---
+
+# Templates and ordinary collection literals
+
+Square brackets retain exactly one fundamental meaning:
+
+```caret
+[...]
+```
+
+constructs a collection.
+
+A collection does not automatically become a template merely because it contains holes.
+
+Template construction is explicit:
+
+```caret
+template [...]
+```
+
+This distinction is intentional.
+
+For example:
+
+```caret
+[
+  (Float) _
+  (Float) _
+]
+```
+
+is a collection expression containing contracted holes.
+
+Applying:
+
+```caret
+template
+```
+
+to that collection creates a structural contract:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+The language therefore does not need separate collection and template literal grammars.
+
+---
+
+# Relationship to ordinary holes
+
+Templates reuse the normal Caret `_` syntax.
+
+A hole means that some value is intentionally unspecified.
+
+Within:
+
+```caret
+template [...]
+```
+
+the hole represents a variable position in the matched collection.
+
+A contracted hole:
+
+```caret
+(Float) _
+```
+
+means:
+
+> this position is variable, but any value occupying it must satisfy `Float`.
+
+A fixed element:
+
+```caret
+10
+```
+
+means:
+
+> this position is not variable; its value must equal `10`.
+
+No additional placeholder syntax is required.
+
+---
+
+# Templates and polymorphic dispatch
+
+Because templates are contracts, they may specialize function definitions.
+
+Example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+
+(String) toString (Point) p =
+  ...
+```
+
+A value satisfying `Point` may therefore select the `Point` specialization of `toString`.
+
+Likewise:
+
+```caret
+(Float) distance (Point) a (Point) b =
+  ...
+```
+
+uses ordinary contract-based function polymorphism.
+
+Template dispatch is not a separate dispatch system.
+
+---
+
+# Templates and static checking
+
+The compiler should statically validate template contracts whenever possible.
+
+For example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+
+(Point) p =
+  [1.0 2.0]
+```
+
+may be proven valid at compile time.
+
+This:
+
+```caret
+(Point) p =
+  [1.0 "two"]
+```
+
+should produce a compile-time error when the compiler knows that `"two"` does not satisfy `Float`.
+
+Likewise:
+
+```caret
+(Point) p =
+  [1.0 2.0 3.0]
+```
+
+may be rejected statically because its shape is incompatible.
+
+When the candidate value is only known dynamically, normal runtime contract checking applies.
+
+---
+
+# Exact shape
+
+The initial template model uses exact structural shape.
+
+For positional collections:
+
+```caret
+template [
+  (Int) _
+  (Int) _
+]
+```
+
+requires exactly two positions.
+
+For named structures, the fields described by the template are part of its required shape.
+
+The initial implementation should treat additional unmatched structural members as incompatible unless another contract explicitly provides open/extensible-template semantics.
+
+A future contract may provide open structural matching where useful, but it should not silently change the meaning of ordinary `template`.
+
+---
+
+# Templates versus formats
+
+Templates and formats describe different relationships.
+
+A template describes:
+
+```text
+Value -> Boolean
+```
+
+by specifying a collection's logical shape.
+
+A format describes:
+
+```text
+logical value <-> representation
+```
+
+A template may therefore be used as the logical contract of values processed by a format.
+
+For example, a format may decode data satisfying:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+without making `Point` itself a serialization format.
+
+Likewise, a concrete template may provide enough structural information to derive a packed memory layout without becoming a `Format`.
+
+---
+
+# Reflection
+
+Templates are first-class contract values and should be reflectable.
+
+Reflection may expose information such as:
+
+```text
+shape
+element count
+field names
+hole positions
+hole contracts
+fixed positions
+fixed values
+nested templates
+derived contracts
+```
+
+For example:
+
+```caret
+@Point
+```
+
+may expose the structure represented by:
+
+```caret
+template [
+  (Float) _
+  (Float) _
+]
+```
+
+subject to ordinary Caret reflection and sandbox rules.
+
+This enables tooling such as:
+
+* schema viewers;
+* editors;
+* serializers;
+* binary layout tools;
+* GPU buffer inspectors;
+* pattern editors;
+* generated documentation.
+
+---
+
+# Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. Explicit template construction:
+
+```caret
+template [...]
+```
+
+2. Templates as ordinary contracts.
+
+3. Unconstrained holes:
+
+```caret
+_
+```
+
+4. Contracted holes:
+
+```caret
+(Int) _
+```
+
+5. Multiple contracts on a hole:
+
+```caret
+(Int positive) _
+```
+
+6. Fixed-value positions.
+
+7. Equality-based checking of fixed values.
+
+8. Exact positional shape matching.
+
+9. Named fields using `^`.
+
+10. Nested collection shapes.
+
+11. Reusable named templates:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+12. Templates usable as binding and parameter contracts.
+
+13. Templates usable as collection element contracts:
+
+```caret
+(Collection Point) points
+```
+
+14. Templates participating in ordinary contract derivation.
+
+15. Template-based polymorphic function specialization.
+
+16. Static template validation where possible.
+
+17. Runtime validation where static proof is unavailable.
+
+18. Shared template metadata for collections whose elements have a common shape.
+
+19. Compatibility with packed collection layout when all required representations are concrete.
+
+20. Reflection over template structure.
+
+The initial implementation may postpone:
+
+* open structural templates;
+* optional template fields;
+* variable-length positional templates;
+* repeated subpatterns;
+* template unions;
+* destructuring/binding values from matched holes;
+* automatic construction from template holes;
+* generalized pattern-matching syntax;
+* compile-time layout optimization across arbitrary recursive templates.
+
+These later features should preserve the fundamental model that:
+
+```caret
+template collection
+```
+
+constructs a contract from the structural shape and constraints of that collection.
+
+---
+
+# Design principle
+
+A Caret template is an explicitly constructed structural contract.
+
+For example:
+
+```caret
+Point =
+  template [
+    (Float) _
+    (Float) _
+  ]
+```
+
+means:
+
+> `Point` is the contract for collections of exactly this shape, with two variable positions, each constrained by `Float`.
+
+Within a template:
+
+```text
+_                 unrestricted variable position
+(Contract) _      constrained variable position
+value             fixed-value requirement
+collection        nested structural requirement
+^name ...         named structural member
+```
+
+Templates reuse ordinary:
+
+* collection syntax;
+* holes;
+* contracts;
+* fields;
+* equality;
+* polymorphic functions;
+* reflection.
+
+When many values or templates have the same shape, that shape may be stored once as shared collection metadata.
+
+This lets templates serve simultaneously as structural types, reusable schemas, and compact shared metadata without introducing a separate object, record, tuple, or schema type system.
+
 
 ### Compiler target and compatibility
 
