@@ -49,8 +49,9 @@ baseline.
   grouping, general choices, unordered object traversal, and the initial JVM ABI are specified.
 - `LANGUAGE.md` records the resolved infix, multiline, function-reference/result-contract,
   persistent state/object, module, bytes, contract, collection, and JVM backend decisions.
-- The remaining open result templates and non-portable external serialization are explicit
-  `unresolved` conformance rows and may not be invented during implementation.
+- The shared structured-error payload is specified through `ErrorTemplate`. Public result envelopes
+  and non-portable external serialization remain explicit `unresolved` conformance rows and may not
+  be invented during implementation.
 
 ## Phase 1 — Front end, binding semantics, and unified callables
 
@@ -113,6 +114,15 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
   callables, SIMD values, formats, rules, and cycles as those kinds arrive. Contract failures identify
   the declaration/call and failing contract with related spans.
+- Extend eligible hole functions with language-owned collection-constructor descriptors retaining
+  shape, nesting, fields, fixed captures, hole identities, and hole contracts. Keep ordinary eager
+  capture and numbered-hole behavior; never expose Java AST or runtime implementation objects.
+- Implement `template` as an ordinary callable over concrete collections and reifiable collection
+  constructors. It produces an ordinary first-class `Contract` and rejects arbitrary callables or
+  non-structural partial expressions with a stable located diagnostic.
+- Establish the shared diagnostic/error descriptor from `ErrorTemplate`: stable code, phase,
+  message, primary location, related locations, cause, and subsystem details. Aborting diagnostics
+  retain control-flow semantics; expected operation failures use the corresponding Caret value.
 
 ### Effects and purity
 
@@ -155,6 +165,10 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Implement the universal `[...]` literal, including empty, homogeneous, heterogeneous, and nested
   values. Infer content contracts and apply contextual contracts without assigning a fixed container
   meaning to square brackets.
+- Make each collection literal a hole-expression boundary: materialize its collection-constructor
+  function before passing it to a surrounding call, while retaining nested collection structure in
+  the outer constructor descriptor. This lets ordinary `template [..]` application receive the
+  constructor without template-specific parsing or evaluation.
 - Preserve semantic element contracts independently from physical representation metadata. Share
   metadata at collection level when possible and retain per-element metadata where required.
 
@@ -168,6 +182,18 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   needed. Keep named-field collections distinct from executable exported scopes.
 - Add packed collections only after representation analysis can require uniform layouts. Integrate
   later with SIMD and formats without changing observable contract membership.
+
+### Structural templates
+
+- Implement unconstrained and contracted holes, equality-checked fixed values, exact positional and
+  named shape, dynamic field names, and recursive nested collection shapes.
+- Derive membership as the structural inverse of eligible constructors without invoking them.
+  Repeated numbered holes impose candidate equality; numbering changes parameter order but not
+  collection shape, and mixed numbered/unnumbered holes remain invalid.
+- Validate statically known template membership and retain runtime checks when proof is unavailable.
+  Diagnose malformed holes, duplicate fields, and non-comparable fixed values with stable locations.
+- Reflect template structure as metadata on `Contract` descriptors. Permit shared metadata and
+  packed-layout derivation only when optimized and optimization-disabled behavior is identical.
 
 ### Updates and controlled mutation
 
@@ -221,8 +247,9 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Phase 7 — First-class bidirectional formats
 
-- Add immutable `Format` values representing bidirectional relations plus explicit structured
-  success/failure results. Implement empty formats and ordinary functional construction.
+- Add immutable `Format` values representing bidirectional relations. Expected failures carry an
+  `ErrorTemplate` payload; settle the still-unresolved success/failure envelope before exposing the
+  public `decode` and `encode` APIs. Implement empty formats and ordinary functional construction.
 - Implement primitive byte/integer formats, `field format "name"`, constants/signatures, nested
   formats, fixed/prior-field repetition, conditions, general `selector ==` choices, constraints,
   and `>>` composition.
@@ -231,7 +258,8 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Implement `decode`, `encode`, and pure explicit `codec decode encode format`; distinguish
   representation transformations from logical-value transformations.
 - Make expected mismatch, incomplete input, invalid field, and codec failure structured rather than
-  exceptional. Preserve offsets/path context in failure values and rendered diagnostics.
+  exceptional. Preserve offsets/path context in an exact format-details template inside the shared
+  error payload and in rendered diagnostics.
 - Add format reflection for components, names, contracts, directionality, size information where
   known, and tooling/generator use. Keep transport independent from formats.
 - Defer general relational solving, arbitrary inversion, nondeterminism/backtracking, streaming,
@@ -308,8 +336,8 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   invalidate all old-generation references without rebinding, preserve copied immutable values,
   and leave a failed reload unloaded but retryable from retained configuration.
 - Support direct, filtered, and virtual capabilities. Treat effect declarations as descriptions,
-  never authority grants, and report unavailable authority through the settled language failure
-  model.
+  never authority grants, and report unavailable authority through `ErrorTemplate`; settle the
+  sandbox operation result envelope before exposing the public lifecycle API.
 - Project references crossing the boundary through a reflective membrane that cannot expose host
   roots, private captures, native implementation state, hidden code, or other capabilities.
 - Support nested sandboxes with child authority bounded by parent authority unless the outer host

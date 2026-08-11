@@ -39,8 +39,11 @@ column by one, although a leading tab still contributes two spaces to indentatio
 Built-in argument validation retains individual argument spans, so an invalid operand points to
 that operand rather than the complete call.
 
-Internally, errors retain their phase, a stable diagnostic code, message, primary source span, and
-related source spans. The CLI renders the primary location in the compact form below and follows it
+Internally, diagnostics retain their phase, a stable diagnostic code, message, primary source span,
+related source spans, an optional cause, and subsystem-specific details. These fields use the same
+semantic information model as the planned `ErrorTemplate` described below, but a diagnostic that
+aborts lexing, parsing, analysis, or evaluation is not thereby an ordinary catchable Caret value.
+The CLI renders the primary location in the compact form below and follows it
 with located `Note:` lines when a diagnostic has related locations, such as the first declaration
 for a duplicate definition.
 
@@ -2857,9 +2860,10 @@ Encoding may also fail because:
 
 These failures should be represented explicitly rather than relying on exceptions for expected format mismatch.
 
-The concrete exported result/error shape remains unresolved and is tracked as
-`FORMAT-FAILURE-001` in `CONFORMANCE.md`. It must be specified before public `decode` and `encode`
-are implemented.
+Each failure payload satisfies the standard `ErrorTemplate`; a format-specific exact template
+describes its `details` field. The enclosing success/failure result envelope remains unresolved and
+is tracked as `FORMAT-FAILURE-001` in `CONFORMANCE.md`. It must be specified before public `decode`
+and `encode` are implemented.
 
 Errors should be capable of carrying useful information such as:
 
@@ -6672,8 +6676,8 @@ plugin[#dynamic]~
 @plugin.code
 ```
 
-`@plugin` metadata is non-callable. The exact structured failure/result values remain unresolved
-until the general template-based result model is specified.
+`@plugin` metadata is non-callable. Sandbox failure payloads satisfy `ErrorTemplate`, with an exact
+sandbox-specific template for `details`. The enclosing operation result envelope remains unresolved.
 
 ## Lifecycle and boundary values
 
@@ -7436,7 +7440,8 @@ without weakening Caret's reflection model.
 
 A **template** is a contract describing the structure and contents of a collection.
 
-A template is constructed by applying `template` to a collection containing:
+A template is constructed by calling the ordinary `template` function with either a concrete
+collection or a reifiable function produced by a collection expression containing:
 
 * holes;
 * contracted holes;
@@ -7476,12 +7481,12 @@ They do not introduce a separate type system.
 
 ---
 
-# Template construction
+### Template construction
 
 The general form is:
 
 ```caret
-template collection
+template specimen
 ```
 
 For example:
@@ -7494,15 +7499,50 @@ Point =
   ]
 ```
 
-`template` examines the structure of the supplied collection and constructs a contract requiring another collection to have compatible structure and values.
+Collection literals are hole-expression boundaries: their holes are materialized as a constructor
+function before a surrounding application consumes the literal's value. Because this collection
+contains holes, it first becomes a function whose parameters fill those holes and whose result is
+the completed collection. The ordinary `template` function then derives a contract from that
+function's language-owned collection constructor descriptor.
 
-Conceptually:
+The supported overloads are conceptually:
 
 ```text
 template : Collection -> Contract
+template : CollectionConstructor -> Contract
 ```
 
-The resulting value may therefore be used anywhere an ordinary contract may be used.
+A concrete collection produces a fixed-only exact template. A `CollectionConstructor` is an
+ordinary hole function whose retained descriptor is structurally a collection construction.
+`template` is not syntax and creates no exception to ordinary application or hole evaluation.
+
+For example, the compact form above is equivalent to:
+
+```caret
+PointConstructor =
+  [
+    (Float) _
+    (Float) _
+  ]
+
+Point = template PointConstructor
+```
+
+Calling `PointConstructor 10.0 20.0` produces `[10.0 20.0]`; calling
+`template PointConstructor` instead derives the corresponding membership contract.
+
+Only reifiable hole functions whose expression directly constructs a collection are accepted
+initially. Named functions, opaque/native callables, and partial expressions such as `[transform _]`
+whose hole is used in a computed element are rejected with a located
+`TEMPLATE_INVALID_CONSTRUCTOR` diagnostic. This restriction avoids attempting general function
+inversion. The descriptor is language-owned metadata and must never expose Java AST or runtime
+implementation objects.
+
+Template membership is the structural inverse of construction: candidate elements occupy hole
+positions, captured values compare equal, and fields and nested collections match recursively. The
+constructor is not invoked during membership testing.
+
+The resulting value may be used anywhere an ordinary contract may be used.
 
 For example:
 
@@ -7518,9 +7558,9 @@ or:
 
 ---
 
-# Holes
+### Holes
 
-## Unconstrained holes
+#### Unconstrained holes
 
 A plain hole:
 
@@ -7552,7 +7592,7 @@ provided the collection has the required shape.
 
 ---
 
-## Contracted holes
+#### Contracted holes
 
 Normal Caret contract syntax may constrain a hole:
 
@@ -7595,9 +7635,25 @@ PositiveIntegerPair =
 
 No template-specific constraint syntax is required.
 
+#### Numbered holes
+
+Numbered holes retain their ordinary partial-application meaning in collection constructors:
+
+```caret
+Diagonal = template [_1 _1]
+Swapped = template [_2 _1]
+```
+
+Repeated occurrences of the same numbered hole describe the same constructor parameter and
+therefore require the corresponding candidate positions to be equal. Numbering and reordering
+change the constructor's parameter order, not the collection's structural order. Any contracts on
+repeated occurrences must all hold for the shared candidate value.
+
+As with every partial expression, numbered and unnumbered holes may not be mixed.
+
 ---
 
-# Fixed values
+### Fixed values
 
 A template element that is not a hole represents a fixed-value requirement.
 
@@ -7636,13 +7692,18 @@ requires:
 eq actual 42
 ```
 
-using the applicable polymorphic equality operation.
+using the applicable polymorphic equality operation. Non-hole subexpressions are evaluated and
+captured eagerly when the collection-producing hole function is created; deriving or testing the
+template does not repeat those effects. A fixed template value must support Caret
+equality. Template construction fails with a located diagnostic when a fixed value is callable or
+otherwise non-comparable; membership testing must not turn such a value into an exceptional
+predicate.
 
 Thus a template may combine exact-value requirements and contract requirements.
 
 ---
 
-# Template semantics
+### Template semantics
 
 For:
 
@@ -7680,7 +7741,7 @@ Runtime validation is required only where the contract cannot be proven statical
 
 ---
 
-# Shape
+### Shape
 
 A template describes collection **shape** as well as element constraints.
 
@@ -7726,7 +7787,7 @@ For positional templates, element count and position are part of the template co
 
 ---
 
-# Named fields
+### Named fields
 
 Templates may describe named structured collections using ordinary `^` fields.
 
@@ -7765,13 +7826,16 @@ active:
     equals true
 ```
 
-Field names are part of the template structure.
+Field names are part of the template structure. For the initial exact model, named shape means the
+exact set of field names and the field ordering defined by the universal collection model. Missing,
+additional, or reordered fields are incompatible whenever that ordering is observable for the
+candidate collection.
 
 The template system does not require a separate record-schema syntax.
 
 ---
 
-# Dynamic fields
+### Dynamic fields
 
 Templates may use ordinary field values where dynamic keys are required.
 
@@ -7783,13 +7847,15 @@ template [
 ]
 ```
 
-uses the same first-class field mechanism as ordinary collection construction.
+uses the same first-class field mechanism as ordinary collection construction. The key expression
+is evaluated exactly once when the collection or hole function is created. It must produce a valid field name, and
+duplicate resolved names are located template-construction diagnostics.
 
 Templates do not introduce another dictionary representation.
 
 ---
 
-# Nested templates
+### Nested templates
 
 Templates may contain nested collection structure.
 
@@ -7808,7 +7874,10 @@ Person =
   ]
 ```
 
-The nested collection contributes recursively to the outer template shape.
+Within an eligible collection-constructor descriptor, a bare nested collection contributes
+recursively to the outer template shape; it is not a fixed-value equality requirement.
+Non-collection expressions that are neither holes nor contracted holes remain fixed-value
+requirements.
 
 A matching value is:
 
@@ -7844,7 +7913,7 @@ Both forms participate in the ordinary contract system.
 
 ---
 
-# Templates are contracts
+### Templates are contracts
 
 The result of `template` is a normal Caret contract.
 
@@ -7891,7 +7960,7 @@ No separate "template type" mechanism is required.
 
 ---
 
-# Template derivation
+### Template derivation
 
 Templates may participate in ordinary derived contracts.
 
@@ -7921,7 +7990,7 @@ Likewise, a structural template may derive from or be combined with other collec
 
 ---
 
-# Collections of template-shaped values
+### Collections of template-shaped values
 
 Templates are particularly useful as common metadata for homogeneous structural collections.
 
@@ -7944,7 +8013,7 @@ Point =
 
 Every element has the same template shape.
 
-The runtime therefore does not need to repeat the full structural metadata for every point.
+An implementation may avoid repeating the full structural metadata for every point.
 
 Conceptually:
 
@@ -7968,7 +8037,7 @@ The template may be stored once as common collection metadata.
 
 ---
 
-# Templates and metadata
+### Templates and metadata
 
 A template may describe more precise structural metadata than a broad element contract.
 
@@ -8001,15 +8070,16 @@ establishes:
 
 A collection whose elements all satisfy the same template can therefore share this metadata.
 
-The semantic rule is:
+The optimization permission is:
 
 > When every element of a collection has the same template shape, the template may serve as shared element metadata for the entire collection.
 
-The physical metadata representation remains an implementation detail.
+The physical metadata representation remains an implementation detail. Sharing must not change
+value identity, structural equality, reflection, evaluation order, or any other observable behavior.
 
 ---
 
-# Templates and packed collections
+### Templates and packed collections
 
 A template may also provide the structural information required for a packed representation.
 
@@ -8079,7 +8149,7 @@ but a sufficiently concrete template may allow a packed layout to be derived.
 
 ---
 
-# Heterogeneous template collections
+### Heterogeneous template collections
 
 A collection may also contain templates themselves.
 
@@ -8119,7 +8189,7 @@ Conceptually:
 collection metadata:
 
     element kind:
-        Template
+        Contract
 
     common template shape:
         [Fixed Hole Hole]
@@ -8135,7 +8205,7 @@ This allows collections of structurally equivalent templates to be represented e
 
 ---
 
-# Template shape metadata
+### Template shape metadata
 
 Two templates may have the same metadata shape while containing different fixed values.
 
@@ -8189,7 +8259,7 @@ An implementation may factor common template structure into collection-level met
 
 ---
 
-# Templates and ordinary collection literals
+### Templates and ordinary collection literals
 
 Square brackets retain exactly one fundamental meaning:
 
@@ -8197,9 +8267,20 @@ Square brackets retain exactly one fundamental meaning:
 [...]
 ```
 
-constructs a collection.
+describes collection construction.
 
-A collection does not automatically become a template merely because it contains holes.
+A collection expression containing holes follows the ordinary partial-application rule: it evaluates
+to a function whose parameters fill the holes and whose result is the completed collection. A
+collection literal owns the holes in its structural expression and materializes that function before
+the value is passed to a surrounding call. Thus `consume [1 _]` passes a constructor function to
+`consume`; it does not make the whole `consume [1 _]` application partial. This is a general
+collection rule, not behavior specific to `template`.
+
+Evaluation proceeds recursively. A nested literal used directly as an element belongs to the
+enclosing collection's structural constructor, so its holes contribute to the same reifiable
+descriptor. A nested literal used as the operand of an inner call materializes its constructor for
+that call first. A collection expression never evaluates to a collection containing hole values and
+does not automatically become a template.
 
 Template construction is explicit:
 
@@ -8218,15 +8299,9 @@ For example:
 ]
 ```
 
-is a collection expression containing contracted holes.
+is an ordinary two-argument function. Supplying two values constructs the completed collection.
 
-Applying:
-
-```caret
-template
-```
-
-to that collection creates a structural contract:
+Passing that function to the ordinary `template` callable creates a structural contract:
 
 ```caret
 Point =
@@ -8240,13 +8315,13 @@ The language therefore does not need separate collection and template literal gr
 
 ---
 
-# Relationship to ordinary holes
+### Relationship to ordinary holes
 
 Templates reuse the normal Caret `_` syntax.
 
 A hole means that some value is intentionally unspecified.
 
-Within:
+Within a collection-producing hole function passed to `template`:
 
 ```caret
 template [...]
@@ -8278,7 +8353,7 @@ No additional placeholder syntax is required.
 
 ---
 
-# Templates and polymorphic dispatch
+### Templates and polymorphic dispatch
 
 Because templates are contracts, they may specialize function definitions.
 
@@ -8310,7 +8385,7 @@ Template dispatch is not a separate dispatch system.
 
 ---
 
-# Templates and static checking
+### Templates and static checking
 
 The compiler should statically validate template contracts whenever possible.
 
@@ -8351,7 +8426,7 @@ When the candidate value is only known dynamically, normal runtime contract chec
 
 ---
 
-# Exact shape
+### Exact shape
 
 The initial template model uses exact structural shape.
 
@@ -8374,7 +8449,7 @@ A future contract may provide open structural matching where useful, but it shou
 
 ---
 
-# Templates versus formats
+### Templates versus formats
 
 Templates and formats describe different relationships.
 
@@ -8410,9 +8485,11 @@ Likewise, a concrete template may provide enough structural information to deriv
 
 ---
 
-# Reflection
+### Reflection
 
-Templates are first-class contract values and should be reflectable.
+Templates are first-class contract values and should be reflectable. Their public kind remains
+`Contract`; template shape is metadata on the language-owned contract descriptor rather than a
+separate `Template` value kind.
 
 Reflection may expose information such as:
 
@@ -8457,11 +8534,12 @@ This enables tooling such as:
 
 ---
 
-# Implementation requirements
+### Implementation requirements
 
 The initial implementation should support at minimum:
 
-1. Explicit template construction:
+1. Ordinary `template` function application to concrete collections or eligible collection-producing
+hole functions:
 
 ```caret
 template [...]
@@ -8487,17 +8565,19 @@ _
 (Int positive) _
 ```
 
-6. Fixed-value positions.
+6. Numbered-hole reordering and repeated-hole equality constraints.
 
-7. Equality-based checking of fixed values.
+7. Fixed-value positions.
 
-8. Exact positional shape matching.
+8. Equality-based checking of fixed values.
 
-9. Named fields using `^`.
+9. Exact positional shape matching.
 
-10. Nested collection shapes.
+10. Named fields using `^`.
 
-11. Reusable named templates:
+11. Nested collection shapes.
+
+12. Reusable named templates:
 
 ```caret
 Point =
@@ -8507,27 +8587,32 @@ Point =
   ]
 ```
 
-12. Templates usable as binding and parameter contracts.
+13. Templates usable as binding and parameter contracts.
 
-13. Templates usable as collection element contracts:
+14. Templates usable as collection element contracts:
 
 ```caret
 (Collection Point) points
 ```
 
-14. Templates participating in ordinary contract derivation.
+15. Templates participating in ordinary contract derivation.
 
-15. Template-based polymorphic function specialization.
+16. Template-based polymorphic function specialization.
 
-16. Static template validation where possible.
+17. Static template validation where possible.
 
-17. Runtime validation where static proof is unavailable.
+18. Runtime validation where static proof is unavailable.
 
-18. Shared template metadata for collections whose elements have a common shape.
+19. Shared template metadata for collections whose elements have a common shape.
 
-19. Compatibility with packed collection layout when all required representations are concrete.
+20. Compatibility with packed collection layout when all required representations are concrete.
 
-20. Reflection over template structure.
+21. Reflection over template structure.
+
+22. Located diagnostics for invalid constructors, fixed values, dynamic field names, duplicate
+fields, and malformed contracted holes.
+
+23. Identical observable behavior with shared-template and packed-layout optimizations disabled.
 
 The initial implementation may postpone:
 
@@ -8544,14 +8629,15 @@ The initial implementation may postpone:
 These later features should preserve the fundamental model that:
 
 ```caret
-template collection
+template [...]
 ```
 
-constructs a contract from the structural shape and constraints of that collection.
+calls an ordinary function that constructs a contract from a concrete collection or from the
+language-owned descriptor of an eligible collection-producing hole function.
 
 ---
 
-# Design principle
+### Design principle
 
 A Caret template is an explicitly constructed structural contract.
 
@@ -8569,7 +8655,7 @@ means:
 
 > `Point` is the contract for collections of exactly this shape, with two variable positions, each constrained by `Float`.
 
-Within a template:
+Within an eligible collection constructor:
 
 ```text
 _                 unrestricted variable position
@@ -8592,6 +8678,47 @@ Templates reuse ordinary:
 When many values or templates have the same shape, that shape may be stored once as shared collection metadata.
 
 This lets templates serve simultaneously as structural types, reusable schemas, and compact shared metadata without introducing a separate object, record, tuple, or schema type system.
+
+### Standard error template
+
+Caret uses one structural information model for recoverable operation failures and aborting
+diagnostics. The planned standard library defines an exact outer error shape equivalent to:
+
+```caret
+ErrorShape =
+  template [
+    ^code (Name) _
+    ^phase (Name) _
+    ^message (String) _
+    ^location _
+    ^related (Collection) _
+    ^cause _
+    ^details (Collection) _
+  ]
+
+ErrorTemplate =
+  contract ErrorShape validErrorMembers
+```
+
+Every field is present. `location` and `cause` contain `~` when unavailable; a present cause must
+itself satisfy `ErrorTemplate`. `related` is an empty collection when there are no related
+locations. `validErrorMembers` supplies these recursive and source-location constraints until the
+corresponding parameterized contracts can express them directly.
+
+`code` is a stable machine-readable name. `phase` identifies the producing subsystem, `message` is
+human-readable, and `location` is the primary source or representation location. `details` contains
+domain-specific information. Formats, sandboxes, contracts, and other subsystems may define exact
+templates for their `details` values, but they do not add fields to the outer error shape.
+
+Expected failures of operations such as decoding or sandbox lifecycle calls return values satisfying
+`ErrorTemplate`. Lexer, parser, semantic, and aborting runtime errors retain the same fields in their
+language-owned diagnostic descriptors and render them consistently, but remain control-flow events
+rather than ordinary catchable return values. Unexpected host exceptions and implementation faults
+must not be silently reclassified as expected failures.
+
+`ErrorTemplate` settles the failure payload, not the enclosing success/failure result protocol.
+Public APIs that must return either success or failure still require a separately specified result
+envelope; no union, exception-catching, or propagation syntax is implied here.
 
 
 ### Compiler target and compatibility
@@ -8626,9 +8753,9 @@ self-hosted implementation.
 The following decisions remain unresolved and must be settled in `LANGUAGE.md` before their
 dependent implementation begins:
 
-* the concrete exported shape of structured format success/failure values;
-* the structured result values used by sandbox construction, lifecycle operations, and unavailable
-  capabilities; and
+* the success/failure result envelope used by public format operations;
+* the success/failure result envelope used by sandbox construction, lifecycle operations, and
+  unavailable capabilities; and
 * how canonical serialization represents a dynamically supplied host function or capability that
   has no portable semantic identity.
 

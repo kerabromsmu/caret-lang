@@ -173,7 +173,20 @@ elements rather than a separate object or JSON notation.
 Caret likewise plans to use contracts as one common model for types, interfaces, refinements, and
 capabilities. Contracts form derivation graphs and work as predicates. Behavior remains in ordinary
 functions, with the most-specific applicable implementation selected from contract-specialized
-definitions. None of this contract, dispatch, or literal syntax is implemented by the current
+definitions.
+
+In the planned collection model, an expression such as `[fixed _]` is an ordinary function whose
+parameter fills the hole and whose result is the completed collection. Passing that reifiable
+constructor—or a concrete fixed collection—to the ordinary `template` function derives an exact
+structural contract. Contracted holes constrain variable positions, ordinary values require
+equality, and fields or nested collections contribute recursively. Templates remain ordinary
+`Contract` values, so they can constrain parameters, collection elements, and dispatch without
+introducing a separate record or schema type system.
+
+Caret also plans a standard `ErrorTemplate` carrying a stable code, phase, message, locations,
+cause, and subsystem details. Expected operation failures use values of that shape; aborting
+compiler and runtime diagnostics share the information model without becoming catchable return
+values. None of this contract, dispatch, literal, or template syntax is implemented by the current
 prototype yet.
 
 ## Environment-relative reflection
@@ -198,8 +211,8 @@ supports lexical closures, direct and mutual recursion, partial application, exp
 language-owned reflection, persistent collections, source-located diagnostics, a REPL, and native
 test assertions.
 
-Contracts, contract-based dispatch, universal collection literals, modules, root reification,
-sandboxing, lambdas, mutation, and a compiler backend
+Contracts, structural templates, contract-based dispatch, universal collection literals, modules,
+root reification, sandboxing, lambdas, mutation, and a compiler backend
 remain future work. The prototype exists to make the language's ideas executable and testable while
 its larger design evolves.
 

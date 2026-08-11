@@ -25,7 +25,11 @@ Contracts form derivation graphs and act as predicates, while ordinary functions
 through contract-based multiple dispatch. Collections likewise have one universal `[...]` literal:
 surrounding contracts determine whether a value is a list, set, dictionary, packed buffer, or another
 representation. Named fields are first-class collection elements. These facilities are design
-targets, not features of the current prototype.
+targets, not features of the current prototype. A collection expression containing holes will be an
+ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
+or a concrete fixed collection, to the planned `template` function creates an exact structural
+contract. The same mechanism defines a standard structured error payload while leaving public
+success/failure result envelopes as an open design decision.
 
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code
