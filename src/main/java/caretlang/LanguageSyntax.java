@@ -35,7 +35,7 @@ final class LanguageSyntax {
             "print", "type", "textSize", "textAt", "textSlice", "textNumber", "numberText",
             "seqEmpty", "seqAdd", "seqGet", "seqSize", "dictEmpty", "dictPut", "dictGet",
             "dictHas", "dictKeys", "assert", "assertEqual");
-    private static final Set<String> MULTI_CHARACTER_SYMBOLS = Set.of("==", "!=", ">=", "<=");
+    private static final Set<String> MULTI_CHARACTER_SYMBOLS = Set.of("==", "!=", ">=", "<=", ">>");
     private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@+-*/%^=<>.&!?~";
 
     private LanguageSyntax() {}

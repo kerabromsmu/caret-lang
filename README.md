@@ -7,6 +7,7 @@ interpreter. The current prototype supports:
 - indentation-delimited functions, lexical closures, direct and mutual recursion;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
+- left-to-right function composition (`parse >> validate`) with partial application;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
 - exported immutable scopes, required/optional field access, and dynamic lookup;
 - arbitrary partial application with ordinary and numbered holes;

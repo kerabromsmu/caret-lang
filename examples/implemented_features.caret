@@ -199,4 +199,15 @@ print (@dictionary).kind
 print (@dictionary).size
 print (@dictionary).names
 
+// Composition is left-to-right, lowest-precedence, and supports partial left callables.
+double value = value * 2
+incrementOne value = value + 1
+addThenDouble = add >> double
+addTenThenText = add _ 10 >> numberText
+pipeline = double >> incrementOne >> numberText
+print addThenDouble 2 3
+print addTenThenText 5
+print pipeline 2
+print (@addThenDouble).remaining
+
 // Executable diagnostic examples live in examples/errors/ and are indexed by examples/README.md.

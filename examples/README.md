@@ -24,6 +24,7 @@ contains one intentional failure and is exercised by `test.sh`.
 | `CORE-REFLECT-001` | Scope, scalar, operator, and function reflection section |
 | `CORE-INFIX-001` | Named infix precedence, associativity, partial, and callable-parameter examples; invalid-target/arity fixtures |
 | `CORE-INFIX-002` | Symbolic prefix, infix, grouped subtraction, and symbolic partial examples |
+| `CORE-COMP-001` | Left-to-right pipelines, chaining, partial left operands, reflection, and invalid operand/arity fixtures |
 | `CORE-TEXT-002` | Unicode code-point indexing/slicing and conversion section |
 | `CORE-COLL-001`, `CORE-COLL-002` | Persistent sequence/dictionary, safe lookup, replacement-order, and nested equality sections |
 

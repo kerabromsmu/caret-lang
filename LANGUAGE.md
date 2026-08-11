@@ -273,17 +273,18 @@ The metadata representation is intentionally minimal. A later version should exp
 
 From lower to higher precedence:
 
-1. conditional `& ... ! ...`
-2. `or`
-3. `and`
-4. equality `== !=`
-5. comparison `< <= > >=`
-6. named binary infix functions
-7. addition `+ -`
-8. multiplication `* / %`
-9. unary `- not @`
-10. function application
-11. field and dynamic lookup
+1. composition `>>`
+2. conditional `& ... ! ...`
+3. `or`
+4. `and`
+5. equality `== !=`
+6. comparison `< <= > >=`
+7. named binary infix functions
+8. addition `+ -`
+9. multiplication `* / %`
+10. unary `- not @`
+11. function application
+12. field and dynamic lookup
 
 ## Implementation roadmap
 
@@ -372,6 +373,29 @@ That spelling is only a design direction and is not valid Caret syntax.
 Named infix calls are represented separately while parsing but invoke the same callable values as
 prefix application. A non-callable infix target or a callable whose remaining arity is not two
 produces a located runtime diagnostic.
+
+### Function composition
+
+`left >> right` creates an ordinary callable that applies `left` and passes its result to `right`:
+
+```caret
+double value = value * 2
+asText = double >> numberText
+print asText 5
+```
+
+`>>` is the lowest-precedence operator and is left-associative. The left operand may require any
+positive number of remaining arguments; the composition retains that arity and supports ordinary
+partial application. The right operand must require exactly one remaining argument. Inline partial
+operands work normally, as in `add _ 10 >> numberText`.
+
+Both operands are validated when the composition is created. Non-callable operands, a nullary left
+operand, or a non-unary right operand produce located runtime diagnostics. Nullary composition is
+deferred until Caret has a separate first-class callable-value design; `@function` remains a
+non-callable reflective reference. The completed left result is passed as one value even when that
+value is itself callable. Composition uses the ordinary invocation path and therefore preserves
+call-depth checks and argument locations. Contract and effect propagation will be added with the
+planned contract/effect system.
 
 ### Ungrouped multiline application
 

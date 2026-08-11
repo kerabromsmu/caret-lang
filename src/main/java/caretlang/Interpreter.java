@@ -98,7 +98,7 @@ final class Interpreter {
 
     private Value eval(Expr expr, Environment env, List<Value.Argument> holeArgs, Resolution resolution) {
         try {
-            if (holeArgs == null) {
+            if (holeArgs == null && !(expr instanceof Compose)) {
                 HoleAnalysis analysis = analyzeHoles(expr);
                 if (!analysis.indexes().isEmpty()) {
                     HoleShape shape = holeShape(expr, analysis.indexes());
@@ -158,6 +158,23 @@ final class Interpreter {
             Value left = evalInner(left1, env, resolution);
             Value right = evalInner(right1, env, resolution);
             return applyBinaryOperator(operator, left, left1.span(), right, right1.span(), expr.span());
+        }
+        if (expr instanceof Compose(Expr leftExpression, Expr rightExpression, SourceSpan ignored)) {
+            Value left = compositionOperand(leftExpression, env, resolution);
+            if (!(left instanceof Value.Callable leftCallable) || leftCallable.remainingArity() < 1) {
+                throw new LangException(Diagnostic.Phase.RUNTIME,
+                        Diagnostic.Codes.INVALID_COMPOSITION_LEFT,
+                        "Composition left operand must be a callable requiring at least one argument",
+                        leftExpression.span());
+            }
+            Value right = compositionOperand(rightExpression, env, resolution);
+            if (!(right instanceof Value.Callable rightCallable) || rightCallable.remainingArity() != 1) {
+                throw new LangException(Diagnostic.Phase.RUNTIME,
+                        Diagnostic.Codes.INVALID_COMPOSITION_RIGHT,
+                        "Composition right operand must be a callable requiring exactly one argument",
+                        rightExpression.span());
+            }
+            return new Value.ComposedFunction(leftCallable, rightCallable, this::invoke);
         }
         if (expr instanceof NamedInfix(Expr leftExpression, Expr functionExpression,
                                        Expr rightExpression, SourceSpan ignored)) {
@@ -256,6 +273,11 @@ final class Interpreter {
     private Value rawValue(Expr expression, Environment env, Resolution resolution) {
         return expression instanceof Name name ? bindingValue(name, env, resolution)
                 : evalInner(expression, env, resolution);
+    }
+
+    private Value compositionOperand(Expr expression, Environment env, Resolution resolution) {
+        return expression instanceof Name name ? bindingValue(name, env, resolution)
+                : eval(expression, env, null, resolution);
     }
 
     private Value bindingValue(Name expression, Environment env, Resolution resolution) {

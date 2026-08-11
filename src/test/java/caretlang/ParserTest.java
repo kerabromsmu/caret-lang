@@ -19,6 +19,23 @@ final class ParserTest {
     }
 
     @Test
+    void parsesCompositionAsTheLowestPrecedenceLeftAssociativeOperator() {
+        Compose pipeline = assertInstanceOf(Compose.class, expression("first >> second >> third"));
+        assertInstanceOf(Compose.class, pipeline.left());
+        assertEquals("third", assertInstanceOf(Name.class, pipeline.right()).name());
+
+        Compose conditionalPipeline = assertInstanceOf(Compose.class,
+                expression("true & first ! second >> third"));
+        assertInstanceOf(Conditional.class, conditionalPipeline.left());
+
+        Apply call = assertInstanceOf(Apply.class, expression("(first >> second) value"));
+        Compose grouped = assertInstanceOf(Compose.class,
+                assertInstanceOf(Group.class, call.function()).expression());
+        assertEquals(2, grouped.span().start().column());
+        assertEquals(17, grouped.span().end().column());
+    }
+
+    @Test
     void parsesNamedInfixAtItsFixedPrecedence() {
         NamedInfix call = assertInstanceOf(NamedInfix.class, expression("2 combine 3 + 4"));
         assertEquals("combine", assertInstanceOf(Name.class, call.function()).name());

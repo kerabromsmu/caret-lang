@@ -215,8 +215,18 @@ final class Parser {
         }
 
         Expr parse() {
-            Expr expression = conditional();
+            Expr expression = composition();
             if (!atEnd()) throw error("Unexpected token: " + peek().text());
+            return expression;
+        }
+
+        private Expr composition() {
+            Expr expression = conditional();
+            while (match(">>")) {
+                Expr right = conditional();
+                expression = new Compose(expression, right,
+                        SourceSpan.cover(expression.span(), right.span()));
+            }
             return expression;
         }
 
@@ -440,7 +450,7 @@ final class Parser {
                 if (atEnd()) {
                     throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ')'");
                 }
-                Expr expr = conditional();
+                Expr expr = composition();
                 consume(")", "Expected ')'");
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }

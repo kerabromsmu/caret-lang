@@ -146,5 +146,8 @@ expect_failure examples/errors/mixed_holes.caret 'Line 2, column 11: Cannot mix 
 expect_failure examples/errors/callable_equality.caret 'Line 2, column 7: Callable values cannot be compared for equality'
 expect_failure examples/errors/non_callable_infix.caret 'Line 2, column 9: Named infix target is not callable: value'
 expect_failure examples/errors/invalid_infix_arity.caret 'Line 2, column 9: Named infix function must take exactly two arguments: identity'
+expect_failure examples/errors/non_callable_composition.caret 'Line 3, column 12: Composition left operand must be a callable requiring at least one argument'
+expect_failure examples/errors/invalid_composition_arity.caret 'Line 3, column 24: Composition right operand must be a callable requiring exactly one argument'
+expect_failure examples/errors/nullary_composition.caret 'Line 3, column 12: Composition left operand must be a callable requiring at least one argument'
 expect_failure examples/errors/call_depth.caret 'Maximum Caret evaluation depth exceeded'
 printf 'All prototype tests passed.\n'

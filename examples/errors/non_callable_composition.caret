@@ -1,0 +1,3 @@
+identity value = value
+notCallable = 1
+pipeline = notCallable >> identity

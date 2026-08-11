@@ -5,6 +5,7 @@ import caretlang.Ast.AmbiguousCall;
 import caretlang.Ast.Assign;
 import caretlang.Ast.Binary;
 import caretlang.Ast.Conditional;
+import caretlang.Ast.Compose;
 import caretlang.Ast.DynamicField;
 import caretlang.Ast.Expr;
 import caretlang.Ast.ExprStmt;
@@ -105,6 +106,10 @@ final class Resolver {
                 resolveExpr(binary.left(), scope, functionBody, deferred);
                 resolveExpr(binary.right(), scope, functionBody,
                         deferred || binary.operator().equals("and") || binary.operator().equals("or"));
+            }
+            case Compose compose -> {
+                resolveExpr(compose.left(), scope, functionBody, deferred);
+                resolveExpr(compose.right(), scope, functionBody, deferred);
             }
             case NamedInfix infix -> {
                 resolveExpr(infix.left(), scope, functionBody, deferred);

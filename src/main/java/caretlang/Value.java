@@ -299,6 +299,44 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
+    @FunctionalInterface
+    interface CallInvoker {
+        Value invoke(Callable callable, Argument argument, SourceSpan callSpan);
+    }
+
+    final class ComposedFunction implements Callable {
+        private final Callable left;
+        private final Callable right;
+        private final CallInvoker invoker;
+
+        ComposedFunction(Callable left, Callable right, CallInvoker invoker) {
+            this.left = Objects.requireNonNull(left);
+            this.right = Objects.requireNonNull(right);
+            this.invoker = Objects.requireNonNull(invoker);
+        }
+
+        @Override public Value apply(Argument argument, SourceSpan callSpan) {
+            int before = left.remainingArity();
+            Value leftResult = invoker.invoke(left, argument, callSpan);
+            if (before > 1) {
+                if (!(leftResult instanceof Callable remaining)) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                            "Composed callable lost its remaining parameters", callSpan);
+                }
+                return new ComposedFunction(remaining, right, invoker);
+            }
+            return invoker.invoke(right, new Argument(leftResult, callSpan), callSpan);
+        }
+
+        @Override public int remainingArity() {
+            return left.remainingArity();
+        }
+
+        @Override public String toString() {
+            return "<composition/" + remainingArity() + ">";
+        }
+    }
+
     final class FunctionValue implements Callable {
         private final String name;
         private final List<String> params;

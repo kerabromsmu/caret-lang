@@ -1,0 +1,3 @@
+identity value = value
+add left right = left + right
+pipeline = identity >> add

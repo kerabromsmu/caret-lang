@@ -8,6 +8,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class LexerTest {
     @Test
+    void recognizesCompositionAsOneSymbol() {
+        List<Lexer.Token> tokens = Lexer.lex("left >> right");
+        assertEquals(List.of("left", ">>", "right", ""),
+                tokens.stream().map(Lexer.Token::text).toList());
+    }
+
+    @Test
     void rejectsRemovedNameLiteralSyntax() {
         LangException error = assertThrows(LangException.class,
                 () -> Lexer.lex("#count", 20, 3, 5));

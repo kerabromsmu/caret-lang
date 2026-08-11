@@ -1,0 +1,3 @@
+zero = 0
+identity value = value
+pipeline = zero >> identity

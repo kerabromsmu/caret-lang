@@ -91,8 +91,9 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   using the precedence/associativity rules settled in Phase 0.
 - Preserve the rule that the expression start selects prefix versus infix interpretation; later
   binary functions in a prefix argument sequence do not reclassify the call.
-- Implement `>>` function composition with arity, holes, closure capture, contract/effect metadata,
-  and diagnostics for incompatible composition.
+- Extend the implemented `>>` function composition with contract/effect metadata when those systems
+  arrive. Its arity, holes, partial state, reflection, and incompatible-operand diagnostics already
+  use the shared callable path.
 - Expand function reflection to parameter descriptors, remaining arity, contracts, effects,
   captures where public, and reification rules without making `@function` itself callable.
 
@@ -409,17 +410,10 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Recommended next implementation step
 
-Phase 0 documentation reconciliation and fixed-precedence named infix calls (`CORE-INFIX-001`) are
-complete. Next implement `>>` composition (`CORE-COMP-001`) on the shared callable representation.
-
-1. Parse `>>` at its specified precedence and preserve complete operand spans.
-2. Represent composition as an ordinary callable retaining compatible arity, partial state, and
-   source-owned diagnostics.
-3. Invoke the left callable and pass its result to the right callable without bypassing call-depth,
-   contract, effect, or reflection hooks.
-4. Add associativity, grouping, partial application, nullary behavior, incompatible-callable, and
-   call-depth tests.
-5. Extend the runnable example, Caret-native suite, language reference, and conformance evidence.
+Fixed-precedence named infix calls (`CORE-INFIX-001`) and `>>` composition (`CORE-COMP-001`) are
+complete. The next implementation-planning session should scope the Phase 2 contract foundation,
+beginning with parsed contract annotations, built-in value contracts, and runtime membership checks;
+composition contract/effect propagation remains dependent on that foundation.
 
 ## Explicit assumptions and allowed deferrals
 

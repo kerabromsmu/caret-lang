@@ -210,8 +210,8 @@ are not available in the prototype.
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
 supports lexical closures, direct and mutual recursion, partial application, exported scopes,
-language-owned reflection, persistent collections, source-located diagnostics, a REPL, and native
-test assertions.
+left-to-right function composition, language-owned reflection, persistent collections,
+source-located diagnostics, a REPL, and native test assertions.
 
 Contracts, structural templates, contract-based dispatch, universal collection literals, modules,
 root reification, sandboxing, lambdas, mutation, and a compiler backend

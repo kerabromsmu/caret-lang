@@ -16,6 +16,7 @@ final class AstTraversal {
             case Hole ignored -> List.of();
             case Unary unary -> List.of(unary.operand());
             case Binary binary -> List.of(binary.left(), binary.right());
+            case Compose compose -> List.of(compose.left(), compose.right());
             case NamedInfix infix -> List.of(infix.left(), infix.function(), infix.right());
             case AmbiguousCall call -> List.of(call.first(), call.middle(), call.last());
             case Conditional conditional -> List.of(
@@ -43,6 +44,7 @@ final class AstTraversal {
             case Hole hole -> hole;
             case Unary unary -> new Unary(unary.operator(), children.get(0), unary.span());
             case Binary binary -> new Binary(binary.operator(), children.get(0), children.get(1), binary.span());
+            case Compose compose -> new Compose(children.get(0), children.get(1), compose.span());
             case NamedInfix infix -> new NamedInfix(children.get(0), children.get(1),
                     children.get(2), infix.span());
             case AmbiguousCall call -> new AmbiguousCall(children.get(0), children.get(1),

@@ -201,4 +201,15 @@ assertEqual "dictionary reflection kind" (@dictionary).kind "Dictionary"
 assertEqual "dictionary reflection size" (@dictionary).size 2
 assertEqual "dictionary reflection names" (@dictionary).names "present,missingValue"
 
+// Left-to-right function composition, chaining, partials, and reflection.
+double value = value * 2
+incrementOne value = value + 1
+addThenDouble = add >> double
+addTenThenText = add _ 10 >> numberText
+pipeline = double >> incrementOne >> numberText
+assertEqual "multi-argument composition" (addThenDouble 2 3) 10
+assertEqual "partial left composition" (addTenThenText 5) "15"
+assertEqual "composition chain" (pipeline 2) "5"
+assertEqual "composition retains left arity" (@addThenDouble).remaining 2
+
 // Expected failures are isolated in examples/errors/ and exercised by test.sh.

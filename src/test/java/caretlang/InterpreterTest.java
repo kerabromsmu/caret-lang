@@ -65,6 +65,61 @@ final class InterpreterTest {
     }
 
     @Test
+    void composesCallablesWithArityPartialsChainsAndReflection() {
+        assertEquals("10\n15\n5\nFunction\n2\n", execute("""
+                add left right = left + right
+                double value = value * 2
+                increment value = value + 1
+                returnAdd ignored = add
+
+                addThenDouble = add >> double
+                print addThenDouble 2 3
+                addTenThenText = add _ 10 >> numberText
+                print addTenThenText 5
+                pipeline = double >> increment >> numberText
+                print pipeline 2
+                callableResult = returnAdd >> type
+                print callableResult 0
+                print (@addThenDouble).remaining
+                """));
+    }
+
+    @Test
+    void compositionRejectsInvalidOperandsWithLocatedDiagnostics() {
+        LangException left = assertThrows(LangException.class, () -> execute("""
+                identity value = value
+                value = 1
+                pipeline = value >> identity
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_COMPOSITION_LEFT, left.diagnostic().code());
+        assertEquals(12, left.span().start().column());
+
+        LangException right = assertThrows(LangException.class, () -> execute("""
+                identity value = value
+                add left right = left + right
+                pipeline = identity >> add
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_COMPOSITION_RIGHT, right.diagnostic().code());
+        assertEquals(24, right.span().start().column());
+
+        LangException nullary = assertThrows(LangException.class, () -> execute("""
+                zero = 0
+                identity value = value
+                pipeline = zero >> identity
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_COMPOSITION_LEFT, nullary.diagnostic().code());
+        assertEquals(12, nullary.span().start().column());
+    }
+
+    @Test
+    void compositionUsesTheOrdinaryCallDepthGuard() {
+        String source = "identity value = value\npipeline = identity"
+                + " >> identity".repeat(1_100) + "\nprint pipeline 1\n";
+        LangException error = assertThrows(LangException.class, () -> execute(source));
+        assertEquals(Diagnostic.Codes.CALL_DEPTH_EXCEEDED, error.diagnostic().code());
+    }
+
+    @Test
     void namedInfixCallsRequireCallableBinaryTargets() {
         LangException arity = assertThrows(LangException.class, () -> execute("""
                 unary value = value
