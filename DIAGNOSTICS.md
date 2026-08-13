@@ -31,6 +31,7 @@ from ordinary Caret source use focused Java evidence.
 | SEMANTIC-DUPLICATE-DEFINITION | public | DUPLICATE_DEFINITION | `examples/errors/duplicate_definition.caret` |
 | SEMANTIC-PREMATURE-READ | public | READ_BEFORE_INITIALIZATION | `examples/errors/read_before_initialization.caret` |
 | SEMANTIC-UNKNOWN-CONTRACT | public | UNKNOWN_CONTRACT | `examples/errors/unknown_contract.caret` |
+| SEMANTIC-NOT-A-CONTRACT | public | NOT_A_CONTRACT | `examples/errors/not_a_contract.caret` |
 | RUNTIME-DUPLICATE-DEFINITION | internal | DUPLICATE_DEFINITION | `InterpreterTest#rejectsDuplicateDefinitionsAndParameters` |
 | RUNTIME-PREMATURE-READ | internal | READ_BEFORE_INITIALIZATION | `InterpreterTest#reportsReadsBeforeSequentialDeclarations` |
 | RUNTIME-UNKNOWN-NAME | public | UNKNOWN_NAME | `examples/errors/unknown_name.caret` |

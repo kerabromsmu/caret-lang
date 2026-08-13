@@ -24,6 +24,15 @@ final class ResolverTest {
     }
 
     @Test
+    void rejectsResolvedBindingsThatAreNotContracts() {
+        LangException error = assertThrows(LangException.class, () -> Resolver.resolve(
+                new Parser("value = 1\n(value) other = 2").parseProgram(), new Environment(null)));
+        assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.NOT_A_CONTRACT, error.diagnostic().code());
+        assertEquals(2, error.span().start().line());
+    }
+
+    @Test
     void resolvesParametersAndPredeclaredMutualFunctionsToLexicalSlots() {
         List<Stmt> program = new Parser("""
                 even n = n == 0 & true ! odd (n - 1)

@@ -80,6 +80,7 @@ final class Environment {
         ArrayList<LocalBinding> bindings = new ArrayList<>(slotNames.size());
         for (int slot = 0; slot < slotNames.size(); slot++) {
             Value value = slots.get(slot).initialized ? slots.get(slot).value : null;
+            if (value != null) value = ValueSemantics.underlying(value);
             Integer arity = value instanceof Value.Callable callable ? callable.remainingArity() : null;
             bindings.add(new LocalBinding(slotNames.get(slot), slot, arity));
         }

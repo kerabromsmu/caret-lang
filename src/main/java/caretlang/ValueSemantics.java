@@ -21,9 +21,14 @@ final class ValueSemantics {
 
     private ValueSemantics() {}
 
+    static Value underlying(Value value) {
+        while (value instanceof Value.Attributed attributed) value = attributed.value();
+        return value;
+    }
+
     static Descriptor descriptor(Value value) {
         Objects.requireNonNull(value);
-        if (value instanceof Value.Attributed attributed) return descriptor(attributed.value());
+        value = underlying(value);
         return switch (value) {
             case Value.Num ignored -> Descriptor.NUMBER;
             case Value.Str ignored -> Descriptor.STRING;

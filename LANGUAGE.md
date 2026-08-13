@@ -1108,6 +1108,8 @@ Multi-line literals are allowed:
 ```
 
 Parentheses remain the normal grouping mechanism where expression boundaries would otherwise be ambiguous.
+On one line, adjacent simple atoms are separate elements. An unparenthesized top-level operator
+extends an element through the closing bracket; use parentheses when another element follows it.
 
 ---
 

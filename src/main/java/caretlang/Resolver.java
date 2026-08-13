@@ -26,8 +26,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 final class Resolver {
-    private record Symbol(int slot, SourceSpan declaration, boolean initialized, Integer callableArity) {
-        Symbol initializedSymbol() { return new Symbol(slot, declaration, true, callableArity); }
+    private enum ContractState { CONTRACT, NON_CONTRACT, UNKNOWN }
+    private record Symbol(int slot, SourceSpan declaration, boolean initialized, Integer callableArity,
+                          ContractState contractState) {
+        Symbol initializedSymbol() { return new Symbol(slot, declaration, true, callableArity, contractState); }
     }
 
     private static final class Scope {
@@ -46,7 +48,10 @@ final class Resolver {
         Resolver resolver = new Resolver();
         Scope root = new Scope(null);
         for (Environment.LocalBinding binding : globals.localBindings()) {
-            root.symbols.put(binding.name(), new Symbol(binding.slot(), null, true, binding.callableArity()));
+            ContractState state = BuiltinContract.named(binding.name()).isPresent()
+                    ? ContractState.CONTRACT : ContractState.UNKNOWN;
+            root.symbols.put(binding.name(), new Symbol(binding.slot(), null, true,
+                    binding.callableArity(), state));
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
@@ -82,7 +87,9 @@ final class Resolver {
             if (original != null) duplicate(name, statement.span(), original);
             boolean function = statement instanceof FunctionDef;
             Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
-            scope.symbols.put(name, new Symbol(scope.nextSlot++, statement.span(), function, arity));
+            ContractState state = statement instanceof Assign assign ? contractState(assign.value())
+                    : ContractState.NON_CONTRACT;
+            scope.symbols.put(name, new Symbol(scope.nextSlot++, statement.span(), function, arity, state));
         }
     }
 
@@ -97,7 +104,7 @@ final class Resolver {
                         "Duplicate parameter: " + parameter.name(), function.span());
             }
             parameters.symbols.put(parameter.name(),
-                    new Symbol(parameters.nextSlot++, function.span(), true, null));
+                    new Symbol(parameters.nextSlot++, function.span(), true, null, ContractState.UNKNOWN));
         }
         resolveBlock(function.body(), new Scope(parameters), true);
     }
@@ -108,8 +115,14 @@ final class Resolver {
             int depth = 0;
             for (Scope current = scope; current != null; current = current.parent, depth++) {
                 Symbol symbol = current.symbols.get(name.name());
-                if (symbol != null) return new Resolution.ContractBinding(name.name(),
-                        new Resolution.Binding(depth, symbol.slot(), symbol.declaration(), false), name.span());
+                if (symbol != null) {
+                    if (symbol.contractState() == ContractState.NON_CONTRACT) {
+                        throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.NOT_A_CONTRACT,
+                                "Binding is not a contract: " + name.name(), name.span());
+                    }
+                    return new Resolution.ContractBinding(name.name(),
+                            new Resolution.Binding(depth, symbol.slot(), symbol.declaration(), false), name.span());
+                }
             }
             if (BuiltinContract.named(name.name()).isPresent()) {
                 return new Resolution.ContractBinding(name.name(), null, name.span());
@@ -118,6 +131,15 @@ final class Resolver {
                     "Unknown contract: " + name.name(), name.span());
         }).toList();
         contracts.put(clause, resolved);
+    }
+
+    private ContractState contractState(Expr expression) {
+        if (expression instanceof Apply apply && apply.function() instanceof Name name
+                && name.name().equals("contract")) return ContractState.CONTRACT;
+        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral) {
+            return ContractState.NON_CONTRACT;
+        }
+        return ContractState.UNKNOWN;
     }
 
     private void resolveExpr(Expr expression, Scope scope, boolean functionBody, boolean deferred) {

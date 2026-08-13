@@ -108,8 +108,8 @@ final class Interpreter {
                                    Resolution resolution, Environment contractEnvironment, String subject) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
-            Value resolved = reference.binding() == null ? globals.get(reference.name())
-                    : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot());
+            Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
+                    : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
             if (!(resolved instanceof Value.ContractValue contractValue)) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_CONTRACT,
                         "Binding is not a contract: " + reference.name(), reference.span());
@@ -461,7 +461,7 @@ final class Interpreter {
             globals.define(contract.publicName(), new Value.ContractValue(contract));
         }
         globals.define("contract", locatedFunction("contract", List.of("bases"), (args, span) -> {
-            Value argument = args.getFirst().value();
+            Value argument = underlying(args.getFirst().value());
             List<ContractDescriptor> bases;
             if (argument == Value.Missing.INSTANCE) {
                 bases = List.of();
@@ -470,6 +470,7 @@ final class Interpreter {
             } else if (argument instanceof Value.Seq sequence && sequence.size() >= 2) {
                 ArrayList<ContractDescriptor> collected = new ArrayList<>(sequence.size());
                 for (Value element : sequence.values()) {
+                    element = underlying(element);
                     if (!(element instanceof Value.ContractValue contract)) {
                         throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
                                 "Contract violation for contract bases: expected Contract, got "
@@ -565,7 +566,8 @@ final class Interpreter {
         globals.define("assert", new Value.FunctionValue("assert", List.of("name", "condition"),
                 (args, span) -> {
                     String name = text(args.get(0));
-                    if (!(args.get(1).value() instanceof Value.Bool condition)) {
+                    Value conditionValue = underlying(args.get(1).value());
+                    if (!(conditionValue instanceof Value.Bool condition)) {
                         throw runtime(Diagnostic.Codes.INVALID_ASSERTION,
                                 "Assertion condition must be Boolean, got: " + args.get(1).value(),
                                 args.get(1).span());
@@ -615,7 +617,8 @@ final class Interpreter {
     }
 
     private OptionalInt index(Value.Argument argument) {
-        if (!(argument.value() instanceof Value.Num(double number)) || !Double.isFinite(number)
+        Value raw = underlying(argument.value());
+        if (!(raw instanceof Value.Num(double number)) || !Double.isFinite(number)
                 || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) {
             return OptionalInt.empty();
         }
@@ -623,7 +626,7 @@ final class Interpreter {
     }
 
     private String dictionaryKey(Value.Argument argument) {
-        return argument.value() instanceof Value.Str(String text) ? text : null;
+        return underlying(argument.value()) instanceof Value.Str(String text) ? text : null;
     }
 
     private String requiredDictionaryKey(Value.Argument argument) {
@@ -659,7 +662,7 @@ final class Interpreter {
     }
 
     private static Value underlying(Value value) {
-        return value instanceof Value.Attributed attributed ? attributed.value() : value;
+        return ValueSemantics.underlying(value);
     }
 
     private record HoleShape(int arity, boolean numbered) {}

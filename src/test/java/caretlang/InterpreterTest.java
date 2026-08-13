@@ -38,6 +38,31 @@ final class InterpreterTest {
     }
 
     @Test
+    void nominalAttributionIsTransparentToExistingPrimitiveOperations() {
+        assertEquals("second\ntrue\nvalue\n", execute("""
+                Index = contract Number
+                Key = contract String
+                Flag = contract Boolean
+                (Index) index = 1
+                (Key) key = "name"
+                (Flag) condition = true
+                values = ["first" "second"]
+                dictionary = dictPut dictEmpty key "value"
+                print seqGet values index
+                print dictHas dictionary key
+                print condition & dictGet dictionary key ! "wrong"
+                """));
+    }
+
+    @Test
+    void evaluatesUnambiguousExpressionsInsideCollectionLiterals() {
+        assertEquals("[7, 5, yes, [a, b]]\n", execute("""
+                add left right = left + right
+                print [(1 + 2 * 3) (add 2 3) (true & "yes" ! "no") ["a" "b"]]
+                """));
+    }
+
+    @Test
     void evaluatesLowPrecedenceApplicationThroughTheOrdinaryCallPath() {
         assertEquals("7\n7\n5\ntrue\n", execute("""
                 add left right = left + right

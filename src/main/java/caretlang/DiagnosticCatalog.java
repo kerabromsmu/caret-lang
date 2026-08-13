@@ -37,6 +37,7 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     DUPLICATE_DEFINITION("SEMANTIC-DUPLICATE-DEFINITION", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: .*", PUBLIC),
     PREMATURE_READ("SEMANTIC-PREMATURE-READ", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.READ_BEFORE_INITIALIZATION, "Binding read before initialization: .*", PUBLIC),
     UNKNOWN_CONTRACT("SEMANTIC-UNKNOWN-CONTRACT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.UNKNOWN_CONTRACT, "Unknown contract: .*", PUBLIC),
+    NOT_A_CONTRACT("SEMANTIC-NOT-A-CONTRACT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.NOT_A_CONTRACT, "Binding is not a contract: .*", PUBLIC),
 
     RUNTIME_DUPLICATE_DEFINITION("RUNTIME-DUPLICATE-DEFINITION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: .*", INTERNAL),
     RUNTIME_PREMATURE_READ("RUNTIME-PREMATURE-READ", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.READ_BEFORE_INITIALIZATION, "Binding read before initialization.*", INTERNAL),

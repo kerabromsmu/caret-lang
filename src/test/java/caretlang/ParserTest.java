@@ -14,6 +14,11 @@ final class ParserTest {
         assertEquals(List.of("A", "B"), literal.elements().stream()
                 .map(Name.class::cast).map(Name::name).toList());
         assertTrue(assertInstanceOf(CollectionLiteral.class, expression("[]")).elements().isEmpty());
+        CollectionLiteral arithmetic = assertInstanceOf(CollectionLiteral.class, expression("[1 + 2]"));
+        assertInstanceOf(Binary.class, arithmetic.elements().getFirst());
+        CollectionLiteral nested = assertInstanceOf(CollectionLiteral.class, expression("[[A B] C]"));
+        assertInstanceOf(CollectionLiteral.class, nested.elements().getFirst());
+        assertEquals(2, nested.elements().size());
     }
 
     @Test

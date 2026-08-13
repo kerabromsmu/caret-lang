@@ -199,5 +199,6 @@ expect_failure examples/errors/definition_in_continuation.caret unused
 expect_failure examples/errors/invalid_numbered_hole.caret unused
 expect_failure examples/errors/ambiguous_call_arity.caret unused
 expect_failure examples/errors/unknown_contract.caret unused
+expect_failure examples/errors/not_a_contract.caret unused
 expect_failure examples/errors/contract_violation.caret unused
 printf 'All prototype tests passed.\n'

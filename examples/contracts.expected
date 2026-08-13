@@ -5,3 +5,6 @@ Contract
 Number
 Both
 [Tag, Numeric]
+one
+keeps its ordinary behavior
+[7, 5]

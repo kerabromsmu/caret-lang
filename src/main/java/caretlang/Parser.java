@@ -443,9 +443,9 @@ final class Parser {
                 ArrayList<Expr> elements = new ArrayList<>();
                 while (!peek().text().equals("]")) {
                     if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
-                    // Brackets establish an element boundary. Parentheses or `$` can be used when
-                    // an element itself needs whitespace application.
-                    elements.add(postfix());
+                    // A top-level operator makes the remainder one unambiguous expression. Plain
+                    // adjacent atoms remain separate elements; calls can be grouped explicitly.
+                    elements.add(hasTopLevelOperatorBeforeCollectionEnd() ? lowPrecedenceApplication() : postfix());
                 }
                 consume("]", "Expected ']'");
                 return new CollectionLiteral(List.copyOf(elements),
@@ -474,6 +474,21 @@ final class Parser {
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }
             throw error("Expected expression, found '" + peek().text() + "'");
+        }
+
+        private boolean hasTopLevelOperatorBeforeCollectionEnd() {
+            int depth = 0;
+            for (int index = current; index < tokens.size(); index++) {
+                String text = tokens.get(index).text();
+                if (text.equals("(") || text.equals("[")) depth++;
+                else if (text.equals(")") || text.equals("]")) {
+                    if (depth == 0) return false;
+                    depth--;
+                } else if (depth == 0 && (text.equals("$") || text.equals("&") || text.equals(">>")
+                        || LanguageSyntax.binaryOperatorSpellings().contains(text)
+                        || text.equals("and") || text.equals("or"))) return true;
+            }
+            return false;
         }
 
         private Expr numberLiteral(Token token) {

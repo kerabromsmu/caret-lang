@@ -16,3 +16,9 @@ print type Number
 print (@Number).name
 print (@Both).name
 print (@Both).bases
+
+(Numeric) index = 1
+(Tag) tagged = "keeps its ordinary behavior"
+print seqGet ["zero" "one"] index
+print tagged
+print [(1 + 2 * 3) (add 2 3)]

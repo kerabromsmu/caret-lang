@@ -21,7 +21,7 @@ enum BuiltinContract implements ContractDescriptor {
     public abstract boolean accepts(Value value);
 
     private static boolean kind(Value value, ValueSemantics.Descriptor descriptor) {
-        if (value instanceof Value.Attributed attributed) value = attributed.value();
+        value = ValueSemantics.underlying(value);
         return ValueSemantics.descriptor(value) == descriptor;
     }
 
