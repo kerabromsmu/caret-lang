@@ -34,6 +34,9 @@ Read `README.md` and `LANGUAGE.md` before making architectural or syntactic chan
 16. Planned `#` changes execution stage but grants no effects or authority. Compile-time visibility,
     runtime inclusion, and artifact reachability are distinct; staging must preserve module export,
     reflection, sandbox, and capability boundaries.
+17. Expression-form `#` is a compile-time remainder marker, not a unary precedence operator. Its
+    region extends to the nearest enclosing expression boundary, and no later operator resumes
+    runtime execution; binding-form `# name = expression` stages the complete binding.
 
 ## Established syntax
 

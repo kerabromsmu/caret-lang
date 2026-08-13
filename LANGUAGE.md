@@ -320,6 +320,9 @@ From lower to higher precedence:
 
 Lambda construction will also bind more tightly than `$` once lambdas are implemented.
 
+The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
+opens a compile-time region covering the remainder of the current syntactic expression boundary.
+
 ## Implementation roadmap
 
 The following facilities and semantic decisions are planned prerequisites for implementing a
@@ -11936,9 +11939,12 @@ The resulting runtime program contains only values deliberately crossing the sta
 
 ---
 
-# Parsing and precedence of `#`
+# Parsing and extent of `#`
 
-`#` is a compile-time staging marker.
+`#` is a compile-time remainder marker, not an ordinary unary operator. Operator precedence does
+not determine its operand. In expression position it moves everything after it, through the end of
+the current syntactic expression boundary, into compile-time execution. No later operator switches
+execution back to runtime.
 
 When applied to a binding:
 
@@ -11954,7 +11960,18 @@ When applied to an expression:
 name = # expression
 ```
 
-it stages the complete expression that forms the initializer operand.
+it stages the complete remainder of the initializer.
+
+The part before `#` remains in its existing stage and consumes the already-computed result of the
+staged suffix. For example:
+
+```caret
+result = runtimeFunction # calculate configuration
+sum = runtimeValue + # calculateConstant input * scale
+```
+
+conceptually stage `calculate configuration` and `calculateConstant input * scale`, then supply
+their results to the preceding runtime call and addition respectively.
 
 For example:
 
@@ -11977,9 +11994,14 @@ evaluate during compilation:
 
 and use the resulting ruleset as the value of the ordinary `clientRules` binding.
 
-`#` must not stage only the immediately following function name or atom.
+`#` must not stage only the immediately following function name, atom, application, or
+higher-precedence subexpression. Whitespace application, postfix operations, infix operators,
+conditionals, composition, `$`, and lambdas appearing later in the region all execute at compile
+time.
 
-Parentheses remain available when only a smaller subexpression should execute at compile time.
+The region ends at the nearest enclosing syntactic expression boundary: the end of the statement,
+a closing parenthesis, or the end of an explicitly delimited nested expression such as a collection
+element. Parentheses therefore provide a smaller boundary when required.
 
 For example:
 
@@ -11990,7 +12012,20 @@ result =
     runtimeValue
 ```
 
-The exact precedence entry for `#` should preserve these whole-expression staging semantics without changing ordinary `$`, lambda, conditional, or application behavior.
+For a conditional split across stages:
+
+```caret
+result = runtimeCondition & # yes ! no
+```
+
+both branch values belong to the staged suffix. They are computed at compile time and embedded; the
+runtime condition selects between those results. When the condition itself is inside a staged region,
+ordinary lazy conditional evaluation still selects only one branch during compilation.
+
+A nested `#` inside a compile-time region is valid but redundant. A staged suffix may not depend on
+a runtime-only value, including an earlier runtime subexpression or a runtime invocation parameter.
+The parser represents the complete region explicitly and preserves a span from `#` through its
+boundary; semantic analysis assigns stages and diagnoses invalid cross-stage dependencies.
 
 ---
 
@@ -12206,8 +12241,8 @@ self-hosted implementation.
 
 The public format and sandbox result envelope, serialization of dynamically supplied capabilities,
 and environment replacement semantics are specified above. User-defined symbolic operators,
-fine-grained module-code visibility, resumable sandbox state, exact `#` precedence, and the standard
-compiler-environment interface remain deferred for the initial language.
+fine-grained module-code visibility, resumable sandbox state, and the standard compiler-environment
+interface remain deferred for the initial language.
 
 Source-exact and comment-preserving reconstruction, fine-grained metadata permissions, dynamic
 language-feature unlocking, revocable capability proxies, resource quotas, operating-system or

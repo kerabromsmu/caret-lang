@@ -56,9 +56,10 @@ serialization rules, and sandbox syntax remain open design work and are not impl
 Compile-time execution is planned through `#` rather than a separate macro language. `# name =
 expression` creates a compile-time-only binding, while `name = # expression` incorporates a staged
 result into the runtime program. Different source roots may stage the same shared modules differently
-and produce separate artifacts; runtime inclusion is determined by reachability after staging. Exact
-`#` precedence and the standard compiler environment remain unresolved, and no staging support is
-implemented yet.
+and produce separate artifacts; runtime inclusion is determined by reachability after staging. `#`
+stages the remainder of its current expression boundary rather than participating in ordinary
+operator precedence. The standard compiler environment remains unresolved, and no staging support
+is implemented yet.
 
 After the language and conformance roadmap is complete, the project plans to generate a searchable
 MkDocs Material learning site from `LANGUAGE.md`, split into approachable Markdown pages with a

@@ -395,9 +395,13 @@ modifiers, parameterized contracts, dispatch, and effects remain.
 
 ## Phase 11 — Compile-time execution and separate compilation
 
-- Add stage-aware AST/semantic forms for compile-time bindings and whole initializer expressions.
-  Resolve names across stages, reject runtime-only dependencies from compile-time code, and preserve
-  source spans and stable diagnostics. Settle exact `#` precedence before parser implementation.
+- Parse binding-form `#` separately and represent expression-form `#` as an explicit staged region
+  covering the remainder of its nearest expression boundary. Preserve its complete source span;
+  parentheses and other explicit delimiters bound smaller regions, while later operators never
+  return to runtime execution.
+- Resolve names across stages, reject runtime-only dependencies from compile-time regions, and
+  preserve stable diagnostics. Treat redundant nested `#` as valid and ensure split conditionals
+  stage both branch values while retaining ordinary laziness for wholly staged conditionals.
 - Execute ordinary Caret functions in an explicit compile-time environment using the reference
   evaluator. Enforce inferred effects against the capabilities actually supplied by that environment;
   staging and reflection must never recover omitted host or sandbox authority.
@@ -518,6 +522,6 @@ that would later need replacement.
   cross-process container identity, debugger visualization, and formal rule conflict analysis.
 - Deferred items still receive extension points and conformance notes so their later addition does
   not change the core value, effect, format, cycle, or scheduling models.
-- Exact `#` precedence and the standard compiler-environment interface must be settled before Phase
-  11 begins. Source-text macros, cross-target whole-program optimization, automatic multi-root
+- The standard compiler-environment interface must be settled before Phase 11 begins. Source-text
+  macros, cross-target whole-program optimization, automatic multi-root
   orchestration, compile-time networking, and advanced cache invalidation remain deferred.
