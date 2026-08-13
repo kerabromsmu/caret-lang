@@ -64,8 +64,8 @@ expressions form nested calls. Potential named prefix/infix calls are parsed neu
 from lexical callable facts, with runtime fallback only when arity is genuinely dynamic. Callable
 partial arguments use persistent O(1) accumulation, and language-owned value descriptors now
 centralize public kinds, basic reflection, structural equality, and stack-safe rendering. Trailing
-lambdas remain deferred to Phase 3; complete callable metadata remains the principal unfinished
-Phase 1 work.
+lambdas remain deferred to Phase 3. Low-precedence `$` application and complete callable metadata
+are the principal unfinished Phase 1 work.
 
 ### Layout and expressions
 
@@ -75,6 +75,9 @@ Phase 1 work.
 - Preserve raw source columns and complete spans through desugaring. Add recovery boundaries so one
   malformed declaration does not erase useful later diagnostics in compiler mode.
 - Keep function application tighter than infix operators and make conditional branches lazy.
+- Add right-associative, syntax-level `$` below composition and conditionals. Lower it to the same
+  application node/protocol as whitespace calls so holes, contracts, effects, depth guards, and
+  diagnostics cannot diverge; extend precedence coverage when lambdas arrive in Phase 3.
 
 ### Name resolution and closures
 
@@ -195,6 +198,21 @@ User-defined contracts, derivation, refinements, modifiers, results, dispatch, a
   needed. Keep named-field collections distinct from executable exported scopes.
 - Add packed collections only after representation analysis can require uniform layouts. Integrate
   later with SIMD and formats without changing observable contract membership.
+
+### Scoped member lookup
+
+- Implement `with value` as an expression over the common public named-member protocol, beginning
+  with exported scopes and extending to structured collections, rulesets, root/module metadata,
+  and sandbox projections as those value kinds arrive. Evaluate the target once and preserve member
+  identity rather than copying or destructuring fields.
+- Resolve names in local-declaration, current-`with`-member, enclosing-lexical order. Keep ordinary
+  declaration predeclaration and initialization errors; a same-named member is not a fallback for
+  an uninitialized local.
+- Represent `outer.name` and repeated `outer.outer.name` as analyzed lexical paths across `with`
+  layers, never as first-class environment values. Preserve export, reflection, module, root, and
+  sandbox authority boundaries, including for member reification.
+- Defer lookup specialization, flattened outer chains, and IDE scope visualization until the
+  resolver/member protocol is semantically complete.
 
 ### Structural templates
 
@@ -426,6 +444,11 @@ User-defined contracts, derivation, refinements, modifiers, results, dispatch, a
   related spans when two declarations/contracts/rules conflict.
 - Interaction tests combine each new feature with null/missing, exports, lookup, reflection,
   closures, partials, contracts/effects, collections, and modules as relevant.
+- Low-precedence application tests cover right associativity and its boundary with whitespace calls,
+  every infix tier, composition, conditionals, holes, multiline layout, and later lambdas.
+- Scoped-lookup tests cover one-time target evaluation, local/member/enclosing shadowing,
+  initialization errors, nested `outer` paths, member identity and reification, invalid/dynamic
+  targets, and adversarial export/root/module/sandbox visibility.
 - Container tests cover parsing/spans, independent and aliased identity, identity equality, explicit
   reads, successful and rejected writes, unchanged contents after failure, nested storage, absence
   of deep mutation, effect propagation, field reification, and selective rule reevaluation.
@@ -436,10 +459,12 @@ User-defined contracts, derivation, refinements, modifiers, results, dispatch, a
 
 ## Recommended next implementation step
 
-Built-in contract predicates and binding/parameter boundary checks (`CONTRACT-CORE-001`) are
-complete. The next implementation-planning session should settle and implement user-defined base
-contracts plus derivation graphs (`CONTRACT-005`), retaining refinements, parameterized contracts,
-result contracts, overload dispatch, and effects as separate dependent slices.
+The next implementation slice is syntax-level low-precedence application (`CORE-LOWAPP-001` and
+`CORE-LOWAPP-002`): lex `$`, parse it right-associatively below the current expression tiers, lower
+it to ordinary application, and add precedence/diagnostic/example coverage. This completes an
+independent Phase 1 feature before user-defined base contracts and derivation graphs
+(`CONTRACT-005`). `with`/`outer` wait for the Phase 4 public named-member protocol rather than
+introducing an exported-scope-only semantic model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals
 

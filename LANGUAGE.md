@@ -300,18 +300,22 @@ The metadata representation is intentionally minimal. A later version should exp
 
 From lower to higher precedence:
 
-1. composition `>>`
-2. conditional `& ... ! ...`
-3. `or`
-4. `and`
-5. equality `== !=`
-6. comparison `< <= > >=`
-7. named binary infix functions
-8. addition `+ -`
-9. multiplication `* / %`
-10. unary `- not @`
-11. function application
-12. field and dynamic lookup
+1. planned low-precedence application `$`
+2. composition `>>`
+3. conditional `& ... ! ...`
+4. `or`
+5. `and`
+6. equality `== !=`
+7. comparison `< <= > >=`
+8. named binary infix functions
+9. addition `+ -`
+10. multiplication `* / %`
+11. unary `- not @`
+12. function application
+13. field and dynamic lookup
+
+`$` is specified below but is not implemented by the current prototype. Lambda construction will
+also bind more tightly than `$` once lambdas are implemented.
 
 ## Implementation roadmap
 
@@ -414,10 +418,11 @@ asText = double >> numberText
 print asText 5
 ```
 
-`>>` is the lowest-precedence operator and is left-associative. The left operand may require any
-positive number of remaining arguments; the composition retains that arity and supports ordinary
-partial application. The right operand must require exactly one remaining argument. Inline partial
-operands work normally, as in `add _ 10 >> numberText`.
+`>>` is left-associative and is the lowest-precedence operator implemented by the current
+prototype. Planned `$` application binds below it. The left operand may require any positive number
+of remaining arguments; the composition retains that arity and supports ordinary partial
+application. The right operand must require exactly one remaining argument. Inline partial operands
+work normally, as in `add _ 10 >> numberText`.
 
 Both operands are validated when the composition is created. Non-callable operands, a nullary left
 operand, or a non-unary right operand produce located runtime diagnostics. Nullary composition is
@@ -10091,6 +10096,8 @@ with value
   body
 ```
 
+`with` and `outer` are reserved spellings and cannot be declared as bindings or parameters.
+
 Example:
 
 ```caret
@@ -10102,6 +10109,10 @@ with player
 The expression supplied to `with` is evaluated once.
 
 Its accessible named members participate directly in name resolution throughout the body.
+The target must expose a public named-member interface; otherwise evaluation produces a located
+diagnostic. Statically known members should resolve during semantic analysis. When the target's
+shape is dynamic, member selection is checked at runtime without weakening ordinary lexical or
+visibility rules.
 
 ---
 
@@ -10144,6 +10155,10 @@ with @root
 ```
 
 subject to normal visibility and sandbox restrictions.
+
+For `@root` and other metadata-only references, `with` exposes only the names already present on
+the reference's public metadata interface. It does not turn metadata into binding authority or a
+capability invocation path.
 
 ---
 
@@ -10220,6 +10235,9 @@ because the exposed `record.number` shadows the enclosing `number`.
 ## Local bindings inside `with`
 
 A local binding declared inside the block has higher precedence than a member supplied by `with`.
+As in ordinary blocks, declarations are resolved for the whole block: reading such a local before
+its initialization reports `READ_BEFORE_INITIALIZATION` rather than falling back to a same-named
+`with` member.
 
 Example:
 
@@ -10284,7 +10302,11 @@ produces:
 11
 ```
 
-`outer` is a scope-like value used for explicit lookup.
+`outer` is a reserved, resolver-owned lexical path used for explicit lookup. It does not
+materialize the enclosing environment as a first-class scope: bare `outer` cannot be stored,
+passed, called, dynamically indexed, or reflected. Only member traversal such as `outer.name` and
+`outer.outer.name` is valid. This prevents `with` from exposing private lexical bindings through
+reflection or dynamic lookup.
 
 ---
 
@@ -10344,6 +10366,10 @@ outer.outer.outer.value
 ```
 
 Each `outer` moves one level outward in the lexical scope chain.
+
+Each step crosses one enclosing `with` lookup layer. After the outermost `with`, lookup continues
+in the ordinary enclosing lexical scope. Normal initialization and visibility rules still apply;
+`outer` grants no authority and cannot bypass module, export, root, or sandbox boundaries.
 
 This provides explicit access to shadowed bindings without introducing multi-object `with` syntax.
 
@@ -10599,6 +10625,9 @@ f $ expression
 as low-precedence application before ordinary function dispatch occurs.
 
 Semantically it reduces to ordinary function application after parsing.
+It therefore uses the same arity, partial-application and hole behavior, contracts, effects,
+call-depth guard, source locations, and call diagnostics as whitespace application. `$` introduces
+no runtime callable or independently reflectable operator value.
 
 ---
 

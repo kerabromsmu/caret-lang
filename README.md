@@ -41,6 +41,12 @@ content, and `put container value` performs a contract-checked replacement. Cont
 shared through otherwise immutable fields and collections; reads and writes participate in the
 planned effect system. This syntax is specified but not implemented by the current prototype.
 
+Planned `with value` expressions make a value's public named members available for lexical lookup
+without copying them. Resolver-only paths such as `outer.name` recover shadowed enclosing names
+without exposing lexical environments as values, and right-associative `$` supplies application
+below composition, conditionals, and ordinary expressions (`print $ calculate value`). These forms
+are specified but not implemented by the current prototype.
+
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code
 to canonical Caret syntax. Sandboxes will substitute a smaller visible root and expose only selected

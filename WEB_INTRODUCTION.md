@@ -46,6 +46,16 @@ value = 1 combine 2 combine 3
 The analyzer uses the callable visible in the expression's lexical scope to distinguish named
 prefix and infix forms; unrelated declarations elsewhere in a file cannot change that choice.
 
+The planned language also provides right-associative `$` when the entire expression on the right
+should become one argument:
+
+```text
+print $ calculate value
+```
+
+This is syntax-level low-precedence application, not a new callable operator. It will lower to the
+same calls as `print (calculate value)`.
+
 ## Indentation defines structure
 
 Multiline function bodies are introduced by indentation rather than braces. The final value in a
@@ -115,6 +125,11 @@ print ada.age
 Exported scopes are immutable and compare recursively by their contents. The same equality rules
 apply when values are nested, while callable values are deliberately not comparable. Scopes provide
 a compact foundation for building and returning named data without exposing implementation details.
+
+Planned `with person` blocks will make public named members available directly inside an expression.
+Local declarations take priority, followed by the current `with` members and then enclosing lexical
+bindings. Explicit `outer.name` paths recover shadowed names, but `outer` will not be a first-class
+or reflectable environment value; exports and sandbox visibility remain unchanged.
 
 ## Partial application without ceremony
 

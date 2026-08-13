@@ -28,6 +28,9 @@ Read `README.md` and `LANGUAGE.md` before making architectural or syntactic chan
     invocation paths.
 14. Code visibility and binding authority are distinct: the initial module-code reflection model
     exposes complete semantic code for a visible module without exposing its private bindings.
+15. Planned `with` changes lexical lookup only; it must not copy members or widen their visibility
+    or authority. Planned `outer.name` is a resolver-owned lexical path, never a first-class scope
+    exposing enclosing private bindings.
 
 ## Established syntax
 
@@ -150,6 +153,22 @@ rules in `LANGUAGE.md`; do not invent the remaining structured result forms or s
 host capabilities without portable identities. Reflection must not reveal host roots, private
 captures, native implementation details, code outside the visible module environment, or unexposed
 capabilities.
+
+### Planned scoped lookup and low-precedence application
+
+```caret
+with value
+  print member
+  print outer.member
+
+print $ toString $ calculate value
+```
+
+`with` and `outer` are reserved. Local declarations shadow public members of the current `with`
+target, which shadow enclosing lexical bindings. `outer` is valid only as an explicit lexical
+member path and cannot be stored, reflected, dynamically indexed, or used to bypass export or
+sandbox visibility. `$` is right-associative syntax-level application below `>>`, conditionals,
+lambdas, and ordinary expressions; it lowers to the ordinary callable path.
 
 ## Implementation rules
 
