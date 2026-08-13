@@ -171,6 +171,8 @@ User-defined contracts, derivation, refinements, modifiers, results, dispatch, a
 - Implement composition and standard higher-order collection functions (`map`, `filter`, `fold`,
   `any`, `all`) using the unified callable/effect model.
 - Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
+- Complete `LAMBDA-LOWAPP-001`: lambda construction binds above `$`, with parser and runtime
+  coverage for ungrouped lambdas used as complete low-precedence arguments.
 
 ## Phase 4 — Universal collections, fields, and mutability containers
 
