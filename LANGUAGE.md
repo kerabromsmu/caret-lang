@@ -11052,6 +11052,1128 @@ means evaluate the complete right-hand expression and pass its result to the lef
 
 Together, `with`, `outer`, and `$` allow Caret code to remain concise without introducing implicit object receivers or excessive grouping parentheses.
 
+# Compile-Time Execution and Separate Compilation
+
+## Overview
+
+Caret may compile different runtime artifacts from different source roots.
+
+For example:
+
+```text
+client.caret
+server.caret
+```
+
+may be compiled independently:
+
+```text
+client.caret -> client artifact
+server.caret -> server artifact
+```
+
+Each root determines its own reachable program.
+
+The roots may import common Caret source and use compile-time computation to select different parts of that source before runtime code is generated.
+
+Caret does not require a separate target-description language for this.
+
+Instead, it provides compile-time execution through `#`.
+
+The same ordinary Caret operations used at runtime may therefore also be used to:
+
+* import modules;
+* inspect code;
+* filter rulesets;
+* transform collections;
+* generate lookup tables;
+* derive configuration;
+* construct formats or templates;
+* generate or select program structure.
+
+The fundamental model is:
+
+```text
+Caret source
+    ↓
+compile-time Caret computation
+    ↓
+resulting runtime program
+    ↓
+backend compilation
+    ↓
+artifact
+```
+
+Separate compilation is consequently based on ordinary source roots and ordinary Caret metaprogramming rather than on conditional-preprocessor syntax.
+
+---
+
+# Compile-time execution
+
+## `#`
+
+`#` moves the construct it prefixes into the compile-time execution stage.
+
+For an expression:
+
+```caret
+value = # expression
+```
+
+`expression` is evaluated during compilation.
+
+Its result becomes the value used by the runtime program.
+
+For a binding:
+
+```caret
+# value = expression
+```
+
+the binding itself belongs to the compile-time environment.
+
+It may be used by subsequent compile-time computation but is not itself a runtime binding.
+
+This distinction is fundamental.
+
+---
+
+## Compile-time bindings
+
+A compile-time binding is written:
+
+```caret
+# name = expression
+```
+
+Example:
+
+```caret
+# size = calculateSize configuration
+```
+
+Both the initializer and the resulting binding exist at compile time.
+
+A later compile-time computation may use it:
+
+```caret
+table = # buildTable size
+```
+
+Conceptually:
+
+```text
+compile time:
+
+    size = calculateSize configuration
+    generatedTable = buildTable size
+
+runtime:
+
+    table = generatedTable
+```
+
+`size` need not exist in the runtime artifact.
+
+---
+
+## Compile-time expression values
+
+When `#` applies to an initializer expression rather than to the binding:
+
+```caret
+table = # buildTable size
+```
+
+the computation occurs at compile time, but `table` is an ordinary runtime/program binding.
+
+The result must therefore be representable in the resulting program.
+
+For example:
+
+```caret
+squares =
+  # range 100 map $
+    x -> x * x
+```
+
+may calculate the collection during compilation and embed the resulting immutable value.
+
+The distinction is:
+
+```caret
+# value = expression
+```
+
+means:
+
+> `value` exists at compile time.
+
+while:
+
+```caret
+value = # expression
+```
+
+means:
+
+> evaluate `expression` at compile time and make its result part of the resulting program.
+
+---
+
+## Compile-time dependency rule
+
+A compile-time computation may depend only on values available at compile time.
+
+For example:
+
+```caret
+# size = 100
+
+table =
+  # buildTable size
+```
+
+is valid.
+
+By contrast:
+
+```caret
+input = readInput
+
+table =
+  # buildTable input
+```
+
+is invalid when `input` is produced only at runtime.
+
+The compiler should report a dependency diagnostic conceptually equivalent to:
+
+```text
+compile-time expression depends on runtime binding `input`
+```
+
+Compile-time availability propagates through compile-time bindings.
+
+For example:
+
+```caret
+# configuration = loadConfiguration
+# size = configuration.tableSize
+# source = generateValues size
+```
+
+is valid when every dependency is itself available during compilation.
+
+---
+
+## Ordinary functions at compile time
+
+Caret does not require separate compile-time function declarations.
+
+An ordinary function may execute at compile time when:
+
+* the function itself is available;
+* all required inputs are available;
+* its effects are permitted in the compile-time environment.
+
+For example:
+
+```caret
+square x =
+  x * x
+```
+
+may be used normally:
+
+```caret
+result = square input
+```
+
+or during compilation:
+
+```caret
+table =
+  # range 256 map square
+```
+
+The function has one definition.
+
+`#` determines the execution stage of the invocation.
+
+This avoids a separate macro or compile-time function language.
+
+---
+
+# Compile-time imports
+
+## Importing for metaprogramming
+
+A module used for compile-time inspection or transformation should normally be bound at compile time:
+
+```caret
+# shared = import "client-server.caret"
+```
+
+This means:
+
+1. `client-server.caret` is loaded and evaluated in the compile-time environment;
+2. its exported module value is bound to `shared`;
+3. `shared` may be inspected and transformed by later compile-time expressions;
+4. the binding `shared` is not automatically included as a runtime module.
+
+This differs from:
+
+```caret
+shared = import "client-server.caret"
+```
+
+which is an ordinary runtime/program import according to the normal module semantics.
+
+`import` itself does not require separate compile-time syntax.
+
+Its stage follows the surrounding Caret execution stage.
+
+---
+
+## Compile-time import does not imply runtime inclusion
+
+Given:
+
+```caret
+# shared = import "client-server.caret"
+```
+
+the complete imported module is available to compile-time Caret code.
+
+This does not mean that the complete imported module must be emitted into the runtime artifact.
+
+Only program elements that survive compile-time transformation and are reachable from the resulting runtime root need to be emitted.
+
+Conceptually:
+
+```text
+client-server.caret
+        ↓
+# import
+        ↓
+complete compile-time module
+        ↓
+compile-time transformation
+        ↓
+selected runtime program
+        ↓
+reachability analysis
+        ↓
+artifact
+```
+
+Compile-time availability and runtime inclusion are separate concepts.
+
+Compile-time imports use the same logical module identity, export visibility, initialization, and
+per-environment caching rules as ordinary imports. Reification may expose the complete semantic code
+permitted for a visible module, but it does not turn private bindings into accessible values or
+capabilities. A compiler must track every imported module and external input used by staging as a
+semantic build dependency even when none of that module is emitted at runtime.
+
+---
+
+# Compile-time metaprogramming
+
+## Ordinary values and code values
+
+Compile-time Caret may operate on ordinary values:
+
+```caret
+table =
+  # range 1000 map calculate
+```
+
+and on program structures:
+
+```caret
+# module = import "library.caret"
+```
+
+Modules, rulesets, code descriptors, templates, formats, contracts, and other reifiable language values may therefore participate in compile-time computation where their contracts permit it.
+
+Combined with Caret reflection, `#` forms the basis of metaprogramming.
+
+Conceptually:
+
+```text
+@
+    reifies program entities and exposes semantic structure
+
+#
+    executes Caret computation while the program is being compiled
+```
+
+No textual macro substitution mechanism is required for ordinary structural metaprogramming.
+
+---
+
+## Compile-time transformation uses ordinary functions
+
+Caret should prefer ordinary collection and higher-order functions for compile-time program transformation.
+
+For example:
+
+```caret
+# shared = import "module.caret"
+
+selected =
+  # shared.rules filter $
+    rule -> someCondition rule
+```
+
+`filter` is the ordinary Caret filtering operation.
+
+It is not a compiler-specific filtering syntax.
+
+The operation happens at compile time because its enclosing expression is prefixed by `#`.
+
+The same `filter` may be used on runtime collections without `#`.
+
+---
+
+# Separate compilation roots
+
+## Roots define artifacts
+
+Separate artifacts may be compiled from separate root source files.
+
+For example:
+
+```text
+client.caret
+server.caret
+```
+
+may each be passed independently to the compiler.
+
+Conceptually:
+
+```text
+compile client.caret
+    -> client artifact
+
+compile server.caret
+    -> server artifact
+```
+
+Each source file is the root of its own compilation reachability graph.
+
+Caret does not require both targets to be declared inside one special project-level source construct.
+
+A build system may invoke the Caret compiler once per root.
+
+---
+
+## Shared source
+
+Different roots may use the same source module:
+
+```text
+                  client-server.caret
+                    /             \
+                   /               \
+          client.caret           server.caret
+              |                       |
+              v                       v
+       client artifact          server artifact
+```
+
+The shared module may describe a larger logical system than either target individually needs.
+
+Each compilation root may use compile-time computation to derive the portion relevant to that target.
+
+This permits common definitions to remain in one source while producing separate deployment artifacts.
+
+---
+
+## Reachability
+
+After compile-time execution is complete, the compiler performs normal program reachability analysis from the resulting runtime root.
+
+Definitions reachable only from discarded compile-time structures do not belong to the runtime artifact.
+
+For example, if a selected client rule requires:
+
+```text
+LoginMessage
+LoginFormat
+encode
+validateName
+```
+
+those definitions remain reachable and are included as necessary.
+
+A server-only rule and helpers used exclusively by that rule may be absent from the client artifact.
+
+This is a semantic consequence of the resulting compiled program, not merely an optional size optimization.
+
+The compiler must not require unreachable imported definitions to remain in an artifact solely because they were inspected during compile-time execution.
+
+---
+
+# Example: shared client/server rules
+
+## Shared interaction module
+
+A shared source file may define both sides of an interaction.
+
+For example, `client-server.caret`:
+
+```caret
+^client = context
+^server = context
+
+^interaction =
+  ruleset
+    sendLogin = rule
+      C client
+      T loginRequested
+      E
+        request = makeLoginRequest
+        send server $ encode LoginRequest request
+
+    authenticate = rule
+      C server
+      T loginReceived
+      E
+        result = authenticateRequest
+        send client result
+
+    showLoginResult = rule
+      C client
+      T loginResultReceived
+      E
+        showResult
+```
+
+The shared ruleset describes both client-side and server-side behavior.
+
+The contexts:
+
+```caret
+client
+server
+```
+
+are ordinary context values exported by the shared module.
+
+They are not strings or compiler keywords.
+
+---
+
+## Client compilation root
+
+`client.caret` may import the shared module at compile time:
+
+```caret
+# shared = import "client-server.caret"
+```
+
+and construct the runtime client ruleset by filtering the shared interaction:
+
+```caret
+clientRules =
+  # shared.interaction filter $
+    rule ->
+      rule.context contains shared.client
+```
+
+The resulting runtime program may then install those rules:
+
+```caret
+clientApp =
+  ruleCycle
+    init
+      install clientRules
+```
+
+The binding:
+
+```caret
+shared
+```
+
+exists only during compilation.
+
+The runtime artifact receives `clientRules` and whatever dependencies are reachable through them.
+
+---
+
+## Server compilation root
+
+`server.caret` performs the corresponding selection:
+
+```caret
+# shared = import "client-server.caret"
+
+serverRules =
+  # shared.interaction filter $
+    rule ->
+      rule.context contains shared.server
+
+serverApp =
+  ruleCycle
+    init
+      install serverRules
+```
+
+Both compilation roots evaluate the same logical shared source.
+
+Each creates a different runtime ruleset.
+
+---
+
+## Resulting artifacts
+
+Conceptually, the shared source contains:
+
+```text
+sendLogin
+authenticate
+showLoginResult
+shared message definitions
+shared formats
+shared helper functions
+client-only dependencies
+server-only dependencies
+```
+
+The client compilation produces approximately:
+
+```text
+sendLogin
+showLoginResult
+required shared definitions
+required client dependencies
+client root
+```
+
+The server compilation produces approximately:
+
+```text
+authenticate
+required shared definitions
+required server dependencies
+server root
+```
+
+A helper used by both sides may be included in both artifacts.
+
+A helper used only by server rules need not appear in the client artifact.
+
+The programmer specifies the semantic selection.
+
+Normal compiler reachability determines the required dependency closure.
+
+---
+
+# Context filtering
+
+## Context values rather than names
+
+Compile-time rule filtering should normally compare or inspect actual context values rather than their textual names.
+
+Prefer:
+
+```caret
+rule.context contains shared.client
+```
+
+over:
+
+```caret
+rule.context contains "client"
+```
+
+when `shared.client` is the context being selected.
+
+The first form refers to the actual exported context value.
+
+It therefore participates in normal Caret identity, reflection, renaming, and static analysis.
+
+Strings remain appropriate only when an API intentionally operates on names.
+
+---
+
+## Complex context expressions
+
+A rule context may contain combinations such as:
+
+```caret
+C client and authenticated
+```
+
+or:
+
+```caret
+C client or server
+```
+
+The filtering predicate may use ordinary context-inspection functions to determine whether a rule is relevant.
+
+The simple example:
+
+```caret
+rule.context contains shared.client
+```
+
+is sufficient when structural containment expresses the desired criterion.
+
+More sophisticated selection may use ordinary predicates such as:
+
+```caret
+contextCompatible rule.context targetContext
+```
+
+without changing the compile-time mechanism.
+
+For example:
+
+```caret
+clientRules =
+  # shared.interaction filter $
+    rule ->
+      contextCompatible rule.context shared.client
+```
+
+Context compatibility policy belongs to context/ruleset functions, not to `#`.
+
+---
+
+# Filtering and dependency closure
+
+## `filter` selects rules
+
+When filtering a ruleset:
+
+```caret
+selected =
+  # rules filter predicate
+```
+
+`filter` determines which rules are present in the resulting ruleset.
+
+It does not need to manually enumerate every function, contract, format, or helper referenced by those rules.
+
+For example, if a selected rule calls:
+
+```caret
+encode LoginRequest request
+```
+
+the selected rule retains its semantic references to:
+
+```text
+encode
+LoginRequest
+```
+
+Normal reachability analysis keeps those required definitions.
+
+The programmer should therefore specify:
+
+```text
+which rules belong to the resulting ruleset
+```
+
+rather than:
+
+```text
+every source declaration that must appear in the artifact
+```
+
+---
+
+## Unselected rules
+
+A rule removed by compile-time filtering is not part of the resulting runtime ruleset.
+
+If no remaining runtime definition depends on it, it is unreachable and need not be emitted.
+
+Dependencies used only by that rule likewise need not be emitted.
+
+Thus:
+
+```caret
+# shared = import "client-server.caret"
+
+clientRules =
+  # shared.interaction filter $
+    rule ->
+      rule.context contains shared.client
+```
+
+does not imply that the client artifact contains `shared.interaction` in its original complete form.
+
+Only the resulting `clientRules` value and runtime-reachable dependencies matter.
+
+---
+
+# Generality
+
+The mechanism is not specific to client/server programs.
+
+Different compilation roots may filter or transform shared code using any compile-time criterion expressible in Caret.
+
+Examples may include:
+
+```text
+desktop / browser
+CPU / GPU
+editor / runtime
+production / test
+different embedded devices
+different protocol roles
+different application editions
+different rule-system participants
+```
+
+For example:
+
+```caret
+# shared = import "platform-rules.caret"
+
+browserRules =
+  # shared.rules filter $
+    rule ->
+      rule.context contains shared.browser
+```
+
+The compiler does not need a built-in concept of `browser`, `client`, `server`, or `agent`.
+
+These are ordinary program values interpreted by compile-time Caret code.
+
+---
+
+# Compile-time effects and authority
+
+Compile-time execution remains subject to Caret's normal effect and capability principles.
+
+`#` does not grant authority.
+
+The compile-time environment is an ordinary explicit Caret execution environment. It may be more
+restricted than the eventual runtime environment, and neither reflection nor staging may recover a
+host root or capability omitted from it. Effect declarations remain descriptions rather than
+authority grants at both stages.
+
+For example, a compile-time operation that reads source files requires the corresponding capability in the compilation environment.
+
+The compilation environment may expose facilities such as:
+
+```text
+module loading
+source access
+compiler metadata
+target information
+environment configuration
+```
+
+while omitting unrelated runtime capabilities.
+
+Effects used during compile-time execution occur during compilation, not in the resulting runtime artifact.
+
+A function executed through `#` retains its ordinary effect contract and must be permitted by the compile-time environment.
+
+The exact standard compiler environment may be specified separately.
+
+---
+
+# Stage boundaries
+
+## Values crossing into runtime
+
+A value produced at compile time may enter the runtime program only when it has a valid runtime representation.
+
+For example:
+
+```caret
+table =
+  # buildTable configuration
+```
+
+may embed an immutable collection.
+
+Likewise:
+
+```caret
+clientRules =
+  # shared.interaction filter predicate
+```
+
+may produce executable ruleset structure that the compiler incorporates into the resulting program.
+
+Compile-time-only capabilities, compiler handles, source-loader objects, and other values with no runtime representation must not cross the stage boundary accidentally.
+
+Crossing the boundary has three distinct outcomes: an immutable representable value may be embedded;
+a reifiable executable/code value may retain semantic references whose runtime dependency closure is
+emitted; and a compiler-only or capability-bearing value without a portable runtime representation
+is rejected. Backend serialization details do not define this language-level distinction.
+
+The compiler should issue a located diagnostic when a compile-time-only value is required directly at runtime.
+
+---
+
+## Compile-time bindings remain compile-time
+
+A binding declared:
+
+```caret
+# shared = import "client-server.caret"
+```
+
+does not itself become part of the runtime program merely because later code uses it during compilation.
+
+This permits large modules and compiler-side structures to be inspected without forcing them into the emitted artifact.
+
+The resulting runtime program contains only values deliberately crossing the stage boundary and their runtime-reachable dependencies.
+
+---
+
+# Parsing and precedence of `#`
+
+`#` is a compile-time staging marker.
+
+When applied to a binding:
+
+```caret
+# name = expression
+```
+
+it stages the complete binding.
+
+When applied to an expression:
+
+```caret
+name = # expression
+```
+
+it stages the complete expression that forms the initializer operand.
+
+For example:
+
+```caret
+clientRules =
+  # shared.interaction filter $
+    rule ->
+      rule.context contains shared.client
+```
+
+means:
+
+```text
+evaluate during compilation:
+
+    shared.interaction filter $
+      rule ->
+        rule.context contains shared.client
+```
+
+and use the resulting ruleset as the value of the ordinary `clientRules` binding.
+
+`#` must not stage only the immediately following function name or atom.
+
+Parentheses remain available when only a smaller subexpression should execute at compile time.
+
+For example:
+
+```caret
+result =
+  combine
+    (# calculateConstant configuration)
+    runtimeValue
+```
+
+The exact precedence entry for `#` should preserve these whole-expression staging semantics without changing ordinary `$`, lambda, conditional, or application behavior.
+
+---
+
+# Relationship to `@`
+
+`@` and `#` have complementary roles.
+
+`@` reifies a binding or program entity:
+
+```caret
+@function
+@root.code
+player.@health
+```
+
+`#` controls execution stage:
+
+```caret
+# module = import "module.caret"
+
+generated =
+  # transform code
+```
+
+Conceptually:
+
+```text
+@
+    expose semantic program structure as values
+
+#
+    execute Caret computation during compilation
+```
+
+Together they provide structural metaprogramming without requiring textual macros.
+
+Neither operator replaces the other.
+
+---
+
+# Implementation requirements
+
+The initial compile-time and separate-compilation implementation should support at minimum:
+
+1. Compile-time bindings:
+
+```caret
+# value = expression
+```
+
+2. Compile-time initializer expressions:
+
+```caret
+value = # expression
+```
+
+3. Compile-time bindings available to later compile-time expressions.
+
+4. Diagnostics when compile-time computation depends on runtime-only values.
+
+5. Ordinary pure functions executable at compile time.
+
+6. Effectful compile-time functions when their effects are permitted by the compilation environment.
+
+7. Compile-time imports:
+
+```caret
+# module = import "module.caret"
+```
+
+8. Compile-time imported modules that are not automatically emitted into the runtime artifact.
+
+9. Compile-time transformation of ordinary Caret values.
+
+10. Compile-time transformation of rulesets and other reifiable program structures.
+
+11. Ordinary higher-order collection functions such as `filter` usable during compilation.
+
+12. Values produced by compile-time expressions incorporated into the resulting program when they have valid runtime representation.
+
+13. Separate source roots compiled independently into separate artifacts.
+
+14. Different roots importing the same shared module at compile time.
+
+15. Different roots producing different runtime rulesets from that shared module.
+
+16. Normal reachability analysis after compile-time transformation.
+
+17. Unreachable unselected rules omitted from the resulting artifact.
+
+18. Dependencies required by selected rules retained automatically.
+
+19. Shared dependencies permitted to appear in several independently compiled artifacts.
+
+20. Context values usable as compile-time filtering criteria.
+
+21. Compile-time authority remaining subject to normal Caret effect and capability rules.
+
+The initial implementation may postpone:
+
+* arbitrary syntax-generating macros;
+* source-text macros;
+* cross-target whole-program optimization;
+* automatic coordination of several compiler invocations;
+* distributed deployment;
+* automatic protocol-version negotiation;
+* target-specific package management;
+* compile-time network access;
+* incremental metaprogram cache invalidation;
+* sophisticated static proof of arbitrary context predicates.
+
+These later facilities must preserve the separation between:
+
+```text
+compile-time program values
+
+runtime program values
+
+source roots
+
+runtime reachability
+
+backend artifacts
+```
+
+---
+
+# Design principle
+
+Caret does not require a dedicated multi-target build language.
+
+A compilation target begins with an ordinary Caret source root.
+
+Different roots may inspect and transform the same shared source at compile time:
+
+```caret
+# shared = import "client-server.caret"
+```
+
+and derive different runtime values:
+
+```caret
+clientRules =
+  # shared.interaction filter $
+    rule ->
+      rule.context contains shared.client
+```
+
+or:
+
+```caret
+serverRules =
+  # shared.interaction filter $
+    rule ->
+      rule.context contains shared.server
+```
+
+`#` means that ordinary Caret computation happens while the program is being compiled.
+
+Compile-time bindings remain outside the runtime artifact unless a resulting value deliberately crosses into runtime.
+
+After compile-time transformation, ordinary dependency reachability determines what code is required.
+
+The resulting model is:
+
+```text
+shared Caret source
+        ↓
+compile-time import
+        ↓
+ordinary Caret transformation
+        ↓
+target-specific runtime program
+        ↓
+normal reachability
+        ↓
+backend compilation
+        ↓
+artifact
+```
+
+Client/server separation is one application of this mechanism, not a special language feature.
+
 
 ### Compiler target and compatibility
 
@@ -11084,8 +12206,8 @@ self-hosted implementation.
 
 The public format and sandbox result envelope, serialization of dynamically supplied capabilities,
 and environment replacement semantics are specified above. User-defined symbolic operators,
-fine-grained module-code visibility, and resumable sandbox state remain deferred for the initial
-language.
+fine-grained module-code visibility, resumable sandbox state, exact `#` precedence, and the standard
+compiler-environment interface remain deferred for the initial language.
 
 Source-exact and comment-preserving reconstruction, fine-grained metadata permissions, dynamic
 language-feature unlocking, revocable capability proxies, resource quotas, operating-system or
@@ -11109,3 +12231,5 @@ Their later implementation must not weaken root substitution or permit authority
 - modules, imports, JVM compiler backend, runtime ABI, and optimizer
 - environment-relative `@root`, structured program reification, canonical code serialization, and quines
 - sandbox execution, capability isolation, reflective membranes, and nested sandboxes
+- `#` compile-time bindings/expressions, compile-time imports and transformation, separate
+  compilation roots, staged reachability, and target-specific artifacts

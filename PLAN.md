@@ -393,7 +393,28 @@ modifiers, parameterized contracts, dispatch, and effects remain.
   retained references, nested environments, and interpreter/compiler parity. Keep revocation,
   quotas, OS/process isolation, and advanced information-flow enforcement deferred.
 
-## Phase 11 — Compiler backend and optimization
+## Phase 11 — Compile-time execution and separate compilation
+
+- Add stage-aware AST/semantic forms for compile-time bindings and whole initializer expressions.
+  Resolve names across stages, reject runtime-only dependencies from compile-time code, and preserve
+  source spans and stable diagnostics. Settle exact `#` precedence before parser implementation.
+- Execute ordinary Caret functions in an explicit compile-time environment using the reference
+  evaluator. Enforce inferred effects against the capabilities actually supplied by that environment;
+  staging and reflection must never recover omitted host or sandbox authority.
+- Apply normal module identity, exports, initialization, and environment-local caching to
+  compile-time imports. Track modules and external compile-time inputs as semantic build dependencies
+  without automatically including their runtime bodies.
+- Lower stage-boundary results into runtime IR: embed portable immutable values, retain semantic
+  references required by reifiable executable/code values, and diagnose compiler-only or
+  non-portable capability values.
+- Compile each requested source root independently. After staging, compute semantic reachability from
+  its resulting runtime root, omit discarded definitions, and retain the full dependency closure of
+  selected rules, formats, contracts, and helpers.
+- Test pure/effectful staging, invalid cross-stage dependencies, import visibility, target-specific
+  rule filtering, shared dependency retention, discarded dependency removal, reproducible dependency
+  manifests, and adversarial authority/reflection boundaries.
+
+## Phase 12 — Compiler backend and optimization
 
 ### Compiler backend
 
@@ -419,7 +440,7 @@ modifiers, parameterized contracts, dispatch, and effects remain.
   order for unordered rules, merge null with missing, execute an unselected conditional branch, or
   change effect/contract behavior.
 
-## Phase 12 — Tooling, standard library, and release hardening
+## Phase 13 — Tooling, standard library, and release hardening
 
 - Build standard-library modules for identity, collection transforms/reductions, field manipulation,
   common contracts, formats/codecs, cycle helpers, and reusable rulesets using ordinary Caret where
@@ -456,6 +477,8 @@ modifiers, parameterized contracts, dispatch, and effects remain.
   of deep mutation, effect propagation, field reification, and selective rule reevaluation.
 - Sandbox stages require adversarial tests for hidden-name lookup, reflective traversal, code
   visibility, imports, capability retention, nested authority, and interpreter/compiler parity.
+- Compile-time stages test runtime-dependency rejection, effect/capability enforcement, module/code
+  visibility, boundary representability, independent roots, and exact post-transformation reachability.
 - Stage completion requires `./gradlew test`, `./test.sh`, all examples, differential tests available
   at that stage, and `git diff --check` to pass.
 
@@ -482,3 +505,6 @@ that would later need replacement.
   cross-process container identity, debugger visualization, and formal rule conflict analysis.
 - Deferred items still receive extension points and conformance notes so their later addition does
   not change the core value, effect, format, cycle, or scheduling models.
+- Exact `#` precedence and the standard compiler-environment interface must be settled before Phase
+  11 begins. Source-text macros, cross-target whole-program optimization, automatic multi-root
+  orchestration, compile-time networking, and advanced cache invalidation remain deferred.

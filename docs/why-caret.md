@@ -177,6 +177,14 @@ or editors without treating a compiler's private AST as a public API. It also fi
 environments: a lesson could expose a small language universe, inspect the learner's semantic code,
 and gradually add capabilities.
 
+The planned `#` staging model extends this without adding textual macros. Ordinary Caret functions
+can inspect or transform reified modules during compilation, and different source roots can select
+different runtime programs from shared source. Compile-time availability does not imply runtime
+inclusion: after staging, semantic reachability retains selected code and its dependencies. This is
+promising for client/server splits, embedded editions, generated tables, and platform-specific
+artifacts, but it depends on modules, effects, capability-bounded environments, code reification,
+and a compiler pipeline that do not exist yet.
+
 This is a promising area for experimental use because language enthusiasts and DSL authors are
 often willing to work with a small runtime while semantics are still changing. The missing pieces
 are substantial: modules, full code descriptors, canonical serialization, source-to-code mapping

@@ -31,6 +31,9 @@ Read `README.md` and `LANGUAGE.md` before making architectural or syntactic chan
 15. Planned `with` changes lexical lookup only; it must not copy members or widen their visibility
     or authority. Planned `outer.name` is a resolver-owned lexical path, never a first-class scope
     exposing enclosing private bindings.
+16. Planned `#` changes execution stage but grants no effects or authority. Compile-time visibility,
+    runtime inclusion, and artifact reachability are distinct; staging must preserve module export,
+    reflection, sandbox, and capability boundaries.
 
 ## Established syntax
 

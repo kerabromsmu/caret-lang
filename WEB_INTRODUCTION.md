@@ -254,6 +254,13 @@ an environment swap, starts a fresh generation: immutable values already obtaine
 while all old-generation references become invalid. These features are specified future work and
 are not available in the prototype.
 
+Caret also plans compile-time execution using ordinary Caret code. A `#`-prefixed binding exists only
+during compilation, while a `#`-prefixed initializer computes a value or program structure to carry
+into the runtime program. Independent client, server, test, or platform roots can transform shared
+modules differently; semantic reachability after staging retains required dependencies without
+emitting everything inspected at compile time. Staging uses an explicit capability-bounded compiler
+environment and is not implemented by the current interpreter.
+
 ## An evolving language experiment
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
@@ -262,7 +269,8 @@ left-to-right function composition, language-owned reflection, persistent collec
 source-located diagnostics, a REPL, and native test assertions.
 
 Contracts, structural templates, contract-based dispatch, universal collection literals, modules,
-root reification, sandboxing, lambdas, mutability containers, and a compiler backend
+root reification, sandboxing, compile-time execution, separate compilation roots, lambdas,
+mutability containers, and a compiler backend
 remain future work. The prototype exists to make the language's ideas executable and testable while
 its larger design evolves.
 

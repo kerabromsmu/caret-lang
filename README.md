@@ -53,6 +53,13 @@ to canonical Caret syntax. Sandboxes will substitute a smaller visible root and 
 libraries and capabilities; effect declarations will not grant authority. The concrete root metadata,
 serialization rules, and sandbox syntax remain open design work and are not implemented.
 
+Compile-time execution is planned through `#` rather than a separate macro language. `# name =
+expression` creates a compile-time-only binding, while `name = # expression` incorporates a staged
+result into the runtime program. Different source roots may stage the same shared modules differently
+and produce separate artifacts; runtime inclusion is determined by reachability after staging. Exact
+`#` precedence and the standard compiler environment remain unresolved, and no staging support is
+implemented yet.
+
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
 [`examples/contracts.caret`](examples/contracts.caret) demonstrates built-in and user-defined
@@ -194,6 +201,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - Reflection is intentionally limited to basic kind, size/name, and function-arity metadata.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
   quines, and `sandbox source environment` execution are specified but not implemented.
+- Compile-time `#` execution, compile-time imports, independent compilation roots, staged
+  reachability, and target-specific artifacts are specified but not implemented.
 
 ## Diagnostics
 
