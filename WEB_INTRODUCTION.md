@@ -190,6 +190,31 @@ values. A generic `Result` contract uses `ok`, `value`, and `error` fields so fo
 operations share one explicit envelope. None of this contract, dispatch, literal, template, or
 result syntax is implemented by the current prototype yet.
 
+## Contained mutability
+
+Caret values remain immutable by default. Planned mutability is introduced only through an explicit
+stable-identity container:
+
+```text
+health = { (Int) 100 }
+player =
+  ^health = health
+
+print player.health{}  // read the shared current value
+put health 80          // replace it after checking the Int contract
+```
+
+`player.health` returns the container itself, while `player.health{}` reads its contents and
+`player.@health` reifies the field binding. Sharing the container does not make `player` mutable and
+does not require special reference-assignment syntax. Container identity uses ordinary equality;
+comparing current contents requires explicit reads.
+
+The planned effect system names content observation `StateRead` and replacement `StateWrite`.
+Passing or inspecting the container reference remains pure, and declaring an effect never grants
+authority over a container. Rule cycles can track explicit reads as reactive dependencies, while
+sandboxes may expose a real container, a restricted projection, or an immutable snapshot. These
+features are specified future work and are not available in the prototype.
+
 ## Environment-relative reflection
 
 Caret plans to let programs reflect on the environment visible to them through metadata-only
@@ -214,7 +239,7 @@ left-to-right function composition, language-owned reflection, persistent collec
 source-located diagnostics, a REPL, and native test assertions.
 
 Contracts, structural templates, contract-based dispatch, universal collection literals, modules,
-root reification, sandboxing, lambdas, mutation, and a compiler backend
+root reification, sandboxing, lambdas, mutability containers, and a compiler backend
 remain future work. The prototype exists to make the language's ideas executable and testable while
 its larger design evolves.
 

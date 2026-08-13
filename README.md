@@ -33,6 +33,12 @@ or a concrete fixed collection, to the planned `template` function creates an ex
 contract. The same mechanism defines a standard structured error payload, while a generic
 three-field `Result` contract supplies the planned public success/failure envelope.
 
+Explicit mutability is planned through stable-identity containers rather than mutable bindings or
+deeply mutable objects. `{ (Int) 100 }` constructs a container, `container{}` reads its current
+content, and `put container value` performs a contract-checked replacement. Containers can be
+shared through otherwise immutable fields and collections; reads and writes participate in the
+planned effect system. This syntax is specified but not implemented by the current prototype.
+
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code
 to canonical Caret syntax. Sandboxes will substitute a smaller visible root and expose only selected
@@ -172,8 +178,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- There is no mutation, immutable scope-update syntax, object model, module system, compiler
-  backend, bytecode, or optimizer.
+- Mutability containers and immutable scope-update syntax are specified but not implemented. There
+  is no object model, module system, compiler backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, and function-arity metadata.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
   quines, and `sandbox source environment` execution are specified but not implemented.

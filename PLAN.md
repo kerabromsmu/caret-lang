@@ -109,7 +109,8 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   refinements, evaluate statically provable membership, and retain runtime checks when proof is
   unavailable.
 - Implement parameterized contracts through ordinary contract/function application, beginning with
-  collection element contracts rather than introducing a separate generic-type subsystem.
+  collection element contracts and `Container T` rather than introducing a separate generic-type
+  subsystem.
 - Group same-named function definitions into overload sets. Select the unique most-specific
   implementation across all parameter contracts and diagnose incomparable applicable definitions.
 - Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
@@ -129,6 +130,8 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 - Give every callable an inferred effect set and a declared maximum set. No effect declaration means
   an empty set; `pure` is the explicit spelling of that guarantee.
+- Define `StateRead` for explicit container dereference and `StateWrite` for `put`. Accessing or
+  sharing a container reference is pure; effects describe observation but do not grant authority.
 - Infer effects transitively through calls, higher-order parameters, closures, composition, partials,
   cycles, codecs, and rule effects. Diagnose every inferred effect outside the declared allowance.
 - Require contract predicates, format construction/relations, SIMD-mapped functions, cycle
@@ -157,7 +160,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   `any`, `all`) using the unified callable/effect model.
 - Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 
-## Phase 4 — Universal collections, fields, and state updates
+## Phase 4 — Universal collections, fields, and mutability containers
 
 ### Collection protocol and literals
 
@@ -196,15 +199,20 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Reflect template structure as metadata on `Contract` descriptors. Permit shared metadata and
   packed-layout derivation only when optimized and optimization-disabled behavior is identical.
 
-### Updates and controlled mutation
+### Persistent updates and contained mutation
 
 - Implement immutable scope/collection update syntax, including nested updates and
   shape/contract checking.
-- Add mutable bindings or objects only to the degree specified, with explicit aliasing and closure
-  capture semantics. Expected missing/update failures return structured results or `~` where the
-  language defines them, not Java exceptions.
+- Implement `{ value }` and `{ (Contract...) value }`, postfix `container{}`, and `put container
+  value`. Infer stable content contracts, validate initial and replacement values, return the stored
+  value from successful `put`, and leave prior content unchanged on failed validation.
+- Give containers stable runtime identity and identity-based `==`. Ordinary assignment, fields,
+  collections, closures, and function calls share that identity; only explicit dereference observes
+  contents, and no surrounding value becomes deeply mutable.
+- Implement `object.@field` as field-binding reification distinct from both `object.field` and
+  `object.field{}`. Reification exposes no additional read/write authority.
 - Extend reflection with field descriptors, order, mutability, ownership, contracts, nullability,
-  optionality, and export status.
+  optionality, export status, and visibility-filtered container identity/content-contract metadata.
 
 ## Phase 5 — Self-hosting foundation and ordinary cycles
 
@@ -296,6 +304,9 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Implement nested rulesets and explicit idempotent `install`; an uninstalled ruleset is inert.
 - Add `ruleCycle init`, its master `cycle` context, registration, propagation to stability, traversal,
   and termination by lowering the master context.
+- Record container identities observed by rule `C`/`T` evaluation. After a successful `put`, enqueue
+  only dependent rules for reevaluation; keep this live dependency mechanism separate from atomic
+  previous/next persistent-state commits.
 - Introduce first-class objects with stable identity, exported state, cycle membership, and implicit
   traversal contexts. Define deterministic deferred lifecycle semantics for `create`/`destroy` to
   prevent reentrant traversal.
@@ -342,6 +353,9 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 - Support direct, filtered, and virtual capabilities. Treat effect declarations as descriptions,
   never authority grants, and report unavailable authority through `Result` and `ErrorTemplate`.
   Apply the same boundary result envelope to construction, lifecycle, swaps, and exported calls.
+- Project containers explicitly as shared read/write identities, read-only views, mediated values,
+  snapshots, or virtual replacements. Reflection and field reification must not upgrade the chosen
+  projection or recover hidden host mutation authority.
 - Project references crossing the boundary through a reflective membrane that cannot expose host
   roots, private captures, native implementation state, hidden code, or other capabilities.
 - Support nested sandboxes with child authority bounded by parent authority unless the outer host
@@ -363,7 +377,7 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   implementations. Cover all Caret value kinds, module linking, and executable CLI commands.
   Compiled and interpreted programs must share observable
   values, evaluation order, missing/null behavior, errors, effects, environment-relative reflection,
-  code visibility, and sandbox authority boundaries.
+  code visibility, container identity/aliasing, and sandbox authority boundaries.
 - Add differential tests that run every conformance example in both modes and compare stdout,
   stderr, exit status, values, and stable diagnostic codes/locations.
 
@@ -403,6 +417,9 @@ syntax/metadata remains the principal unfinished Phase 1 work.
   related spans when two declarations/contracts/rules conflict.
 - Interaction tests combine each new feature with null/missing, exports, lookup, reflection,
   closures, partials, contracts/effects, collections, and modules as relevant.
+- Container tests cover parsing/spans, independent and aliased identity, identity equality, explicit
+  reads, successful and rejected writes, unchanged contents after failure, nested storage, absence
+  of deep mutation, effect propagation, field reification, and selective rule reevaluation.
 - Sandbox stages require adversarial tests for hidden-name lookup, reflective traversal, code
   visibility, imports, capability retention, nested authority, and interpreter/compiler parity.
 - Stage completion requires `./gradlew test`, `./test.sh`, all examples, differential tests available
@@ -424,7 +441,8 @@ composition contract/effect propagation remains dependent on that foundation.
 - The plan includes all normative initial requirements. Items explicitly marked by `LANGUAGE.md` as
   postponable remain deferred: advanced capture/ownership optimization, general format relation
   solving and streaming, flexible cycle state/`Break`/`Continue`, parallelism, numeric rule
-  priorities, distributed/transactional rule cycles, dynamic ruleset unloading, debugger
-  visualization, and formal rule conflict analysis.
+  priorities, distributed/transactional rule cycles, dynamic ruleset unloading, atomic or
+  transactional container operations, concurrency policies, revocable/read-only projections,
+  cross-process container identity, debugger visualization, and formal rule conflict analysis.
 - Deferred items still receive extension points and conformance notes so their later addition does
   not change the core value, effect, format, cycle, or scheduling models.
