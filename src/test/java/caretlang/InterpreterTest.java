@@ -11,6 +11,50 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void providesBuiltInContractPredicatesAndReflection() {
+        assertEquals("true\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nContract\nNumber\n", execute("""
+                identity value = value
+                make =
+                  ^value = 1
+                print Number 1
+                print Number "one"
+                print String "one"
+                print Boolean true
+                print Null ?
+                print Missing ~
+                print Function identity
+                print Function (@identity)
+                print Scope make
+                print Sequence seqEmpty
+                print Dictionary dictEmpty
+                print Any Number
+                print type Number
+                print (@Number).name
+                """));
+    }
+
+    @Test
+    void enforcesBindingAndParameterContractsAtTheirBoundaries() {
+        assertEquals("3\n", execute("""
+                (Number) initial = 1
+                add (Number) left (Number) right = left + right
+                addOne = add 1
+                print addOne 2
+                """));
+
+        LangException binding = assertThrows(LangException.class,
+                () -> execute("(Number) value = \"wrong\""));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, binding.diagnostic().code());
+        assertEquals(18, binding.span().start().column());
+        assertEquals(1, binding.diagnostic().related().size());
+
+        LangException partial = assertThrows(LangException.class,
+                () -> execute("add (Number) left right = left\npartial = add \"wrong\""));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, partial.diagnostic().code());
+        assertEquals(15, partial.span().start().column());
+    }
+
+    @Test
     void characterizesCoreLanguageBehavior() {
         String source = """
                 add a b = a + b

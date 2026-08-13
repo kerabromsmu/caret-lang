@@ -1,0 +1,2 @@
+Error: Line 1, column 18: Contract violation for binding value: expected Number, got String
+  Note: Line 1, column 1: Required contract: Number

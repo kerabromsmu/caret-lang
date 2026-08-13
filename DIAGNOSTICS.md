@@ -21,6 +21,8 @@ from ordinary Caret source use focused Java evidence.
 | PARSE-INVALID-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/invalid_definition.caret` |
 | PARSE-CONTINUATION-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/definition_in_continuation.caret` |
 | PARSE-RESERVED-BINDING | public | PARSE_RESERVED_BINDING | `examples/errors/reserved_binding.caret` |
+| PARSE-INVALID-CONTRACT | public | PARSE_INVALID_CONTRACT | `ParserTest#rejectsMalformedAndResultContractClauses` |
+| PARSE-UNSUPPORTED-RESULT-CONTRACT | public | PARSE_UNSUPPORTED_RESULT_CONTRACT | `ParserTest#rejectsMalformedAndResultContractClauses` |
 | PARSE-UNCLOSED-DELIMITER | public | PARSE_UNCLOSED_DELIMITER | `examples/errors/unclosed_delimiter.caret` |
 | PARSE-INVALID-HOLE | public | PARSE_INVALID_HOLE | `examples/errors/invalid_numbered_hole.caret` |
 | PARSE-INVALID-NUMBER | internal | PARSE_INVALID_NUMBER | `ParserTest#rejectsNonFiniteNumberLiteralsAsLocatedParserDiagnostics` |
@@ -29,6 +31,7 @@ from ordinary Caret source use focused Java evidence.
 | SEMANTIC-DUPLICATE-PARAMETER | public | DUPLICATE_PARAMETER | `examples/errors/duplicate_parameter.caret` |
 | SEMANTIC-DUPLICATE-DEFINITION | public | DUPLICATE_DEFINITION | `examples/errors/duplicate_definition.caret` |
 | SEMANTIC-PREMATURE-READ | public | READ_BEFORE_INITIALIZATION | `examples/errors/read_before_initialization.caret` |
+| SEMANTIC-UNKNOWN-CONTRACT | public | UNKNOWN_CONTRACT | `examples/errors/unknown_contract.caret` |
 | RUNTIME-DUPLICATE-DEFINITION | internal | DUPLICATE_DEFINITION | `InterpreterTest#rejectsDuplicateDefinitionsAndParameters` |
 | RUNTIME-PREMATURE-READ | internal | READ_BEFORE_INITIALIZATION | `InterpreterTest#reportsReadsBeforeSequentialDeclarations` |
 | RUNTIME-UNKNOWN-NAME | public | UNKNOWN_NAME | `examples/errors/unknown_name.caret` |
@@ -57,6 +60,7 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-CALLABLE-EQUALITY | public | CALLABLE_EQUALITY | `examples/errors/callable_equality.caret` |
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
+| RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret` |
 | INTERNAL-UNKNOWN-UNARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
 | INTERNAL-UNKNOWN-BINARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
 | INTERNAL-INVARIANT | internal | INTERNAL_ERROR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |

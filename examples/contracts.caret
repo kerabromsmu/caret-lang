@@ -1,0 +1,12 @@
+(Number) initial = 2
+
+add (Number) left (Number) right =
+  left + right
+
+addTen = add 10
+
+print Number initial
+print String initial
+print addTen 5
+print type Number
+print (@Number).name

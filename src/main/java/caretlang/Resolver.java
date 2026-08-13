@@ -39,6 +39,7 @@ final class Resolver {
     }
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
+    private final IdentityHashMap<Ast.ContractClause, List<BuiltinContract>> contracts = new IdentityHashMap<>();
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
         Resolver resolver = new Resolver();
@@ -48,7 +49,7 @@ final class Resolver {
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names);
+        return new Resolution(resolver.names, resolver.contracts);
     }
 
     private void resolveBlock(List<Stmt> statements, Scope scope, boolean functionBody) {
@@ -56,6 +57,7 @@ final class Resolver {
         for (Stmt statement : statements) {
             switch (statement) {
                 case Assign assign -> {
+                    resolverContracts(assign.contracts());
                     resolveExpr(assign.value(), scope, functionBody, false);
                     Symbol symbol = scope.symbols.get(assign.name());
                     if (symbol == null) throw new IllegalStateException("Assignment was not predeclared");
@@ -85,15 +87,25 @@ final class Resolver {
     private void resolveFunction(FunctionDef function, Scope enclosing) {
         Scope parameters = new Scope(enclosing);
         HashSet<String> seen = new HashSet<>();
-        for (String parameter : function.params()) {
-            if (!seen.add(parameter)) {
+        for (Ast.Parameter parameter : function.params()) {
+            resolverContracts(parameter.contracts());
+            if (!seen.add(parameter.name())) {
                 throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER,
-                        "Duplicate parameter: " + parameter, function.span());
+                        "Duplicate parameter: " + parameter.name(), function.span());
             }
-            parameters.symbols.put(parameter,
+            parameters.symbols.put(parameter.name(),
                     new Symbol(parameters.nextSlot++, function.span(), true));
         }
         resolveBlock(function.body(), new Scope(parameters), true);
+    }
+
+    private void resolverContracts(Ast.ContractClause clause) {
+        if (clause == null) return;
+        List<BuiltinContract> resolved = clause.names().stream().map(name -> BuiltinContract.named(name.name())
+                .orElseThrow(() -> new LangException(Diagnostic.Phase.SEMANTIC,
+                        Diagnostic.Codes.UNKNOWN_CONTRACT, "Unknown contract: " + name.name(), name.span())))
+                .toList();
+        contracts.put(clause, resolved);
     }
 
     private void resolveExpr(Expr expression, Scope scope, boolean functionBody, boolean deferred) {

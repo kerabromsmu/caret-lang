@@ -27,6 +27,7 @@ variants that require focused Java or host-level tests.
 | `CORE-INFIX-001` | Named infix precedence, associativity, partial, and callable-parameter examples; invalid-target/arity fixtures |
 | `CORE-INFIX-002` | Symbolic prefix, infix, grouped subtraction, and symbolic partial examples |
 | `CORE-COMP-001` | Left-to-right pipelines, chaining, partial left operands, reflection, and invalid operand/arity fixtures |
+| `CONTRACT-CORE-001` | `contracts.caret`; built-in predicates, binding/parameter clauses, partial application, and reflection |
 | `CORE-TEXT-002` | Unicode code-point indexing/slicing and conversion section |
 | `CORE-COLL-001`, `CORE-COLL-002` | Persistent sequence/dictionary, safe lookup, replacement-order, and nested equality sections |
 

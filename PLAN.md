@@ -99,6 +99,11 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 
+Current status: the first vertical contract slice is implemented. Runtime-kind contracts are
+first-class unary predicates; built-in contract clauses constrain bindings and parameters, resolve
+in semantic analysis, and validate at assignment/application boundaries including partial calls.
+User-defined contracts, derivation, refinements, modifiers, results, dispatch, and effects remain.
+
 ### Contract and type model
 
 - Parse `contract` construction, derivation lists, refinements, contracts before bindings and
@@ -427,10 +432,10 @@ syntax/metadata remains the principal unfinished Phase 1 work.
 
 ## Recommended next implementation step
 
-Fixed-precedence named infix calls (`CORE-INFIX-001`) and `>>` composition (`CORE-COMP-001`) are
-complete. The next implementation-planning session should scope the Phase 2 contract foundation,
-beginning with parsed contract annotations, built-in value contracts, and runtime membership checks;
-composition contract/effect propagation remains dependent on that foundation.
+Built-in contract predicates and binding/parameter boundary checks (`CONTRACT-CORE-001`) are
+complete. The next implementation-planning session should settle and implement user-defined base
+contracts plus derivation graphs (`CONTRACT-005`), retaining refinements, parameterized contracts,
+result contracts, overload dispatch, and effects as separate dependent slices.
 
 ## Explicit assumptions and allowed deferrals
 

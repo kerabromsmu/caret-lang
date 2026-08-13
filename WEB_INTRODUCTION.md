@@ -175,6 +175,11 @@ capabilities. Contracts form derivation graphs and work as predicates. Behavior 
 functions, with the most-specific applicable implementation selected from contract-specialized
 definitions.
 
+The prototype now includes the first small piece of that model: built-in contracts such as `Number`,
+`String`, and `Boolean` are unary predicates and can dynamically constrain bindings and function
+parameters. User-defined derivation, refinements, parameterized contracts, static proof, and
+contract-based dispatch remain planned.
+
 In the planned collection model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable
 constructor—or a concrete fixed collection—to the ordinary `template` function derives an exact

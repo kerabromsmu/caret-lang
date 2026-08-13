@@ -45,18 +45,20 @@ final class Interpreter {
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
         LinkedHashMap<String, Value> exports = new LinkedHashMap<>();
-        IdentityHashMap<FunctionDef, Value.FunctionValue> functions = prepareDeclarations(statements, env, resolution);
+        IdentityHashMap<FunctionDef, Value.Callable> functions = prepareDeclarations(statements, env, resolution);
         Value last = Value.Missing.INSTANCE;
 
         for (Stmt statement : statements) {
-            if (statement instanceof Assign(String name, boolean exported, Expr value1, SourceSpan ignored)) {
+            if (statement instanceof Assign(String name, boolean exported, ContractClause contracts,
+                                            Expr value1, SourceSpan ignored)) {
                 Value value = eval(value1, env, null, resolution);
+                validateContracts(value, value1.span(), contracts, resolution, "binding " + name);
                 env.initialize(name, value);
                 if (exported) exports.put(name, value);
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
                 last = eval(expression, env, null, resolution);
-            } else if (statement instanceof FunctionDef(String name, List<String> params, List<Stmt> body,
+            } else if (statement instanceof FunctionDef(String name, List<Parameter> params, List<Stmt> body,
                                                         SourceSpan ignored)) {
                 last = functions.get((FunctionDef) statement);
             }
@@ -65,28 +67,48 @@ final class Interpreter {
         return exports.isEmpty() ? last : new Value.Scope(exports);
     }
 
-    private IdentityHashMap<FunctionDef, Value.FunctionValue> prepareDeclarations(List<Stmt> statements,
+    private IdentityHashMap<FunctionDef, Value.Callable> prepareDeclarations(List<Stmt> statements,
                                                                                    Environment env,
                                                                                    Resolution resolution) {
-        IdentityHashMap<FunctionDef, Value.FunctionValue> functions = new IdentityHashMap<>();
+        IdentityHashMap<FunctionDef, Value.Callable> functions = new IdentityHashMap<>();
         for (Stmt statement : statements) {
             if (statement instanceof Assign assign) declare(env, assign.name(), assign.span());
             else if (statement instanceof FunctionDef function) declare(env, function.name(), function.span());
         }
         for (Stmt statement : statements) {
             if (statement instanceof FunctionDef function) {
-                Value.FunctionValue value = new Value.FunctionValue(function.name(), function.params(), args -> {
+                List<String> parameterNames = function.params().stream().map(Parameter::name).toList();
+                Value.FunctionValue raw = new Value.FunctionValue(function.name(), parameterNames, args -> {
                     Environment parameters = new Environment(env);
                     for (int i = 0; i < function.params().size(); i++) {
-                        parameters.define(function.params().get(i), args.get(i));
+                        parameters.define(function.params().get(i).name(), args.get(i));
                     }
                     return executeBlock(function.body(), new Environment(parameters), resolution);
                 });
+                Value.Callable value = function.params().stream().noneMatch(parameter -> parameter.contracts() != null)
+                        ? raw : new Value.ContractedCallable(raw, (index, argument) -> {
+                            Parameter parameter = function.params().get(index);
+                            validateContracts(argument.value(), argument.span(), parameter.contracts(), resolution,
+                                    "parameter " + parameter.name());
+                        });
                 env.initialize(function.name(), value);
                 functions.put(function, value);
             }
         }
         return functions;
+    }
+
+    private void validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
+                                   Resolution resolution, String subject) {
+        for (BuiltinContract contract : resolution.contracts(clause)) {
+            if (contract.accepts(value)) continue;
+            List<Diagnostic.Related> related = clause == null ? List.of()
+                    : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), clause.span()));
+            throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.CONTRACT_VIOLATION,
+                    "Contract violation for " + subject + ": expected " + contract.publicName()
+                            + ", got " + kindOf(value), valueSpan, related));
+        }
     }
 
     private void declare(Environment env, String name, SourceSpan span) {
@@ -428,6 +450,9 @@ final class Interpreter {
     }
 
     private void installBuiltins() {
+        for (BuiltinContract contract : BuiltinContract.values()) {
+            globals.define(contract.publicName(), new Value.ContractValue(contract));
+        }
         for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
             String operator = descriptor.spelling();
             globals.define(operator, locatedFunction(operator, List.of("left", "right"),
@@ -590,6 +615,7 @@ final class Interpreter {
 
     private Value reflect(Value value) {
         if (value instanceof Value.FunctionReference reference) return reference;
+        if (value instanceof Value.ContractValue contract) return contract;
         if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
         LinkedHashMap<String, Value> metadata = new LinkedHashMap<>();
         switch (value) {
@@ -623,6 +649,7 @@ final class Interpreter {
             case Value.Missing ignored -> "Missing";
             case Value.Scope ignored -> "Scope";
             case Value.FunctionReference ignored -> "Function";
+            case Value.ContractValue ignored -> "Contract";
             case Value.Reflective ignored -> "Reflective";
             case Value.Seq ignored -> "Sequence";
             case Value.Dict ignored -> "Dictionary";

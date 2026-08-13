@@ -9,6 +9,31 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ParserTest {
     @Test
+    void parsesBuiltInContractClausesOnBindingsAndParameters() {
+        List<Stmt> program = new Parser("""
+                (Number) count = 1
+                add (Number) left (Number Any) right = left + right
+                """).parseProgram();
+        Assign binding = assertInstanceOf(Assign.class, program.getFirst());
+        assertEquals("Number", binding.contracts().names().getFirst().name());
+        assertEquals(1, binding.contracts().span().start().column());
+        FunctionDef function = assertInstanceOf(FunctionDef.class, program.get(1));
+        assertEquals(List.of("left", "right"), function.params().stream().map(Parameter::name).toList());
+        assertEquals(2, function.params().get(1).contracts().names().size());
+        assertEquals(5, function.params().getFirst().contracts().span().start().column());
+    }
+
+    @Test
+    void rejectsMalformedAndResultContractClauses() {
+        LangException empty = assertThrows(LangException.class,
+                () -> new Parser("() value = 1").parseProgram());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_CONTRACT, empty.diagnostic().code());
+        LangException result = assertThrows(LangException.class,
+                () -> new Parser("(Number) add left right = left + right").parseProgram());
+        assertEquals(Diagnostic.Codes.PARSE_UNSUPPORTED_RESULT_CONTRACT, result.diagnostic().code());
+    }
+
+    @Test
     void parsesApplicationMoreTightlyThanAddition() {
         Expr expression = expression("f x + g y");
         Binary addition = assertInstanceOf(Binary.class, expression);

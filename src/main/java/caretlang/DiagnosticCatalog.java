@@ -26,6 +26,8 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     PARSE_INVALID_DEFINITION("PARSE-INVALID-DEFINITION", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Invalid assignment or function definition.*", PUBLIC),
     PARSE_CONTINUATION_DEFINITION("PARSE-CONTINUATION-DEFINITION", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Continuation argument must be an expression.*", PUBLIC),
     PARSE_RESERVED_BINDING("PARSE-RESERVED-BINDING", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_RESERVED_BINDING, "Reserved spelling cannot be used as a binding name: .*", PUBLIC),
+    PARSE_INVALID_CONTRACT("PARSE-INVALID-CONTRACT", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT, ".*[Cc]ontract clause.*", PUBLIC),
+    PARSE_UNSUPPORTED_RESULT_CONTRACT("PARSE-UNSUPPORTED-RESULT-CONTRACT", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNSUPPORTED_RESULT_CONTRACT, "Function result contracts are not yet supported", PUBLIC),
     PARSE_UNCLOSED_DELIMITER("PARSE-UNCLOSED-DELIMITER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected .*", PUBLIC),
     PARSE_INVALID_HOLE("PARSE-INVALID-HOLE", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_HOLE, "Numbered hole index is too large", PUBLIC),
     PARSE_INVALID_NUMBER("PARSE-INVALID-NUMBER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_NUMBER, "Invalid number literal", INTERNAL),
@@ -35,6 +37,7 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     DUPLICATE_PARAMETER("SEMANTIC-DUPLICATE-PARAMETER", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER, "Duplicate parameter: .*", PUBLIC),
     DUPLICATE_DEFINITION("SEMANTIC-DUPLICATE-DEFINITION", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: .*", PUBLIC),
     PREMATURE_READ("SEMANTIC-PREMATURE-READ", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.READ_BEFORE_INITIALIZATION, "Binding read before initialization: .*", PUBLIC),
+    UNKNOWN_CONTRACT("SEMANTIC-UNKNOWN-CONTRACT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.UNKNOWN_CONTRACT, "Unknown contract: .*", PUBLIC),
 
     RUNTIME_DUPLICATE_DEFINITION("RUNTIME-DUPLICATE-DEFINITION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: .*", INTERNAL),
     RUNTIME_PREMATURE_READ("RUNTIME-PREMATURE-READ", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.READ_BEFORE_INITIALIZATION, "Binding read before initialization.*", INTERNAL),
@@ -64,6 +67,7 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     CALLABLE_EQUALITY("RUNTIME-CALLABLE-EQUALITY", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY, "Callable values cannot be compared for equality", PUBLIC),
     MIXED_HOLES("RUNTIME-MIXED-HOLES", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_HOLE_STYLES, "Cannot mix numbered and unnumbered holes", PUBLIC),
     INVALID_ASSERTION("RUNTIME-INVALID-ASSERTION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_ASSERTION, "Assertion condition must be Boolean, got: .*", PUBLIC),
+    CONTRACT_VIOLATION("RUNTIME-CONTRACT-VIOLATION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CONTRACT_VIOLATION, "Contract violation for .*", PUBLIC),
     UNKNOWN_UNARY_OPERATOR("INTERNAL-UNKNOWN-UNARY-OPERATOR", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown unary operator: .*", INTERNAL),
     UNKNOWN_BINARY_OPERATOR("INTERNAL-UNKNOWN-BINARY-OPERATOR", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: .*", INTERNAL),
     INTERNAL_INVARIANT("INTERNAL-INVARIANT", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR, ".*", INTERNAL);

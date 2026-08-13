@@ -88,6 +88,33 @@ makePerson name age =
 The constant/operator spellings `true`, `false`, `and`, `or`, `not`, `_`, and numbered holes such
 as `_1` are reserved and cannot be used as binding or parameter names.
 
+### Built-in contract foundation currently implemented
+
+The prototype provides first-class unary contracts matching its existing runtime kinds: `Any`,
+`Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Scope`, `Sequence`, and `Dictionary`.
+Calling a contract tests membership and returns a Boolean:
+
+```caret
+Number 42
+String "text"
+```
+
+Simple clauses constrain bindings and function parameters dynamically:
+
+```caret
+(Number) count = 1
+add (Number) left (Number) right = left + right
+```
+
+Arguments are checked as they fill parameters, including during partial application. Contracted
+initializers are checked before their bindings commit. `type Number` and `(@Number).kind` report
+`"Contract"`, and `(@Number).name` reports `"Number"`.
+
+This is only the first contract slice. User-defined `contract`, derivation, refinements,
+parameterized contracts, nullable/optional modifiers, result contracts, overload dispatch, and
+static proof are still planned below. A clause in this prototype therefore accepts only built-in
+contract names; leading function-result clauses are rejected until their syntax is finalized.
+
 Indentation defines a multiline function body. If a body contains exported bindings (`^`), calling the function returns an immutable scope containing those exports. Otherwise it returns the final expression or assigned value.
 
 A zero-argument function is evaluated when its name is read. Use reflection syntax to refer to the
@@ -10049,7 +10076,8 @@ Their later implementation must not weaken root substitution or permit authority
 
 - function composition
 - trailing lambdas
-- contracts, static types, effect inference, and ownership analysis
+- user-defined/parameterized contracts, derivation, refinements, dispatch, static type proof,
+  result contracts, effect inference, and ownership analysis
 - universal collection literals, first-class fields, contract-selected representations, and persistent updates
 - mutability containers, container reads/writes, and field reification
 - lambdas and higher-order standard collection operations

@@ -55,6 +55,9 @@ diff -u "$CARET_TEST_TMP/expected.txt" "$CARET_TEST_TMP/output.txt"
 "$CARET_LAUNCHER" examples/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
 diff -u examples/implemented_features.expected "$CARET_TEST_TMP/implemented-features-output.txt"
 
+"$CARET_LAUNCHER" examples/contracts.caret > "$CARET_TEST_TMP/contracts-output.txt"
+diff -u examples/contracts.expected "$CARET_TEST_TMP/contracts-output.txt"
+
 "$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value
@@ -192,4 +195,6 @@ expect_failure examples/errors/inconsistent_continuation_indent.caret unused
 expect_failure examples/errors/definition_in_continuation.caret unused
 expect_failure examples/errors/invalid_numbered_hole.caret unused
 expect_failure examples/errors/ambiguous_call_arity.caret unused
+expect_failure examples/errors/unknown_contract.caret unused
+expect_failure examples/errors/contract_violation.caret unused
 printf 'All prototype tests passed.\n'

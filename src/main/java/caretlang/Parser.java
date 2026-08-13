@@ -8,7 +8,8 @@ import caretlang.Lexer.Token;
 import java.util.*;
 
 final class Parser {
-    private record DefinitionHeader(String name, List<String> parameters, boolean exported) {}
+    private record DefinitionHeader(String name, ContractClause contracts,
+                                    List<Parameter> parameters, boolean exported) {}
     private final List<LogicalLine> lines;
     private final Map<String, Integer> declaredArities;
     private int lineIndex;
@@ -68,7 +69,7 @@ final class Parser {
             if (header != null && !right.isEmpty()) {
                 Expr expression = parseExpression(right, tokens.getLast().span().end(), indent);
                 if (header.parameters().isEmpty()) {
-                    return new Assign(header.name(), header.exported(), expression,
+                    return new Assign(header.name(), header.exported(), header.contracts(), expression,
                             SourceSpan.cover(left.getFirst().span(), expression.span()));
                 }
                 if (!header.exported()) {
@@ -98,7 +99,7 @@ final class Parser {
         return new ExprParser(tokens, end, continuationArguments(baseIndent), declaredArities).parse();
     }
 
-    private static Map<String, Integer> discoverDeclaredArities(List<LogicalLine> lines) {
+    private Map<String, Integer> discoverDeclaredArities(List<LogicalLine> lines) {
         LinkedHashMap<String, Integer> result = new LinkedHashMap<>();
         for (LogicalLine line : lines) {
             List<Token> tokens = Lexer.lex(line.text(), line.offset(), line.number(), line.column());
@@ -111,11 +112,8 @@ final class Parser {
                 else if (spelling.equals("=") && depth == 0) { equals = i; break; }
             }
             if (equals < 1) continue;
-            int start = tokens.getFirst().text().equals("^") ? 1 : 0;
-            List<Token> header = tokens.subList(start, equals);
-            if (!header.isEmpty() && header.stream().allMatch(token -> token.kind() == Kind.IDENT)) {
-                result.putIfAbsent(header.getFirst().text(), header.size() - 1);
-            }
+            DefinitionHeader header = definitionHeader(tokens.subList(0, equals));
+            if (header != null) result.putIfAbsent(header.name(), header.parameters().size());
         }
         return Map.copyOf(result);
     }
@@ -148,13 +146,53 @@ final class Parser {
 
     private DefinitionHeader definitionHeader(List<Token> tokens) {
         boolean exported = !tokens.isEmpty() && tokens.getFirst().text().equals("^");
-        int start = exported ? 1 : 0;
-        if (tokens.size() <= start || !tokens.subList(start, tokens.size()).stream()
-                .allMatch(token -> token.kind() == Kind.IDENT)) return null;
-        List<Token> names = tokens.subList(start, tokens.size());
-        requireBindable(names);
-        return new DefinitionHeader(names.getFirst().text(),
-                names.subList(1, names.size()).stream().map(Token::text).toList(), exported);
+        int current = exported ? 1 : 0;
+        ContractParse leading = contractClause(tokens, current);
+        if (leading != null) current = leading.next();
+        if (current >= tokens.size() || tokens.get(current).kind() != Kind.IDENT) return null;
+        Token name = tokens.get(current++);
+        requireBindable(name);
+        ArrayList<Parameter> parameters = new ArrayList<>();
+        while (current < tokens.size()) {
+            ContractParse clause = contractClause(tokens, current);
+            ContractClause contracts = clause == null ? null : clause.clause();
+            if (clause != null) current = clause.next();
+            if (current >= tokens.size() || tokens.get(current).kind() != Kind.IDENT) return null;
+            Token parameter = tokens.get(current++);
+            requireBindable(parameter);
+            parameters.add(new Parameter(parameter.text(), contracts,
+                    contracts == null ? parameter.span() : SourceSpan.cover(contracts.span(), parameter.span())));
+        }
+        if (leading != null && !parameters.isEmpty()) {
+            throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNSUPPORTED_RESULT_CONTRACT,
+                    "Function result contracts are not yet supported", leading.clause().span());
+        }
+        return new DefinitionHeader(name.text(), leading == null ? null : leading.clause(),
+                List.copyOf(parameters), exported);
+    }
+
+    private record ContractParse(ContractClause clause, int next) {}
+
+    private ContractParse contractClause(List<Token> tokens, int start) {
+        if (start >= tokens.size() || !tokens.get(start).text().equals("(")) return null;
+        ArrayList<ContractName> names = new ArrayList<>();
+        int current = start + 1;
+        while (current < tokens.size() && !tokens.get(current).text().equals(")")) {
+            Token name = tokens.get(current++);
+            if (name.kind() != Kind.IDENT) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "Contract clause requires contract names", name.span());
+            }
+            names.add(new ContractName(name.text(), name.span()));
+        }
+        if (current >= tokens.size() || names.isEmpty()) {
+            SourceSpan span = tokens.get(start).span();
+            throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                    names.isEmpty() ? "Contract clause cannot be empty" : "Expected ')' after contract clause", span);
+        }
+        Token close = tokens.get(current++);
+        return new ContractParse(new ContractClause(List.copyOf(names),
+                SourceSpan.cover(tokens.get(start).span(), close.span())), current);
     }
 
     private SourceSpan functionSpan(List<Token> header, List<Stmt> body) {

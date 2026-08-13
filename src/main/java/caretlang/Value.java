@@ -299,6 +299,51 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
+    final class ContractValue implements Callable, Reflective {
+        private final BuiltinContract contract;
+
+        ContractValue(BuiltinContract contract) { this.contract = Objects.requireNonNull(contract); }
+
+        @Override public Value apply(Argument argument, SourceSpan callSpan) {
+            return new Bool(contract.accepts(argument.value()));
+        }
+
+        @Override public int remainingArity() { return 1; }
+        @Override public Optional<Value> find(String name) { return Optional.ofNullable(fields().get(name)); }
+        @Override public Map<String, Value> fields() {
+            return Map.of("kind", new Str("Contract"), "name", new Str(contract.publicName()));
+        }
+        @Override public String toString() { return "<contract " + contract.publicName() + ">"; }
+    }
+
+    final class ContractedCallable implements Callable {
+        private final Callable target;
+        private final int parameterIndex;
+        private final java.util.function.BiConsumer<Integer, Argument> validator;
+
+        ContractedCallable(Callable target, java.util.function.BiConsumer<Integer, Argument> validator) {
+            this(target, 0, validator);
+        }
+
+        private ContractedCallable(Callable target, int parameterIndex,
+                                   java.util.function.BiConsumer<Integer, Argument> validator) {
+            this.target = Objects.requireNonNull(target);
+            this.parameterIndex = parameterIndex;
+            this.validator = Objects.requireNonNull(validator);
+        }
+
+        @Override public Value apply(Argument argument, SourceSpan callSpan) {
+            validator.accept(parameterIndex, argument);
+            Value result = target.apply(argument, callSpan);
+            return result instanceof Callable callable && callable.remainingArity() > 0
+                    ? new ContractedCallable(callable, parameterIndex + 1, validator) : result;
+        }
+
+        @Override public int remainingArity() { return target.remainingArity(); }
+        @Override public Value invokeZero(SourceSpan callSpan) { return target.invokeZero(callSpan); }
+        @Override public String toString() { return target.toString(); }
+    }
+
     @FunctionalInterface
     interface CallInvoker {
         Value invoke(Callable callable, Argument argument, SourceSpan callSpan);
