@@ -6,7 +6,8 @@ The example suite mirrors every requirement currently marked `implemented` in
 [`implemented_features_test.caret`](implemented_features_test.caret). Each `.caret` file under
 `errors/` contains one intentional failure, has an adjacent `.expected` file containing its exact
 stderr, and is exercised by `test.sh`. [The diagnostic matrix](../DIAGNOSTICS.md) also records
-variants that require focused Java or host-level tests.
+internal and host variants that require focused Java or host-level tests. Every public diagnostic
+variant has executable `.caret` evidence.
 
 | Conformance requirements | Example coverage |
 |---|---|
