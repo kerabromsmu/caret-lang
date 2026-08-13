@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 final class Environment {
-    record LocalBinding(String name, int slot) {}
+    record LocalBinding(String name, int slot, Integer callableArity) {}
     private static final class Binding {
         private Value value;
         private boolean initialized;
@@ -79,7 +79,9 @@ final class Environment {
     List<LocalBinding> localBindings() {
         ArrayList<LocalBinding> bindings = new ArrayList<>(slotNames.size());
         for (int slot = 0; slot < slotNames.size(); slot++) {
-            bindings.add(new LocalBinding(slotNames.get(slot), slot));
+            Value value = slots.get(slot).initialized ? slots.get(slot).value : null;
+            Integer arity = value instanceof Value.Callable callable ? callable.remainingArity() : null;
+            bindings.add(new LocalBinding(slotNames.get(slot), slot, arity));
         }
         return List.copyOf(bindings);
     }

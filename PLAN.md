@@ -60,8 +60,12 @@ definition-header parsing has been consolidated, and the semantic resolver now p
 bindings and records lexical depth/slot metadata consumed by the interpreter. Duplicate and
 premature-read diagnostics run in the semantic phase, callable invocation has a common depth guard,
 partial-expression rewrites share one exhaustive AST rewriter, and more-indented ungrouped
-expressions form nested calls. Trailing lambdas remain deferred to Phase 3; unified callable
-syntax/metadata remains the principal unfinished Phase 1 work.
+expressions form nested calls. Potential named prefix/infix calls are parsed neutrally and resolved
+from lexical callable facts, with runtime fallback only when arity is genuinely dynamic. Callable
+partial arguments use persistent O(1) accumulation, and language-owned value descriptors now
+centralize public kinds, basic reflection, structural equality, and stack-safe rendering. Trailing
+lambdas remain deferred to Phase 3; complete callable metadata remains the principal unfinished
+Phase 1 work.
 
 ### Layout and expressions
 

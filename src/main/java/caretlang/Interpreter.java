@@ -107,7 +107,7 @@ final class Interpreter {
             throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
                     Diagnostic.Codes.CONTRACT_VIOLATION,
                     "Contract violation for " + subject + ": expected " + contract.publicName()
-                            + ", got " + kindOf(value), valueSpan, related));
+                            + ", got " + ValueSemantics.kind(value), valueSpan, related));
         }
     }
 
@@ -211,7 +211,13 @@ final class Interpreter {
         if (expr instanceof AmbiguousCall(Expr firstExpression, Expr middleExpression,
                                           Expr lastExpression, SourceSpan ignored)) {
             Value first = rawValue(firstExpression, env, resolution);
-            if (first instanceof Value.Callable callable && callable.remainingArity() > 0) {
+            Resolution.CallMode mode = resolution.callMode((AmbiguousCall) expr);
+            if (mode == Resolution.CallMode.PREFIX
+                    || mode == Resolution.CallMode.DYNAMIC
+                    && first instanceof Value.Callable callableValue && callableValue.remainingArity() > 0) {
+                if (!(first instanceof Value.Callable callable)) {
+                    throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + first);
+                }
                 Value middle = evalInner(middleExpression, env, resolution);
                 Value partial = invoke(callable,
                         new Value.Argument(middle, middleExpression.span()), expr.span());
@@ -383,42 +389,10 @@ final class Interpreter {
             case ">=" -> new Value.Bool(number(leftArgument) >= number(rightArgument));
             case "<" -> new Value.Bool(number(leftArgument) < number(rightArgument));
             case "<=" -> new Value.Bool(number(leftArgument) <= number(rightArgument));
-            case "==" -> new Value.Bool(equalsValue(left, right));
-            case "!=" -> new Value.Bool(!equalsValue(left, right));
+            case "==" -> new Value.Bool(ValueSemantics.equal(left, right));
+            case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right));
             default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
         };
-    }
-
-    private boolean equalsValue(Value a, Value b) {
-        if (a instanceof Value.Callable || b instanceof Value.Callable) {
-            throw runtime(Diagnostic.Codes.CALLABLE_EQUALITY,
-                    "Callable values cannot be compared for equality");
-        }
-        if (a instanceof Value.Num(double value1) && b instanceof Value.Num(double value)) return value1 == value;
-        if (a instanceof Value.Scope left && b instanceof Value.Scope right) {
-            return equalsFields(left.fields(), right.fields());
-        }
-        if (a instanceof Value.Seq left && b instanceof Value.Seq right) {
-            List<Value> leftValues = left.values();
-            List<Value> rightValues = right.values();
-            if (leftValues.size() != rightValues.size()) return false;
-            for (int i = 0; i < leftValues.size(); i++) {
-                if (!equalsValue(leftValues.get(i), rightValues.get(i))) return false;
-            }
-            return true;
-        }
-        if (a instanceof Value.Dict left && b instanceof Value.Dict right) {
-            return equalsFields(left.entries(), right.entries());
-        }
-        return Objects.equals(a, b);
-    }
-
-    private boolean equalsFields(Map<String, Value> left, Map<String, Value> right) {
-        if (!left.keySet().equals(right.keySet())) return false;
-        for (String key : left.keySet()) {
-            if (!equalsValue(left.get(key), right.get(key))) return false;
-        }
-        return true;
     }
 
     private double number(Value value) {
@@ -464,7 +438,8 @@ final class Interpreter {
             return args.getFirst();
         }));
 
-        globals.define("type", new Value.FunctionValue("type", List.of("value"), args -> new Value.Str(kindOf(args.getFirst()))));
+        globals.define("type", new Value.FunctionValue("type", List.of("value"),
+                args -> new Value.Str(ValueSemantics.kind(args.getFirst()))));
 
         globals.define("textSize", locatedFunction("textSize", List.of("text"), (args, ignored) -> {
             String value = text(args.getFirst());
@@ -545,7 +520,7 @@ final class Interpreter {
                     String name = text(args.get(0));
                     Value actual = args.get(1).value();
                     Value expected = args.get(2).value();
-                    reporter.record(name, actual, expected, equalsValue(actual, expected), span);
+                    reporter.record(name, actual, expected, ValueSemantics.equal(actual, expected), span);
                     return Value.Missing.INSTANCE;
                 }));
     }
@@ -617,44 +592,7 @@ final class Interpreter {
         if (value instanceof Value.FunctionReference reference) return reference;
         if (value instanceof Value.ContractValue contract) return contract;
         if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
-        LinkedHashMap<String, Value> metadata = new LinkedHashMap<>();
-        switch (value) {
-            case Value.Num ignored -> { }
-            case Value.Str ignored -> { }
-            case Value.Bool ignored -> { }
-            case Value.Null ignored -> { }
-            case Value.Missing ignored -> { }
-            case Value.Scope scope -> {
-                metadata.put("size", new Value.Num(scope.fields().size()));
-                metadata.put("names", new Value.Str(String.join(",", scope.fields().keySet())));
-            }
-            case Value.Reflective reflective -> metadata.putAll(reflective.fields());
-            case Value.Seq sequence -> metadata.put("size", new Value.Num(sequence.size()));
-            case Value.Dict dictionary -> {
-                metadata.put("size", new Value.Num(dictionary.size()));
-                metadata.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
-            }
-            case Value.Callable ignored -> throw new AssertionError("Handled above");
-        }
-        metadata.putFirst("kind", new Value.Str(kindOf(value)));
-        return new Value.Scope(metadata);
-    }
-
-    private String kindOf(Value value) {
-        return switch (value) {
-            case Value.Num ignored -> "Number";
-            case Value.Str ignored -> "String";
-            case Value.Bool ignored -> "Boolean";
-            case Value.Null ignored -> "Null";
-            case Value.Missing ignored -> "Missing";
-            case Value.Scope ignored -> "Scope";
-            case Value.FunctionReference ignored -> "Function";
-            case Value.ContractValue ignored -> "Contract";
-            case Value.Reflective ignored -> "Reflective";
-            case Value.Seq ignored -> "Sequence";
-            case Value.Dict ignored -> "Dictionary";
-            case Value.Callable ignored -> "Function";
-        };
+        return new Value.Scope(ValueSemantics.reflectionFields(value));
     }
 
     private record HoleShape(int arity, boolean numbered) {}

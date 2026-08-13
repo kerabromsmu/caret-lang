@@ -373,7 +373,11 @@ add 2 3       // prefix call of a named function
 2 + 3         // infix call of the same symbolic operator
 ```
 
-The parser will distinguish the two forms from the beginning of the expression:
+The parser preserves a potentially ambiguous named call without consulting declarations elsewhere
+in the source. Semantic analysis then attaches lexical callable-arity facts where available, and
+evaluation uses the visible runtime binding when static arity is unknown. This prevents a nested or
+later declaration from changing how an unrelated expression is interpreted. The choice still
+follows the beginning of the expression:
 
 - If the first expression is a value, or a function taking no parameters, and the next expression
   denotes a function taking two parameters, the form is an infix call. The first expression is the
@@ -397,9 +401,8 @@ A later language version may add a quoted-symbol declaration resembling:
 
 That spelling is only a design direction and is not valid Caret syntax.
 
-Named infix calls are represented separately while parsing but invoke the same callable values as
-prefix application. A non-callable infix target or a callable whose remaining arity is not two
-produces a located runtime diagnostic.
+Analyzed named infix calls invoke the same callable values as prefix application. A non-callable
+infix target or a callable whose remaining arity is not two produces a located runtime diagnostic.
 
 ### Function composition
 
@@ -10030,6 +10033,991 @@ The central rule is:
 > Structures remain immutable unless mutability is explicitly introduced with `{ ... }`. The container's identity remains stable; only its contained value may be replaced.
 
 This keeps mutation local, visible, shareable, compatible with Caret's effect system, and naturally observable by reactive systems such as `ruleCycle`.
+
+# `with`, `outer`, and Low-Precedence Application
+
+## Overview
+
+Caret provides two related mechanisms for reducing syntactic noise:
+
+* `with` temporarily exposes the named members of a value directly in lexical lookup;
+* `$` provides low-precedence function application, reducing the need for parentheses.
+
+These features do not introduce new object or record types.
+
+A value used with `with` may simply be a heterogeneous collection containing named fields.
+
+For example:
+
+```caret
+number = 11
+
+record =
+  [
+    ^name "one"
+    ^number 10
+    ^content [1 2 3]
+  ]
+
+with record
+  print name
+  print number
+  print outer.number
+  map print content
+```
+
+Inside the `with` block:
+
+```text
+name
+number
+content
+```
+
+refer directly to exported named members of `record`.
+
+`outer.number` refers to the `number` binding from the enclosing scope.
+
+---
+
+# `with`
+
+## Basic syntax
+
+The general form is:
+
+```caret
+with value
+  body
+```
+
+Example:
+
+```caret
+with player
+  print name
+  print health{}
+```
+
+The expression supplied to `with` is evaluated once.
+
+Its accessible named members participate directly in name resolution throughout the body.
+
+---
+
+## Named members
+
+`with` operates on values that expose named members.
+
+For example:
+
+```caret
+person =
+  [
+    ^name "Alice"
+    ^age 42
+  ]
+
+with person
+  print name
+  print age
+```
+
+There is no separate `Record` type required.
+
+A heterogeneous collection with named fields is sufficient.
+
+Likewise, `with` may operate on:
+
+* returned scopes;
+* rulesets;
+* structured collections;
+* `@root`;
+* sandbox roots;
+* other values exposing named members.
+
+Example:
+
+```caret
+with @root
+  print code
+```
+
+subject to normal visibility and sandbox restrictions.
+
+---
+
+## Export visibility
+
+Only members visible through the value's normal public interface participate in `with`.
+
+For a scope or ruleset:
+
+```caret
+system =
+  ruleset
+    privateState = 10
+    ^publicState = 20
+```
+
+then:
+
+```caret
+with system
+  print publicState
+```
+
+is valid.
+
+The private binding:
+
+```caret
+privateState
+```
+
+does not become visible merely because `with` is used.
+
+`with` must preserve normal Caret visibility rules.
+
+---
+
+# Name resolution
+
+## Lookup order
+
+Inside a `with` block, unqualified names are resolved in the following order:
+
+```text
+1. local bindings declared in the current lexical block
+2. named members exposed by the current `with` value
+3. enclosing lexical scopes
+```
+
+For example:
+
+```caret
+number = 11
+
+record =
+  [
+    ^number 10
+  ]
+
+with record
+  print number
+```
+
+prints:
+
+```text
+10
+```
+
+because the exposed `record.number` shadows the enclosing `number`.
+
+---
+
+## Local bindings inside `with`
+
+A local binding declared inside the block has higher precedence than a member supplied by `with`.
+
+Example:
+
+```caret
+number = 11
+
+record =
+  [
+    ^number 10
+  ]
+
+with record
+  number = 20
+
+  print number
+  print outer.number
+```
+
+Here:
+
+```caret
+number
+```
+
+refers to the local value `20`.
+
+`outer.number` refers to the enclosing lexical environment.
+
+If direct access to the original structured value remains available, its member can still be accessed explicitly:
+
+```caret
+record.number
+```
+
+---
+
+# `outer`
+
+## Enclosing scope access
+
+Inside a `with` block, `outer` refers to the immediately enclosing lexical environment.
+
+Example:
+
+```caret
+number = 11
+
+record =
+  [
+    ^number 10
+  ]
+
+with record
+  print number
+  print outer.number
+```
+
+produces:
+
+```text
+10
+11
+```
+
+`outer` is a scope-like value used for explicit lookup.
+
+---
+
+## Nested `with`
+
+`with` blocks may be nested.
+
+Example:
+
+```caret
+x = 1
+
+a =
+  [
+    ^x 2
+  ]
+
+b =
+  [
+    ^x 3
+  ]
+
+with a
+  with b
+    print x
+    print outer.x
+    print outer.outer.x
+```
+
+produces:
+
+```text
+3
+2
+1
+```
+
+The scope chain is conceptually:
+
+```text
+inner with b
+    ↓ outer
+with a
+    ↓ outer
+enclosing lexical scope
+```
+
+---
+
+## `outer.outer`
+
+`outer` may be followed repeatedly:
+
+```caret
+outer.outer.name
+outer.outer.outer.value
+```
+
+Each `outer` moves one level outward in the lexical scope chain.
+
+This provides explicit access to shadowed bindings without introducing multi-object `with` syntax.
+
+Caret should prefer nested `with` blocks over constructs such as:
+
+```caret
+with a b c
+```
+
+because nesting makes lookup precedence visible and deterministic.
+
+---
+
+# `with` does not copy fields
+
+`with` changes name resolution only.
+
+It does not destructure or copy the value.
+
+For:
+
+```caret
+with player
+  print health{}
+```
+
+the name:
+
+```caret
+health
+```
+
+refers to the actual exported member of `player`.
+
+This matters for containers.
+
+Example:
+
+```caret
+player =
+  [
+    ^health { (Int) 100 }
+  ]
+
+with player
+  put health 75
+```
+
+changes the same container accessible as:
+
+```caret
+player.health
+```
+
+Afterward:
+
+```caret
+player.health{}
+```
+
+returns:
+
+```text
+75
+```
+
+No local copy of the container was created.
+
+---
+
+# Field reification inside `with`
+
+Normal reification rules apply to names introduced through `with`.
+
+Outside:
+
+```caret
+player.@health
+```
+
+reifies the `health` field of `player`.
+
+Inside:
+
+```caret
+with player
+  @health
+```
+
+reifies the same field.
+
+Conceptually:
+
+```caret
+player.@health
+```
+
+and:
+
+```caret
+with player
+  @health
+```
+
+refer to the same binding.
+
+This preserves the normal meaning of `@`:
+
+> reify the binding resolved at this position.
+
+---
+
+# `with` as an expression
+
+`with` is an expression.
+
+Its result is the result of its body according to normal Caret block semantics.
+
+Example:
+
+```caret
+distanceSquared point =
+  with point
+    x * x + y * y
+```
+
+or:
+
+```caret
+fullName person =
+  with person
+    firstName + " " + lastName
+```
+
+The `with` block does not require an explicit `return`.
+
+---
+
+# `with` and contained mutability
+
+`with` is particularly useful with immutable structures containing mutable containers.
+
+Example:
+
+```caret
+damage player amount =
+  with player
+    put health $ health{} - amount
+```
+
+Here:
+
+```caret
+health
+```
+
+is the container stored in `player.health`.
+
+```caret
+health{}
+```
+
+reads its mutable content.
+
+```caret
+put health ...
+```
+
+changes its content.
+
+The surrounding `player` value remains immutable.
+
+---
+
+# `$`
+
+## Overview
+
+Caret uses whitespace for ordinary function application:
+
+```caret
+f x
+```
+
+Whitespace application binds tightly.
+
+When a complete expression should be evaluated first and then supplied as an argument to the expression on its left, Caret provides `$`.
+
+Example:
+
+```caret
+print $ calculate x
+```
+
+is equivalent to:
+
+```caret
+print (calculate x)
+```
+
+`$` is therefore a **low-precedence application operator**.
+
+---
+
+## Basic semantics
+
+The general form is:
+
+```caret
+functionExpression $ argumentExpression
+```
+
+Semantically:
+
+```text
+left $ right
+```
+
+means:
+
+```text
+left (right)
+```
+
+after the right-hand expression has been grouped as a whole.
+
+For example:
+
+```caret
+put health $ health{} - damage
+```
+
+means:
+
+```caret
+put health (health{} - damage)
+```
+
+---
+
+## `$` is syntax-level application
+
+`$` is not an ordinary binary function.
+
+Its purpose is to affect parsing and expression grouping.
+
+The parser must therefore interpret:
+
+```caret
+f $ expression
+```
+
+as low-precedence application before ordinary function dispatch occurs.
+
+Semantically it reduces to ordinary function application after parsing.
+
+---
+
+# Right associativity
+
+`$` is right-associative.
+
+Therefore:
+
+```caret
+a $ b $ c
+```
+
+means:
+
+```caret
+a $ (b $ c)
+```
+
+which is equivalent to:
+
+```caret
+a (b c)
+```
+
+For example:
+
+```caret
+print $ toString $ calculate value
+```
+
+means:
+
+```caret
+print (toString (calculate value))
+```
+
+This permits nested application without repeated parentheses.
+
+---
+
+# Low precedence
+
+`$` should bind more weakly than ordinary expressions on its right.
+
+For example:
+
+```caret
+print $ a + b * c
+```
+
+means:
+
+```caret
+print (a + b * c)
+```
+
+not:
+
+```caret
+(print a) + b * c
+```
+
+Likewise:
+
+```caret
+put health $ max 0 $ health{} - damage
+```
+
+means:
+
+```caret
+put health
+  (max 0
+    (health{} - damage))
+```
+
+The practical rule is:
+
+> The right-hand side of `$` extends as far as possible.
+
+---
+
+# `$` and ordinary application
+
+Caret therefore has two complementary application forms.
+
+High-precedence application:
+
+```caret
+f x
+```
+
+Low-precedence application:
+
+```caret
+f $ expression
+```
+
+For example:
+
+```caret
+print toString value
+```
+
+uses ordinary arity-directed whitespace application.
+
+By contrast:
+
+```caret
+print $ toString value
+```
+
+explicitly groups:
+
+```caret
+toString value
+```
+
+as the argument to `print`.
+
+---
+
+# `$` and lambdas
+
+`$` should bind more weakly than lambda construction.
+
+Therefore:
+
+```caret
+map values $ x -> x * 2
+```
+
+means:
+
+```caret
+map values (x -> x * 2)
+```
+
+This allows lambdas to be passed without requiring parentheses in many common cases.
+
+For example:
+
+```caret
+filter values $ x -> x > 0
+```
+
+instead of:
+
+```caret
+filter values (x -> x > 0)
+```
+
+Parentheses remain available when a lambda must participate in a more complex surrounding expression.
+
+---
+
+# `$` and conditionals
+
+`$` should bind more weakly than Caret's conditional expression:
+
+```caret
+condition & trueValue ! falseValue
+```
+
+Therefore:
+
+```caret
+print $ valid & value ! fallback
+```
+
+means:
+
+```caret
+print (valid & value ! fallback)
+```
+
+Likewise:
+
+```caret
+put result $ condition & a ! b
+```
+
+means:
+
+```caret
+put result (condition & a ! b)
+```
+
+This allows `$` to serve as a general escape from parenthesizing complete conditional expressions.
+
+---
+
+# `$` and composition
+
+Function composition:
+
+```caret
+f >> g
+```
+
+binds more tightly than `$`.
+
+Therefore:
+
+```caret
+use $ parse >> validate
+```
+
+means:
+
+```caret
+use (parse >> validate)
+```
+
+Likewise:
+
+```caret
+map values $ normalize >> validate
+```
+
+passes the composed function:
+
+```caret
+normalize >> validate
+```
+
+as the argument.
+
+---
+
+# `$` and `with`
+
+`$` is particularly useful inside concise `with` blocks.
+
+Example:
+
+```caret
+with player
+  print $ toString health{}
+  put health $ max 0 $ health{} - damage
+```
+
+Without `$`, the same expressions would require more grouping:
+
+```caret
+with player
+  print (toString health{})
+  put health (max 0 (health{} - damage))
+```
+
+The low-precedence application form keeps the flow of expressions readable.
+
+---
+
+# Suggested precedence
+
+The exact full precedence table is specified separately, but the relative order should follow approximately:
+
+```text
+member / index / container access
+    .
+    []
+    {}
+
+ordinary whitespace application
+
+arithmetic
+comparisons
+named and symbolic binary operators
+
+function composition
+    >>
+
+conditional
+    & !
+
+lambda
+    ->
+
+low-precedence application
+    $
+
+assignment / binding
+    =
+```
+
+The essential guarantees are:
+
+```text
+ordinary application binds tightly
+
+>> binds more tightly than $
+
+conditionals bind more tightly than $
+
+lambdas bind more tightly than $
+
+$ is right-associative
+```
+
+---
+
+# Implementation requirements
+
+The initial implementation should support at minimum:
+
+1. Basic `with` blocks:
+
+```caret
+with value
+  body
+```
+
+2. Direct lookup of exported named members.
+
+3. Local bindings shadowing `with` members.
+
+4. `with` members shadowing enclosing lexical bindings.
+
+5. Explicit enclosing-scope access:
+
+```caret
+outer.name
+```
+
+6. Arbitrarily nested scope traversal:
+
+```caret
+outer.outer.name
+```
+
+7. Nested `with` blocks.
+
+8. `with` working with heterogeneous collections containing named fields.
+
+9. `with` working with returned scopes and rulesets.
+
+10. Normal visibility rules inside `with`.
+
+11. No implicit copying or destructuring of members.
+
+12. Reification of members inside a `with` block:
+
+```caret
+@field
+```
+
+13. `with` as an expression returning its body's result.
+
+14. Low-precedence application:
+
+```caret
+f $ expression
+```
+
+15. Right-associative `$`.
+
+16. `$` binding below ordinary application.
+
+17. `$` binding below arithmetic and comparison expressions.
+
+18. `$` binding below `>>`.
+
+19. `$` binding below conditional expressions.
+
+20. `$` binding below lambda expressions.
+
+21. `$` reducing semantically to ordinary function application after parsing.
+
+The initial implementation may postpone:
+
+* special optimizations for `with`;
+* compile-time flattening of nested `outer` chains;
+* advanced IDE visualization of scope resolution;
+* alternative low-precedence application operators.
+
+No separate record type, implicit receiver object, or multi-object `with` syntax is required.
+
+---
+
+# Design principle
+
+`with` changes how names are resolved, not what values are.
+
+For:
+
+```caret
+with value
+  body
+```
+
+the exported named members of `value` become directly visible in `body`.
+
+Shadowed enclosing names remain explicitly reachable through:
+
+```caret
+outer
+outer.outer
+...
+```
+
+Nested `with` blocks express lookup priority naturally.
+
+`$` complements Caret's whitespace application:
+
+```caret
+f x
+```
+
+means tightly bound application.
+
+```caret
+f $ expression
+```
+
+means evaluate the complete right-hand expression and pass its result to the left-hand expression.
+
+Together, `with`, `outer`, and `$` allow Caret code to remain concise without introducing implicit object receivers or excessive grouping parentheses.
 
 
 ### Compiler target and compatibility

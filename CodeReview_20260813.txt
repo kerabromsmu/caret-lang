@@ -1,0 +1,92 @@
+Findings
+No critical issues found. Two high-severity correctness defects should be fixed before extending contracts or callable metadata.
+High — Contracted functions corrupt callable return values
+Value.java:335 assumes every callable returned by target.apply(...) is the partially applied target. That is false when a completed function legitimately returns another function or contract. Reproduction:
+returnContract (Any) value = Number
+predicate = returnContract 1
+print predicate 2
+This leaks an uncaught Java IndexOutOfBoundsException from Interpreter.java:90, because the wrapper advances to nonexistent parameter index 1.
+This violates first-class callable return semantics and the requirement that normal Caret execution not expose host exceptions.
+Recommended fix: capture target.remainingArity() before applying. Wrap the result only when the target had more than one parameter remaining; once the final parameter is supplied, return the function’s result unchanged. Add tests using returned named functions, contracts, partials, and compositions.
+High — Global arity discovery ignores lexical scope and changes program meaning
+Parser.java:102 collects declarations from every logical line into one name-to-arity map. It ignores indentation and lexical scope. That map controls prefix-versus-infix parsing at Parser.java:388.
+A nested function can therefore change how an unrelated top-level expression parses:
+maker =
+  one a b = a
+  0
+
+one = 1
+add a b = a + b
+two = 2
+print one add two
+The final expression should use binary add and print 3. Instead, the nested one a b causes it to parse as a prefix call of top-level numeric one, producing:
+Value is not callable: 1
+Recommended fix: remove the file-global arity heuristic. Represent three-term ambiguity uniformly and resolve it using lexically resolved callable metadata, or maintain properly nested declaration scopes during parsing.
+Medium — Parser pre-scan reports later errors before earlier errors
+The constructor runs full-file arity discovery before parseProgram() begins at Parser.java:17. That discovery reparses definition headers and can emit diagnostics.
+For example:
+print )
+(Number) identity value = value
+reports the unsupported result contract on line 2 instead of the earlier malformed expression on line 1.
+This also prevents future parser recovery from controlling diagnostic order.
+Recommended fix: make declaration discovery non-diagnosing and syntax-neutral, or fold it into the actual scoped parse/semantic-analysis pass.
+Medium — High-arity application is quadratic
+Both ordinary and hole functions copy all previously supplied arguments for every application:
+•
+Value.java:417
+•
+Value.java:482
+Applying an arity-(n) callable therefore copies (1+2+\dots+n) arguments: O(n²) time and allocations. Typical functions are small, but generated functions, templates, and collection constructors could be large.
+Recommended fix: use a persistent argument vector, linked argument chain materialized once at completion, or fixed backing storage with an immutable cursor.
+Medium — Value classification remains duplicated across subsystems
+Adding a value kind currently requires coordinated edits across:
+•
+Value.java:8
+•
+BuiltinContract.java:6
+•
+Interpreter.java:616
+•
+Interpreter.java:643 ContractValue already needs special ordering because it is simultaneously callable and reflective, and Function membership must explicitly exclude it. Containers, formats, rules, code values, and sandboxes will multiply this risk.
+Recommended fix: introduce one language-owned value descriptor supplying public kind, reflection fields, contract membership, equality category, and rendering policy.
+Low — Public primitive constructors do not enforce runtime invariants
+Value.java:18 permits new Value.Num(Double.NaN) and infinities even though LANGUAGE.md requires all numbers to remain finite. Value.java:25 also permits a null string payload.
+The interpreter currently constructs valid instances, but the types are public and future embedding/backend code could violate the invariants.
+Recommended fix: validate compact record constructors or restrict construction behind checked factories. Remove the interface-wide nullability suppression afterward.
+Architecture and maintenance
+The main concentration remains Interpreter.java, now 737 lines. It owns evaluation, declarations, callable invocation, contract enforcement, equality, operators, built-ins, reflection, hole lowering, and test built-ins. Upcoming derivation, dispatch, effects, and containers should not be added directly to it.
+Suggested extraction order:
+1.
+Callable application and contract-boundary validation.
+2.
+Value operations: equality, kind, reflection, rendering.
+3.
+Built-in registry with shared parser-visible arity metadata.
+4.
+Hole analysis/lowering.
+5.
+An analyzed-program representation shared by interpreter and future compiler.
+The diagnostic catalog is comprehensive, but regex-based message identity at DiagnosticCatalog.java:94 couples stable variants to prose. Prefer constructing diagnostics from catalog entries directly so wording changes cannot become uncatalogued runtime failures.
+Previous review status
+Most findings from CodeReview_20260809.txt have been addressed:
+•
+Reserved bindings, call-depth handling, CLI failures, ignored arguments, and kind-name drift are fixed.
+•
+Hole analysis is now linear-pass-based.
+•
+Sequences and dictionaries now use persistent tree structures.
+•
+Layout ownership moved into the lexer.
+•
+REPL execution shares one loop.
+The remaining earlier concern is responsibility concentration in Interpreter; the new global parser pre-scan and contracted-callable wrapper introduce the two most serious current defects.
+Validation
+•
+Full JUnit suite: passed.
+•
+Full test.sh integration suite: passed.
+•
+Targeted /tmp probes reproduced both high-severity defects.
+•
+Working tree remained unchanged.
+The passing suites currently lack contracted functions returning callables and lexical-scope collisions in arity discovery; those should be the first regression tests added.

@@ -43,6 +43,9 @@ combine left right = left * 10 + right
 value = 1 combine 2 combine 3
 ```
 
+The analyzer uses the callable visible in the expression's lexical scope to distinguish named
+prefix and infix forms; unrelated declarations elsewhere in a file cannot change that choice.
+
 ## Indentation defines structure
 
 Multiline function bodies are introduced by indentation rather than braces. The final value in a

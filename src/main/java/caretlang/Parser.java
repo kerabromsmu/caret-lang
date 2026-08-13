@@ -11,12 +11,10 @@ final class Parser {
     private record DefinitionHeader(String name, ContractClause contracts,
                                     List<Parameter> parameters, boolean exported) {}
     private final List<LogicalLine> lines;
-    private final Map<String, Integer> declaredArities;
     private int lineIndex;
 
     Parser(String source) {
         this.lines = Lexer.logicalLines(source);
-        this.declaredArities = discoverDeclaredArities(lines);
     }
 
     List<Stmt> parseProgram() {
@@ -96,26 +94,7 @@ final class Parser {
     }
 
     private Expr parseExpression(List<Token> tokens, SourcePosition end, int baseIndent) {
-        return new ExprParser(tokens, end, continuationArguments(baseIndent), declaredArities).parse();
-    }
-
-    private Map<String, Integer> discoverDeclaredArities(List<LogicalLine> lines) {
-        LinkedHashMap<String, Integer> result = new LinkedHashMap<>();
-        for (LogicalLine line : lines) {
-            List<Token> tokens = Lexer.lex(line.text(), line.offset(), line.number(), line.column());
-            int equals = -1;
-            int depth = 0;
-            for (int i = 0; i < tokens.size() - 1; i++) {
-                String spelling = tokens.get(i).text();
-                if (spelling.equals("(") || spelling.equals("[")) depth++;
-                else if (spelling.equals(")") || spelling.equals("]")) depth--;
-                else if (spelling.equals("=") && depth == 0) { equals = i; break; }
-            }
-            if (equals < 1) continue;
-            DefinitionHeader header = definitionHeader(tokens.subList(0, equals));
-            if (header != null) result.putIfAbsent(header.name(), header.parameters().size());
-        }
-        return Map.copyOf(result);
+        return new ExprParser(tokens, end, continuationArguments(baseIndent)).parse();
     }
 
     private List<Expr> continuationArguments(int baseIndent) {
@@ -231,25 +210,22 @@ final class Parser {
     private static final class ExprParser {
         private final List<Token> tokens;
         private final List<Expr> continuationArguments;
-        private final Map<String, Integer> declaredArities;
         private int current;
 
         ExprParser(List<Token> tokens) {
             this(tokens, tokens.isEmpty()
                     ? new SourcePosition(0, 1, 1)
-                    : tokens.getLast().span().end(), List.of(), Map.of());
+                    : tokens.getLast().span().end(), List.of());
         }
 
         ExprParser(List<Token> tokens, SourcePosition end) {
-            this(tokens, end, List.of(), Map.of());
+            this(tokens, end, List.of());
         }
 
-        ExprParser(List<Token> tokens, SourcePosition end, List<Expr> continuationArguments,
-                   Map<String, Integer> declaredArities) {
+        ExprParser(List<Token> tokens, SourcePosition end, List<Expr> continuationArguments) {
             this.tokens = new ArrayList<>(tokens);
             this.tokens.add(new Token(Kind.EOF, "", SourceSpan.point(end)));
             this.continuationArguments = List.copyOf(continuationArguments);
-            this.declaredArities = declaredArities;
         }
 
         Expr parse() {
@@ -387,8 +363,8 @@ final class Parser {
 
         private Expr application(boolean namedInfixOperand) {
             Expr expr = postfix();
-            if (namedInfixOperand && expr instanceof Name name
-                    && isUnknownCallable(name.name()) && peek().kind() == Kind.IDENT
+            if (namedInfixOperand && expr instanceof Name
+                    && peek().kind() == Kind.IDENT
                     && LanguageSyntax.canBeNamedInfix(peek().text()) && canStartAtom(peekNext())) {
                 Expr middle = postfix();
                 Expr last = postfix();
@@ -396,7 +372,6 @@ final class Parser {
             }
             while (canStartAtom(peek())) {
                 if (namedInfixOperand && isValueLed(expr)
-                        && (!(expr instanceof Name) || isDeclaredInfixCandidate(peek()))
                         && peek().kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(peek().text())
                         && canStartAtom(peekNext())) break;
                 Expr argument = postfix();
@@ -411,19 +386,8 @@ final class Parser {
         }
 
         private boolean isValueLed(Expr expression) {
-            if (expression instanceof Name name) {
-                return isUnknownCallable(name.name());
-            }
+            if (expression instanceof Name) return true;
             return !(expression instanceof Apply) && !(expression instanceof Group);
-        }
-
-        private boolean isUnknownCallable(String name) {
-            return !LanguageSyntax.isBuiltinCallable(name) && declaredArities.getOrDefault(name, 0) <= 0;
-        }
-
-        private boolean isDeclaredInfixCandidate(Token token) {
-            return token.kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(token.text())
-                    && declaredArities.containsKey(token.text());
         }
 
         private Token peekNext() {

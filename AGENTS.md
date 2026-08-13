@@ -165,6 +165,10 @@ capabilities.
 * Treat sandbox and capability changes as security-sensitive. Document the threat model and add
   adversarial interpreter/compiler tests for name lookup, reflection, imports, effects, retained
   references, and nested sandboxes before marking the feature implemented.
+* Invoke Gradle either directly as `./gradlew <arguments...>` or, when a login shell is required,
+  as `/bin/bash -lc './gradlew "$@"' bash <arguments...>`. Do not embed Gradle arguments,
+  environment assignments, command chains, or substitutions inside the `bash -lc` program string;
+  those command shapes do not match the project's persistent Gradle-only approval rules.
 * Run the full test suite after changes.
 * Update `LANGUAGE.md` whenever observable language behavior changes.
 * Update `WEB_INTRODUCTION.md` whenever a language feature is added or altered so the public-facing

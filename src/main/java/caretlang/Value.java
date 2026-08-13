@@ -4,7 +4,6 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
-@SuppressWarnings("NullableProblems")
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
         Value.Reflective, Value.Seq, Value.Dict, Value.Callable {
 
@@ -16,6 +15,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     }
 
     record Num(double value) implements Value {
+        public Num {
+            if (!Double.isFinite(value)) throw new IllegalArgumentException("Caret numbers must be finite");
+        }
+        @SuppressWarnings("NullableProblems")
         @Override public String toString() {
             long asLong = (long) value;
             return value == asLong ? Long.toString(asLong) : Double.toString(value);
@@ -23,10 +26,13 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     }
 
     record Str(String value) implements Value {
+        public Str { Objects.requireNonNull(value, "string value"); }
+        @SuppressWarnings("NullableProblems")
         @Override public String toString() { return value; }
     }
 
     record Bool(boolean value) implements Value {
+        @SuppressWarnings("NullableProblems")
         @Override public String toString() { return Boolean.toString(value); }
     }
 
@@ -61,9 +67,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public String toString() {
-            StringJoiner joiner = new StringJoiner(", ", "^{", "}");
-            fields.forEach((k, v) -> joiner.add(k + " = " + v));
-            return joiner.toString();
+            return ValueSemantics.render(this);
         }
 
         @Override public boolean equals(Object other) {
@@ -105,7 +109,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         private final List<Node> chunks;
         private final int size;
-        private volatile List<Value> materialized;
+        private static final List<Value> UNMATERIALIZED = Collections.unmodifiableList(new ArrayList<>());
+        private volatile List<Value> materialized = UNMATERIALIZED;
 
         public Seq(Collection<? extends Value> values) {
             Objects.requireNonNull(values);
@@ -123,7 +128,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         public List<Value> values() {
             List<Value> result = materialized;
-            if (result != null) return result;
+            if (result != UNMATERIALIZED) return result;
             ArrayList<Value> combined = new ArrayList<>(size);
             for (Node chunk : chunks) chunk.appendTo(combined);
             result = List.copyOf(combined);
@@ -163,27 +168,33 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public int hashCode() { return values().hashCode(); }
 
         @Override public String toString() {
-            StringJoiner joiner = new StringJoiner(", ", "[", "]");
-            values().forEach(value -> joiner.add(value.toString()));
-            return joiner.toString();
+            return ValueSemantics.render(this);
         }
     }
 
     final class Dict implements Value {
-        private record Node(String key, Value value, Node left, Node right, int height) {
+        private sealed interface Tree permits EmptyTree, Node {}
+
+        private enum EmptyTree implements Tree { INSTANCE }
+
+        private record Node(String key, Value value, Tree left, Tree right, int height) implements Tree {
             private Node {
                 Objects.requireNonNull(key);
                 Objects.requireNonNull(value);
+                Objects.requireNonNull(left);
+                Objects.requireNonNull(right);
             }
         }
 
-        private final Node root;
+        private static final Map<String, Value> UNMATERIALIZED =
+                Collections.unmodifiableMap(new LinkedHashMap<>());
+        private final Tree root;
         private final Seq keys;
-        private volatile Map<String, Value> materialized;
+        private volatile Map<String, Value> materialized = UNMATERIALIZED;
 
         public Dict(Map<String, Value> entries) {
             LinkedHashMap<String, Value> checked = checkedMap(entries);
-            Node builtRoot = null;
+            Tree builtRoot = EmptyTree.INSTANCE;
             Seq builtKeys = new Seq(List.of());
             for (Map.Entry<String, Value> entry : checked.entrySet()) {
                 builtRoot = putNode(builtRoot, entry.getKey(), entry.getValue());
@@ -194,14 +205,14 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.materialized = Collections.unmodifiableMap(checked);
         }
 
-        private Dict(Node root, Seq keys) {
-            this.root = root;
-            this.keys = keys;
+        private Dict(Tree root, Seq keys) {
+            this.root = Objects.requireNonNull(root);
+            this.keys = Objects.requireNonNull(keys);
         }
 
         public Map<String, Value> entries() {
             Map<String, Value> result = materialized;
-            if (result != null) return result;
+            if (result != UNMATERIALIZED) return result;
 
             LinkedHashMap<String, Value> combined = new LinkedHashMap<>();
             for (Value key : keys.values()) {
@@ -215,10 +226,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         public Optional<Value> find(String key) {
             Objects.requireNonNull(key);
-            for (Node node = root; node != null; ) {
+            for (Tree tree = root; tree instanceof Node node; ) {
                 int comparison = key.compareTo(node.key());
                 if (comparison == 0) return Optional.of(node.value());
-                node = comparison < 0 ? node.left() : node.right();
+                tree = comparison < 0 ? node.left() : node.right();
             }
             return Optional.empty();
         }
@@ -233,8 +244,11 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         public boolean containsKey(String key) { return find(key).isPresent(); }
         public int size() { return keys.size(); }
 
-        private static Node putNode(Node node, String key, Value value) {
-            if (node == null) return new Node(key, value, null, null, 1);
+        private static Tree putNode(Tree tree, String key, Value value) {
+            if (tree == EmptyTree.INSTANCE) {
+                return new Node(key, value, EmptyTree.INSTANCE, EmptyTree.INSTANCE, 1);
+            }
+            Node node = (Node) tree;
             int comparison = key.compareTo(node.key());
             if (comparison == 0) return new Node(key, value, node.left(), node.right(), node.height());
             Node updated = comparison < 0
@@ -243,15 +257,15 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return balance(updated);
         }
 
-        private static Node balance(Node node) {
+        private static Tree balance(Node node) {
             int balance = height(node.left()) - height(node.right());
             if (balance > 1) {
-                Node left = node.left();
+                Node left = populated(node.left());
                 if (height(left.left()) < height(left.right())) left = rotateLeft(left);
                 return rotateRight(node(node.key(), node.value(), left, node.right()));
             }
             if (balance < -1) {
-                Node right = node.right();
+                Node right = populated(node.right());
                 if (height(right.right()) < height(right.left())) right = rotateRight(right);
                 return rotateLeft(node(node.key(), node.value(), node.left(), right));
             }
@@ -259,22 +273,29 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         private static Node rotateLeft(Node node) {
-            Node right = node.right();
+            Node right = populated(node.right());
             Node moved = node(node.key(), node.value(), node.left(), right.left());
             return node(right.key(), right.value(), moved, right.right());
         }
 
         private static Node rotateRight(Node node) {
-            Node left = node.left();
+            Node left = populated(node.left());
             Node moved = node(node.key(), node.value(), left.right(), node.right());
             return node(left.key(), left.value(), left.left(), moved);
         }
 
-        private static Node node(String key, Value value, Node left, Node right) {
+        private static Node node(String key, Value value, Tree left, Tree right) {
             return new Node(key, value, left, right, Math.max(height(left), height(right)) + 1);
         }
 
-        private static int height(Node node) { return node == null ? 0 : node.height(); }
+        private static int height(Tree tree) {
+            return tree instanceof Node node ? node.height() : 0;
+        }
+
+        private static Node populated(Tree tree) {
+            if (tree instanceof Node node) return node;
+            throw new IllegalStateException("Balanced dictionary tree expected a populated child");
+        }
 
         @Override public boolean equals(Object other) {
             return other instanceof Dict dictionary && entries().equals(dictionary.entries());
@@ -283,9 +304,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public int hashCode() { return entries().hashCode(); }
 
         @Override public String toString() {
-            StringJoiner joiner = new StringJoiner(", ", "#[", "]");
-            entries().forEach((key, value) -> joiner.add("#" + key + " = " + value));
-            return joiner.toString();
+            return ValueSemantics.render(this);
         }
     }
 
@@ -334,14 +353,51 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             validator.accept(parameterIndex, argument);
+            int before = target.remainingArity();
             Value result = target.apply(argument, callSpan);
-            return result instanceof Callable callable && callable.remainingArity() > 0
+            return before > 1 && result instanceof Callable callable
                     ? new ContractedCallable(callable, parameterIndex + 1, validator) : result;
         }
 
         @Override public int remainingArity() { return target.remainingArity(); }
         @Override public Value invokeZero(SourceSpan callSpan) { return target.invokeZero(callSpan); }
         @Override public String toString() { return target.toString(); }
+    }
+
+    /** Persistent reverse argument chain: O(1) partial application and one materialization at invocation. */
+    final class BoundArguments {
+        private sealed interface Link permits EmptyLink, Node {}
+        private enum EmptyLink implements Link { INSTANCE }
+        private record Node(Argument value, Link previous) implements Link {
+            private Node {
+                Objects.requireNonNull(value);
+                Objects.requireNonNull(previous);
+            }
+        }
+        private static final BoundArguments EMPTY = new BoundArguments(EmptyLink.INSTANCE, 0);
+        private final Link last;
+        private final int size;
+
+        private BoundArguments(Link last, int size) {
+            this.last = Objects.requireNonNull(last);
+            this.size = size;
+        }
+
+        static BoundArguments empty() { return EMPTY; }
+        BoundArguments appended(Argument argument) {
+            return new BoundArguments(new Node(Objects.requireNonNull(argument), last), size + 1);
+        }
+        int size() { return size; }
+        List<Argument> values() {
+            Argument[] ordered = new Argument[size];
+            Link link = last;
+            for (int i = size - 1; i >= 0; i--) {
+                Node node = (Node) link;
+                ordered[i] = node.value();
+                link = node.previous();
+            }
+            return List.of(ordered);
+        }
     }
 
     @FunctionalInterface
@@ -385,25 +441,31 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     final class FunctionValue implements Callable {
         private final String name;
         private final List<String> params;
-        private final List<Argument> bound;
+        private final BoundArguments bound;
         private final BiFunction<List<Argument>, SourceSpan, Value> implementation;
 
         public FunctionValue(String name, List<String> params, Function<List<Value>, Value> implementation) {
-            this(name, params, List.of(), (arguments, ignoredSpan) -> implementation.apply(
-                    arguments.stream().map(Argument::value).toList()));
+            this(name, params, BoundArguments.empty(), valueImplementation(implementation));
         }
 
         FunctionValue(String name, List<String> params,
                       BiFunction<List<Argument>, SourceSpan, Value> implementation) {
-            this(name, params, List.of(), implementation);
+            this(name, params, BoundArguments.empty(), implementation);
         }
 
-        private FunctionValue(String name, List<String> params, List<Argument> bound,
+        private FunctionValue(String name, List<String> params, BoundArguments bound,
                               BiFunction<List<Argument>, SourceSpan, Value> implementation) {
-            this.name = name;
+            this.name = Objects.requireNonNull(name, "function name");
             this.params = List.copyOf(params);
-            this.bound = List.copyOf(bound);
-            this.implementation = implementation;
+            this.bound = Objects.requireNonNull(bound);
+            this.implementation = Objects.requireNonNull(implementation, "function implementation");
+        }
+
+        private static BiFunction<List<Argument>, SourceSpan, Value> valueImplementation(
+                Function<List<Value>, Value> implementation) {
+            Objects.requireNonNull(implementation, "function implementation");
+            return (arguments, ignoredSpan) -> implementation.apply(
+                    arguments.stream().map(Argument::value).toList());
         }
 
         @Override public Value invokeZero(SourceSpan callSpan) {
@@ -411,14 +473,13 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                         "Function still requires arguments: " + name, callSpan);
             }
-            return implementation.apply(bound, callSpan);
+            return implementation.apply(bound.values(), callSpan);
         }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
-            ArrayList<Argument> next = new ArrayList<>(bound);
-            next.add(argument);
+            BoundArguments next = bound.appended(argument);
             if (next.size() == params.size()) {
-                return implementation.apply(next, callSpan);
+                return implementation.apply(next.values(), callSpan);
             }
             if (next.size() > params.size()) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
@@ -464,25 +525,25 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     final class HoleFunction implements Callable {
         private final String display;
         private final int arity;
-        private final List<Argument> bound;
+        private final BoundArguments bound;
         private final Function<List<Argument>, Value> implementation;
 
         public HoleFunction(String display, int arity, Function<List<Argument>, Value> implementation) {
-            this(display, arity, List.of(), implementation);
+            this(display, arity, BoundArguments.empty(), implementation);
         }
 
-        private HoleFunction(String display, int arity, List<Argument> bound,
+        private HoleFunction(String display, int arity, BoundArguments bound,
                              Function<List<Argument>, Value> implementation) {
-            this.display = display;
+            this.display = Objects.requireNonNull(display, "partial display");
+            if (arity < 1) throw new IllegalArgumentException("Partial arity must be positive");
             this.arity = arity;
-            this.bound = List.copyOf(bound);
-            this.implementation = implementation;
+            this.bound = Objects.requireNonNull(bound);
+            this.implementation = Objects.requireNonNull(implementation, "partial implementation");
         }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
-            ArrayList<Argument> next = new ArrayList<>(bound);
-            next.add(argument);
-            if (next.size() == arity) return implementation.apply(next);
+            BoundArguments next = bound.appended(argument);
+            if (next.size() == arity) return implementation.apply(next.values());
             if (next.size() > arity) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                         "Too many arguments for partial expression", callSpan);

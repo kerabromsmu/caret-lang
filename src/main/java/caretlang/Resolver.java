@@ -26,8 +26,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 final class Resolver {
-    private record Symbol(int slot, SourceSpan declaration, boolean initialized) {
-        Symbol initializedSymbol() { return new Symbol(slot, declaration, true); }
+    private record Symbol(int slot, SourceSpan declaration, boolean initialized, Integer callableArity) {
+        Symbol initializedSymbol() { return new Symbol(slot, declaration, true, callableArity); }
     }
 
     private static final class Scope {
@@ -40,16 +40,17 @@ final class Resolver {
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.ContractClause, List<BuiltinContract>> contracts = new IdentityHashMap<>();
+    private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
         Resolver resolver = new Resolver();
         Scope root = new Scope(null);
         for (Environment.LocalBinding binding : globals.localBindings()) {
-            root.symbols.put(binding.name(), new Symbol(binding.slot(), null, true));
+            root.symbols.put(binding.name(), new Symbol(binding.slot(), null, true, binding.callableArity()));
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names, resolver.contracts);
+        return new Resolution(resolver.names, resolver.contracts, resolver.calls);
     }
 
     private void resolveBlock(List<Stmt> statements, Scope scope, boolean functionBody) {
@@ -80,7 +81,8 @@ final class Resolver {
             Symbol original = scope.symbols.get(name);
             if (original != null) duplicate(name, statement.span(), original);
             boolean function = statement instanceof FunctionDef;
-            scope.symbols.put(name, new Symbol(scope.nextSlot++, statement.span(), function));
+            Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
+            scope.symbols.put(name, new Symbol(scope.nextSlot++, statement.span(), function, arity));
         }
     }
 
@@ -94,7 +96,7 @@ final class Resolver {
                         "Duplicate parameter: " + parameter.name(), function.span());
             }
             parameters.symbols.put(parameter.name(),
-                    new Symbol(parameters.nextSlot++, function.span(), true));
+                    new Symbol(parameters.nextSlot++, function.span(), true, null));
         }
         resolveBlock(function.body(), new Scope(parameters), true);
     }
@@ -132,6 +134,13 @@ final class Resolver {
                 resolveExpr(call.first(), scope, functionBody, deferred);
                 resolveExpr(call.middle(), scope, functionBody, deferred);
                 resolveExpr(call.last(), scope, functionBody, deferred);
+                Integer firstArity = knownArity(call.first(), scope);
+                Integer middleArity = knownArity(call.middle(), scope);
+                Resolution.CallMode mode = firstArity != null && firstArity > 0
+                        ? Resolution.CallMode.PREFIX
+                        : firstArity != null && firstArity == 0 && Integer.valueOf(2).equals(middleArity)
+                                ? Resolution.CallMode.INFIX : Resolution.CallMode.DYNAMIC;
+                calls.put(call, mode);
             }
             case Conditional conditional -> {
                 resolveExpr(conditional.condition(), scope, functionBody, deferred);
@@ -150,6 +159,15 @@ final class Resolver {
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
             case Group group -> resolveExpr(group.expression(), scope, functionBody, deferred);
         }
+    }
+
+    private Integer knownArity(Expr expression, Scope scope) {
+        if (!(expression instanceof Name name)) return null;
+        for (Scope current = scope; current != null; current = current.parent) {
+            Symbol symbol = current.symbols.get(name.name());
+            if (symbol != null) return symbol.callableArity();
+        }
+        return null;
     }
 
     private void resolveName(Name name, Scope scope, boolean functionBody, boolean deferred) {

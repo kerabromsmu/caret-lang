@@ -31,10 +31,6 @@ final class LanguageSyntax {
             .map(BinaryOperator::spelling).collect(Collectors.toUnmodifiableSet());
     private static final Set<String> RESERVED_WORDS = Set.of("true", "false", "and", "or", "not");
     private static final Set<String> NON_ARGUMENT_KEYWORDS = Set.of("and", "or", "not");
-    private static final Set<String> BUILTIN_CALLABLE_NAMES = Set.of(
-            "print", "type", "textSize", "textAt", "textSlice", "textNumber", "numberText",
-            "seqEmpty", "seqAdd", "seqGet", "seqSize", "dictEmpty", "dictPut", "dictGet",
-            "dictHas", "dictKeys", "assert", "assertEqual");
     private static final Set<String> MULTI_CHARACTER_SYMBOLS = Set.of("==", "!=", ">=", "<=", ">>");
     private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@+-*/%^=<>.&!?~";
 
@@ -55,10 +51,6 @@ final class LanguageSyntax {
 
     static boolean canBeNamedInfix(String spelling) {
         return canStartApplicationArgument(spelling) && !isReservedBinding(spelling);
-    }
-
-    static boolean isBuiltinCallable(String spelling) {
-        return BUILTIN_CALLABLE_NAMES.contains(spelling);
     }
 
     static boolean isMultiCharacterSymbol(String spelling) {

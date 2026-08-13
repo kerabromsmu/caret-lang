@@ -34,6 +34,13 @@ final class ParserTest {
     }
 
     @Test
+    void constructorDoesNotPreparseLaterHeadersOrReorderDiagnostics() {
+        Parser parser = new Parser("print )\n(Number) identity value = value");
+        LangException error = assertThrows(LangException.class, parser::parseProgram);
+        assertEquals(1, error.span().start().line());
+    }
+
+    @Test
     void parsesApplicationMoreTightlyThanAddition() {
         Expr expression = expression("f x + g y");
         Binary addition = assertInstanceOf(Binary.class, expression);

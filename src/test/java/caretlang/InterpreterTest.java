@@ -55,6 +55,32 @@ final class InterpreterTest {
     }
 
     @Test
+    void contractedFunctionsReturnCallableValuesWithoutRetainingParameterValidation() {
+        assertEquals("true\n5\n", execute("""
+                returnContract (Any) value = Number
+                returnAdd (Any) value = + _ value
+                predicate = returnContract 1
+                addTwo = returnAdd 2
+                print predicate 2
+                print addTwo 3
+                """));
+    }
+
+    @Test
+    void nestedDeclarationsDoNotChangeUnrelatedPrefixOrInfixInterpretation() {
+        assertEquals("3\n", execute("""
+                maker =
+                  one a b = a
+                  0
+
+                one = 1
+                add a b = a + b
+                two = 2
+                print one add two
+                """));
+    }
+
+    @Test
     void characterizesCoreLanguageBehavior() {
         String source = """
                 add a b = a + b
