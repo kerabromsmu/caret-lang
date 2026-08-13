@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 final class DiagnosticTest {
     @Test
     void usesStableCodesAndLocationsAcrossPhases() {
-        LangException lexical = assertThrows(LangException.class, () -> Lexer.lex("$"));
+        LangException lexical = assertThrows(LangException.class, () -> Lexer.lex("#"));
         assertDiagnostic(lexical, Diagnostic.Phase.LEXER,
                 Diagnostic.Codes.LEX_UNEXPECTED_CHARACTER, 1, 1);
 

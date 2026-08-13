@@ -51,7 +51,7 @@ final class Parser {
         // left-associative while allowing the concise `print add 2 3` spelling.
         if (tokens.size() > 2 && tokens.getFirst().kind() == Kind.IDENT
                 && tokens.getFirst().text().equals("print")
-                && !tokens.get(1).text().equals("=")) {
+                && !tokens.get(1).text().equals("=") && !tokens.get(1).text().equals("$")) {
             Expr expression = parseExpression(tokens.subList(1, tokens.size() - 1),
                     tokens.getLast().span().end(), indent);
             Expr print = new Name("print", tokens.getFirst().span());
@@ -229,9 +229,16 @@ final class Parser {
         }
 
         Expr parse() {
-            Expr expression = composition();
+            Expr expression = lowPrecedenceApplication();
             if (!atEnd()) throw error("Unexpected token: " + peek().text());
             return expression;
+        }
+
+        private Expr lowPrecedenceApplication() {
+            Expr function = composition();
+            if (!match("$")) return function;
+            Expr argument = lowPrecedenceApplication();
+            return new Apply(function, argument, SourceSpan.cover(function.span(), argument.span()));
         }
 
         private Expr composition() {
@@ -409,7 +416,7 @@ final class Parser {
                     if (atEnd()) {
                         throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
                     }
-                    Expr name = conditional();
+                    Expr name = lowPrecedenceApplication();
                     consume("]", "Expected ']'");
                     Token close = previous();
                     boolean optional = match("~");
@@ -452,7 +459,7 @@ final class Parser {
                 if (atEnd()) {
                     throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ')'");
                 }
-                Expr expr = composition();
+                Expr expr = lowPrecedenceApplication();
                 consume(")", "Expected ')'");
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }

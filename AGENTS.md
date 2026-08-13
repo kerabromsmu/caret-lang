@@ -154,7 +154,7 @@ host capabilities without portable identities. Reflection must not reveal host r
 captures, native implementation details, code outside the visible module environment, or unexposed
 capabilities.
 
-### Planned scoped lookup and low-precedence application
+### Scoped lookup and low-precedence application
 
 ```caret
 with value
@@ -164,7 +164,7 @@ with value
 print $ toString $ calculate value
 ```
 
-`with` and `outer` are reserved. Local declarations shadow public members of the current `with`
+Planned `with` and `outer` are reserved. Local declarations shadow public members of the current `with`
 target, which shadow enclosing lexical bindings. `outer` is valid only as an explicit lexical
 member path and cannot be stored, reflected, dynamically indexed, or used to bypass export or
 sandbox visibility. `$` is right-associative syntax-level application below `>>`, conditionals,

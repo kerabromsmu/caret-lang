@@ -300,7 +300,7 @@ The metadata representation is intentionally minimal. A later version should exp
 
 From lower to higher precedence:
 
-1. planned low-precedence application `$`
+1. low-precedence application `$`
 2. composition `>>`
 3. conditional `& ... ! ...`
 4. `or`
@@ -314,8 +314,7 @@ From lower to higher precedence:
 12. function application
 13. field and dynamic lookup
 
-`$` is specified below but is not implemented by the current prototype. Lambda construction will
-also bind more tightly than `$` once lambdas are implemented.
+Lambda construction will also bind more tightly than `$` once lambdas are implemented.
 
 ## Implementation roadmap
 
@@ -418,8 +417,7 @@ asText = double >> numberText
 print asText 5
 ```
 
-`>>` is left-associative and is the lowest-precedence operator implemented by the current
-prototype. Planned `$` application binds below it. The left operand may require any positive number
+`>>` is left-associative. `$` application binds below it. The left operand may require any positive number
 of remaining arguments; the composition retains that arity and supports ordinary partial
 application. The right operand must require exactly one remaining argument. Inline partial operands
 work normally, as in `add _ 10 >> numberText`.
@@ -11091,12 +11089,12 @@ Their later implementation must not weaken root substitution or permit authority
 
 ## Not implemented
 
-- function composition
 - trailing lambdas
 - user-defined/parameterized contracts, derivation, refinements, dispatch, static type proof,
   result contracts, effect inference, and ownership analysis
 - universal collection literals, first-class fields, contract-selected representations, and persistent updates
 - mutability containers, container reads/writes, and field reification
+- `with`, resolver-only `outer` paths, and scoped member lookup
 - lambdas and higher-order standard collection operations
 - cycles and transactional previous/next state views
 - SIMD values and required vectorized application

@@ -179,6 +179,7 @@ expect_failure examples/errors/invalid_definition.caret unused
 expect_failure examples/errors/unclosed_delimiter.caret unused
 expect_failure examples/errors/non_finite_literal.caret unused
 expect_failure examples/errors/invalid_expression.caret unused
+expect_failure examples/errors/missing_dollar_operand.caret unused
 expect_failure examples/errors/duplicate_parameter.caret unused
 expect_failure examples/errors/not_callable.caret unused
 expect_failure examples/errors/invalid_condition.caret unused

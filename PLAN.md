@@ -64,8 +64,8 @@ expressions form nested calls. Potential named prefix/infix calls are parsed neu
 from lexical callable facts, with runtime fallback only when arity is genuinely dynamic. Callable
 partial arguments use persistent O(1) accumulation, and language-owned value descriptors now
 centralize public kinds, basic reflection, structural equality, and stack-safe rendering. Trailing
-lambdas remain deferred to Phase 3. Low-precedence `$` application and complete callable metadata
-are the principal unfinished Phase 1 work.
+lambdas remain deferred to Phase 3. Right-associative low-precedence `$` application now lowers to
+the ordinary callable path; complete callable metadata remains the principal unfinished Phase 1 work.
 
 ### Layout and expressions
 
@@ -459,12 +459,12 @@ User-defined contracts, derivation, refinements, modifiers, results, dispatch, a
 
 ## Recommended next implementation step
 
-The next implementation slice is syntax-level low-precedence application (`CORE-LOWAPP-001` and
-`CORE-LOWAPP-002`): lex `$`, parse it right-associatively below the current expression tiers, lower
-it to ordinary application, and add precedence/diagnostic/example coverage. This completes an
-independent Phase 1 feature before user-defined base contracts and derivation graphs
-(`CONTRACT-005`). `with`/`outer` wait for the Phase 4 public named-member protocol rather than
-introducing an exported-scope-only semantic model that would later need replacement.
+Low-precedence application (`CORE-LOWAPP-001` and `CORE-LOWAPP-002`) is complete. The next
+implementation-planning session should settle and implement user-defined base contracts plus
+derivation graphs (`CONTRACT-005`), retaining refinements, parameterized contracts, result
+contracts, overload dispatch, and effects as separate dependent slices. `with`/`outer` wait for the
+Phase 4 public named-member protocol rather than introducing an exported-scope-only semantic model
+that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals
 

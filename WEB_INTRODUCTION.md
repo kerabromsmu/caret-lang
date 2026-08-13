@@ -46,10 +46,10 @@ value = 1 combine 2 combine 3
 The analyzer uses the callable visible in the expression's lexical scope to distinguish named
 prefix and infix forms; unrelated declarations elsewhere in a file cannot change that choice.
 
-The planned language also provides right-associative `$` when the entire expression on the right
+Caret also provides right-associative `$` when the entire expression on the right
 should become one argument:
 
-```text
+```caret
 print $ calculate value
 ```
 

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 final class LanguageConformanceTest {
     @Test
     void characterizesTheCompleteImplementedPrecedenceTable() {
-        assertEquals("7\n4\ntrue\ntrue\nyes\n-5\n", execute("""
+        assertEquals("7\n4\ntrue\ntrue\nyes\n-5\n7\nyes\n", execute("""
                 first a b = a
                 identity value = value
 
@@ -21,6 +21,8 @@ final class LanguageConformanceTest {
                 print false or true and true
                 print false or true & "yes" ! "no"
                 print - identity 5
+                print $ 1 + 2 * 3
+                print $ false & "no" ! "yes"
                 """));
     }
 

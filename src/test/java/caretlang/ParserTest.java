@@ -68,6 +68,47 @@ final class ParserTest {
     }
 
     @Test
+    void parsesDollarAsRightAssociativeLowestPrecedenceApplication() {
+        Apply outer = assertInstanceOf(Apply.class, expression("a $ b $ c"));
+        assertEquals("a", assertInstanceOf(Name.class, outer.function()).name());
+        Apply nested = assertInstanceOf(Apply.class, outer.argument());
+        assertEquals("b", assertInstanceOf(Name.class, nested.function()).name());
+        assertEquals("c", assertInstanceOf(Name.class, nested.argument()).name());
+
+        Apply arithmetic = assertInstanceOf(Apply.class, expression("use $ 1 + 2 * 3"));
+        assertInstanceOf(Binary.class, arithmetic.argument());
+
+        Apply conditional = assertInstanceOf(Apply.class,
+                expression("use $ valid & value ! fallback"));
+        assertInstanceOf(Conditional.class, conditional.argument());
+
+        Apply composition = assertInstanceOf(Apply.class, expression("use $ parse >> validate"));
+        assertInstanceOf(Compose.class, composition.argument());
+
+        Apply appliedFunction = assertInstanceOf(Apply.class, expression("map values $ transform item"));
+        assertInstanceOf(Apply.class, appliedFunction.function());
+        assertInstanceOf(Apply.class, appliedFunction.argument());
+    }
+
+    @Test
+    void printDollarUsesOrdinaryLowPrecedenceApplication() {
+        ExprStmt statement = assertInstanceOf(ExprStmt.class,
+                new Parser("print $ add 1 2").parseProgram().getFirst());
+        Apply print = assertInstanceOf(Apply.class, statement.expression());
+        assertEquals("print", assertInstanceOf(Name.class, print.function()).name());
+        Apply add = assertInstanceOf(Apply.class, print.argument());
+        assertInstanceOf(Apply.class, add.function());
+    }
+
+    @Test
+    void rejectsDollarWithoutARightOperandAtTheOperator() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("identity $").parseProgram());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_EXPRESSION, error.diagnostic().code());
+        assertEquals(11, error.span().start().column());
+    }
+
+    @Test
     void parsesNamedInfixAtItsFixedPrecedence() {
         NamedInfix call = assertInstanceOf(NamedInfix.class, expression("2 combine 3 + 4"));
         assertEquals("combine", assertInstanceOf(Name.class, call.function()).name());

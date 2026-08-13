@@ -19,6 +19,7 @@ variants that require focused Java or host-level tests.
 | `CORE-CALL-001`, `CORE-PRINT-001` | Application/precedence sections, including `print 2 joinDigits 3` |
 | `CORE-CALL-002`, `CORE-CALL-003` | Grouped lookup and grouped/ungrouped multiline sections |
 | `CORE-CALL-004` | Nullary invocation and function-reflection sections; `errors/call_depth.caret` |
+| `CORE-LOWAPP-001`, `CORE-LOWAPP-002` | Right-associative `$` examples with arithmetic and conditional right operands; `errors/missing_dollar_operand.caret` |
 | `CORE-COND-001`, `CORE-BOOL-001` | Short-circuit Boolean and conditional section |
 | `CORE-PART-001`, `CORE-PART-002` | Ordinary/numbered hole section; `errors/mixed_holes.caret` |
 | `CORE-SCOPE-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | Exported-scope and lookup sections; missing-field and invalid-key fixtures |

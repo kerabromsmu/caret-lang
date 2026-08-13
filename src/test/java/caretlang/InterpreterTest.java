@@ -11,6 +11,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void evaluatesLowPrecedenceApplicationThroughTheOrdinaryCallPath() {
+        assertEquals("7\n7\n5\ntrue\n", execute("""
+                add left right = left + right
+                identity value = value
+                apply function value = function value
+                print $ add 1 $ 2 * 3
+                print (add 1 (2 * 3))
+                print $ identity $ add 2 3
+                addOne = add _ $ 1
+                print addOne 4 == 5
+                """));
+    }
+
+    @Test
     void providesBuiltInContractPredicatesAndReflection() {
         assertEquals("true\nfalse\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\nContract\nNumber\n", execute("""
                 identity value = value

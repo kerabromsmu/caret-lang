@@ -15,6 +15,14 @@ final class LexerTest {
     }
 
     @Test
+    void recognizesLowPrecedenceApplicationAsSyntax() {
+        List<Lexer.Token> tokens = Lexer.lex("left $ right", 20, 3, 5);
+        assertEquals(List.of("left", "$", "right", ""),
+                tokens.stream().map(Lexer.Token::text).toList());
+        assertEquals(new SourcePosition(25, 3, 10), tokens.get(1).span().start());
+    }
+
+    @Test
     void rejectsRemovedNameLiteralSyntax() {
         LangException error = assertThrows(LangException.class,
                 () -> Lexer.lex("#count", 20, 3, 5));
@@ -38,9 +46,9 @@ final class LexerTest {
 
     @Test
     void reportsUnexpectedCharactersAtTheirLocation() {
-        LangException error = assertThrows(LangException.class, () -> Lexer.lex("ok $"));
+        LangException error = assertThrows(LangException.class, () -> Lexer.lex("ok #"));
         assertEquals(4, error.span().start().column());
-        assertTrue(error.getMessage().contains("Unexpected character: $"));
+        assertTrue(error.getMessage().contains("Unexpected character: #"));
     }
 
     @Test

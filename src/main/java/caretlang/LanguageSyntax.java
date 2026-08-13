@@ -32,7 +32,7 @@ final class LanguageSyntax {
     private static final Set<String> RESERVED_WORDS = Set.of("true", "false", "and", "or", "not");
     private static final Set<String> NON_ARGUMENT_KEYWORDS = Set.of("and", "or", "not");
     private static final Set<String> MULTI_CHARACTER_SYMBOLS = Set.of("==", "!=", ">=", "<=", ">>");
-    private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@+-*/%^=<>.&!?~";
+    private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@+-*/%^=<>.&!?~$";
 
     private LanguageSyntax() {}
 

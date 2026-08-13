@@ -199,7 +199,7 @@ print (@dictionary).kind
 print (@dictionary).size
 print (@dictionary).names
 
-// Composition is left-to-right, lowest-precedence, and supports partial left callables.
+// Composition is left-to-right, binds above $, and supports partial left callables.
 double value = value * 2
 incrementOne value = value + 1
 addThenDouble = add >> double
@@ -209,5 +209,9 @@ print addThenDouble 2 3
 print addTenThenText 5
 print pipeline 2
 print (@addThenDouble).remaining
+
+// $ is right-associative application below composition, conditionals, and ordinary operators.
+print $ add 1 $ 2 * 3
+print $ false & "unselected" ! "conditional argument"
 
 // Executable diagnostic examples live in examples/errors/ and are indexed by examples/README.md.
