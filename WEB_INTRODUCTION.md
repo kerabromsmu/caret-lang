@@ -193,10 +193,10 @@ capabilities. Contracts form derivation graphs and work as predicates. Behavior 
 functions, with the most-specific applicable implementation selected from contract-specialized
 definitions.
 
-The prototype now includes the first small piece of that model: built-in contracts such as `Number`,
-`String`, and `Boolean` are unary predicates and can dynamically constrain bindings and function
-parameters. User-defined derivation, refinements, parameterized contracts, static proof, and
-contract-based dispatch remain planned.
+The prototype includes built-in predicates plus unary user-defined contract construction. Use
+`Tag = contract ~` for a nominal base, `Numeric = contract Number` for one base, and
+`AB = contract [A B]` for multiple bases. Clauses can constrain bindings, parameters, and function
+results. Refinements, parameterized contracts, complete static proof, and dispatch remain planned.
 
 In the planned collection model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable

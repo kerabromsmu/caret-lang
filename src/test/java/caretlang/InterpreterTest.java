@@ -11,6 +11,33 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void constructsUnaryBaseAndMultiplyDerivedContracts() {
+        assertEquals("false\nfalse\nAB\n[Tag, Numeric]\n[1, two, true]\n", execute("""
+                Tag = contract ~
+                Numeric = contract Number
+                AB = contract [Tag Numeric]
+                print Tag "anything"
+                print Numeric "not a number"
+                print (@AB).name
+                print (@AB).bases
+                print [1 "two" true]
+                """));
+    }
+
+    @Test
+    void acceptsUserDefinedContractsInClausesAndRejectsInvalidConstructorArguments() {
+        assertEquals("3\n", execute("""
+                Numeric = contract Number
+                (Numeric) add (Numeric) left (Numeric) right = left + right
+                print add 1 2
+                """));
+
+        LangException invalid = assertThrows(LangException.class,
+                () -> execute("Bad = contract [Number 1]"));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, invalid.diagnostic().code());
+    }
+
+    @Test
     void evaluatesLowPrecedenceApplicationThroughTheOrdinaryCallPath() {
         assertEquals("7\n7\n5\ntrue\n", execute("""
                 add left right = left + right

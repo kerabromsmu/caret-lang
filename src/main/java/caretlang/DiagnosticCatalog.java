@@ -27,7 +27,6 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     PARSE_CONTINUATION_DEFINITION("PARSE-CONTINUATION-DEFINITION", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Continuation argument must be an expression.*", PUBLIC),
     PARSE_RESERVED_BINDING("PARSE-RESERVED-BINDING", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_RESERVED_BINDING, "Reserved spelling cannot be used as a binding name: .*", PUBLIC),
     PARSE_INVALID_CONTRACT("PARSE-INVALID-CONTRACT", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT, ".*[Cc]ontract clause.*", PUBLIC),
-    PARSE_UNSUPPORTED_RESULT_CONTRACT("PARSE-UNSUPPORTED-RESULT-CONTRACT", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNSUPPORTED_RESULT_CONTRACT, "Function result contracts are not yet supported", PUBLIC),
     PARSE_UNCLOSED_DELIMITER("PARSE-UNCLOSED-DELIMITER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected .*", PUBLIC),
     PARSE_INVALID_HOLE("PARSE-INVALID-HOLE", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_HOLE, "Numbered hole index is too large", PUBLIC),
     PARSE_INVALID_NUMBER("PARSE-INVALID-NUMBER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_NUMBER, "Invalid number literal", INTERNAL),

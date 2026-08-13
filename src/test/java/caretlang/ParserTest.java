@@ -9,6 +9,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ParserTest {
     @Test
+    void parsesEagerCollectionLiteralsAsElementBoundaries() {
+        CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class, expression("[A B]"));
+        assertEquals(List.of("A", "B"), literal.elements().stream()
+                .map(Name.class::cast).map(Name::name).toList());
+        assertTrue(assertInstanceOf(CollectionLiteral.class, expression("[]")).elements().isEmpty());
+    }
+
+    @Test
     void parsesBuiltInContractClausesOnBindingsAndParameters() {
         List<Stmt> program = new Parser("""
                 (Number) count = 1
@@ -24,13 +32,13 @@ final class ParserTest {
     }
 
     @Test
-    void rejectsMalformedAndResultContractClauses() {
+    void rejectsMalformedContractClausesAndParsesResultContracts() {
         LangException empty = assertThrows(LangException.class,
                 () -> new Parser("() value = 1").parseProgram());
         assertEquals(Diagnostic.Codes.PARSE_INVALID_CONTRACT, empty.diagnostic().code());
-        LangException result = assertThrows(LangException.class,
-                () -> new Parser("(Number) add left right = left + right").parseProgram());
-        assertEquals(Diagnostic.Codes.PARSE_UNSUPPORTED_RESULT_CONTRACT, result.diagnostic().code());
+        FunctionDef result = assertInstanceOf(FunctionDef.class,
+                new Parser("(Number) add left right = left + right").parseProgram().getFirst());
+        assertEquals("Number", result.resultContracts().names().getFirst().name());
     }
 
     @Test

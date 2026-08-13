@@ -106,10 +106,10 @@ the ordinary callable path; complete callable metadata remains the principal unf
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 
-Current status: the first vertical contract slice is implemented. Runtime-kind contracts are
-first-class unary predicates; built-in contract clauses constrain bindings and parameters, resolve
-in semantic analysis, and validate at assignment/application boundaries including partial calls.
-User-defined contracts, derivation, refinements, modifiers, results, dispatch, and effects remain.
+Current status: unary user-defined base and derived contracts are implemented alongside runtime-kind
+contracts. Multiple bases are passed as one ordinary `[A B]` collection. Binding, parameter, and
+result clauses acquire or validate membership at runtime. Complete static inference, refinements,
+modifiers, parameterized contracts, dispatch, and effects remain.
 
 ### Contract and type model
 
@@ -461,10 +461,10 @@ User-defined contracts, derivation, refinements, modifiers, results, dispatch, a
 
 ## Recommended next implementation step
 
-Low-precedence application (`CORE-LOWAPP-001` and `CORE-LOWAPP-002`) is complete. The next
-implementation-planning session should settle and implement user-defined base contracts plus
-derivation graphs (`CONTRACT-005`), retaining refinements, parameterized contracts, result
-contracts, overload dispatch, and effects as separate dependent slices. `with`/`outer` wait for the
+Low-precedence application and the runtime user-contract derivation slice are complete. The next
+implementation-planning session should implement constraint inference and generalized contract
+variables for unannotated functions, retaining refinements, parameterized contracts, overload
+dispatch, and effects as separate dependent slices. `with`/`outer` wait for the
 Phase 4 public named-member protocol rather than introducing an exported-scope-only semantic model
 that would later need replacement.
 

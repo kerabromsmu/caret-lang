@@ -26,6 +26,7 @@ final class AstTraversal {
             case DynamicField field -> List.of(field.target(), field.name());
             case Reflect reflect -> List.of(reflect.target());
             case Group group -> List.of(group.expression());
+            case CollectionLiteral collection -> collection.elements();
         };
     }
 
@@ -57,6 +58,7 @@ final class AstTraversal {
                     children.get(0), children.get(1), field.optional(), field.span());
             case Reflect reflect -> new Reflect(children.getFirst(), reflect.span());
             case Group group -> new Group(children.getFirst(), group.span());
+            case CollectionLiteral collection -> new CollectionLiteral(children, collection.span());
         };
     }
 }

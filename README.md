@@ -14,8 +14,8 @@ interpreter. The current prototype supports:
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
 - persistent sequences and insertion-ordered dictionaries with structural equality; and
-- first-class built-in runtime-kind contracts, predicate membership calls, and contract-checked
-  bindings and function parameters.
+- first-class built-in and user-defined derived contracts, predicate membership calls, and
+  contract-checked bindings, parameters, and function results.
 
 This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
 describes both the implemented language sketch and the larger planned language. Features described
@@ -55,8 +55,8 @@ serialization rules, and sandbox syntax remain open design work and are not impl
 
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
-[`examples/contracts.caret`](examples/contracts.caret) demonstrates the initial built-in contract
-foundation.
+[`examples/contracts.caret`](examples/contracts.caret) demonstrates built-in and user-defined
+contracts and derivation.
 
 ## Requirements
 
@@ -183,9 +183,9 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - A function definition must start at the beginning of a logical line.
 - Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
   Trailing callable blocks remain unavailable until lambda syntax is implemented.
-- Built-in runtime-kind contracts can check bindings and parameters dynamically. User-defined and
-  parameterized contracts, derivation, refinements, dispatch, static proof, nullable/optional type
-  checking, result contracts, and effect inference are not implemented.
+- Built-in and user-defined derived contracts can check bindings, parameters, and results
+  dynamically. Parameterized contracts, refinements, dispatch, complete static proof,
+  nullable/optional type checking, and effect inference are not implemented.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.

@@ -88,7 +88,7 @@ makePerson name age =
 The constant/operator spellings `true`, `false`, `and`, `or`, `not`, `_`, and numbered holes such
 as `_1` are reserved and cannot be used as binding or parameter names.
 
-### Built-in contract foundation currently implemented
+### Contract foundation currently implemented
 
 The prototype provides first-class unary contracts matching its existing runtime kinds: `Any`,
 `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Scope`, `Sequence`, and `Dictionary`.
@@ -110,10 +110,14 @@ Arguments are checked as they fill parameters, including during partial applicat
 initializers are checked before their bindings commit. `type Number` and `(@Number).kind` report
 `"Contract"`, and `(@Number).name` reports `"Number"`.
 
-This is only the first contract slice. User-defined `contract`, derivation, refinements,
-parameterized contracts, nullable/optional modifiers, result contracts, overload dispatch, and
-static proof are still planned below. A clause in this prototype therefore accepts only built-in
-contract names; leading function-result clauses are rejected until their syntax is finalized.
+The unary `contract` function constructs nominal contracts. `contract ~` creates a base contract,
+`contract A` derives from one contract, and `contract [A B]` derives from several contracts packaged
+in one ordinary collection argument. Explicit binding and parameter clauses acquire nominal
+membership while checking built-in base constraints; leading function clauses check and attribute
+results. Unannotated functions remain dynamically generic in this interpreter.
+
+Refinements, parameterized contracts, nullable/optional modifiers, overload dispatch, complete
+static inference/proof, and the full universal-collection model remain planned below.
 
 Indentation defines a multiline function body. If a body contains exported bindings (`^`), calling the function returns an immutable scope containing those exports. Otherwise it returns the final expression or assigned value.
 
@@ -627,7 +631,7 @@ It does not need to execute a runtime predicate when derivation already proves m
 
 ```caret
 Number =
-  contract Eq Comparable Arithmetic
+  contract [Eq Comparable Arithmetic]
 ```
 
 This means that every `Number` also satisfies:
@@ -656,10 +660,10 @@ For example:
 
 ```caret
 Integer =
-  contract Number Integral
+  contract [Number Integral]
 
 Float =
-  contract Number Fractional
+  contract [Number Fractional]
 ```
 
 establishes:
@@ -692,13 +696,13 @@ Arithmetic =
   contract Eq
 
 Number =
-  contract Comparable Arithmetic
+  contract [Comparable Arithmetic]
 
 Int =
-  contract Number Integral
+  contract [Number Integral]
 
 Float =
-  contract Number Fractional
+  contract [Number Fractional]
 ```
 
 This creates a graph rather than requiring a strict inheritance tree.
@@ -1532,7 +1536,7 @@ Eq = contract ~
 3. Contract derivation:
 
 ```caret
-Number = contract Eq Comparable
+Number = contract [Eq Comparable]
 ```
 
 4. Multiple derivation.
@@ -1541,7 +1545,7 @@ Number = contract Eq Comparable
 7. Derived refinement contracts:
 
 ```caret
-PositiveInt = contract Int positive
+PositiveInt = contract [Int positive]
 ```
 
 8. Separate function definitions for operations.

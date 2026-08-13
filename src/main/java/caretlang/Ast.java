@@ -11,9 +11,10 @@ final class Ast {
     record Parameter(String name, ContractClause contracts, SourceSpan span) {}
     record Assign(String name, boolean exported, ContractClause contracts, Expr value, SourceSpan span) implements Stmt {}
     record ExprStmt(Expr expression, SourceSpan span) implements Stmt {}
-    record FunctionDef(String name, List<Parameter> params, List<Stmt> body, SourceSpan span) implements Stmt {}
+    record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
+                       List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Hole, Group {
+    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Hole, Group, CollectionLiteral {
         SourceSpan span();
     }
     record Literal(Value value, SourceSpan span) implements Expr {}
@@ -32,4 +33,5 @@ final class Ast {
     /** index is zero for an ordinary left-to-right hole, otherwise one-based. */
     record Hole(int index, SourceSpan span) implements Expr {}
     record Group(Expr expression, SourceSpan span) implements Expr {}
+    record CollectionLiteral(List<Expr> elements, SourceSpan span) implements Expr {}
 }

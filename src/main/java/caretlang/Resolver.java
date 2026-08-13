@@ -39,7 +39,7 @@ final class Resolver {
     }
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
-    private final IdentityHashMap<Ast.ContractClause, List<BuiltinContract>> contracts = new IdentityHashMap<>();
+    private final IdentityHashMap<Ast.ContractClause, List<Resolution.ContractBinding>> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
@@ -58,7 +58,7 @@ final class Resolver {
         for (Stmt statement : statements) {
             switch (statement) {
                 case Assign assign -> {
-                    resolverContracts(assign.contracts());
+                    resolverContracts(assign.contracts(), scope);
                     resolveExpr(assign.value(), scope, functionBody, false);
                     Symbol symbol = scope.symbols.get(assign.name());
                     if (symbol == null) throw new IllegalStateException("Assignment was not predeclared");
@@ -87,10 +87,11 @@ final class Resolver {
     }
 
     private void resolveFunction(FunctionDef function, Scope enclosing) {
+        resolverContracts(function.resultContracts(), enclosing);
         Scope parameters = new Scope(enclosing);
         HashSet<String> seen = new HashSet<>();
         for (Ast.Parameter parameter : function.params()) {
-            resolverContracts(parameter.contracts());
+            resolverContracts(parameter.contracts(), enclosing);
             if (!seen.add(parameter.name())) {
                 throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER,
                         "Duplicate parameter: " + parameter.name(), function.span());
@@ -101,12 +102,21 @@ final class Resolver {
         resolveBlock(function.body(), new Scope(parameters), true);
     }
 
-    private void resolverContracts(Ast.ContractClause clause) {
+    private void resolverContracts(Ast.ContractClause clause, Scope scope) {
         if (clause == null) return;
-        List<BuiltinContract> resolved = clause.names().stream().map(name -> BuiltinContract.named(name.name())
-                .orElseThrow(() -> new LangException(Diagnostic.Phase.SEMANTIC,
-                        Diagnostic.Codes.UNKNOWN_CONTRACT, "Unknown contract: " + name.name(), name.span())))
-                .toList();
+        List<Resolution.ContractBinding> resolved = clause.names().stream().map(name -> {
+            int depth = 0;
+            for (Scope current = scope; current != null; current = current.parent, depth++) {
+                Symbol symbol = current.symbols.get(name.name());
+                if (symbol != null) return new Resolution.ContractBinding(name.name(),
+                        new Resolution.Binding(depth, symbol.slot(), symbol.declaration(), false), name.span());
+            }
+            if (BuiltinContract.named(name.name()).isPresent()) {
+                return new Resolution.ContractBinding(name.name(), null, name.span());
+            }
+            throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.UNKNOWN_CONTRACT,
+                    "Unknown contract: " + name.name(), name.span());
+        }).toList();
         contracts.put(clause, resolved);
     }
 
@@ -158,6 +168,8 @@ final class Resolver {
             }
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
             case Group group -> resolveExpr(group.expression(), scope, functionBody, deferred);
+            case Ast.CollectionLiteral collection -> collection.elements().forEach(
+                    element -> resolveExpr(element, scope, functionBody, deferred));
         }
     }
 

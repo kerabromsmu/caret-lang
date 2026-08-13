@@ -13,8 +13,8 @@ final class ResolverTest {
         List<Stmt> program = new Parser("identity (Any) value = value").parseProgram();
         FunctionDef function = assertInstanceOf(FunctionDef.class, program.getFirst());
         Resolution resolution = Resolver.resolve(program, new Environment(null));
-        assertEquals(List.of(BuiltinContract.ANY),
-                resolution.contracts(function.params().getFirst().contracts()));
+        assertEquals(List.of("Any"), resolution.contracts(function.params().getFirst().contracts())
+                .stream().map(Resolution.ContractBinding::name).toList());
 
         LangException unknown = assertThrows(LangException.class, () -> Resolver.resolve(
                 new Parser("identity (Unknown) value = value").parseProgram(), new Environment(null)));

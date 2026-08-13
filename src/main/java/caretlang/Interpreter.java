@@ -52,13 +52,16 @@ final class Interpreter {
             if (statement instanceof Assign(String name, boolean exported, ContractClause contracts,
                                             Expr value1, SourceSpan ignored)) {
                 Value value = eval(value1, env, null, resolution);
-                validateContracts(value, value1.span(), contracts, resolution, "binding " + name);
+                value = validateContracts(value, value1.span(), contracts, resolution, env, "binding " + name);
+                if (value instanceof Value.ContractValue contract
+                        && contract.descriptor() instanceof UserContract user) user.nameIfAnonymous(name);
                 env.initialize(name, value);
                 if (exported) exports.put(name, value);
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
                 last = eval(expression, env, null, resolution);
-            } else if (statement instanceof FunctionDef(String name, List<Parameter> params, List<Stmt> body,
+            } else if (statement instanceof FunctionDef(String name, ContractClause resultContracts,
+                                                        List<Parameter> params, List<Stmt> body,
                                                         SourceSpan ignored)) {
                 last = functions.get((FunctionDef) statement);
             }
@@ -83,13 +86,16 @@ final class Interpreter {
                     for (int i = 0; i < function.params().size(); i++) {
                         parameters.define(function.params().get(i).name(), args.get(i));
                     }
-                    return executeBlock(function.body(), new Environment(parameters), resolution);
+                    Value result = executeBlock(function.body(), new Environment(parameters), resolution);
+                    return validateContracts(result, function.body().getLast().span(),
+                            function.resultContracts(), resolution, env, "result of " + function.name());
                 });
                 Value.Callable value = function.params().stream().noneMatch(parameter -> parameter.contracts() != null)
                         ? raw : new Value.ContractedCallable(raw, (index, argument) -> {
                             Parameter parameter = function.params().get(index);
-                            validateContracts(argument.value(), argument.span(), parameter.contracts(), resolution,
-                                    "parameter " + parameter.name());
+                            Value checked = validateContracts(argument.value(), argument.span(),
+                                    parameter.contracts(), resolution, env, "parameter " + parameter.name());
+                            return new Value.Argument(checked, argument.span());
                         });
                 env.initialize(function.name(), value);
                 functions.put(function, value);
@@ -98,9 +104,21 @@ final class Interpreter {
         return functions;
     }
 
-    private void validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
-                                   Resolution resolution, String subject) {
-        for (BuiltinContract contract : resolution.contracts(clause)) {
+    private Value validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
+                                   Resolution resolution, Environment contractEnvironment, String subject) {
+        LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
+        for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+            Value resolved = reference.binding() == null ? globals.get(reference.name())
+                    : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot());
+            if (!(resolved instanceof Value.ContractValue contractValue)) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_CONTRACT,
+                        "Binding is not a contract: " + reference.name(), reference.span());
+            }
+            ContractDescriptor contract = contractValue.descriptor();
+            if (contract instanceof UserContract user && user.acceptsBuiltinBases(value)) {
+                acquired.add(contract);
+                continue;
+            }
             if (contract.accepts(value)) continue;
             List<Diagnostic.Related> related = clause == null ? List.of()
                     : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), clause.span()));
@@ -109,6 +127,12 @@ final class Interpreter {
                     "Contract violation for " + subject + ": expected " + contract.publicName()
                             + ", got " + ValueSemantics.kind(value), valueSpan, related));
         }
+        if (acquired.isEmpty()) return value;
+        if (value instanceof Value.Attributed attributed) {
+            acquired.addAll(attributed.contracts());
+            return new Value.Attributed(attributed.value(), acquired);
+        }
+        return new Value.Attributed(value, acquired);
     }
 
     private void declare(Environment env, String name, SourceSpan span) {
@@ -153,7 +177,8 @@ final class Interpreter {
             Resolution.Binding binding = resolution.binding(nameExpression);
             Value value = binding == null ? env.get(nameExpression.name())
                     : env.getAt(binding.lexicalDepth(), binding.slot());
-            if (value instanceof Value.Callable callable && callable.remainingArity() == 0) {
+            Value callableValue = underlying(value);
+            if (callableValue instanceof Value.Callable callable && callable.remainingArity() == 0) {
                 return invokeZero(callable, expr.span());
             }
             return value;
@@ -184,14 +209,14 @@ final class Interpreter {
             return applyBinaryOperator(operator, left, left1.span(), right, right1.span(), expr.span());
         }
         if (expr instanceof Compose(Expr leftExpression, Expr rightExpression, SourceSpan ignored)) {
-            Value left = compositionOperand(leftExpression, env, resolution);
+            Value left = underlying(compositionOperand(leftExpression, env, resolution));
             if (!(left instanceof Value.Callable leftCallable) || leftCallable.remainingArity() < 1) {
                 throw new LangException(Diagnostic.Phase.RUNTIME,
                         Diagnostic.Codes.INVALID_COMPOSITION_LEFT,
                         "Composition left operand must be a callable requiring at least one argument",
                         leftExpression.span());
             }
-            Value right = compositionOperand(rightExpression, env, resolution);
+            Value right = underlying(compositionOperand(rightExpression, env, resolution));
             if (!(right instanceof Value.Callable rightCallable) || rightCallable.remainingArity() != 1) {
                 throw new LangException(Diagnostic.Phase.RUNTIME,
                         Diagnostic.Codes.INVALID_COMPOSITION_RIGHT,
@@ -210,7 +235,7 @@ final class Interpreter {
         }
         if (expr instanceof AmbiguousCall(Expr firstExpression, Expr middleExpression,
                                           Expr lastExpression, SourceSpan ignored)) {
-            Value first = rawValue(firstExpression, env, resolution);
+            Value first = underlying(rawValue(firstExpression, env, resolution));
             Resolution.CallMode mode = resolution.callMode((AmbiguousCall) expr);
             if (mode == Resolution.CallMode.PREFIX
                     || mode == Resolution.CallMode.DYNAMIC
@@ -241,7 +266,7 @@ final class Interpreter {
                     : evalInner(whenFalse, env, resolution);
         }
         if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
-            Value fn = evalInner(function, env, resolution);
+            Value fn = underlying(evalInner(function, env, resolution));
             Value argument = evalInner(argument1, env, resolution);
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
@@ -254,7 +279,7 @@ final class Interpreter {
         }
         if (expr instanceof DynamicField(Expr target1, Expr name1, boolean optional, SourceSpan ignored)) {
             Value target = evalInner(target1, env, resolution);
-            Value name = evalInner(name1, env, resolution);
+            Value name = underlying(evalInner(name1, env, resolution));
             if (!(name instanceof Value.Str(String fieldName))) {
                 throw runtime(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME,
                         "Dynamic field name must be a string, got: " + name);
@@ -277,6 +302,11 @@ final class Interpreter {
         }
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
             return evalInner(expression, env, resolution);
+        }
+        if (expr instanceof CollectionLiteral(List<Expr> elements, SourceSpan ignored)) {
+            ArrayList<Value> values = new ArrayList<>(elements.size());
+            for (Expr element : elements) values.add(evalInner(element, env, resolution));
+            return new Value.Seq(values);
         }
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }
@@ -358,8 +388,8 @@ final class Interpreter {
     private Value binaryOperation(String op, List<Value.Argument> arguments, SourceSpan callSpan) {
         Value.Argument leftArgument = arguments.get(0);
         Value.Argument rightArgument = arguments.get(1);
-        Value left = leftArgument.value();
-        Value right = rightArgument.value();
+        Value left = underlying(leftArgument.value());
+        Value right = underlying(rightArgument.value());
         return switch (op) {
             case "+" -> {
                 if (left instanceof Value.Str || right instanceof Value.Str)
@@ -396,12 +426,14 @@ final class Interpreter {
     }
 
     private double number(Value value) {
+        value = underlying(value);
         if (value instanceof Value.Num(double value1)) return value1;
         throw runtime(Diagnostic.Codes.EXPECTED_NUMBER, "Expected number, got: " + value);
     }
 
     private double number(Value.Argument argument) {
-        if (argument.value() instanceof Value.Num(double value)) return value;
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Num(double value)) return value;
         throw runtime(Diagnostic.Codes.EXPECTED_NUMBER,
                 "Expected number, got: " + argument.value(), argument.span());
     }
@@ -417,6 +449,7 @@ final class Interpreter {
     }
 
     private boolean truth(Value value) {
+        value = underlying(value);
         if (value instanceof Value.Bool(boolean value1)) return value1;
         if (value == Value.Null.INSTANCE || value == Value.Missing.INSTANCE) return false;
         throw runtime(Diagnostic.Codes.INVALID_CONDITION,
@@ -427,6 +460,31 @@ final class Interpreter {
         for (BuiltinContract contract : BuiltinContract.values()) {
             globals.define(contract.publicName(), new Value.ContractValue(contract));
         }
+        globals.define("contract", locatedFunction("contract", List.of("bases"), (args, span) -> {
+            Value argument = args.getFirst().value();
+            List<ContractDescriptor> bases;
+            if (argument == Value.Missing.INSTANCE) {
+                bases = List.of();
+            } else if (argument instanceof Value.ContractValue contract) {
+                bases = List.of(contract.descriptor());
+            } else if (argument instanceof Value.Seq sequence && sequence.size() >= 2) {
+                ArrayList<ContractDescriptor> collected = new ArrayList<>(sequence.size());
+                for (Value element : sequence.values()) {
+                    if (!(element instanceof Value.ContractValue contract)) {
+                        throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                                "Contract violation for contract bases: expected Contract, got "
+                                        + ValueSemantics.kind(element), args.getFirst().span());
+                    }
+                    collected.add(contract.descriptor());
+                }
+                bases = List.copyOf(collected);
+            } else {
+                throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                        "Contract violation for contract argument: expected missing, Contract, or a collection of at least two contracts",
+                        args.getFirst().span());
+            }
+            return new Value.ContractValue(new UserContract(bases));
+        }));
         for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
             String operator = descriptor.spelling();
             globals.define(operator, locatedFunction(operator, List.of("left", "right"),
@@ -536,19 +594,22 @@ final class Interpreter {
     }
 
     private String text(Value.Argument argument) {
-        if (argument.value() instanceof Value.Str(String text)) return text;
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Str(String text)) return text;
         throw runtime(Diagnostic.Codes.EXPECTED_STRING,
                 "Expected string, got: " + argument.value(), argument.span());
     }
 
     private Value.Seq sequence(Value.Argument argument) {
-        if (argument.value() instanceof Value.Seq sequence) return sequence;
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Seq sequence) return sequence;
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
     }
 
     private Value.Dict dictionary(Value.Argument argument) {
-        if (argument.value() instanceof Value.Dict dictionary) return dictionary;
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Dict dictionary) return dictionary;
         throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
                 "Expected dictionary, got: " + argument.value(), argument.span());
     }
@@ -575,6 +636,7 @@ final class Interpreter {
     }
 
     private Value field(Value target, String name, boolean optional) {
+        target = underlying(target);
         if (!(target instanceof Value.Reflective reflective)) {
             throw runtime(Diagnostic.Codes.INVALID_FIELD_TARGET,
                     "Field access requires a scope, got: " + target);
@@ -589,10 +651,15 @@ final class Interpreter {
     }
 
     private Value reflect(Value value) {
+        value = underlying(value);
         if (value instanceof Value.FunctionReference reference) return reference;
         if (value instanceof Value.ContractValue contract) return contract;
         if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
         return new Value.Scope(ValueSemantics.reflectionFields(value));
+    }
+
+    private static Value underlying(Value value) {
+        return value instanceof Value.Attributed attributed ? attributed.value() : value;
     }
 
     private record HoleShape(int arity, boolean numbered) {}

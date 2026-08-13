@@ -272,7 +272,7 @@ pure predicate over values, and derivation means logical inclusion:
 
 ```caret
 Number = contract Comparable Arithmetic
-Int = contract Number Integral
+Int = contract [Number Integral]
 ```
 
 An `Int` therefore satisfies `Number` and its other base contracts. This is a graph, not an

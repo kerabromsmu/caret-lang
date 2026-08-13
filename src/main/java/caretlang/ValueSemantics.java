@@ -23,6 +23,7 @@ final class ValueSemantics {
 
     static Descriptor descriptor(Value value) {
         Objects.requireNonNull(value);
+        if (value instanceof Value.Attributed attributed) return descriptor(attributed.value());
         return switch (value) {
             case Value.Num ignored -> Descriptor.NUMBER;
             case Value.Str ignored -> Descriptor.STRING;
@@ -34,6 +35,7 @@ final class ValueSemantics {
             case Value.Dict ignored -> Descriptor.DICTIONARY;
             case Value.FunctionReference ignored -> Descriptor.FUNCTION;
             case Value.ContractValue ignored -> Descriptor.CONTRACT;
+            case Value.Attributed attributed -> descriptor(attributed.value());
             case Value.Reflective ignored -> Descriptor.REFLECTIVE;
             case Value.Callable ignored -> Descriptor.FUNCTION;
         };
@@ -69,6 +71,8 @@ final class ValueSemantics {
             Pair pair = pending.pop();
             Value a = pair.left();
             Value b = pair.right();
+            if (a instanceof Value.Attributed attributed) a = attributed.value();
+            if (b instanceof Value.Attributed attributed) b = attributed.value();
             if (a instanceof Value.Callable || b instanceof Value.Callable) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY,
                         "Callable values cannot be compared for equality", null);
@@ -110,6 +114,7 @@ final class ValueSemantics {
                     }
                     pending.push("[");
                 }
+                case Value.Attributed attributed -> pending.push(attributed.value());
                 default -> output.append(item);
             }
         }

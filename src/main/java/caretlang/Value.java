@@ -5,7 +5,16 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Reflective, Value.Seq, Value.Dict, Value.Callable {
+        Value.Reflective, Value.Seq, Value.Dict, Value.Callable, Value.Attributed {
+
+    record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
+        public Attributed {
+            Objects.requireNonNull(value);
+            contracts = Set.copyOf(contracts);
+        }
+        @SuppressWarnings("NullableProblems")
+        @Override public String toString() { return value.toString(); }
+    }
 
     record Argument(Value value, SourceSpan span) {
         public Argument {
@@ -319,9 +328,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     }
 
     final class ContractValue implements Callable, Reflective {
-        private final BuiltinContract contract;
+        private final ContractDescriptor contract;
 
-        ContractValue(BuiltinContract contract) { this.contract = Objects.requireNonNull(contract); }
+        ContractValue(ContractDescriptor contract) { this.contract = Objects.requireNonNull(contract); }
+        ContractDescriptor descriptor() { return contract; }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             return new Bool(contract.accepts(argument.value()));
@@ -330,7 +340,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public int remainingArity() { return 1; }
         @Override public Optional<Value> find(String name) { return Optional.ofNullable(fields().get(name)); }
         @Override public Map<String, Value> fields() {
-            return Map.of("kind", new Str("Contract"), "name", new Str(contract.publicName()));
+            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+            fields.put("kind", new Str("Contract"));
+            fields.put("name", new Str(contract.publicName()));
+            fields.put("bases", new Seq(contract.bases().stream()
+                    .map(base -> (Value) new Str(base.publicName())).toList()));
+            return Collections.unmodifiableMap(fields);
         }
         @Override public String toString() { return "<contract " + contract.publicName() + ">"; }
     }
@@ -338,21 +353,21 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     final class ContractedCallable implements Callable {
         private final Callable target;
         private final int parameterIndex;
-        private final java.util.function.BiConsumer<Integer, Argument> validator;
+        private final java.util.function.BiFunction<Integer, Argument, Argument> validator;
 
-        ContractedCallable(Callable target, java.util.function.BiConsumer<Integer, Argument> validator) {
+        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator) {
             this(target, 0, validator);
         }
 
         private ContractedCallable(Callable target, int parameterIndex,
-                                   java.util.function.BiConsumer<Integer, Argument> validator) {
+                                   java.util.function.BiFunction<Integer, Argument, Argument> validator) {
             this.target = Objects.requireNonNull(target);
             this.parameterIndex = parameterIndex;
             this.validator = Objects.requireNonNull(validator);
         }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
-            validator.accept(parameterIndex, argument);
+            argument = validator.apply(parameterIndex, argument);
             int before = target.remainingArity();
             Value result = target.apply(argument, callSpan);
             return before > 1 && result instanceof Callable callable

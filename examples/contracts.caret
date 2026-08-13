@@ -1,6 +1,10 @@
 (Number) initial = 2
 
-add (Number) left (Number) right =
+Tag = contract ~
+Numeric = contract Number
+Both = contract [Tag Numeric]
+
+(Numeric) add (Numeric) left (Numeric) right =
   left + right
 
 addTen = add 10
@@ -10,3 +14,5 @@ print String initial
 print addTen 5
 print type Number
 print (@Number).name
+print (@Both).name
+print (@Both).bases

@@ -72,7 +72,7 @@ final class Parser {
                 }
                 if (!header.exported()) {
                     ExprStmt expressionStatement = new ExprStmt(expression, expression.span());
-                    return new FunctionDef(header.name(), header.parameters(), List.of(expressionStatement),
+                    return new FunctionDef(header.name(), header.contracts(), header.parameters(), List.of(expressionStatement),
                             SourceSpan.cover(left.getFirst().span(), expression.span()));
                 }
             }
@@ -81,7 +81,7 @@ final class Parser {
                     throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Function body must be indented");
                 }
                 List<Stmt> body = parseBlock(lines.get(lineIndex).indent());
-                return new FunctionDef(header.name(), header.parameters(), body, functionSpan(left, body));
+                return new FunctionDef(header.name(), header.contracts(), header.parameters(), body, functionSpan(left, body));
             }
 
             throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
@@ -141,10 +141,6 @@ final class Parser {
             requireBindable(parameter);
             parameters.add(new Parameter(parameter.text(), contracts,
                     contracts == null ? parameter.span() : SourceSpan.cover(contracts.span(), parameter.span())));
-        }
-        if (leading != null && !parameters.isEmpty()) {
-            throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNSUPPORTED_RESULT_CONTRACT,
-                    "Function result contracts are not yet supported", leading.clause().span());
         }
         return new DefinitionHeader(name.text(), leading == null ? null : leading.clause(),
                 List.copyOf(parameters), exported);
@@ -412,7 +408,8 @@ final class Parser {
                     expr = new Field(expr, name.text(), optional, SourceSpan.cover(expr.span(), end));
                     continue;
                 }
-                if (match("[")) {
+                if (peek().text().equals("[")
+                        && expr.span().end().offset() == peek().span().start().offset() && match("[")) {
                     if (atEnd()) {
                         throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
                     }
@@ -441,6 +438,19 @@ final class Parser {
             if (matchIdent("false")) return new Literal(new Value.Bool(false), previous().span());
             if (match("?")) return new Literal(Value.Null.INSTANCE, previous().span());
             if (match("~")) return new Literal(Value.Missing.INSTANCE, previous().span());
+            if (match("[")) {
+                Token open = previous();
+                ArrayList<Expr> elements = new ArrayList<>();
+                while (!peek().text().equals("]")) {
+                    if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
+                    // Brackets establish an element boundary. Parentheses or `$` can be used when
+                    // an element itself needs whitespace application.
+                    elements.add(postfix());
+                }
+                consume("]", "Expected ']'");
+                return new CollectionLiteral(List.copyOf(elements),
+                        SourceSpan.cover(open.span(), previous().span()));
+            }
             if (matchIdent("_")) return new Hole(0, previous().span());
             if (peek().kind() == Kind.IDENT && peek().text().matches("_[1-9][0-9]*")) {
                 Token hole = tokens.get(current++);
@@ -486,7 +496,7 @@ final class Parser {
             if (token.kind() == Kind.IDENT) {
                 return LanguageSyntax.canStartApplicationArgument(token.text());
             }
-            return Set.of("(", "?", "~").contains(token.text());
+            return Set.of("(", "[", "?", "~").contains(token.text());
         }
 
         private boolean prefixOrReferenceMinus() {
