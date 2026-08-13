@@ -60,6 +60,11 @@ and produce separate artifacts; runtime inclusion is determined by reachability 
 `#` precedence and the standard compiler environment remain unresolved, and no staging support is
 implemented yet.
 
+After the language and conformance roadmap is complete, the project plans to generate a searchable
+MkDocs Material learning site from `LANGUAGE.md`, split into approachable Markdown pages with a
+left-hand table of contents. The same release-hardening work will produce a runnable, implemented-only
+“Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
+
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
 [`examples/contracts.caret`](examples/contracts.caret) demonstrates built-in and user-defined

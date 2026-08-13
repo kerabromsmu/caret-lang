@@ -454,6 +454,17 @@ modifiers, parameterized contracts, dispatch, and effects remain.
   collections, encode/decode round trips, optimizer equivalence, and scheduler stability.
 - Establish performance suites for parsing, closures/partials, collection updates, cycles, SIMD,
   formats, rule propagation, module compilation, code serialization, sandbox startup, and REPL latency.
+- After all planned language features and their conformance requirements are complete, generate a
+  developer-learning site from canonical `LANGUAGE.md` sections. Use MkDocs Material with separate
+  Markdown pages, persistent left-pane navigation, search, breadcrumbs, and previous/next links;
+  distinguish implemented, planned, deferred, and unresolved material from `CONFORMANCE.md`.
+- Generate a coverage manifest mapping every normative specification section to the site, and fail
+  strict builds on uncovered sections, duplicate anchors, broken links, missing navigation entries,
+  orphan pages, contradictory status, or non-reproducible output. Generated pages are build artifacts,
+  not an independently edited specification.
+- Author a shared-source “Learn Caret in Y Minutes” tutorial using only implemented behavior and
+  runnable examples. Produce both a site page and an upstream-compatible Markdown/YAML contribution,
+  with an explicit checklist for metadata, license, formatting, highlighting, links, and submission.
 - Version the language and runtime ABI only after the complete conformance suite passes on supported
   platforms.
 
@@ -479,6 +490,8 @@ modifiers, parameterized contracts, dispatch, and effects remain.
   visibility, imports, capability retention, nested authority, and interpreter/compiler parity.
 - Compile-time stages test runtime-dependency rejection, effect/capability enforcement, module/code
   visibility, boundary representability, independent roots, and exact post-transformation reachability.
+- Documentation release gates run every published Caret example, build MkDocs with strict warnings,
+  check links/navigation/specification coverage, and verify clean reproducible regeneration.
 - Stage completion requires `./gradlew test`, `./test.sh`, all examples, differential tests available
   at that stage, and `git diff --check` to pass.
 

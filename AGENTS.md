@@ -198,6 +198,12 @@ lambdas, and ordinary expressions; it lowers to the ordinary callable path.
 * Include representative Caret programs as integration tests.
 * For every newly implemented language feature, add or extend a runnable `.caret` example that
   demonstrates the feature, and exercise that example from the integration test suite.
+* `LANGUAGE.md` remains the canonical language specification. After the Phase 13 documentation
+  generator exists, do not hand-edit generated site pages; update their canonical inputs and
+  regenerate them instead.
+* The final documentation release must provide a MkDocs Material site split into approachable
+  Markdown pages with left-pane navigation, plus a shared-source “Learn Caret in Y Minutes” entry.
+  Published examples must be executable or explicitly labeled conceptual/planned.
 
 ## Change discipline
 
