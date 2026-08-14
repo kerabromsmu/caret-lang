@@ -88,7 +88,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
-    final class Seq implements Value {
+    final class Seq implements Value, Iterable<Value> {
         private sealed interface Node permits Leaf, Branch {
             int size();
             Value get(int index);
@@ -152,6 +152,35 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         public int size() { return size; }
+
+        @Override public Iterator<Value> iterator() {
+            return new Iterator<>() {
+                private final ArrayDeque<Node> pending = initial();
+                private Value next = advance();
+                private ArrayDeque<Node> initial() {
+                    ArrayDeque<Node> nodes = new ArrayDeque<>();
+                    for (int i = chunks.size() - 1; i >= 0; i--) nodes.push(chunks.get(i));
+                    return nodes;
+                }
+                private Value advance() {
+                    while (!pending.isEmpty()) {
+                        Node node = pending.pop();
+                        if (node instanceof Leaf(Value value)) return value;
+                        Branch branch = (Branch) node;
+                        pending.push(branch.right());
+                        pending.push(branch.left());
+                    }
+                    return null;
+                }
+                @Override public boolean hasNext() { return next != null; }
+                @Override public Value next() {
+                    if (next == null) throw new NoSuchElementException();
+                    Value result = next;
+                    next = advance();
+                    return result;
+                }
+            };
+        }
 
         public Optional<Value> find(int index) {
             if (index < 0 || index >= size) return Optional.empty();
@@ -253,6 +282,17 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         public boolean containsKey(String key) { return find(key).isPresent(); }
         public int size() { return keys.size(); }
 
+        Iterable<Map.Entry<String, Value>> orderedEntries() {
+            return () -> new Iterator<>() {
+                private final Iterator<Value> names = keys.iterator();
+                @Override public boolean hasNext() { return names.hasNext(); }
+                @Override public Map.Entry<String, Value> next() {
+                    String name = ((Str) names.next()).value();
+                    return Map.entry(name, find(name).orElseThrow());
+                }
+            };
+        }
+
         private static Tree putNode(Tree tree, String key, Value value) {
             if (tree == EmptyTree.INSTANCE) {
                 return new Node(key, value, EmptyTree.INSTANCE, EmptyTree.INSTANCE, 1);
@@ -321,6 +361,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         Value apply(Argument argument, SourceSpan callSpan);
         int remainingArity();
         default boolean refinementEligible() { return false; }
+        default String publicName() { return "<anonymous>"; }
 
         default Value invokeZero(SourceSpan callSpan) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
@@ -346,6 +387,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             fields.put("name", new Str(contract.publicName()));
             fields.put("bases", new Seq(contract.bases().stream()
                     .map(base -> (Value) new Str(base.publicName())).toList()));
+            fields.put("requirements", new Seq(contract.requirements().stream()
+                    .map(requirement -> (Value) new Str(requirement)).toList()));
             return Collections.unmodifiableMap(fields);
         }
         @Override public String toString() { return "<contract " + contract.publicName() + ">"; }
@@ -526,6 +569,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public boolean refinementEligible() {
             return refinementEligible && bound.size() == 0;
         }
+
+        @Override public String publicName() { return name; }
 
         @Override public String toString() {
             return "<fn " + name + "/" + remainingArity() + ">";

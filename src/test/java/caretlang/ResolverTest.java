@@ -79,7 +79,7 @@ final class ResolverTest {
     @Test
     void nestedFunctionsRecordCapturedLexicalDepth() {
         List<Stmt> program = new Parser("""
-                outer captured =
+                enclosing captured =
                   inner argument = captured + argument
                   inner
                 """).parseProgram();

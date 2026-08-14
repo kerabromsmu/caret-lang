@@ -161,7 +161,7 @@ final class ContractInferenceTest {
     @Test
     void includesNestedNamedCallsInEnclosingFunctionEffects() {
         List<Ast.Stmt> program = new Parser("""
-                outer value =
+                enclosing value =
                   nested item =
                     print item
                   nested value
@@ -254,5 +254,27 @@ final class ContractInferenceTest {
         ContractInference inference = ContractInference.analyze(program, resolution);
         assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
                 inference.effects((Ast.FunctionDef) program.getFirst()).effects());
+    }
+
+    @Test
+    void partialConstructionIncludesEffectsOfEagerHoleFreeSubexpressions() {
+        List<Ast.Stmt> program = new Parser("""
+                pair left right = left
+                buildsPartial value =
+                  pair _ (print value)
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+        assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
+                inference.effects((Ast.FunctionDef) program.get(1)).effects());
+    }
+
+    @Test
+    void overApplicationOfAKnownCallableAddsUnknownResultCallEffects() {
+        List<Ast.Stmt> program = new Parser("""
+                identity value = value
+                over value = identity value value
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+        assertTrue(inference.effects((Ast.FunctionDef) program.get(1)).unknownDynamicCall());
     }
 }

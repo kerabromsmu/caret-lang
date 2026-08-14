@@ -210,6 +210,20 @@ print addTenThenText 5
 print pipeline 2
 print (@addThenDouble).remaining
 
+// Contracts compare by identity and expose public refinement requirement metadata.
+positive value = value > 0
+Positive = contract positive
+PositiveAlias = Positive
+OtherPositive = contract positive
+Required = [Number positive]
+RequiredAgain = [Number positive]
+CompositeOne = contract Required
+CompositeTwo = contract RequiredAgain
+print (Positive == PositiveAlias)
+print (Positive == OtherPositive)
+print (CompositeOne == CompositeTwo)
+print (@Positive).requirements
+
 // $ is right-associative application below composition, conditionals, and ordinary operators.
 print $ add 1 $ 2 * 3
 print $ false & "unselected" ! "conditional argument"

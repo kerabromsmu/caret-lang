@@ -1,6 +1,10 @@
 package caretlang;
 
 import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
@@ -27,6 +31,9 @@ final class UserContract implements ContractDescriptor {
 
     @Override public String publicName() { return name == null ? "<anonymous>" : name; }
     @Override public List<ContractDescriptor> bases() { return bases; }
+    @Override public List<String> requirements() {
+        return refinements.stream().map(Value.Callable::publicName).toList();
+    }
 
     @Override public boolean accepts(Value value) {
         if (value instanceof Value.Attributed attributed) {
@@ -36,21 +43,41 @@ final class UserContract implements ContractDescriptor {
     }
 
     private boolean includes(ContractDescriptor candidate) {
-        return candidate == this || candidate.bases().stream().anyMatch(this::includes);
-    }
-
-    private boolean acceptsRequirements(Value value, SourceSpan span) {
-        return bases.stream().allMatch(base -> base instanceof BuiltinContract builtin
-                ? builtin.accepts(value)
-                : ((UserContract) base).canAcquire(value, span));
+        Set<ContractDescriptor> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        ArrayDeque<ContractDescriptor> pending = new ArrayDeque<>();
+        pending.push(candidate);
+        while (!pending.isEmpty()) {
+            ContractDescriptor current = pending.pop();
+            if (!visited.add(current)) continue;
+            if (current == this) return true;
+            current.bases().forEach(pending::push);
+        }
+        return false;
     }
 
     boolean canAcquire(Value value, SourceSpan span) {
-        if (!acceptsRequirements(value, span)) return false;
-        for (Value.Callable refinement : refinements) {
-            Value result = refinementInvoker.apply(refinement, new Value.Argument(value, span));
-            while (result instanceof Value.Attributed attributed) result = attributed.value();
-            if (!(result instanceof Value.Bool(boolean accepted)) || !accepted) return false;
+        Set<ContractDescriptor> visitedContracts = Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<Value.Callable> visitedRefinements = Collections.newSetFromMap(new IdentityHashMap<>());
+        ArrayDeque<ContractDescriptor> pending = new ArrayDeque<>();
+        pending.push(this);
+        while (!pending.isEmpty()) {
+            ContractDescriptor current = pending.pop();
+            if (!visitedContracts.add(current)) continue;
+            if (current instanceof BuiltinContract builtin) {
+                if (!builtin.accepts(value)) return false;
+                continue;
+            }
+            if (!(current instanceof UserContract user)) {
+                if (!current.accepts(value)) return false;
+                continue;
+            }
+            user.bases.forEach(pending::push);
+            for (Value.Callable refinement : user.refinements) {
+                if (!visitedRefinements.add(refinement)) continue;
+                Value result = refinementInvoker.apply(refinement, new Value.Argument(value, span));
+                while (result instanceof Value.Attributed attributed) result = attributed.value();
+                if (!(result instanceof Value.Bool(boolean accepted)) || !accepted) return false;
+            }
         }
         return true;
     }

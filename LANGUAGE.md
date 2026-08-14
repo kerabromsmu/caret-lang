@@ -1,6 +1,9 @@
-# Implemented language sketch
+# Caret language specification
 
-This file describes the prototype as it currently behaves, not a final language specification.
+The opening section describes the prototype as it currently behaves. Later sections describe the
+planned language and are explicitly separated from implemented behavior.
+
+# Implemented prototype
 
 ## Values
 
@@ -39,8 +42,8 @@ Built-in argument validation retains individual argument spans, so an invalid op
 that operand rather than the complete call.
 
 Internally, diagnostics retain their phase, a stable diagnostic code, message, primary source span,
-related source spans, an optional cause, and subsystem-specific details. These fields use the same
-semantic information model as the planned `ErrorTemplate` described below, but a diagnostic that
+and related source spans. Planned causes and subsystem-specific detail payloads belong to the
+`ErrorTemplate` model described below. A diagnostic that
 aborts lexing, parsing, analysis, or evaluation is not thereby an ordinary catchable Caret value.
 The CLI renders the primary location in the compact form below and follows it
 with located `Note:` lines when a diagnostic has related locations, such as the first declaration
@@ -85,8 +88,9 @@ makePerson name age =
   ^age = age
 ```
 
-The constant/operator spellings `true`, `false`, `and`, `or`, `not`, `_`, and numbered holes such
-as `_1` are reserved and cannot be used as binding or parameter names.
+The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the planned lexical forms
+`with`, `outer`, `root`, and `module`, `_`, and numbered holes such as `_1` are reserved and cannot
+be used as binding or parameter names.
 
 ### Contract foundation currently implemented
 
@@ -121,12 +125,18 @@ must instead resolve from their initializer or context. An actual use that still
 contract variable unresolved is a located compile-time ambiguity error.
 
 The semantic analyzer also computes an initial effect summary for named functions. It propagates
-known effects through direct named calls, treats construction of partials as pure, and records an
+known effects through direct named calls, includes effects from the fixed subexpressions captured
+eagerly while constructing partials, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
 prove that a prospective refinement is unary, Boolean-returning, and pure. Effect declarations,
 ordinary-function enforcement, and effect reflection/tooling remain planned; the internal output
 marker for `print` is not public syntax. Proven predicates are implemented as first-class refinement
 requirements in `contract` construction and direct clauses, including through ordinary aliases.
+Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
+evaluation of `contract` creates an unequal descriptor even when its requirements are identical.
+Names and reflective metadata do not participate in equality. Contract reflection exposes `name`,
+`bases`, and language-owned refinement
+`requirements`.
 
 Parameterized contracts, nullable/optional modifiers, overload dispatch, complete
 static inference/proof, the public effect system, and the full universal-collection model remain
@@ -200,6 +210,9 @@ expression, so common output does not require grouping:
 print add 1 2
 print condition & "yes" ! "no"
 ```
+
+This whole-line grouping applies only when `print` resolves to the builtin output function. A
+lexical binding named `print` shadows the builtin and uses ordinary left-associative application.
 
 This does not change ordinary application associativity: outside the `print` statement, `f x y`
 still means `(f x) y`.
@@ -418,6 +431,7 @@ Built-in symbolic operators retain the precedence table documented above. User-d
 operators are deliberately unsupported for now; language extensions use named infix functions.
 A later language version may add a quoted-symbol declaration resembling:
 
+<!-- caret-example: planned -->
 ```caret
 `#-!` x y = f x y
 ```
@@ -528,6 +542,11 @@ extending unified binary functions beyond the existing scalar operators.
 
 The self-interpreter may represent successful and failed operations as exported result scopes. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
+
+# Planned language specification
+
+Everything below this heading is canonical design work unless an individual section explicitly
+states that its behavior is already implemented by the prototype above.
 
 ### Not required for self-interpretation
 
@@ -673,12 +692,12 @@ forward references. Direct and indirect contract-derivation cycles are compile-t
 `contract` always takes exactly one ordinary argument: `~`, one contract or predicate, or one
 collection of requirements.
 
-Contract equality is nominal identity, never structural equivalence. Separately constructed
-contracts remain unequal even when they contain the same requirements. An ordinary function that
-returns contracts follows ordinary application and capture rules; repeated application of the same
-contract constructor to the same canonical arguments denotes the same parameterized nominal
-contract. Contract values are comparable by this identity even though ordinary callable values are
-not.
+Contract equality is descriptor identity, never structural, nominal-name, or requirement-list
+equivalence. Every evaluation of contract construction creates a fresh identity, so separately
+constructed contracts remain unequal even when they contain the same bases, refinements, or
+parameterization arguments. Assigning, returning, or otherwise passing an existing contract value
+preserves its identity. Contract values are comparable by this identity even though ordinary
+callable values are not.
 
 ---
 

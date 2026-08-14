@@ -3,7 +3,7 @@ package caretlang;
 import java.util.List;
 
 final class Ast {
-    sealed interface Stmt permits Assign, ExprStmt, FunctionDef {
+    sealed interface Stmt permits Assign, ExprStmt, PrintLine, FunctionDef {
         SourceSpan span();
     }
     record ContractClause(List<ContractName> names, SourceSpan span) {}
@@ -11,6 +11,8 @@ final class Ast {
     record Parameter(String name, ContractClause contracts, SourceSpan span) {}
     record Assign(String name, boolean exported, ContractClause contracts, Expr value, SourceSpan span) implements Stmt {}
     record ExprStmt(Expr expression, SourceSpan span) implements Stmt {}
+    /** A leading print line retains both parses until resolution determines whether print is shadowed. */
+    record PrintLine(Name target, Expr builtinArgument, Expr ordinaryCall, SourceSpan span) implements Stmt {}
     record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
                        List<Stmt> body, SourceSpan span) implements Stmt {}
 

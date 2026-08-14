@@ -46,19 +46,6 @@ final class Parser {
         lineIndex++;
         List<Token> tokens = Lexer.lex(line.text(), line.offset(), line.number(), line.column());
 
-        // Output is intentionally a statement form: the complete remainder of the
-        // line is its expression. This keeps ordinary whitespace application
-        // left-associative while allowing the concise `print add 2 3` spelling.
-        if (tokens.size() > 2 && tokens.getFirst().kind() == Kind.IDENT
-                && tokens.getFirst().text().equals("print")
-                && !tokens.get(1).text().equals("=") && !tokens.get(1).text().equals("$")) {
-            Expr expression = parseExpression(tokens.subList(1, tokens.size() - 1),
-                    tokens.getLast().span().end(), indent);
-            Expr print = new Name("print", tokens.getFirst().span());
-            Expr call = new Apply(print, expression, SourceSpan.cover(print.span(), expression.span()));
-            return new ExprStmt(call, call.span());
-        }
-
         int eq = topLevelEquals(tokens);
         if (eq >= 0) {
             List<Token> left = tokens.subList(0, eq);
@@ -86,6 +73,28 @@ final class Parser {
 
             throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
                     "Invalid assignment or function definition");
+        }
+
+        // Output is intentionally a statement form only when the line is not a definition.
+        // This preserves the concise `print add 2 3` spelling without preventing `print`
+        // from being shadowed as an ordinary binding or function name.
+        if (tokens.size() > 2 && tokens.getFirst().kind() == Kind.IDENT
+                && tokens.getFirst().text().equals("print") && !tokens.get(1).text().equals("$")) {
+            Expr expression = parseExpression(tokens.subList(1, tokens.size() - 1),
+                    tokens.getLast().span().end(), indent);
+            Expr print = new Name("print", tokens.getFirst().span());
+            Expr call = new Apply(print, expression, SourceSpan.cover(print.span(), expression.span()));
+            Expr ordinary;
+            try {
+                ordinary = new ExprParser(tokens.subList(0, tokens.size() - 1),
+                        tokens.getLast().span().end()).parse();
+            } catch (LangException unavailableOrdinaryParse) {
+                // Delimited multiline syntax may only become complete through the continuation
+                // consumed by the builtin argument parse. It cannot denote an ordinary shadowed
+                // call in the current grammar, so retain the builtin-shaped fallback.
+                ordinary = call;
+            }
+            return new PrintLine((Name) print, expression, ordinary, call.span());
         }
 
         Expr expression = parseExpression(tokens.subList(0, tokens.size() - 1),

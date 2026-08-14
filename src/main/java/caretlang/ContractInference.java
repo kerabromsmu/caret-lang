@@ -5,6 +5,7 @@ import caretlang.Ast.*;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,7 +39,7 @@ final class ContractInference {
         }
     }
 
-    private record CallableEffects(int arity, EffectSummary summary, SourceSpan declarationSpan) {}
+    private record CallableEffects(int arity, EffectSummary summary, Integer symbolId) {}
 
     private static final Map<String, CallableEffects> BUILTIN_EFFECTS = builtinEffects();
 
@@ -90,6 +91,7 @@ final class ContractInference {
     static ContractInference analyze(List<Stmt> program, Resolution resolution) {
         ContractInference inference = new ContractInference(resolution);
         inference.analyzeBlock(program, Map.of(), BUILTIN_EFFECTS);
+        inference.validateRefinementClauses(program);
         return inference;
     }
 
@@ -132,7 +134,6 @@ final class ContractInference {
 
         // Recursive groups are deliberately monomorphic while this fixed point is computed.
         boolean changed;
-        int passes = Math.max(1, definitions.size() * 4);
         do {
             changed = false;
             for (FunctionDef function : definitions.values()) {
@@ -142,15 +143,14 @@ final class ContractInference {
                     changed = true;
                 }
             }
-        } while (changed && --passes > 0);
+        } while (changed);
 
         Map<String, CallableEffects> visibleEffects = new HashMap<>(enclosingEffects);
         for (FunctionDef function : definitions.values()) {
             visibleEffects.put(function.name(), new CallableEffects(
-                    function.params().size(), EffectSummary.PURE, function.span()));
+                    function.params().size(), EffectSummary.PURE, symbolId(function)));
         }
         boolean effectsChanged;
-        int effectPasses = Math.max(1, definitions.size() * 4);
         do {
             effectsChanged = false;
             for (FunctionDef function : definitions.values()) {
@@ -158,11 +158,11 @@ final class ContractInference {
                 CallableEffects previous = visibleEffects.get(function.name());
                 if (!inferred.equals(previous.summary())) {
                     visibleEffects.put(function.name(), new CallableEffects(
-                            function.params().size(), inferred, function.span()));
+                            function.params().size(), inferred, symbolId(function)));
                     effectsChanged = true;
                 }
             }
-        } while (effectsChanged && --effectPasses > 0);
+        } while (effectsChanged);
 
         for (FunctionDef function : definitions.values()) {
             FunctionContract inferred = visible.get(function.name());
@@ -199,6 +199,7 @@ final class ContractInference {
                 }
                 case ExprStmt expression -> expression(expression.expression(), parameters, locals,
                         requirements, visible);
+                case PrintLine line -> expression(printExpression(line), parameters, locals, requirements, visible);
                 case FunctionDef ignored -> Shape.unknown();
             };
         }
@@ -441,10 +442,9 @@ final class ContractInference {
                 .map(FunctionDef.class::cast).toList();
         for (FunctionDef function : nested) {
             visible.put(function.name(), new CallableEffects(
-                    function.params().size(), EffectSummary.PURE, function.span()));
+                        function.params().size(), EffectSummary.PURE, symbolId(function)));
         }
         boolean changed;
-        int passes = Math.max(1, nested.size() * 4);
         do {
             changed = false;
             for (FunctionDef function : nested) {
@@ -452,17 +452,18 @@ final class ContractInference {
                 CallableEffects previous = visible.get(function.name());
                 if (!inferred.equals(previous.summary())) {
                     visible.put(function.name(), new CallableEffects(
-                            function.params().size(), inferred, function.span()));
+                            function.params().size(), inferred, symbolId(function)));
                     changed = true;
                 }
             }
-        } while (changed && --passes > 0);
+        } while (changed);
 
         EffectSummary result = EffectSummary.PURE;
         for (Stmt statement : statements) {
             result = result.plus(switch (statement) {
                 case Assign assign -> expressionEffects(assign.value(), visible);
                 case ExprStmt expression -> expressionEffects(expression.expression(), visible);
+                case PrintLine line -> expressionEffects(printExpression(line), visible);
                 case FunctionDef ignored -> EffectSummary.PURE;
             });
         }
@@ -510,11 +511,15 @@ final class ContractInference {
         }
         EffectSummary result = EffectSummary.PURE;
         for (Expr argument : arguments) result = result.plus(expressionEffects(argument, visible));
-        if (arguments.stream().anyMatch(ContractInference::containsHole)) return result;
+        if (arguments.stream().anyMatch(ContractInference::containsHole)) {
+            return captureEffects(application, visible);
+        }
         if (target instanceof Name name) {
             CallableEffects callable = resolvedCallable(name, visible);
             if (callable == null) return result.plus(EffectSummary.UNKNOWN);
-            return arguments.size() >= callable.arity() ? result.plus(callable.summary()) : result;
+            if (arguments.size() < callable.arity()) return result;
+            result = result.plus(callable.summary());
+            return arguments.size() > callable.arity() ? result.plus(EffectSummary.UNKNOWN) : result;
         }
         return result.plus(expressionEffects(target, visible)).plus(EffectSummary.UNKNOWN);
     }
@@ -538,16 +543,91 @@ final class ContractInference {
         CallableEffects candidate = visible.get(name.name());
         if (candidate == null) return null;
         Resolution.Binding binding = resolution.binding(name);
-        if (candidate.declarationSpan() == null) {
+        if (candidate.symbolId() == null) {
             return binding == null || binding.declarationSpan() == null ? candidate : null;
         }
-        return binding != null && candidate.declarationSpan().equals(binding.declarationSpan())
+        return binding != null && candidate.symbolId().equals(binding.symbolId())
                 ? candidate : null;
+    }
+
+    private Integer symbolId(FunctionDef function) {
+        return resolution.symbolId(function.span());
     }
 
     private static void invalidRefinement(FunctionDef function, String reason) {
         throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT,
                 "Invalid refinement predicate: " + function.name() + " " + reason, function.span());
+    }
+
+    private EffectSummary captureEffects(Expr expression, Map<String, CallableEffects> visible) {
+        if (!containsHole(expression)) return expressionEffects(expression, visible);
+        EffectSummary result = EffectSummary.PURE;
+        for (Expr child : AstTraversal.children(expression)) {
+            result = result.plus(captureEffects(child, visible));
+        }
+        return result;
+    }
+
+    private void validateRefinementClauses(List<Stmt> statements) {
+        Map<Integer, FunctionDef> functions = new HashMap<>();
+        Map<Integer, Integer> aliases = new HashMap<>();
+        Map<Integer, Boolean> eligibility = new HashMap<>();
+        collectRefinementBindings(statements, functions, aliases, eligibility);
+        validateClauses(statements, functions, aliases, eligibility);
+    }
+
+    private void collectRefinementBindings(List<Stmt> statements, Map<Integer, FunctionDef> functions,
+                                           Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        for (Stmt statement : statements) {
+            if (statement instanceof FunctionDef function) {
+                functions.put(resolution.symbolId(function.span()), function);
+                collectRefinementBindings(function.body(), functions, aliases, eligibility);
+            } else if (statement instanceof Assign assign && assign.value() instanceof Name target) {
+                Resolution.Binding targetBinding = resolution.binding(target);
+                Integer aliasId = resolution.symbolId(assign.span());
+                if (aliasId != null && targetBinding != null) {
+                    aliases.put(aliasId, targetBinding.symbolId());
+                    if (targetBinding.refinementEligible() != null) {
+                        eligibility.put(targetBinding.symbolId(), targetBinding.refinementEligible());
+                    }
+                }
+            }
+        }
+    }
+
+    private void validateClauses(List<Stmt> statements, Map<Integer, FunctionDef> functions,
+                                 Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        for (Stmt statement : statements) {
+            if (statement instanceof Assign assign) validateClause(assign.contracts(), functions, aliases, eligibility);
+            else if (statement instanceof PrintLine ignored) { }
+            else if (statement instanceof FunctionDef function) {
+                validateClause(function.resultContracts(), functions, aliases, eligibility);
+                function.params().forEach(parameter -> validateClause(
+                        parameter.contracts(), functions, aliases, eligibility));
+                validateClauses(function.body(), functions, aliases, eligibility);
+            }
+        }
+    }
+
+    private void validateClause(ContractClause clause, Map<Integer, FunctionDef> functions,
+                                Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+            Resolution.Binding binding = reference.binding();
+            if (binding == null) continue;
+            if (binding.refinementEligible() != null) {
+                eligibility.put(binding.symbolId(), binding.refinementEligible());
+            }
+            int symbolId = binding.symbolId();
+            Set<Integer> visited = new HashSet<>();
+            while (aliases.containsKey(symbolId) && visited.add(symbolId)) symbolId = aliases.get(symbolId);
+            FunctionDef function = functions.get(symbolId);
+            if (function != null) validateRefinement(function);
+            else if (Boolean.FALSE.equals(eligibility.get(symbolId))) {
+                throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT,
+                        "Invalid refinement predicate: " + reference.name()
+                                + " must be unary, Boolean-returning, and pure", reference.span());
+            }
+        }
     }
 
     private void analyzeOrdinaryBindings(List<Stmt> statements, Map<String, FunctionContract> visible) {
@@ -561,6 +641,8 @@ final class ContractInference {
                 pending.add(Map.entry(assign, shape));
             } else if (statement instanceof ExprStmt expression) {
                 expression(expression.expression(), Map.of(), locals, List.of(), visible);
+            } else if (statement instanceof PrintLine line) {
+                expression(printExpression(line), Map.of(), locals, List.of(), visible);
             }
         }
         for (Map.Entry<Assign, Shape> entry : pending) {
@@ -570,6 +652,11 @@ final class ContractInference {
                         "Ambiguous contract at use: binding " + assign.name(), assign.value().span());
             }
         }
+    }
+
+    private Expr printExpression(PrintLine line) {
+        return resolution.usesBuiltinPrint(line)
+                ? new Apply(line.target(), line.builtinArgument(), line.span()) : line.ordinaryCall();
     }
 
     private static boolean containsHole(Expr expression) {

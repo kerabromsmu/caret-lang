@@ -62,6 +62,10 @@ final class Interpreter {
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
                 last = eval(expression, env, null, resolution);
+            } else if (statement instanceof PrintLine line) {
+                last = eval(resolution.usesBuiltinPrint(line)
+                        ? new Apply(line.target(), line.builtinArgument(), line.span())
+                        : line.ordinaryCall(), env, null, resolution);
             } else if (statement instanceof FunctionDef(String name, ContractClause resultContracts,
                                                         List<Parameter> params, List<Stmt> body,
                                                         SourceSpan ignored)) {

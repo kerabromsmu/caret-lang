@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 final class Environment {
-    record LocalBinding(String name, int slot, Integer callableArity) {}
+    record LocalBinding(String name, int slot, Integer callableArity, Boolean refinementEligible) {}
     private static final class Binding {
         private Value value;
         private boolean initialized;
@@ -82,7 +82,9 @@ final class Environment {
             Value value = slots.get(slot).initialized ? slots.get(slot).value : null;
             if (value != null) value = ValueSemantics.underlying(value);
             Integer arity = value instanceof Value.Callable callable ? callable.remainingArity() : null;
-            bindings.add(new LocalBinding(slotNames.get(slot), slot, arity));
+            Boolean refinement = value instanceof Value.Callable callable
+                    && !(value instanceof Value.ContractValue) ? callable.refinementEligible() : null;
+            bindings.add(new LocalBinding(slotNames.get(slot), slot, arity, refinement));
         }
         return List.copyOf(bindings);
     }

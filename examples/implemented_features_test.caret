@@ -212,4 +212,18 @@ assertEqual "partial left composition" (addTenThenText 5) "15"
 assertEqual "composition chain" (pipeline 2) "5"
 assertEqual "composition retains left arity" (@addThenDouble).remaining 2
 
+// Contract identity equality and public requirement reflection.
+positive value = value > 0
+Positive = contract positive
+PositiveAlias = Positive
+OtherPositive = contract positive
+Required = [Number positive]
+RequiredAgain = [Number positive]
+CompositeOne = contract Required
+CompositeTwo = contract RequiredAgain
+assert "contract alias retains identity" (Positive == PositiveAlias)
+assert "separate contracts have distinct identity" (Positive != OtherPositive)
+assert "identical requirement lists do not imply equality" (CompositeOne != CompositeTwo)
+assertEqual "contract reflection lists refinements" (@Positive).requirements ["positive"]
+
 // Expected failures are isolated in examples/errors/ and exercised by test.sh.

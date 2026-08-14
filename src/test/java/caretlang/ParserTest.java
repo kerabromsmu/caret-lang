@@ -167,22 +167,19 @@ final class ParserTest {
 
     @Test
     void printStatementConsumesTheRemainingExpression() {
-        ExprStmt statement = assertInstanceOf(ExprStmt.class,
+        PrintLine statement = assertInstanceOf(PrintLine.class,
                 new Parser("print add 2 3").parseProgram().getFirst());
-        Apply print = assertInstanceOf(Apply.class, statement.expression());
-        Name name = assertInstanceOf(Name.class, print.function());
-        assertEquals("print", name.name());
-        Apply add = assertInstanceOf(Apply.class, print.argument());
+        assertEquals("print", statement.target().name());
+        Apply add = assertInstanceOf(Apply.class, statement.builtinArgument());
         assertInstanceOf(Apply.class, add.function());
     }
 
     @Test
     void printTreatsANamedInfixExpressionAsItsSingleArgument() {
-        ExprStmt statement = assertInstanceOf(ExprStmt.class,
+        PrintLine statement = assertInstanceOf(PrintLine.class,
                 new Parser("print 2 add 3").parseProgram().getFirst());
-        Apply print = assertInstanceOf(Apply.class, statement.expression());
-        assertEquals("print", assertInstanceOf(Name.class, print.function()).name());
-        assertInstanceOf(NamedInfix.class, print.argument());
+        assertEquals("print", statement.target().name());
+        assertInstanceOf(NamedInfix.class, statement.builtinArgument());
     }
 
     @Test
@@ -432,6 +429,25 @@ final class ParserTest {
         assertEquals(3, error.span().start().line());
         assertEquals(1, error.span().start().column());
         assertTrue(error.getMessage().contains("Expected ')'"));
+    }
+
+    @Test
+    void definitionParsingTakesPrecedenceOverThePrintStatementShortcut() {
+        FunctionDef function = assertInstanceOf(FunctionDef.class, new Parser("""
+                print value = value
+                """).parseProgram().getFirst());
+        assertEquals("print", function.name());
+        assertEquals(List.of("value"), function.params().stream().map(Parameter::name).toList());
+    }
+
+    @Test
+    void rejectsReservedFutureLexicalBindings() {
+        for (String name : List.of("with", "outer", "root", "module")) {
+            LangException error = assertThrows(LangException.class,
+                    () -> new Parser(name + " = 1").parseProgram(), name);
+            assertEquals(Diagnostic.Codes.PARSE_RESERVED_BINDING, error.diagnostic().code());
+            assertEquals(1, error.span().start().column());
+        }
     }
 
     private Expr expression(String source) {

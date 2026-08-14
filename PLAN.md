@@ -115,6 +115,9 @@ eligibility without exposing effect syntax. Proven unary Boolean callables now p
 first-class predicate requirements in derived contracts and direct clauses, including through
 aliases. Modifiers, parameterized contracts, dispatch, and the full public effect system remain
 subsequent Phase 2 slices; nullable/optional contract modifiers are the next implementation slice.
+The effect pass includes eagerly captured fixed operands in partial expressions, treats
+over-application through an unknown returned callable conservatively, and uses resolver-owned
+symbol identities rather than source-span equality.
 
 ### Contract and type model
 

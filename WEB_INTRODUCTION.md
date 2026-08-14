@@ -197,10 +197,14 @@ The prototype includes built-in predicates plus unary user-defined contract cons
 `Tag = contract ~` for a nominal base, `Numeric = contract Number` for one base, and
 `AB = contract [A B]` for multiple bases. Clauses can constrain bindings, parameters, and function
 results. An internal analysis also propagates known effects and conservatively rejects unknown
-dynamic calls when proving whether a refinement predicate is pure. Proven unary Boolean functions
+dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
+fixed operands are captured into partial applications. Proven unary Boolean functions
 are first-class refinement requirements in derived contracts and direct clauses, and retain that
 eligibility through aliases. Parameterized contracts, complete static proof, public effect
 declarations, and dispatch remain planned.
+Contract equality follows descriptor identity: aliases compare equal, but separate constructions
+remain unequal even with identical requirements. Contract reflection exposes public base and
+refinement-requirement names without exposing implementation callables.
 The prototype infers initial built-in constraints for unannotated named functions and uses
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
 each call instantiates those variables independently.

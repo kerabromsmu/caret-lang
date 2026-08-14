@@ -79,6 +79,49 @@ final class InterpreterTest {
     }
 
     @Test
+    void rejectsInvalidRefinementAliasesBeforeAnyEffects() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        LangException error = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                invalid value = value + 1
+                alias = invalid
+                print "must not happen"
+                unused (alias) value = value
+                """).parseProgram()));
+        assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+        assertEquals("", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void retainedCallableMetadataRejectsInvalidRefinementsInLaterSubmissions() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("invalid value = value + 1").parseProgram());
+
+        LangException error = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                print "must not happen"
+                unused (invalid) value = value
+                """).parseProgram()));
+        assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+        assertEquals("", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void lexicalPrintShadowUsesOrdinaryApplication() {
+        assertEquals("3\n", execute("""
+                run value =
+                  print left right = left + right
+                  builtin = @print
+                  sum = print 1 2
+                  ^result = sum
+                value = run ~
+                print value.result
+                """));
+    }
+
+    @Test
     void nominalAttributionIsTransparentToExistingPrimitiveOperations() {
         assertEquals("second\ntrue\nvalue\n", execute("""
                 Index = contract Number
@@ -746,6 +789,46 @@ final class InterpreterTest {
         assertEquals(1, condition.span().start().line());
         assertEquals(27, condition.span().start().column());
         assertTrue(condition.getMessage().contains("Assertion condition must be Boolean"));
+    }
+
+    @Test
+    void contractEqualityUsesDescriptorIdentityNotEquivalentRequirements() {
+        assertEquals("true\nfalse\ntrue\nfalse\n", execute("""
+                First = contract ~
+                Second = contract ~
+                Alias = First
+                BaseA = contract ~
+                BaseB = contract ~
+                SameRequirementsOne = contract [BaseA BaseB]
+                SameRequirementsTwo = contract [BaseA BaseB]
+                print First == First
+                print First == Second
+                print First == Alias
+                print SameRequirementsOne == SameRequirementsTwo
+                """));
+    }
+
+    @Test
+    void invalidRefinementsAreRejectedBeforeProgramEffects() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        LangException error = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                print "must not happen"
+                invalid value = value + 1
+                unused (invalid) value = value
+                """).parseProgram()));
+        assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+        assertEquals("", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void contractReflectionIncludesLanguageOwnedRequirementNames() {
+        assertEquals("[positive]\n", execute("""
+                positive value = value > 0
+                Positive = contract positive
+                print (@Positive).requirements
+                """));
     }
 
     private String execute(String source) {

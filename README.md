@@ -195,7 +195,8 @@ print source.enabled~
 ```
 
 `print` consumes the remainder of its logical line as one expression, so `print add 2 3` prints
-the result of `add 2 3`. Parenthesized output remains valid.
+the result of `add 2 3`. Parenthesized output remains valid. A lexical binding named `print`
+shadows this builtin-only grouping and follows ordinary application rules.
 
 ## Current limitations
 
@@ -204,7 +205,7 @@ the result of `add 2 3`. Parenthesized output remains valid.
   Trailing callable blocks remain unavailable until lambda syntax is implemented.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
   dynamically. Initial named-function constraint inference and the internal purity analysis needed
-  to validate future refinement predicates are implemented;
+  to validate refinement predicates are implemented;
   parameterized contracts, dispatch, complete static proof,
   nullable/optional type checking, and the public effect system are not implemented.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
@@ -212,7 +213,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
   rulesets, and rule cycles are not implemented.
 - Mutability containers and immutable scope-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
-- Reflection is intentionally limited to basic kind, size/name, and function-arity metadata.
+- Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
+  base/requirement metadata.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
   quines, and `sandbox source environment` execution are specified but not implemented.
 - Compile-time `#` execution, compile-time imports, independent compilation roots, staged

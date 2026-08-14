@@ -27,9 +27,11 @@ import java.util.List;
 
 final class Resolver {
     private enum ContractState { CONTRACT, NON_CONTRACT, UNKNOWN }
-    private record Symbol(int slot, SourceSpan declaration, boolean initialized, Integer callableArity,
-                          ContractState contractState) {
-        Symbol initializedSymbol() { return new Symbol(slot, declaration, true, callableArity, contractState); }
+    private record Symbol(int slot, int id, SourceSpan declaration, boolean initialized, Integer callableArity,
+                          ContractState contractState, Boolean refinementEligible) {
+        Symbol initializedSymbol() {
+            return new Symbol(slot, id, declaration, true, callableArity, contractState, refinementEligible);
+        }
     }
 
     private static final class Scope {
@@ -43,6 +45,9 @@ final class Resolver {
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.ContractClause, List<Resolution.ContractBinding>> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
+    private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines = new IdentityHashMap<>();
+    private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
+    private int nextSymbolId;
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
         Resolver resolver = new Resolver();
@@ -50,12 +55,13 @@ final class Resolver {
         for (Environment.LocalBinding binding : globals.localBindings()) {
             ContractState state = BuiltinContract.named(binding.name()).isPresent()
                     ? ContractState.CONTRACT : ContractState.UNKNOWN;
-            root.symbols.put(binding.name(), new Symbol(binding.slot(), null, true,
-                    binding.callableArity(), state));
+            root.symbols.put(binding.name(), new Symbol(binding.slot(), resolver.nextSymbolId++, null, true,
+                    binding.callableArity(), state, binding.refinementEligible()));
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names, resolver.contracts, resolver.calls);
+        return new Resolution(resolver.names, resolver.contracts, resolver.calls,
+                resolver.builtinPrintLines, resolver.declarations);
     }
 
     private void resolveBlock(List<Stmt> statements, Scope scope, boolean functionBody) {
@@ -70,6 +76,7 @@ final class Resolver {
                     scope.symbols.put(assign.name(), symbol.initializedSymbol());
                 }
                 case ExprStmt expression -> resolveExpr(expression.expression(), scope, functionBody, false);
+                case Ast.PrintLine line -> resolvePrintLine(line, scope, functionBody);
                 case FunctionDef function -> resolveFunction(function, scope);
             }
         }
@@ -80,6 +87,7 @@ final class Resolver {
             String name = switch (statement) {
                 case Assign assign -> assign.name();
                 case FunctionDef function -> function.name();
+                case Ast.PrintLine ignored -> null;
                 default -> null;
             };
             if (name == null) continue;
@@ -89,8 +97,19 @@ final class Resolver {
             Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
             ContractState state = statement instanceof Assign assign ? contractState(assign.value())
                     : ContractState.UNKNOWN;
-            scope.symbols.put(name, new Symbol(scope.nextSlot++, statement.span(), function, arity, state));
+            int symbolId = nextSymbolId++;
+            scope.symbols.put(name, new Symbol(scope.nextSlot++, symbolId, statement.span(), function, arity, state,
+                    null));
+            declarations.put(statement.span(), symbolId);
         }
+    }
+
+    private void resolvePrintLine(Ast.PrintLine line, Scope scope, boolean functionBody) {
+        resolveName(line.target(), scope, functionBody, false);
+        Resolution.Binding binding = names.get(line.target());
+        boolean builtin = binding != null && binding.declarationSpan() == null;
+        builtinPrintLines.put(line, builtin);
+        resolveExpr(builtin ? line.builtinArgument() : line.ordinaryCall(), scope, functionBody, false);
     }
 
     private void resolveFunction(FunctionDef function, Scope enclosing) {
@@ -104,7 +123,8 @@ final class Resolver {
                         "Duplicate parameter: " + parameter.name(), function.span());
             }
             parameters.symbols.put(parameter.name(),
-                    new Symbol(parameters.nextSlot++, parameter.span(), true, null, ContractState.UNKNOWN));
+                    new Symbol(parameters.nextSlot++, nextSymbolId++, parameter.span(), true, null,
+                            ContractState.UNKNOWN, null));
         }
         resolveBlock(function.body(), new Scope(parameters), true);
     }
@@ -121,7 +141,8 @@ final class Resolver {
                                 "Binding is not a contract: " + name.name(), name.span());
                     }
                     return new Resolution.ContractBinding(name.name(),
-                            new Resolution.Binding(depth, symbol.slot(), symbol.declaration(), false), name.span());
+                            new Resolution.Binding(depth, symbol.slot(), symbol.id(), symbol.declaration(), false,
+                                    symbol.refinementEligible()), name.span());
                 }
             }
             if (BuiltinContract.named(name.name()).isPresent()) {
@@ -233,7 +254,8 @@ final class Resolver {
     }
 
     private static Resolution.Binding binding(Symbol symbol, int depth, boolean captured) {
-        return new Resolution.Binding(depth, symbol.slot(), symbol.declaration(), captured);
+        return new Resolution.Binding(depth, symbol.slot(), symbol.id(), symbol.declaration(), captured,
+                symbol.refinementEligible());
     }
 
     private void duplicate(String name, SourceSpan span, Symbol original) {

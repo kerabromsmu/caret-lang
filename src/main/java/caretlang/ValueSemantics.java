@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Language-owned policies for public kinds, reflection, equality, and value rendering. */
 final class ValueSemantics {
@@ -68,6 +69,9 @@ final class ValueSemantics {
     }
 
     private record Pair(Value left, Value right) {}
+    private record SequenceFrame(java.util.Iterator<Value> values, boolean first) {}
+    private record EntriesFrame(java.util.Iterator<Map.Entry<String, Value>> entries,
+                                String keyPrefix, boolean first) {}
 
     static boolean equal(Value left, Value right) {
         ArrayDeque<Pair> pending = new ArrayDeque<>();
@@ -78,6 +82,10 @@ final class ValueSemantics {
             Value b = pair.right();
             if (a instanceof Value.Attributed attributed) a = attributed.value();
             if (b instanceof Value.Attributed attributed) b = attributed.value();
+            if (a instanceof Value.ContractValue x && b instanceof Value.ContractValue y) {
+                if (x.descriptor() != y.descriptor()) return false;
+                continue;
+            }
             if (a instanceof Value.Callable || b instanceof Value.Callable) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY,
                         "Callable values cannot be compared for equality", null);
@@ -87,12 +95,17 @@ final class ValueSemantics {
             } else if (a instanceof Value.Scope x && b instanceof Value.Scope y) {
                 if (!enqueueFields(x.fields(), y.fields(), pending)) return false;
             } else if (a instanceof Value.Seq x && b instanceof Value.Seq y) {
-                List<Value> xs = x.values();
-                List<Value> ys = y.values();
-                if (xs.size() != ys.size()) return false;
-                for (int i = xs.size() - 1; i >= 0; i--) pending.push(new Pair(xs.get(i), ys.get(i)));
+                if (x.size() != y.size()) return false;
+                var xs = x.iterator();
+                var ys = y.iterator();
+                while (xs.hasNext()) pending.push(new Pair(xs.next(), ys.next()));
             } else if (a instanceof Value.Dict x && b instanceof Value.Dict y) {
-                if (!enqueueFields(x.entries(), y.entries(), pending)) return false;
+                if (x.size() != y.size()) return false;
+                for (Map.Entry<String, Value> entry : x.orderedEntries()) {
+                    Optional<Value> other = y.find(entry.getKey());
+                    if (other.isEmpty()) return false;
+                    pending.push(new Pair(entry.getValue(), other.get()));
+                }
             } else if (!Objects.equals(a, b)) {
                 return false;
             }
@@ -109,15 +122,34 @@ final class ValueSemantics {
             switch (item) {
                 case String text -> output.append(text);
                 case Value.Scope scope -> pushMap(scope.fields(), "^{", "}", "", pending);
-                case Value.Dict dictionary -> pushMap(dictionary.entries(), "#[", "]", "#", pending);
-                case Value.Seq sequence -> {
-                    List<Value> values = sequence.values();
+                case Value.Dict dictionary -> {
                     pending.push("]");
-                    for (int i = values.size() - 1; i >= 0; i--) {
-                        pending.push(values.get(i));
-                        if (i > 0) pending.push(", ");
-                    }
+                    pending.push(new EntriesFrame(dictionary.orderedEntries().iterator(), "#", true));
+                    pending.push("#[");
+                }
+                case Value.Seq sequence -> {
+                    pending.push("]");
+                    pending.push(new SequenceFrame(sequence.iterator(), true));
                     pending.push("[");
+                }
+                case SequenceFrame frame -> {
+                    if (frame.values().hasNext()) {
+                        Value value = frame.values().next();
+                        pending.push(new SequenceFrame(frame.values(), false));
+                        pending.push(value);
+                        if (!frame.first()) pending.push(", ");
+                    }
+                }
+                case EntriesFrame frame -> {
+                    if (frame.entries().hasNext()) {
+                        Map.Entry<String, Value> entry = frame.entries().next();
+                        pending.push(new EntriesFrame(frame.entries(), frame.keyPrefix(), false));
+                        pending.push(entry.getValue());
+                        pending.push(" = ");
+                        pending.push(entry.getKey());
+                        pending.push(frame.keyPrefix());
+                        if (!frame.first()) pending.push(", ");
+                    }
                 }
                 case Value.Attributed attributed -> pending.push(attributed.value());
                 default -> output.append(item);
@@ -128,7 +160,13 @@ final class ValueSemantics {
 
     private static void pushMap(Map<String, Value> values, String open, String close,
                                 String keyPrefix, ArrayDeque<Object> pending) {
-        List<Map.Entry<String, Value>> entries = new ArrayList<>(values.entrySet());
+        pushEntries(values.entrySet(), open, close, keyPrefix, pending);
+    }
+
+    private static void pushEntries(Iterable<Map.Entry<String, Value>> values, String open, String close,
+                                    String keyPrefix, ArrayDeque<Object> pending) {
+        List<Map.Entry<String, Value>> entries = new ArrayList<>();
+        values.forEach(entries::add);
         pending.push(close);
         for (int i = entries.size() - 1; i >= 0; i--) {
             Map.Entry<String, Value> entry = entries.get(i);

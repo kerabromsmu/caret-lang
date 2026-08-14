@@ -29,7 +29,8 @@ final class LanguageSyntax {
     private static final Map<Precedence, Set<String>> OPERATORS_BY_PRECEDENCE = operatorSets();
     private static final Set<String> BINARY_OPERATOR_SPELLINGS = BINARY_OPERATORS.stream()
             .map(BinaryOperator::spelling).collect(Collectors.toUnmodifiableSet());
-    private static final Set<String> RESERVED_WORDS = Set.of("true", "false", "and", "or", "not");
+    private static final Set<String> RESERVED_WORDS = Set.of(
+            "true", "false", "and", "or", "not", "with", "outer", "root", "module");
     private static final Set<String> NON_ARGUMENT_KEYWORDS = Set.of("and", "or", "not");
     private static final Set<String> MULTI_CHARACTER_SYMBOLS = Set.of("==", "!=", ">=", "<=", ">>");
     private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@+-*/%^=<>.&!?~$";
