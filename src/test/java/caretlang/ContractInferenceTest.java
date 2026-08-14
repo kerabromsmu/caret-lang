@@ -5,8 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
 
 final class ContractInferenceTest {
     @Test
@@ -126,5 +125,70 @@ final class ContractInferenceTest {
                 numeric "wrong"
                 """).parseProgram()));
         assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, error.diagnostic().code());
+    }
+
+    @Test
+    void infersPureKnownAndUnknownEffectsTransitively() {
+        List<Ast.Stmt> program = new Parser("""
+                pureValue value =
+                  value * 2
+
+                emit value =
+                  print value
+
+                emitThrough value =
+                  emit value
+
+                invoke callable value =
+                  callable value
+
+                capture value =
+                  print _
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        assertEquals(ContractInference.EffectSummary.PURE,
+                inference.effects((Ast.FunctionDef) program.get(0)));
+        assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
+                inference.effects((Ast.FunctionDef) program.get(1)).effects());
+        assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
+                inference.effects((Ast.FunctionDef) program.get(2)).effects());
+        assertTrue(inference.effects((Ast.FunctionDef) program.get(3)).unknownDynamicCall());
+        assertEquals(ContractInference.EffectSummary.PURE,
+                inference.effects((Ast.FunctionDef) program.get(4)));
+    }
+
+    @Test
+    void includesNestedNamedCallsInEnclosingFunctionEffects() {
+        List<Ast.Stmt> program = new Parser("""
+                outer value =
+                  nested item =
+                    print item
+                  nested value
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+        assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
+                inference.effects((Ast.FunctionDef) program.getFirst()).effects());
+    }
+
+    @Test
+    void validatesOnlyProvenPureUnaryBooleanRefinements() {
+        List<Ast.Stmt> program = new Parser("""
+                positive value = value > 0
+                wrongArity left right = left == right
+                wrongResult value = value + 1
+                emitting value = print (value > 0)
+                dynamic predicate value = predicate value
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        inference.validateRefinement((Ast.FunctionDef) program.getFirst());
+        for (int index = 1; index < program.size(); index++) {
+            Ast.FunctionDef candidate = (Ast.FunctionDef) program.get(index);
+            LangException error = assertThrows(LangException.class,
+                    () -> inference.validateRefinement(candidate));
+            assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+            assertEquals(index + 1, error.diagnostic().primarySpan().start().line());
+        }
     }
 }

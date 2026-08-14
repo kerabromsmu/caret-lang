@@ -197,9 +197,10 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
   Trailing callable blocks remain unavailable until lambda syntax is implemented.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
-  dynamically. Initial named-function constraint inference is implemented;
+  dynamically. Initial named-function constraint inference and the internal purity analysis needed
+  to validate future refinement predicates are implemented;
   parameterized contracts, refinements, dispatch, complete static proof,
-  nullable/optional type checking, and effect inference are not implemented.
+  nullable/optional type checking, and the public effect system are not implemented.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.

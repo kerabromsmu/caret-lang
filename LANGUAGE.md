@@ -120,8 +120,16 @@ generalized and each external use receives a fresh instantiation. Ordinary non-c
 must instead resolve from their initializer or context. An actual use that still leaves a required
 contract variable unresolved is a located compile-time ambiguity error.
 
+The semantic analyzer also computes an initial effect summary for named functions. It propagates
+known effects through direct named calls, treats construction of partials as pure, and records an
+unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
+prove that a prospective refinement is unary, Boolean-returning, and pure. Effect declarations,
+ordinary-function enforcement, effect reflection/tooling, and use of predicates by `contract`
+remain planned; the internal output marker for `print` is not public syntax.
+
 Refinements, parameterized contracts, nullable/optional modifiers, overload dispatch, complete
-static inference/proof, and the full universal-collection model remain planned below.
+static inference/proof, the public effect system, and the full universal-collection model remain
+planned below.
 
 Indentation defines a multiline function body. If a body contains exported bindings (`^`), calling the function returns an immutable scope containing those exports. Otherwise it returns the final expression or assigned value.
 
