@@ -197,7 +197,8 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
   Trailing callable blocks remain unavailable until lambda syntax is implemented.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
-  dynamically. Parameterized contracts, refinements, dispatch, complete static proof,
+  dynamically. Named-function constraint inference is being introduced incrementally;
+  parameterized contracts, refinements, dispatch, complete static proof,
   nullable/optional type checking, and effect inference are not implemented.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,

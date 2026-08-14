@@ -1,0 +1,12 @@
+identity value =
+  value
+
+increment value =
+  identity value + 1
+
+chooseNumber condition =
+  condition & increment 4 ! increment 8
+
+print identity "generic text"
+print identity 42
+print chooseNumber true

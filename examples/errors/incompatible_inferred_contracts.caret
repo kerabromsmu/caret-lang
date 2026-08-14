@@ -1,0 +1,5 @@
+impossible value =
+  numeric = value + 1
+  value and true
+
+print impossible 1

@@ -108,8 +108,9 @@ the ordinary callable path; complete callable metadata remains the principal unf
 
 Current status: unary user-defined base and derived contracts are implemented alongside runtime-kind
 contracts. Multiple bases are passed as one ordinary `[A B]` collection. Binding, parameter, and
-result clauses acquire or validate membership at runtime. Complete static inference, refinements,
-modifiers, parameterized contracts, dispatch, and effects remain.
+result clauses acquire or validate membership at runtime. The active slice adds constraint
+inference and generalized contract variables for named functions. Refinements, modifiers,
+parameterized contracts, dispatch, and the full effect system remain subsequent Phase 2 slices.
 
 ### Contract and type model
 
@@ -501,10 +502,12 @@ modifiers, parameterized contracts, dispatch, and effects remain.
 
 ## Recommended next implementation step
 
-Low-precedence application and the runtime user-contract derivation slice are complete. The next
-implementation-planning session should implement constraint inference and generalized contract
-variables for unannotated functions, retaining refinements, parameterized contracts, overload
-dispatch, and effects as separate dependent slices. `with`/`outer` wait for the
+Low-precedence application and runtime user-contract derivation are complete. Implement constraint
+inference and generalized contract variables for unannotated named functions: preserve value-flow
+relationships, infer anonymous conjunctions and conservative branch joins, analyze recursion
+monomorphically, and instantiate generalized variables independently at external uses. Retain
+refinements, parameterized contracts, overload dispatch, modifiers, and effects as subsequent
+dependent slices. `with`/`outer` wait for the
 Phase 4 public named-member protocol rather than introducing an exported-scope-only semantic model
 that would later need replacement.
 

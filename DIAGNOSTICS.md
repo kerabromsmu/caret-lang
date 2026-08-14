@@ -61,6 +61,8 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
 | RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret` |
+| SEMANTIC-INCOMPATIBLE-CONTRACTS | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_inferred_contracts.caret` |
+| SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
 | INTERNAL-UNKNOWN-UNARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
 | INTERNAL-UNKNOWN-BINARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
 | INTERNAL-INVARIANT | internal | INTERNAL_ERROR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |

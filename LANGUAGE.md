@@ -114,7 +114,11 @@ The unary `contract` function constructs nominal contracts. `contract ~` creates
 `contract A` derives from one contract, and `contract [A B]` derives from several contracts packaged
 in one ordinary collection argument. Explicit binding and parameter clauses acquire nominal
 membership while checking built-in base constraints; leading function clauses check and attribute
-results. Unannotated functions remain dynamically generic in this interpreter.
+results. Unannotated named functions infer parameter and result contracts from their values,
+operations, calls, and surrounding context. When callable contracts remain unresolved, they are
+generalized and each external use receives a fresh instantiation. Ordinary non-callable bindings
+must instead resolve from their initializer or context. An actual use that still leaves a required
+contract variable unresolved is a located compile-time ambiguity error.
 
 Refinements, parameterized contracts, nullable/optional modifiers, overload dispatch, complete
 static inference/proof, and the full universal-collection model remain planned below.
@@ -628,6 +632,41 @@ It does not need to execute a runtime predicate when derivation already proves m
 
 ---
 
+## Contract inference and nominal ascription
+
+An explicit contract clause confirms membership already carried by a value. Otherwise it attempts
+to establish the named nominal membership by checking every inherited contract and refinement. A
+successful check produces an attributed value with that membership; existing aliases remain
+unchanged. A failed statically decidable check is a compile-time error, while an undecidable check
+is retained for runtime and produces the same located contract-violation diagnostic on failure.
+Contract membership participates in checking and dispatch but not structural equality or hashing.
+
+Inference preserves relationships created by value flow. For example, `identity value = value` has
+one shared contract variable for its parameter and result. Several simultaneous requirements form
+an anonymous conjunction: requiring both `A` and `B` does not create or grant membership in a
+nominal `AB`. Alternative branches retain only the contract guarantees common to every branch;
+anonymous union contracts are not inferred.
+
+Unannotated named functions generalize unresolved contract variables after their complete recursive
+definition group has been analyzed. Recursive uses inside that group are monomorphic; distinct
+external uses instantiate the generalized variables independently. Polymorphic recursion requires
+explicit contracts. An instantiation that remains ambiguous when a concrete contract is required
+is a compile-time error at the use site, rather than at the generic declaration.
+
+Contract declarations are predeclared throughout their lexical block, so their bases may use
+forward references. Direct and indirect contract-derivation cycles are compile-time errors.
+`contract` always takes exactly one ordinary argument: `~`, one contract or predicate, or one
+collection of requirements.
+
+Contract equality is nominal identity, never structural equivalence. Separately constructed
+contracts remain unequal even when they contain the same requirements. An ordinary function that
+returns contracts follows ordinary application and capture rules; repeated application of the same
+contract constructor to the same canonical arguments denotes the same parameterized nominal
+contract. Contract values are comparable by this identity even though ordinary callable values are
+not.
+
+---
+
 ## Contract composition
 
 `contract` may combine multiple contracts:
@@ -729,7 +768,7 @@ positive x =
   x > 0
 
 PositiveInt =
-  contract Int positive
+  contract [Int positive]
 ```
 
 Conceptually:
@@ -751,7 +790,7 @@ Named derived contracts are useful when a combination is reused:
 
 ```caret
 SmallPositiveInt =
-  contract Int positive small
+  contract [Int positive small]
 ```
 
 Thus Caret uses the same mechanism for:
@@ -866,6 +905,17 @@ If exactly one most-specific implementation exists, it is used.
 If several incomparable implementations are equally applicable, the call is ambiguous and must produce a compile-time diagnostic where determinable.
 
 Function dispatch must not arbitrarily choose between ambiguous implementations.
+
+All definitions with the same name in one lexical block form one closed overload set. Every variant
+must have the same arity, and every pair must differ in the normalized requirements of at least one
+parameter; result contracts alone cannot distinguish variants. A generic variant may be the
+least-specific fallback. One variant is more specific when it is at least as restrictive on every
+parameter and strictly more restrictive on at least one.
+
+The compiler selects a uniquely most-specific variant when it can prove one. Otherwise the closed
+set is dispatched at runtime using the arguments' actual memberships. No applicable variant and
+several incomparable applicable variants are distinct located runtime errors. Runtime-loaded code
+may supply values and its own overload sets, but it cannot add variants to an existing lexical set.
 
 ---
 
@@ -8786,18 +8836,21 @@ ErrorShape =
   ]
 
 ErrorTemplate =
-  contract ErrorShape validErrorMembers
+  contract [ErrorShape validErrorMembers]
 ```
 
 The standard parameterized result contract has exactly three exported fields:
 
 ```caret
 Result ValueContract =
-  contract (template [
-    ^ok = (Boolean) _
-    ^value = _
-    ^error = _
-  ]) (validResult ValueContract)
+  contract [
+    (template [
+      ^ok = (Boolean) _
+      ^value = _
+      ^error = _
+    ])
+    (validResult ValueContract)
+  ]
 ```
 
 A successful result is:

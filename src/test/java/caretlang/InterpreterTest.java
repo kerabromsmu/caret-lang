@@ -110,13 +110,13 @@ final class InterpreterTest {
 
         LangException binding = assertThrows(LangException.class,
                 () -> execute("(Number) value = \"wrong\""));
-        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, binding.diagnostic().code());
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, binding.diagnostic().code());
         assertEquals(18, binding.span().start().column());
-        assertEquals(1, binding.diagnostic().related().size());
+        assertEquals(Diagnostic.Phase.SEMANTIC, binding.diagnostic().phase());
 
         LangException partial = assertThrows(LangException.class,
                 () -> execute("add (Number) left right = left\npartial = add \"wrong\""));
-        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, partial.diagnostic().code());
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, partial.diagnostic().code());
         assertEquals(15, partial.span().start().column());
     }
 
