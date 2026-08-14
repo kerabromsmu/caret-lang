@@ -2,7 +2,13 @@ identity value =
   value
 
 increment value =
-  identity value + 1
+  identity value * 1 + 1
+
+suffix value =
+  value + "!"
+
+negate value =
+  not value
 
 chooseNumber condition =
   condition & increment 4 ! increment 8
@@ -10,3 +16,6 @@ chooseNumber condition =
 print identity "generic text"
 print identity 42
 print chooseNumber true
+print chooseNumber ?
+print suffix "works"
+print negate false

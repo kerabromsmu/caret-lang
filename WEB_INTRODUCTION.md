@@ -197,8 +197,9 @@ The prototype includes built-in predicates plus unary user-defined contract cons
 `Tag = contract ~` for a nominal base, `Numeric = contract Number` for one base, and
 `AB = contract [A B]` for multiple bases. Clauses can constrain bindings, parameters, and function
 results. Refinements, parameterized contracts, complete static proof, and dispatch remain planned.
-Unannotated named functions use generalized contract variables when their parameter or result
-contracts cannot yet be made concrete; each call instantiates those variables independently.
+The prototype infers initial built-in constraints for unannotated named functions and uses
+generalized contract variables when parameter or result contracts cannot yet be made concrete;
+each call instantiates those variables independently.
 
 In the planned collection model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable

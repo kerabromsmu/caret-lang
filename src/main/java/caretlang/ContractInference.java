@@ -26,11 +26,28 @@ final class ContractInference {
         }
     }
 
-    private record Shape(EnumSet<BuiltinContract> guarantees, Integer parameter, boolean generalized) {
+    private static final class Shape {
+        private final EnumSet<BuiltinContract> guarantees;
+        private final Integer parameter;
+        private boolean generalized;
+
+        private Shape(EnumSet<BuiltinContract> guarantees, Integer parameter, boolean generalized) {
+            this.guarantees = guarantees;
+            this.parameter = parameter;
+            this.generalized = generalized;
+        }
+
         static Shape unknown() { return new Shape(EnumSet.noneOf(BuiltinContract.class), null, false); }
         static Shape generic() { return new Shape(EnumSet.noneOf(BuiltinContract.class), null, true); }
         static Shape concrete(BuiltinContract contract) { return new Shape(EnumSet.of(contract), null, false); }
         static Shape parameter(int index) { return new Shape(EnumSet.noneOf(BuiltinContract.class), index, false); }
+        EnumSet<BuiltinContract> guarantees() { return guarantees; }
+        Integer parameter() { return parameter; }
+        boolean generalized() { return generalized; }
+        void resolveWith(Set<BuiltinContract> contracts) {
+            guarantees.addAll(contracts);
+            generalized = false;
+        }
     }
 
     private final IdentityHashMap<FunctionDef, FunctionContract> contracts = new IdentityHashMap<>();
@@ -121,13 +138,18 @@ final class ContractInference {
             case Group group -> expression(group.expression(), parameters, locals, requirements, visible);
             case Unary unary -> {
                 Shape operand = expression(unary.operand(), parameters, locals, requirements, visible);
-                constrain(operand, EnumSet.of(BuiltinContract.NUMBER), requirements, unary.span());
-                yield Shape.concrete(BuiltinContract.NUMBER);
+                yield switch (unary.operator()) {
+                    case "-" -> {
+                        constrain(operand, EnumSet.of(BuiltinContract.NUMBER), requirements, unary.operand().span());
+                        yield Shape.concrete(BuiltinContract.NUMBER);
+                    }
+                    case "not" -> Shape.concrete(BuiltinContract.BOOLEAN);
+                    default -> Shape.unknown();
+                };
             }
             case Binary binary -> binary(binary, parameters, locals, requirements, visible);
             case Conditional conditional -> {
                 Shape condition = expression(conditional.condition(), parameters, locals, requirements, visible);
-                constrain(condition, EnumSet.of(BuiltinContract.BOOLEAN), requirements, conditional.condition().span());
                 Shape yes = expression(conditional.whenTrue(), parameters, locals, requirements, visible);
                 Shape no = expression(conditional.whenFalse(), parameters, locals, requirements, visible);
                 if (conditional.condition() instanceof Literal(Value.Bool booleanValue, SourceSpan ignored)) {
@@ -142,7 +164,7 @@ final class ContractInference {
             case Apply apply -> application(apply, parameters, locals, requirements, visible);
             case NamedInfix infix -> application(new Apply(new Apply(infix.function(), infix.left(), infix.span()),
                     infix.right(), infix.span()), parameters, locals, requirements, visible);
-            case AmbiguousCall ignored -> Shape.unknown();
+            case AmbiguousCall call -> ambiguousCall(call, parameters, locals, requirements, visible);
             case Compose ignored -> Shape.unknown();
             case Field ignored -> Shape.unknown();
             case DynamicField ignored -> Shape.unknown();
@@ -158,7 +180,8 @@ final class ContractInference {
         Shape left = expression(binary.left(), parameters, locals, requirements, visible);
         Shape right = expression(binary.right(), parameters, locals, requirements, visible);
         return switch (binary.operator()) {
-            case "+", "-", "*", "/", "%", "<", "<=", ">", ">=" -> {
+            case "+" -> plus(left, right);
+            case "-", "*", "/", "%", "<", "<=", ">", ">=" -> {
                 constrain(left, EnumSet.of(BuiltinContract.NUMBER), requirements, binary.left().span());
                 constrain(right, EnumSet.of(BuiltinContract.NUMBER), requirements, binary.right().span());
                 yield switch (binary.operator()) {
@@ -167,13 +190,44 @@ final class ContractInference {
                 };
             }
             case "and", "or" -> {
-                constrain(left, EnumSet.of(BuiltinContract.BOOLEAN), requirements, binary.left().span());
-                constrain(right, EnumSet.of(BuiltinContract.BOOLEAN), requirements, binary.right().span());
                 yield Shape.concrete(BuiltinContract.BOOLEAN);
             }
             case "==", "!=" -> Shape.concrete(BuiltinContract.BOOLEAN);
             default -> Shape.unknown();
         };
+    }
+
+    private Shape plus(Shape left, Shape right) {
+        if (left.guarantees().contains(BuiltinContract.STRING)
+                || right.guarantees().contains(BuiltinContract.STRING)) {
+            return Shape.concrete(BuiltinContract.STRING);
+        }
+        if (left.guarantees().contains(BuiltinContract.NUMBER)
+                && right.guarantees().contains(BuiltinContract.NUMBER)) {
+            return Shape.concrete(BuiltinContract.NUMBER);
+        }
+        // `+` is relational: an unresolved operand may be Number or String. Do not invent a
+        // numeric constraint; later relational inference can specialize this further.
+        return Shape.unknown();
+    }
+
+    private Shape ambiguousCall(AmbiguousCall call, Map<String, Integer> parameters,
+                                Map<String, Shape> locals, List<EnumSet<BuiltinContract>> requirements,
+                                Map<String, FunctionContract> visible) {
+        if (call.first() instanceof Name first && visible.containsKey(first.name())
+                && !visible.get(first.name()).parameterRequirements().isEmpty()) {
+            return application(new Apply(new Apply(call.first(), call.middle(), call.span()),
+                    call.last(), call.span()), parameters, locals, requirements, visible);
+        }
+        if (call.middle() instanceof Name middle && visible.containsKey(middle.name())
+                && visible.get(middle.name()).parameterRequirements().size() == 2) {
+            return application(new Apply(new Apply(call.middle(), call.first(), call.span()),
+                    call.last(), call.span()), parameters, locals, requirements, visible);
+        }
+        expression(call.first(), parameters, locals, requirements, visible);
+        expression(call.middle(), parameters, locals, requirements, visible);
+        expression(call.last(), parameters, locals, requirements, visible);
+        return Shape.unknown();
     }
 
     private Shape application(Apply application, Map<String, Integer> parameters, Map<String, Shape> locals,
@@ -239,6 +293,11 @@ final class ContractInference {
             rejectDisjoint(target, span);
             return;
         }
+        if (shape.generalized()) {
+            shape.resolveWith(constraints);
+            rejectDisjoint(shape.guarantees(), span);
+            return;
+        }
         if (!shape.guarantees().isEmpty() && constraints.stream().noneMatch(shape.guarantees()::contains)) {
             throw conflict(span, shape.guarantees(), constraints);
         }
@@ -264,15 +323,23 @@ final class ContractInference {
 
     private void analyzeOrdinaryBindings(List<Stmt> statements, Map<String, FunctionContract> visible) {
         Map<String, Shape> locals = new HashMap<>();
+        List<Map.Entry<Assign, Shape>> pending = new ArrayList<>();
         for (Stmt statement : statements) {
-            if (!(statement instanceof Assign assign)) continue;
-            Shape shape = expression(assign.value(), Map.of(), locals, List.of(), visible);
-            constrain(shape, clause(assign.contracts()), List.of(), assign.value().span());
-            if (shape.generalized() && assign.contracts() == null && !containsHole(assign.value())) {
+            if (statement instanceof Assign assign) {
+                Shape shape = expression(assign.value(), Map.of(), locals, List.of(), visible);
+                constrain(shape, clause(assign.contracts()), List.of(), assign.value().span());
+                locals.put(assign.name(), shape);
+                pending.add(Map.entry(assign, shape));
+            } else if (statement instanceof ExprStmt expression) {
+                expression(expression.expression(), Map.of(), locals, List.of(), visible);
+            }
+        }
+        for (Map.Entry<Assign, Shape> entry : pending) {
+            Assign assign = entry.getKey();
+            if (entry.getValue().generalized() && assign.contracts() == null && !containsHole(assign.value())) {
                 throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.AMBIGUOUS_CONTRACT,
                         "Ambiguous contract at use: binding " + assign.name(), assign.value().span());
             }
-            locals.put(assign.name(), shape);
         }
     }
 

@@ -1,5 +1,4 @@
-impossible value =
-  numeric = value + 1
-  value and true
+impossible (String) value =
+  value * 1
 
 print impossible 1

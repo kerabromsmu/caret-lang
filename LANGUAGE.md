@@ -647,6 +647,12 @@ an anonymous conjunction: requiring both `A` and `B` does not create or grant me
 nominal `AB`. Alternative branches retain only the contract guarantees common to every branch;
 anonymous union contracts are not inferred.
 
+Constraints are collected across the complete lexical block before ambiguity is diagnosed, so a
+later use may resolve an earlier intermediate binding. Inference follows runtime operator semantics:
+`not`, conditionals, `and`, and `or` accept the established Boolean/null/missing truth values, while
+`+` may be numeric addition or string concatenation. When that relational choice cannot yet be
+proved, inference retains an unresolved constraint instead of incorrectly assuming `Number`.
+
 Unannotated named functions generalize unresolved contract variables after their complete recursive
 definition group has been analyzed. Recursive uses inside that group are monomorphic; distinct
 external uses instantiate the generalized variables independently. Polymorphic recursion requires

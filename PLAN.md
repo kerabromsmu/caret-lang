@@ -108,8 +108,8 @@ the ordinary callable path; complete callable metadata remains the principal unf
 
 Current status: unary user-defined base and derived contracts are implemented alongside runtime-kind
 contracts. Multiple bases are passed as one ordinary `[A B]` collection. Binding, parameter, and
-result clauses acquire or validate membership at runtime. The active slice adds constraint
-inference and generalized contract variables for named functions. Refinements, modifiers,
+result clauses acquire or validate membership at runtime. Initial constraint inference and
+generalized contract variables for named functions are implemented. Refinements, modifiers,
 parameterized contracts, dispatch, and the full effect system remain subsequent Phase 2 slices.
 
 ### Contract and type model
@@ -502,12 +502,12 @@ parameterized contracts, dispatch, and the full effect system remain subsequent 
 
 ## Recommended next implementation step
 
-Low-precedence application and runtime user-contract derivation are complete. Implement constraint
-inference and generalized contract variables for unannotated named functions: preserve value-flow
-relationships, infer anonymous conjunctions and conservative branch joins, analyze recursion
-monomorphically, and instantiate generalized variables independently at external uses. Retain
-refinements, parameterized contracts, overload dispatch, modifiers, and effects as subsequent
-dependent slices. `with`/`outer` wait for the
+Low-precedence application, runtime user-contract derivation, and the initial generalized-inference
+slice are complete. Next implement the reusable minimum effect analysis required by refinement
+predicates: declared built-in effects, transitive named-call inference, and proof that a refinement
+is a pure unary Boolean callable. Unknown dynamic calls are not proven pure. Retain parameterized
+contracts, overload dispatch, modifiers, and the complete effect system as subsequent dependent
+slices. `with`/`outer` wait for the
 Phase 4 public named-member protocol rather than introducing an exported-scope-only semantic model
 that would later need replacement.
 
