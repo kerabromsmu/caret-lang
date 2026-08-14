@@ -88,7 +88,7 @@ final class Resolver {
             boolean function = statement instanceof FunctionDef;
             Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
             ContractState state = statement instanceof Assign assign ? contractState(assign.value())
-                    : ContractState.NON_CONTRACT;
+                    : ContractState.UNKNOWN;
             scope.symbols.put(name, new Symbol(scope.nextSlot++, statement.span(), function, arity, state));
         }
     }

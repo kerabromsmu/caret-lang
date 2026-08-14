@@ -111,8 +111,10 @@ contracts. Multiple bases are passed as one ordinary `[A B]` collection. Binding
 result clauses acquire or validate membership at runtime. Initial constraint inference and
 generalized contract variables for named functions are implemented. A minimum effect analysis now
 propagates known named-call effects, preserves unknown dynamic calls, and proves refinement
-eligibility without exposing effect syntax. Refinements, modifiers, parameterized contracts,
-dispatch, and the full public effect system remain subsequent Phase 2 slices.
+eligibility without exposing effect syntax. Proven unary Boolean callables now participate as
+first-class predicate requirements in derived contracts and direct clauses, including through
+aliases. Modifiers, parameterized contracts, dispatch, and the full public effect system remain
+subsequent Phase 2 slices; nullable/optional contract modifiers are the next implementation slice.
 
 ### Contract and type model
 

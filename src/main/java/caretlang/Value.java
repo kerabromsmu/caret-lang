@@ -320,6 +320,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     non-sealed interface Callable extends Value {
         Value apply(Argument argument, SourceSpan callSpan);
         int remainingArity();
+        default boolean refinementEligible() { return false; }
 
         default Value invokeZero(SourceSpan callSpan) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
@@ -375,6 +376,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public int remainingArity() { return target.remainingArity(); }
+        @Override public boolean refinementEligible() { return target.refinementEligible(); }
         @Override public Value invokeZero(SourceSpan callSpan) { return target.invokeZero(callSpan); }
         @Override public String toString() { return target.toString(); }
     }
@@ -458,22 +460,36 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final List<String> params;
         private final BoundArguments bound;
         private final BiFunction<List<Argument>, SourceSpan, Value> implementation;
+        private final boolean refinementEligible;
 
         public FunctionValue(String name, List<String> params, Function<List<Value>, Value> implementation) {
-            this(name, params, BoundArguments.empty(), valueImplementation(implementation));
+            this(name, params, BoundArguments.empty(), valueImplementation(implementation), false);
+        }
+
+        FunctionValue(String name, List<String> params, Function<List<Value>, Value> implementation,
+                      boolean refinementEligible) {
+            this(name, params, BoundArguments.empty(), valueImplementation(implementation), refinementEligible);
         }
 
         FunctionValue(String name, List<String> params,
                       BiFunction<List<Argument>, SourceSpan, Value> implementation) {
-            this(name, params, BoundArguments.empty(), implementation);
+            this(name, params, BoundArguments.empty(), implementation, false);
+        }
+
+        FunctionValue(String name, List<String> params,
+                      BiFunction<List<Argument>, SourceSpan, Value> implementation,
+                      boolean refinementEligible) {
+            this(name, params, BoundArguments.empty(), implementation, refinementEligible);
         }
 
         private FunctionValue(String name, List<String> params, BoundArguments bound,
-                              BiFunction<List<Argument>, SourceSpan, Value> implementation) {
+                              BiFunction<List<Argument>, SourceSpan, Value> implementation,
+                              boolean refinementEligible) {
             this.name = Objects.requireNonNull(name, "function name");
             this.params = List.copyOf(params);
             this.bound = Objects.requireNonNull(bound);
             this.implementation = Objects.requireNonNull(implementation, "function implementation");
+            this.refinementEligible = refinementEligible;
         }
 
         private static BiFunction<List<Argument>, SourceSpan, Value> valueImplementation(
@@ -500,11 +516,15 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                         "Too many arguments for " + name, callSpan);
             }
-            return new FunctionValue(name, params, next, implementation);
+            return new FunctionValue(name, params, next, implementation, refinementEligible);
         }
 
         @Override public int remainingArity() {
             return params.size() - bound.size();
+        }
+
+        @Override public boolean refinementEligible() {
+            return refinementEligible && bound.size() == 0;
         }
 
         @Override public String toString() {

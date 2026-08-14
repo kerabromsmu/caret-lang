@@ -85,6 +85,9 @@ Number value
 Eq value
 ```
 
+The prototype also accepts proven-pure unary Boolean functions as refinement requirements in
+derived contracts and declaration clauses. Contract-specialized overload dispatch remains planned.
+
 A value satisfying `Int` may also satisfy broader contracts through derivation:
 
 ```text

@@ -61,6 +61,9 @@ diff -u examples/contracts.expected "$CARET_TEST_TMP/contracts-output.txt"
 "$CARET_LAUNCHER" examples/contract_inference.caret > "$CARET_TEST_TMP/contract-inference-output.txt"
 diff -u examples/contract_inference.expected "$CARET_TEST_TMP/contract-inference-output.txt"
 
+"$CARET_LAUNCHER" examples/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
+diff -u examples/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
+
 "$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value
@@ -206,4 +209,5 @@ expect_failure examples/errors/not_a_contract.caret unused
 expect_failure examples/errors/contract_violation.caret unused
 expect_failure examples/errors/incompatible_inferred_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
+expect_failure examples/errors/invalid_refinement.caret unused
 printf 'All prototype tests passed.\n'

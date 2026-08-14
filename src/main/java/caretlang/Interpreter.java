@@ -12,6 +12,7 @@ final class Interpreter {
     private final Environment globals = new Environment(null);
     private final PrintStream output;
     private int callDepth;
+    private ContractInference inference;
 
     Interpreter() {
         this(System.out);
@@ -31,7 +32,7 @@ final class Interpreter {
         int checkpoint = globals.checkpoint();
         try {
             Resolution resolution = Resolver.resolve(program, globals);
-            ContractInference.analyze(program, resolution);
+            inference = ContractInference.analyze(program, resolution);
             executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
             globals.rollbackTo(checkpoint);
@@ -82,6 +83,7 @@ final class Interpreter {
         for (Stmt statement : statements) {
             if (statement instanceof FunctionDef function) {
                 List<String> parameterNames = function.params().stream().map(Parameter::name).toList();
+                boolean refinementEligible = inference != null && inference.isRefinementEligible(function);
                 Value.FunctionValue raw = new Value.FunctionValue(function.name(), parameterNames, args -> {
                     Environment parameters = new Environment(env);
                     for (int i = 0; i < function.params().size(); i++) {
@@ -90,7 +92,7 @@ final class Interpreter {
                     Value result = executeBlock(function.body(), new Environment(parameters), resolution);
                     return validateContracts(result, function.body().getLast().span(),
                             function.resultContracts(), resolution, env, "result of " + function.name());
-                });
+                }, refinementEligible);
                 Value.Callable value = function.params().stream().noneMatch(parameter -> parameter.contracts() != null)
                         ? raw : new Value.ContractedCallable(raw, (index, argument) -> {
                             Parameter parameter = function.params().get(index);
@@ -111,12 +113,27 @@ final class Interpreter {
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
             Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
                     : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
+            if (resolved instanceof Value.Callable refinement && !(resolved instanceof Value.ContractValue)) {
+                if (!refinement.refinementEligible()) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT,
+                            "Invalid refinement predicate: " + reference.name()
+                                    + " must be unary, Boolean-returning, and pure", reference.span());
+                }
+                Value result = underlying(invoke(refinement, new Value.Argument(value, valueSpan), reference.span()));
+                if (result instanceof Value.Bool(boolean accepted) && accepted) continue;
+                List<Diagnostic.Related> related = List.of(
+                        new Diagnostic.Related("Required refinement: " + reference.name(), reference.span()));
+                throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                        Diagnostic.Codes.CONTRACT_VIOLATION,
+                        "Contract violation for " + subject + ": refinement " + reference.name()
+                                + " rejected " + ValueSemantics.kind(value), valueSpan, related));
+            }
             if (!(resolved instanceof Value.ContractValue contractValue)) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_CONTRACT,
                         "Binding is not a contract: " + reference.name(), reference.span());
             }
             ContractDescriptor contract = contractValue.descriptor();
-            if (contract instanceof UserContract user && user.acceptsBuiltinBases(value)) {
+            if (contract instanceof UserContract user && user.canAcquire(value, valueSpan)) {
                 acquired.add(contract);
                 continue;
             }
@@ -463,29 +480,39 @@ final class Interpreter {
         }
         globals.define("contract", locatedFunction("contract", List.of("bases"), (args, span) -> {
             Value argument = underlying(args.getFirst().value());
-            List<ContractDescriptor> bases;
+            List<ContractDescriptor> bases = new ArrayList<>();
+            List<Value.Callable> refinements = new ArrayList<>();
             if (argument == Value.Missing.INSTANCE) {
-                bases = List.of();
             } else if (argument instanceof Value.ContractValue contract) {
-                bases = List.of(contract.descriptor());
+                bases.add(contract.descriptor());
+            } else if (argument instanceof Value.Callable callable && callable.refinementEligible()) {
+                refinements.add(callable);
             } else if (argument instanceof Value.Seq sequence && sequence.size() >= 2) {
-                ArrayList<ContractDescriptor> collected = new ArrayList<>(sequence.size());
                 for (Value element : sequence.values()) {
                     element = underlying(element);
-                    if (!(element instanceof Value.ContractValue contract)) {
+                    if (element instanceof Value.ContractValue contract) {
+                        bases.add(contract.descriptor());
+                    } else if (element instanceof Value.Callable callable && callable.refinementEligible()) {
+                        refinements.add(callable);
+                    } else {
                         throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
-                                "Contract violation for contract bases: expected Contract, got "
+                                "Contract violation for contract requirements: expected Contract or verified refinement, got "
                                         + ValueSemantics.kind(element), args.getFirst().span());
                     }
-                    collected.add(contract.descriptor());
                 }
-                bases = List.copyOf(collected);
             } else {
+                if (argument instanceof Value.Callable) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT,
+                            "Invalid refinement predicate: callable must be unary, Boolean-returning, and pure",
+                            args.getFirst().span());
+                }
                 throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
-                        "Contract violation for contract argument: expected missing, Contract, or a collection of at least two contracts",
+                        "Contract violation for contract argument: expected missing, Contract, verified refinement, or a collection of requirements",
                         args.getFirst().span());
             }
-            return new Value.ContractValue(new UserContract(bases));
+            return new Value.ContractValue(new UserContract(bases, refinements,
+                    (callable, refinementArgument) -> invoke(callable, refinementArgument,
+                            refinementArgument.span())));
         }));
         for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
             String operator = descriptor.spelling();

@@ -38,6 +38,47 @@ final class InterpreterTest {
     }
 
     @Test
+    void appliesPurePredicateRefinementsInDerivedContractsAndDirectClauses() {
+        assertEquals("3\ntrue\n", execute("""
+                (Boolean) positive value = value > 0
+                predicate = positive
+                PositiveNumber = contract [Number predicate]
+                (PositiveNumber) count = 3
+                (Number positive) identity (Number positive) value = value
+                print identity count
+                print PositiveNumber count
+                """));
+
+        LangException derived = assertThrows(LangException.class, () -> execute("""
+                positive value = value > 0
+                PositiveNumber = contract [Number positive]
+                (PositiveNumber) count = -1
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, derived.diagnostic().code());
+
+        LangException direct = assertThrows(LangException.class, () -> execute("""
+                positive value = value > 0
+                (positive) count = 0
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, direct.diagnostic().code());
+    }
+
+    @Test
+    void rejectsCallablesThatCannotBeProvedValidAsRefinements() {
+        LangException wrongArity = assertThrows(LangException.class, () -> execute("""
+                same left right = left == right
+                Invalid = contract same
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, wrongArity.diagnostic().code());
+
+        LangException effectful = assertThrows(LangException.class, () -> execute("""
+                emitting value = print (value > 0)
+                (emitting) count = 1
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, effectful.diagnostic().code());
+    }
+
+    @Test
     void nominalAttributionIsTransparentToExistingPrimitiveOperations() {
         assertEquals("second\ntrue\nvalue\n", execute("""
                 Index = contract Number

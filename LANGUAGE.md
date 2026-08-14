@@ -124,10 +124,11 @@ The semantic analyzer also computes an initial effect summary for named function
 known effects through direct named calls, treats construction of partials as pure, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
 prove that a prospective refinement is unary, Boolean-returning, and pure. Effect declarations,
-ordinary-function enforcement, effect reflection/tooling, and use of predicates by `contract`
-remain planned; the internal output marker for `print` is not public syntax.
+ordinary-function enforcement, and effect reflection/tooling remain planned; the internal output
+marker for `print` is not public syntax. Proven predicates are implemented as first-class refinement
+requirements in `contract` construction and direct clauses, including through ordinary aliases.
 
-Refinements, parameterized contracts, nullable/optional modifiers, overload dispatch, complete
+Parameterized contracts, nullable/optional modifiers, overload dispatch, complete
 static inference/proof, the public effect system, and the full universal-collection model remain
 planned below.
 
@@ -12320,7 +12321,7 @@ Their later implementation must not weaken root substitution or permit authority
 ## Not implemented
 
 - trailing lambdas
-- user-defined/parameterized contracts, derivation, refinements, dispatch, static type proof,
+- parameterized contracts, dispatch, complete static type proof,
   result contracts, effect inference, and ownership analysis
 - universal collection literals, first-class fields, contract-selected representations, and persistent updates
 - mutability containers, container reads/writes, and field reification

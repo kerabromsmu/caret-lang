@@ -1,0 +1,10 @@
+positive value = value > 0
+predicate = positive
+
+PositiveNumber = contract [Number predicate]
+
+(PositiveNumber) count = 3
+(Number positive) keep (Number positive) value = value
+
+print keep count
+print PositiveNumber count

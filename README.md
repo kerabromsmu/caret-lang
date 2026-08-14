@@ -15,7 +15,9 @@ interpreter. The current prototype supports:
 - Unicode code-point text operations;
 - persistent sequences and insertion-ordered dictionaries with structural equality; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
-  contract-checked bindings, parameters, and function results.
+  contract-checked bindings, parameters, and function results; and
+- proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
+  and direct clauses.
 
 This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
 describes both the implemented language sketch and the larger planned language. Features described
@@ -203,7 +205,7 @@ the result of `add 2 3`. Parenthesized output remains valid.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
   dynamically. Initial named-function constraint inference and the internal purity analysis needed
   to validate future refinement predicates are implemented;
-  parameterized contracts, refinements, dispatch, complete static proof,
+  parameterized contracts, dispatch, complete static proof,
   nullable/optional type checking, and the public effect system are not implemented.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,

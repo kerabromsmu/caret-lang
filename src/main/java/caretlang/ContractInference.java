@@ -96,6 +96,14 @@ final class ContractInference {
     FunctionContract contract(FunctionDef function) { return contracts.get(function); }
     EffectSummary effects(FunctionDef function) { return effects.get(function); }
 
+    boolean isRefinementEligible(FunctionDef function) {
+        FunctionContract contract = contracts.get(function);
+        EffectSummary effect = effects.get(function);
+        return contract != null && effect != null && function.params().size() == 1
+                && contract.resultGuarantees().contains(BuiltinContract.BOOLEAN)
+                && effect.isProvenPure();
+    }
+
     void validateRefinement(FunctionDef function) {
         FunctionContract contract = contracts.get(function);
         EffectSummary effect = effects.get(function);
