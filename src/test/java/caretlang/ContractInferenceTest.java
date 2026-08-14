@@ -191,4 +191,68 @@ final class ContractInferenceTest {
             assertEquals(index + 1, error.diagnostic().primarySpan().start().line());
         }
     }
+
+    @Test
+    void lexicalShadowsNeverInheritOuterCallablePurity() {
+        List<Ast.Stmt> program = new Parser("""
+                known value = value > 0
+
+                parameterShadow known value =
+                  known value
+
+                builtinShadow print value =
+                  print value
+
+                assignmentShadow value =
+                  known = value
+                  known value
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        for (int index = 1; index < program.size(); index++) {
+            Ast.FunctionDef candidate = (Ast.FunctionDef) program.get(index);
+            assertTrue(inference.effects(candidate).unknownDynamicCall(), candidate.name());
+        }
+        LangException error = assertThrows(LangException.class,
+                () -> inference.validateRefinement((Ast.FunctionDef) program.get(1)));
+        assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+    }
+
+    @Test
+    void reflectingANullaryFunctionDoesNotInvokeOrAcquireItsEffects() {
+        List<Ast.Stmt> program = new Parser("""
+                emit =
+                  print "effect"
+
+                inspect value =
+                  (@emit).remaining == 0
+
+                evaluateThenReflect value =
+                  (@(emit)).kind == "Missing"
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        Ast.FunctionDef inspect = (Ast.FunctionDef) program.get(1);
+        Ast.FunctionDef evaluateThenReflect = (Ast.FunctionDef) program.get(2);
+        assertEquals(ContractInference.EffectSummary.PURE, inference.effects(inspect));
+        inference.validateRefinement(inspect);
+        assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
+                inference.effects(evaluateThenReflect).effects());
+    }
+
+    @Test
+    void recognizesBuiltinsResolvedThroughTheInterpreterGlobalScope() {
+        List<Ast.Stmt> program = new Parser("""
+                emit value =
+                  print value
+                """).parseProgram();
+        Environment globals = new Environment(null);
+        globals.define("print", new Value.FunctionValue("print", List.of("value"),
+                ignored -> Value.Missing.INSTANCE));
+        Resolution resolution = Resolver.resolve(program, globals);
+
+        ContractInference inference = ContractInference.analyze(program, resolution);
+        assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
+                inference.effects((Ast.FunctionDef) program.getFirst()).effects());
+    }
 }

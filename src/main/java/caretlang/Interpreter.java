@@ -31,7 +31,7 @@ final class Interpreter {
         int checkpoint = globals.checkpoint();
         try {
             Resolution resolution = Resolver.resolve(program, globals);
-            ContractInference.analyze(program);
+            ContractInference.analyze(program, resolution);
             executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
             globals.rollbackTo(checkpoint);

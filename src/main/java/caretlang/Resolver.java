@@ -104,7 +104,7 @@ final class Resolver {
                         "Duplicate parameter: " + parameter.name(), function.span());
             }
             parameters.symbols.put(parameter.name(),
-                    new Symbol(parameters.nextSlot++, function.span(), true, null, ContractState.UNKNOWN));
+                    new Symbol(parameters.nextSlot++, parameter.span(), true, null, ContractState.UNKNOWN));
         }
         resolveBlock(function.body(), new Scope(parameters), true);
     }

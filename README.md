@@ -24,6 +24,10 @@ implementation roadmap, and [CONFORMANCE.md](CONFORMANCE.md) maps specification 
 their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS.md) inventories
 every current diagnostic message variant and its exact fixture or focused test evidence.
 
+For a conceptual comparison with related language families, see
+[Caret Doesn’t Look Like One Language — and That’s the Point](docs/language-comparison.md). That
+article covers both implemented foundations and explicitly labeled planned features.
+
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
 Contracts form derivation graphs and act as predicates, while ordinary functions provide behavior
 through contract-based multiple dispatch. Collections likewise have one universal `[...]` literal:

@@ -9,6 +9,7 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -37,7 +38,7 @@ final class ContractInference {
         }
     }
 
-    private record CallableEffects(int arity, EffectSummary summary) {}
+    private record CallableEffects(int arity, EffectSummary summary, SourceSpan declarationSpan) {}
 
     private static final Map<String, CallableEffects> BUILTIN_EFFECTS = builtinEffects();
 
@@ -76,9 +77,18 @@ final class ContractInference {
 
     private final IdentityHashMap<FunctionDef, FunctionContract> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<FunctionDef, EffectSummary> effects = new IdentityHashMap<>();
+    private final Resolution resolution;
+
+    private ContractInference(Resolution resolution) {
+        this.resolution = Objects.requireNonNull(resolution);
+    }
 
     static ContractInference analyze(List<Stmt> program) {
-        ContractInference inference = new ContractInference();
+        return analyze(program, Resolver.resolve(program, new Environment(null)));
+    }
+
+    static ContractInference analyze(List<Stmt> program, Resolution resolution) {
+        ContractInference inference = new ContractInference(resolution);
         inference.analyzeBlock(program, Map.of(), BUILTIN_EFFECTS);
         return inference;
     }
@@ -128,7 +138,8 @@ final class ContractInference {
 
         Map<String, CallableEffects> visibleEffects = new HashMap<>(enclosingEffects);
         for (FunctionDef function : definitions.values()) {
-            visibleEffects.put(function.name(), new CallableEffects(function.params().size(), EffectSummary.PURE));
+            visibleEffects.put(function.name(), new CallableEffects(
+                    function.params().size(), EffectSummary.PURE, function.span()));
         }
         boolean effectsChanged;
         int effectPasses = Math.max(1, definitions.size() * 4);
@@ -138,7 +149,8 @@ final class ContractInference {
                 EffectSummary inferred = inferEffects(function.body(), visibleEffects);
                 CallableEffects previous = visibleEffects.get(function.name());
                 if (!inferred.equals(previous.summary())) {
-                    visibleEffects.put(function.name(), new CallableEffects(function.params().size(), inferred));
+                    visibleEffects.put(function.name(), new CallableEffects(
+                            function.params().size(), inferred, function.span()));
                     effectsChanged = true;
                 }
             }
@@ -384,34 +396,35 @@ final class ContractInference {
     private static Map<String, CallableEffects> builtinEffects() {
         Map<String, CallableEffects> result = new HashMap<>();
         for (BuiltinContract contract : BuiltinContract.values()) {
-            result.put(contract.publicName(), new CallableEffects(1, EffectSummary.PURE));
+            result.put(contract.publicName(), builtin(1, EffectSummary.PURE));
         }
-        result.put("contract", new CallableEffects(1, EffectSummary.PURE));
+        result.put("contract", builtin(1, EffectSummary.PURE));
         for (LanguageSyntax.BinaryOperator operator : LanguageSyntax.binaryOperators()) {
-            result.put(operator.spelling(), new CallableEffects(2, EffectSummary.PURE));
+            result.put(operator.spelling(), builtin(2, EffectSummary.PURE));
         }
-        result.put("print", new CallableEffects(1,
-                new EffectSummary(Set.of(BuiltinEffect.OUTPUT), false)));
-        result.put("type", new CallableEffects(1, EffectSummary.PURE));
-        result.put("textSize", new CallableEffects(1, EffectSummary.PURE));
-        result.put("textAt", new CallableEffects(2, EffectSummary.PURE));
-        result.put("textSlice", new CallableEffects(3, EffectSummary.PURE));
-        result.put("textNumber", new CallableEffects(1, EffectSummary.PURE));
-        result.put("numberText", new CallableEffects(1, EffectSummary.PURE));
-        result.put("seqEmpty", new CallableEffects(0, EffectSummary.PURE));
-        result.put("seqAdd", new CallableEffects(2, EffectSummary.PURE));
-        result.put("seqGet", new CallableEffects(2, EffectSummary.PURE));
-        result.put("seqSize", new CallableEffects(1, EffectSummary.PURE));
-        result.put("dictEmpty", new CallableEffects(0, EffectSummary.PURE));
-        result.put("dictPut", new CallableEffects(3, EffectSummary.PURE));
-        result.put("dictGet", new CallableEffects(2, EffectSummary.PURE));
-        result.put("dictHas", new CallableEffects(2, EffectSummary.PURE));
-        result.put("dictKeys", new CallableEffects(1, EffectSummary.PURE));
-        result.put("assert", new CallableEffects(2,
-                new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
-        result.put("assertEqual", new CallableEffects(3,
-                new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
+        result.put("print", builtin(1, new EffectSummary(Set.of(BuiltinEffect.OUTPUT), false)));
+        result.put("type", builtin(1, EffectSummary.PURE));
+        result.put("textSize", builtin(1, EffectSummary.PURE));
+        result.put("textAt", builtin(2, EffectSummary.PURE));
+        result.put("textSlice", builtin(3, EffectSummary.PURE));
+        result.put("textNumber", builtin(1, EffectSummary.PURE));
+        result.put("numberText", builtin(1, EffectSummary.PURE));
+        result.put("seqEmpty", builtin(0, EffectSummary.PURE));
+        result.put("seqAdd", builtin(2, EffectSummary.PURE));
+        result.put("seqGet", builtin(2, EffectSummary.PURE));
+        result.put("seqSize", builtin(1, EffectSummary.PURE));
+        result.put("dictEmpty", builtin(0, EffectSummary.PURE));
+        result.put("dictPut", builtin(3, EffectSummary.PURE));
+        result.put("dictGet", builtin(2, EffectSummary.PURE));
+        result.put("dictHas", builtin(2, EffectSummary.PURE));
+        result.put("dictKeys", builtin(1, EffectSummary.PURE));
+        result.put("assert", builtin(2, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
+        result.put("assertEqual", builtin(3, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         return Map.copyOf(result);
+    }
+
+    private static CallableEffects builtin(int arity, EffectSummary summary) {
+        return new CallableEffects(arity, summary, null);
     }
 
     private EffectSummary inferEffects(List<Stmt> statements, Map<String, CallableEffects> enclosing) {
@@ -419,7 +432,8 @@ final class ContractInference {
         List<FunctionDef> nested = statements.stream().filter(FunctionDef.class::isInstance)
                 .map(FunctionDef.class::cast).toList();
         for (FunctionDef function : nested) {
-            visible.put(function.name(), new CallableEffects(function.params().size(), EffectSummary.PURE));
+            visible.put(function.name(), new CallableEffects(
+                    function.params().size(), EffectSummary.PURE, function.span()));
         }
         boolean changed;
         int passes = Math.max(1, nested.size() * 4);
@@ -429,7 +443,8 @@ final class ContractInference {
                 EffectSummary inferred = inferEffects(function.body(), visible);
                 CallableEffects previous = visible.get(function.name());
                 if (!inferred.equals(previous.summary())) {
-                    visible.put(function.name(), new CallableEffects(function.params().size(), inferred));
+                    visible.put(function.name(), new CallableEffects(
+                            function.params().size(), inferred, function.span()));
                     changed = true;
                 }
             }
@@ -451,7 +466,7 @@ final class ContractInference {
             case Literal ignored -> EffectSummary.PURE;
             case Hole ignored -> EffectSummary.PURE;
             case Name name -> {
-                CallableEffects callable = visible.get(name.name());
+                CallableEffects callable = resolvedCallable(name, visible);
                 yield callable != null && callable.arity() == 0 ? callable.summary() : EffectSummary.PURE;
             }
             case Group group -> expressionEffects(group.expression(), visible);
@@ -470,7 +485,8 @@ final class ContractInference {
             case Field field -> expressionEffects(field.target(), visible);
             case DynamicField field -> expressionEffects(field.target(), visible)
                     .plus(expressionEffects(field.name(), visible));
-            case Reflect reflect -> expressionEffects(reflect.target(), visible);
+            case Reflect reflect -> reflect.target() instanceof Name
+                    ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
             case CollectionLiteral collection -> collection.elements().stream()
                     .map(element -> expressionEffects(element, visible))
                     .reduce(EffectSummary.PURE, EffectSummary::plus);
@@ -488,7 +504,7 @@ final class ContractInference {
         for (Expr argument : arguments) result = result.plus(expressionEffects(argument, visible));
         if (arguments.stream().anyMatch(ContractInference::containsHole)) return result;
         if (target instanceof Name name) {
-            CallableEffects callable = visible.get(name.name());
+            CallableEffects callable = resolvedCallable(name, visible);
             if (callable == null) return result.plus(EffectSummary.UNKNOWN);
             return arguments.size() >= callable.arity() ? result.plus(callable.summary()) : result;
         }
@@ -496,18 +512,29 @@ final class ContractInference {
     }
 
     private EffectSummary ambiguousCallEffects(AmbiguousCall call, Map<String, CallableEffects> visible) {
-        if (call.first() instanceof Name first && visible.containsKey(first.name())
-                && visible.get(first.name()).arity() > 0) {
+        if (call.first() instanceof Name first && resolvedCallable(first, visible) instanceof CallableEffects callable
+                && callable.arity() > 0) {
             return applicationEffects(new Apply(new Apply(call.first(), call.middle(), call.span()),
                     call.last(), call.span()), visible);
         }
-        if (call.middle() instanceof Name middle && visible.containsKey(middle.name())
-                && visible.get(middle.name()).arity() == 2) {
+        if (call.middle() instanceof Name middle && resolvedCallable(middle, visible) instanceof CallableEffects callable
+                && callable.arity() == 2) {
             return applicationEffects(new Apply(new Apply(call.middle(), call.first(), call.span()),
                     call.last(), call.span()), visible);
         }
         return expressionEffects(call.first(), visible).plus(expressionEffects(call.middle(), visible))
                 .plus(expressionEffects(call.last(), visible)).plus(EffectSummary.UNKNOWN);
+    }
+
+    private CallableEffects resolvedCallable(Name name, Map<String, CallableEffects> visible) {
+        CallableEffects candidate = visible.get(name.name());
+        if (candidate == null) return null;
+        Resolution.Binding binding = resolution.binding(name);
+        if (candidate.declarationSpan() == null) {
+            return binding == null || binding.declarationSpan() == null ? candidate : null;
+        }
+        return binding != null && candidate.declarationSpan().equals(binding.declarationSpan())
+                ? candidate : null;
     }
 
     private static void invalidRefinement(FunctionDef function, String reason) {

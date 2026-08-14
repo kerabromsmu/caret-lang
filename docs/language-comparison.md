@@ -14,7 +14,13 @@ Caret is being designed around a recurring principle:
 
 That principle turns out to connect features that are normally found in quite different kinds of languages.
 
-## The first impression: a compact functional language
+> **Implementation status:** This article compares the complete planned Caret design, not only the
+> current Java prototype. Sections marked **Prototype** discuss syntax available today, though
+> individual explanatory snippets may omit definitions for names such as `parse` or `validate`.
+> Sections and examples marked **Planned** are conceptual syntax specified in `LANGUAGE.md` but not
+> yet executable. The conformance matrix is the authoritative feature-status inventory.
+
+## The first impression: a compact functional language — Prototype
 
 Basic Caret code has a functional flavor:
 
@@ -67,7 +73,7 @@ Caret is not built around the idea that every useful program should remain purel
 
 That difference becomes important later.
 
-## Types are contracts, not containers for behavior
+## Types are contracts, not containers for behavior — Prototype foundation, planned dispatch
 
 One of Caret's more fundamental ideas is that a type is a **contract**.
 
@@ -88,6 +94,9 @@ Int -> Number -> Comparable -> Eq
 But contracts do not own methods.
 
 Instead of defining equality "inside" a type, Caret defines ordinary functions:
+
+> **Planned example:** Same-name contract-specialized overload sets and their dispatch are not yet
+> implemented by the prototype.
 
 ```caret
 eq (Eq) a (Eq) b =
@@ -120,6 +129,9 @@ structural requirement
 
 A template, for example, is simply a structural contract:
 
+> **Planned example:** `template` and the universal structural collection model are not yet
+> implemented.
+
 ```caret
 Point =
   template [
@@ -134,9 +146,11 @@ This creates a rather different type-system philosophy:
 
 > describe what values satisfy; keep behavior in functions.
 
-## Collections are deliberately underspecified
+## Collections are deliberately underspecified — Planned
 
-Caret also tries to avoid encoding representation decisions into basic syntax.
+The planned universal collection model tries to avoid encoding representation decisions into basic
+syntax. The prototype currently provides eager sequence literals plus persistent sequence and
+dictionary primitives; the contract-selected representations below are conceptual.
 
 The literal:
 
@@ -181,9 +195,10 @@ This is one of the more Lisp-like aspects of Caret—not syntactically, but arch
 
 A relatively small collection model is expected to support increasingly sophisticated abstractions built on top of it.
 
-## Mutation exists, but you can see exactly where
+## Mutation exists, but you can see exactly where — Planned
 
-Caret values are immutable by default.
+Caret values are immutable by default. The explicit container syntax in this section is specified
+but not implemented by the current prototype.
 
 When mutable state is required, it is introduced using an explicit container:
 
@@ -251,9 +266,10 @@ is observably different from reading an immutable value: the same function call 
 
 Caret therefore treats mutable-state observation and mutation as effects rather than hiding them behind normal field access.
 
-## Rules are part of the language, not a separate DSL
+## Rules are part of the language, not a separate DSL — Planned
 
-Caret becomes much less familiar when you reach its rule system.
+The planned language becomes much less familiar when you reach its rule system. Rules, rulesets,
+contexts, and `ruleCycle` are not implemented by the current prototype.
 
 A rule has five conceptual parts, summarized as CATEN:
 
@@ -308,9 +324,11 @@ Again, the recurring pattern is visible:
 
 > Don't invent a second language if the first one can represent the idea directly.
 
-## Caret's metaprogramming follows the same philosophy
+## Caret's metaprogramming follows the same philosophy — Partly prototype, mostly planned
 
-Caret uses `@` for reification.
+The prototype implements basic `@value` reflection. Environment-relative `@root`, structured code
+reification, imports, lambdas, higher-order collection operations, and compile-time `#` execution in
+the following examples are planned.
 
 Code itself can be represented structurally:
 
@@ -359,9 +377,11 @@ Caret combines that idea with its own reflection model:
 
 Together, those two mechanisms provide a basis for structural metaprogramming without requiring textual macro substitution.
 
-## Separate targets become an ordinary consequence
+## Separate targets become an ordinary consequence — Planned
 
-Suppose one source contains both sides of some client/server interaction.
+This section describes the planned compiler, module, staging, and reachability model; none of these
+facilities is implemented by the current tree-walking prototype. Suppose one source contains both
+sides of some client/server interaction.
 
 The client can be one compilation root:
 
@@ -407,9 +427,10 @@ And there is nothing intrinsically client/server-specific about the mechanism. A
 
 The distinction between targets is expressed using normal Caret values and computation rather than compiler-specific conditional syntax.
 
-## Formats follow the same pattern
+## Formats follow the same pattern — Planned
 
-Caret's `Format` system applies the same compositional approach to external representation.
+Caret's planned `Format` system applies the same compositional approach to external representation.
+Formats, codecs, bytes, and bidirectional encoding/decoding are not implemented by the prototype.
 
 A format describes a relationship:
 
@@ -442,6 +463,9 @@ Formats themselves remain first-class immutable values and are constructed throu
 Once more, what might normally become a special schema language is represented largely through normal Caret composition.
 
 ## Caret in the language landscape
+
+The table compares other languages with the complete planned Caret design. Individual similarities
+therefore include facilities beyond the current prototype.
 
 No single existing language is especially close to Caret. Different languages resemble different parts of it:
 
