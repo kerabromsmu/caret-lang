@@ -12,7 +12,14 @@ enum BuiltinContract implements ContractDescriptor {
     MISSING("Missing") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.MISSING); } },
     FUNCTION("Function") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.FUNCTION); } },
     SCOPE("Scope") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.SCOPE); } },
-    SEQUENCE("Sequence") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.SEQUENCE); } },
+    SEQUENCE("Sequence") {
+        @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.SEQUENCE); }
+        @Override public int parameterArity() { return 1; }
+        @Override public ContractDescriptor parameterize(java.util.List<ContractDescriptor> arguments) {
+            if (arguments.size() != 1) throw new IllegalArgumentException("Sequence requires one contract argument");
+            return new ParameterizedContract(this, arguments);
+        }
+    },
     DICTIONARY("Dictionary") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.DICTIONARY); } };
 
     private final String publicName;

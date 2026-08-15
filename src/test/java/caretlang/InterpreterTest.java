@@ -25,6 +25,65 @@ final class InterpreterTest {
     }
 
     @Test
+    void constructsAndEnforcesParameterizedSequenceContracts() {
+        assertEquals("true\nfalse\ntrue\ntrue\nSequence Number\n[Sequence]\n[Number]\n", execute("""
+                Numbers = Sequence Number
+                Alias = Numbers
+                SequenceConstructor = Sequence
+                Nested = Sequence (Sequence Number)
+                (Sequence Number) direct = [1 2 3]
+                (Alias) aliased = []
+                (SequenceConstructor Number) throughConstructorAlias = [4 5]
+                (Nested) nested = [[1] [] [2 3]]
+                print Numbers direct
+                print Numbers [1 "two"]
+                print Nested nested
+                print Numbers == Alias
+                print (@Numbers).name
+                print (@Numbers).bases
+                print (@Numbers).requirements
+                """));
+
+        LangException element = assertThrows(LangException.class,
+                () -> execute("(Sequence Number) values = [1 \"two\"]"));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, element.diagnostic().code());
+
+        LangException nested = assertThrows(LangException.class,
+                () -> execute("(Sequence (Sequence Number)) values = [[1] [\"two\"]]"));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, nested.diagnostic().code());
+    }
+
+    @Test
+    void parameterizedContractsHaveFreshIdentityAndComposeWithAbsenceModifiers() {
+        assertEquals("false\ntrue\ntrue\ntrue\nfalse\n", execute("""
+                First = Sequence Number
+                Second = Sequence Number
+                Alias = First
+                MaybeNumbers = (Sequence Number)?~
+                print First == Second
+                print First == Alias
+                print MaybeNumbers [1 2]
+                print MaybeNumbers ?
+                print MaybeNumbers "not a sequence"
+                """));
+    }
+
+    @Test
+    void rejectsInvalidParameterizedContractArgumentsAndCandidatesWithLocatedDiagnostics() {
+        LangException argument = expectDiagnostic("""
+                dynamic = false & Number ! 1
+                (Sequence dynamic) values = []
+                """, "Binding is not a contract: dynamic", 2, 11);
+        assertEquals(Diagnostic.Codes.NOT_A_CONTRACT, argument.diagnostic().code());
+
+        LangException candidate = expectDiagnostic("""
+                Numbers = Sequence Number
+                (Numbers) values = "not a sequence"
+                """, "expected Sequence Number", 2, 20);
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, candidate.diagnostic().code());
+    }
+
+    @Test
     void acceptsUserDefinedContractsInClausesAndRejectsInvalidConstructorArguments() {
         assertEquals("3\n", execute("""
                 Numeric = contract Number

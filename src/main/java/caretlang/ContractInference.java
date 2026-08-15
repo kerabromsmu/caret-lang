@@ -364,15 +364,15 @@ final class ContractInference {
         };
     }
 
-    private static EnumSet<BuiltinContract> clause(ContractClause clause) {
+    private EnumSet<BuiltinContract> clause(ContractClause clause) {
         EnumSet<BuiltinContract> result = EnumSet.noneOf(BuiltinContract.class);
         if (clause != null) {
-            for (ContractName name : clause.names()) {
-                BuiltinContract builtin = BuiltinContract.named(name.name()).orElse(null);
+            for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+                BuiltinContract builtin = BuiltinContract.named(reference.name()).orElse(null);
                 if (builtin == null || builtin == BuiltinContract.ANY) continue;
                 result.add(builtin);
-                if (name.nullable()) result.add(BuiltinContract.NULL);
-                if (name.optional()) result.add(BuiltinContract.MISSING);
+                if (reference.nullable()) result.add(BuiltinContract.NULL);
+                if (reference.optional()) result.add(BuiltinContract.MISSING);
             }
         }
         return result;

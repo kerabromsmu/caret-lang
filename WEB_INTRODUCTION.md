@@ -205,8 +205,11 @@ results. An internal analysis also propagates known effects and conservatively r
 dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
 fixed operands are captured into partial applications. Proven unary Boolean functions
 are first-class refinement requirements in derived contracts and direct clauses, and retain that
-eligibility through aliases. Parameterized contracts, complete static proof, public effect
-declarations, and dispatch remain planned.
+eligibility through aliases. The initial parameterized-contract slice implements `Sequence T` as
+ordinary contract application: it validates every sequence element, composes through aliases,
+nesting, and null/missing modifiers, and exposes its base and requirement through reflection.
+General parameterized contracts, complete static proof, public effect declarations, and dispatch
+remain planned.
 Contract equality follows descriptor identity: aliases compare equal, but separate constructions
 remain unequal even with identical requirements. Contract reflection exposes public base and
 refinement-requirement names without exposing implementation callables.
@@ -231,9 +234,10 @@ Caret also plans a standard `ErrorTemplate` carrying a stable code, phase, messa
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return
 values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
-operations share one explicit envelope. Structural templates, parameterized contracts, dispatch,
-universal literals, `ErrorTemplate`, and `Result` remain planned; the unary contract and refinement
-foundation described above is implemented.
+operations share one explicit envelope. Structural templates, general parameterized contracts
+beyond `Sequence T`, dispatch, universal literals, `ErrorTemplate`, and `Result` remain planned;
+the unary contract, refinement, and initial sequence-parameterization foundation described above
+is implemented.
 
 ## Contained mutability
 
@@ -295,8 +299,8 @@ supports lexical closures, direct and mutual recursion, partial application, exp
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 
-Parameterized contracts, structural templates, contract-based dispatch, universal collection
-literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
+General parameterized contracts, structural templates, contract-based dispatch, universal
+collection literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 

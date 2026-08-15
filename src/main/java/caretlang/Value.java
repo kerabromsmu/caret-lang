@@ -376,6 +376,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         ContractDescriptor descriptor() { return contract; }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
+            Value raw = ValueSemantics.underlying(argument.value());
+            if (contract.parameterArity() == 1 && raw instanceof ContractValue parameter) {
+                return new ContractValue(contract.parameterize(List.of(parameter.descriptor())));
+            }
             return new Bool(contract.accepts(argument.value()));
         }
 

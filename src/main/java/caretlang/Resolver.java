@@ -29,9 +29,11 @@ import java.util.List;
 final class Resolver {
     private enum ContractState { CONTRACT, NON_CONTRACT, UNKNOWN }
     private record Symbol(int slot, int id, SourceSpan declaration, boolean initialized, Integer callableArity,
-                          ContractState contractState, Boolean refinementEligible) {
+                          ContractState contractState, Integer contractParameterArity,
+                          Boolean refinementEligible) {
         Symbol initializedSymbol() {
-            return new Symbol(slot, id, declaration, true, callableArity, contractState, refinementEligible);
+            return new Symbol(slot, id, declaration, true, callableArity, contractState,
+                    contractParameterArity, refinementEligible);
         }
     }
 
@@ -57,7 +59,7 @@ final class Resolver {
             ContractState state = BuiltinContract.named(binding.name()).isPresent()
                     ? ContractState.CONTRACT : ContractState.UNKNOWN;
             root.symbols.put(binding.name(), new Symbol(binding.slot(), resolver.nextSymbolId++, null, true,
-                    binding.callableArity(), state, binding.refinementEligible()));
+                    binding.callableArity(), state, binding.contractParameterArity(), binding.refinementEligible()));
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
@@ -74,7 +76,11 @@ final class Resolver {
                     resolveExpr(assign.value(), scope, functionBody, false);
                     Symbol symbol = scope.symbols.get(assign.name());
                     if (symbol == null) throw new IllegalStateException("Assignment was not predeclared");
-                    scope.symbols.put(assign.name(), symbol.initializedSymbol());
+                    Integer parameterArity = knownContractParameterArity(assign.value(), scope);
+                    Symbol initialized = symbol.initializedSymbol();
+                    scope.symbols.put(assign.name(), new Symbol(initialized.slot(), initialized.id(),
+                            initialized.declaration(), true, initialized.callableArity(), initialized.contractState(),
+                            parameterArity, initialized.refinementEligible()));
                 }
                 case ExprStmt expression -> resolveExpr(expression.expression(), scope, functionBody, false);
                 case Ast.PrintLine line -> resolvePrintLine(line, scope, functionBody);
@@ -100,7 +106,7 @@ final class Resolver {
                     : ContractState.UNKNOWN;
             int symbolId = nextSymbolId++;
             scope.symbols.put(name, new Symbol(scope.nextSlot++, symbolId, statement.span(), function, arity, state,
-                    null));
+                    null, null));
             declarations.put(statement.span(), symbolId);
         }
     }
@@ -125,14 +131,35 @@ final class Resolver {
             }
             parameters.symbols.put(parameter.name(),
                     new Symbol(parameters.nextSlot++, nextSymbolId++, parameter.span(), true, null,
-                            ContractState.UNKNOWN, null));
+                            ContractState.UNKNOWN, null, null));
         }
         resolveBlock(function.body(), new Scope(parameters), true);
     }
 
     private void resolverContracts(Ast.ContractClause clause, Scope scope) {
         if (clause == null) return;
-        List<Resolution.ContractBinding> resolved = clause.names().stream().map(name -> {
+        java.util.ArrayList<Resolution.ContractBinding> resolved = new java.util.ArrayList<>();
+        for (int index = 0; index < clause.names().size(); index++) {
+            Ast.ContractName name = clause.names().get(index);
+            Resolution.ContractBinding binding = resolveContract(name, scope);
+            if (name.arguments().isEmpty()) {
+                Integer arity = knownContractParameterArity(name.name(), scope);
+                if (arity != null && arity > 0 && index + arity < clause.names().size()) {
+                    java.util.ArrayList<Resolution.ContractBinding> arguments = new java.util.ArrayList<>();
+                    for (int argument = 0; argument < arity; argument++) {
+                        arguments.add(resolveContract(clause.names().get(++index), scope));
+                    }
+                    binding = new Resolution.ContractBinding(binding.name(), binding.binding(),
+                            List.copyOf(arguments), binding.nullable(), binding.optional(),
+                            SourceSpan.cover(binding.span(), arguments.getLast().span()));
+                }
+            }
+            resolved.add(binding);
+        }
+        contracts.put(clause, List.copyOf(resolved));
+    }
+
+    private Resolution.ContractBinding resolveContract(Ast.ContractName name, Scope scope) {
             int depth = 0;
             for (Scope current = scope; current != null; current = current.parent, depth++) {
                 Symbol symbol = current.symbols.get(name.name());
@@ -143,16 +170,34 @@ final class Resolver {
                     }
                     return new Resolution.ContractBinding(name.name(),
                             new Resolution.Binding(depth, symbol.slot(), symbol.id(), symbol.declaration(), false,
-                                    symbol.refinementEligible()), name.nullable(), name.optional(), name.span());
+                                    symbol.refinementEligible()), resolveContractArguments(name, scope),
+                            name.nullable(), name.optional(), name.span());
                 }
             }
             if (BuiltinContract.named(name.name()).isPresent()) {
-                return new Resolution.ContractBinding(name.name(), null, name.nullable(), name.optional(), name.span());
+                return new Resolution.ContractBinding(name.name(), null, resolveContractArguments(name, scope),
+                        name.nullable(), name.optional(), name.span());
             }
             throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.UNKNOWN_CONTRACT,
                     "Unknown contract: " + name.name(), name.span());
-        }).toList();
-        contracts.put(clause, resolved);
+    }
+
+    private List<Resolution.ContractBinding> resolveContractArguments(Ast.ContractName name, Scope scope) {
+        return name.arguments().stream().map(argument -> resolveContract(argument, scope)).toList();
+    }
+
+    private Integer knownContractParameterArity(String name, Scope scope) {
+        for (Scope current = scope; current != null; current = current.parent) {
+            Symbol symbol = current.symbols.get(name);
+            if (symbol != null) return symbol.contractParameterArity();
+        }
+        return null;
+    }
+
+    private Integer knownContractParameterArity(Expr expression, Scope scope) {
+        if (expression instanceof Name name) return knownContractParameterArity(name.name(), scope);
+        if (expression instanceof Group group) return knownContractParameterArity(group.expression(), scope);
+        return null;
     }
 
     private ContractState contractState(Expr expression) {

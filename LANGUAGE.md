@@ -179,8 +179,9 @@ A modifier target known not to be a contract is rejected during semantic analysi
 When the target's contract status depends on runtime evaluation, failure is instead a located runtime
 `NOT_A_CONTRACT` diagnostic. It never reports Java AST or implementation details.
 
-Parameterized contracts, overload dispatch, complete static inference/proof, the public effect
-system, and the full universal-collection model remain planned below.
+The initial `Sequence T` parameterized-contract form is implemented as described in the collection
+section below. General parameterization, overload dispatch, complete static inference/proof, the
+public effect system, and the full universal-collection model remain planned.
 
 In the current prototype, physical indentation directly defines a multiline function body. The
 planned layout modifiers described below will first translate physical indentation into effective
@@ -1369,6 +1370,19 @@ means:
 > `values` is a collection whose elements all satisfy `Number`.
 
 Parameterized collection types should use the normal Caret contract/function model rather than requiring a separate generic-type language.
+
+The current prototype implements the first instance of this model as `Sequence T`. Applying the
+raw `Sequence` contract to another contract constructs a fresh contract descriptor; applying it to
+an ordinary value remains a Boolean raw-sequence membership test. `Sequence T` accepts empty
+sequences and sequences whose every element satisfies `T`, supports nesting and ordinary
+null/missing modifiers, and reflects `Sequence` as its base and `T` as its requirement. Initial
+inference retains the outer `Sequence` constraint while element proof remains a runtime check.
+
+Within a contract clause, a known parameterizable constructor consumes its declared number of
+following contract terms. Remaining terms are the existing anonymous conjunction. Thus
+`(Sequence Number positive)` requires both `Sequence Number` and `positive`; constructor aliases
+retain this metadata. Parenthesized nested terms allow `Sequence (Sequence Number)` without adding
+a generic-type grammar.
 
 ---
 
@@ -12804,7 +12818,7 @@ Their later implementation must not weaken root substitution or permit authority
 ## Not implemented
 
 - trailing lambdas
-- parameterized contracts, overload dispatch, complete static type proof,
+- general parameterized contracts beyond the implemented `Sequence T` foundation, overload dispatch, complete static type proof,
   public effect declarations/enforcement/reflection, and ownership analysis; initial named-function
   contract inference, result clauses, internal effect analysis, and predicate refinements are
   implemented

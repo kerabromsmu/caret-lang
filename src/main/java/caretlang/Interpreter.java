@@ -16,10 +16,6 @@ final class Interpreter {
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
 
-    Interpreter() {
-        this(System.out);
-    }
-
     Interpreter(PrintStream output) {
         this(output, null);
     }
@@ -40,11 +36,6 @@ final class Interpreter {
             globals.rollbackTo(checkpoint);
             throw failure;
         }
-    }
-
-    Value evalExpression(Expr expression) {
-        Resolution resolution = Resolver.resolve(List.of(new ExprStmt(expression, expression.span())), globals);
-        return eval(expression, globals, null, resolution);
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
@@ -119,6 +110,21 @@ final class Interpreter {
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
             Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
                     : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
+            if (!reference.arguments().isEmpty()) {
+                if (!(resolved instanceof Value.ContractValue constructor)) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
+                            "Binding is not a contract: " + reference.name(), reference.span());
+                }
+                ContractDescriptor descriptor = constructor.descriptor();
+                if (descriptor.parameterArity() != reference.arguments().size()) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
+                            "Binding is not a contract: " + reference.name(), reference.span());
+                }
+                List<ContractDescriptor> arguments = reference.arguments().stream()
+                        .map(argument -> resolveContractDescriptor(argument, contractEnvironment))
+                        .toList();
+                resolved = new Value.ContractValue(descriptor.parameterize(arguments));
+            }
             if (resolved instanceof Value.Callable refinement && !(resolved instanceof Value.ContractValue)) {
                 if (!refinement.refinementEligible()) {
                     throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT,
@@ -168,6 +174,26 @@ final class Interpreter {
         return new Value.Attributed(value, acquired);
     }
 
+    private ContractDescriptor resolveContractDescriptor(Resolution.ContractBinding reference,
+                                                         Environment contractEnvironment) {
+        Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
+                : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
+        if (!(resolved instanceof Value.ContractValue contract)) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
+                    "Binding is not a contract: " + reference.name(), reference.span());
+        }
+        ContractDescriptor descriptor = contract.descriptor();
+        if (!reference.arguments().isEmpty()) {
+            if (descriptor.parameterArity() != reference.arguments().size()) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
+                        "Binding is not a contract: " + reference.name(), reference.span());
+            }
+            descriptor = descriptor.parameterize(reference.arguments().stream()
+                    .map(argument -> resolveContractDescriptor(argument, contractEnvironment)).toList());
+        }
+        return modifiedContract(descriptor, reference.nullable(), reference.optional());
+    }
+
     private void declare(Environment env, String name, SourceSpan span) {
         try {
             env.declare(name);
@@ -182,9 +208,9 @@ final class Interpreter {
             if (holeArgs == null && !(expr instanceof Compose)) {
                 HoleAnalysis analysis = analyzeHoles(expr);
                 if (!analysis.indexes().isEmpty()) {
-                    HoleShape shape = holeShape(expr, analysis.indexes());
+                    int arity = holeArity(expr, analysis.indexes());
                     Expr captured = captureNonHoleParts(expr, env, analysis.containsHole(), resolution);
-                    return new Value.HoleFunction(expr.toString(), shape.arity(),
+                    return new Value.HoleFunction(expr.toString(), arity,
                             supplied -> eval(captured, env, supplied, resolution));
                 }
             }
@@ -735,19 +761,17 @@ final class Interpreter {
         return ValueSemantics.underlying(value);
     }
 
-    private record HoleShape(int arity, boolean numbered) {}
     private record HoleAnalysis(List<Integer> indexes, IdentityHashMap<Expr, Boolean> containsHole) {}
 
-    private HoleShape holeShape(Expr expr, List<Integer> indexes) {
+    private int holeArity(Expr expr, List<Integer> indexes) {
         boolean numbered = indexes.stream().anyMatch(index -> index > 0);
         boolean ordinary = indexes.stream().anyMatch(index -> index == 0);
         if (numbered && ordinary) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_HOLE_STYLES,
                     "Cannot mix numbered and unnumbered holes", expr.span());
         }
-        int arity = numbered ? indexes.stream().mapToInt(Integer::intValue).max().orElseThrow()
+        return numbered ? indexes.stream().mapToInt(Integer::intValue).max().orElseThrow()
                 : indexes.size();
-        return new HoleShape(arity, numbered);
     }
 
     private HoleAnalysis analyzeHoles(Expr expr) {
@@ -776,8 +800,8 @@ final class Interpreter {
     }
 
     private Expr bindHoles(Expr expr, HoleBinder holes) {
-        return AstRewriter.rewrite(expr, candidate -> candidate instanceof Hole(int index, SourceSpan span)
-                ? Optional.of(holes.literal(index, span))
+        return AstRewriter.rewrite(expr, candidate -> candidate instanceof Hole hole
+                ? Optional.of(holes.literal(hole.index()))
                 : Optional.empty());
     }
 
@@ -785,7 +809,7 @@ final class Interpreter {
         private final List<Value.Argument> values;
         private int index;
         private HoleBinder(List<Value.Argument> values) { this.values = values; }
-        Literal literal(int oneBasedIndex, SourceSpan ignoredHoleSpan) {
+        Literal literal(int oneBasedIndex) {
             Value.Argument argument = oneBasedIndex == 0 ? next() : at(oneBasedIndex);
             return new Literal(argument.value(), argument.span());
         }

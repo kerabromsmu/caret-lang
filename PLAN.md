@@ -115,9 +115,12 @@ generalized contract variables for named functions are implemented. A minimum ef
 propagates known named-call effects, preserves unknown dynamic calls, and proves refinement
 eligibility without exposing effect syntax. Proven unary Boolean callables now participate as
 first-class predicate requirements in derived contracts and direct clauses, including through
-aliases. Modifiers, parameterized contracts, dispatch, and the full public effect system remain
-subsequent Phase 2 slices. Nullable/optional contract modifiers are implemented as first-class,
-identity-stable contract unions without collapsing null into missing.
+aliases. Nullable/optional contract modifiers are implemented as first-class, identity-stable
+contract unions without collapsing null into missing. The initial parameterized-contract slice is
+also implemented as `Sequence T`, with constructor metadata preserved through aliases, recursive
+element validation, nesting, modifiers, identity semantics, reflection, and conservative outer-kind
+inference. General parameterization, dispatch, and the full public effect system remain subsequent
+Phase 2 slices.
 The effect pass includes eagerly captured fixed operands in partial expressions, treats
 over-application through an unknown returned callable conservatively, and uses resolver-owned
 symbol identities rather than source-span equality.
@@ -130,9 +133,9 @@ symbol identities rather than source-span equality.
   and retain enough provenance to explain failed membership and invalid derivation.
 - Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
   static membership proofs where possible and retaining runtime checks when proof is unavailable.
-- Implement parameterized contracts through ordinary contract/function application, beginning with
-  collection element contracts and `Container T` rather than introducing a separate generic-type
-  subsystem.
+- Extend the implemented ordinary contract/function parameterization beyond `Sequence T` as later
+  value kinds arrive; keep general `Collection T` and mutable `Container T` aligned with Phase 4
+  rather than introducing a separate generic-type subsystem.
 - Group same-named function definitions into overload sets. Select the unique most-specific
   implementation across all parameter contracts and diagnose incomparable applicable definitions.
 - Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
@@ -520,10 +523,10 @@ symbol identities rather than source-span equality.
 
 Low-precedence application, runtime user-contract derivation, generalized contract inference, the
 minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
-are complete. Next implement parameterized contracts through ordinary contract application,
-beginning with collection element requirements and preserving contract identity, inference,
-reflection, and located runtime checks. Overload dispatch and public effect declarations remain
-subsequent Phase 2 slices. `with`/`outer` wait for the Phase 4 public named-member protocol rather
+are complete. Initial parameterized contracts are also complete through `Sequence T`. Next implement
+closed same-name overload sets and unique most-specific contract dispatch, retaining a generic
+fallback and distinct no-applicable/ambiguous diagnostics. Public effect declarations remain a
+subsequent Phase 2 slice. `with`/`outer` wait for the Phase 4 public named-member protocol rather
 than introducing an exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals

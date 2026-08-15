@@ -38,3 +38,12 @@ print Numeric nullableNumeric
 DerivedNullable = contract Numeric?
 (DerivedNullable) derivedNullable = 5
 print Numeric derivedNullable
+
+Numbers = Sequence Number
+(Sequence Number) numbers = [1 2 3]
+NestedNumbers = Sequence (Sequence Number)
+(NestedNumbers) nestedNumbers = [[1 2] [] [3]]
+print Numbers numbers
+print NestedNumbers nestedNumbers
+print (@Numbers).name
+print (@Numbers).requirements

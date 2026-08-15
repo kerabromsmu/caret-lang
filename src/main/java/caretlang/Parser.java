@@ -156,36 +156,16 @@ final class Parser {
     }
 
     private record ContractParse(ContractClause clause, int next) {}
+    private record ContractNameParse(ContractName name, int next) {}
 
     private ContractParse contractClause(List<Token> tokens, int start) {
         if (start >= tokens.size() || !tokens.get(start).text().equals("(")) return null;
         ArrayList<ContractName> names = new ArrayList<>();
         int current = start + 1;
         while (current < tokens.size() && !tokens.get(current).text().equals(")")) {
-            Token name = tokens.get(current++);
-            if (name.kind() != Kind.IDENT) {
-                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
-                        "Contract clause requires contract names", name.span());
-            }
-            boolean nullable = false;
-            boolean optional = false;
-            SourceSpan end = name.span();
-            if (current < tokens.size() && adjacent(name, tokens.get(current))
-                    && tokens.get(current).text().equals("?")) {
-                nullable = true;
-                end = tokens.get(current++).span();
-            }
-            if (current < tokens.size() && adjacent(end, tokens.get(current))
-                    && tokens.get(current).text().equals("~")) {
-                optional = true;
-                end = tokens.get(current++).span();
-            }
-            if (current < tokens.size() && adjacent(end, tokens.get(current))
-                    && (tokens.get(current).text().equals("?") || tokens.get(current).text().equals("~"))) {
-                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
-                        "Contract clause modifiers must use canonical form T, T?, T~, or T?~", tokens.get(current).span());
-            }
-            names.add(new ContractName(name.text(), nullable, optional, SourceSpan.cover(name.span(), end)));
+            ContractNameParse parsed = contractName(tokens, current);
+            names.add(parsed.name());
+            current = parsed.next();
         }
         if (current >= tokens.size() || names.isEmpty()) {
             SourceSpan span = tokens.get(start).span();
@@ -195,6 +175,53 @@ final class Parser {
         Token close = tokens.get(current++);
         return new ContractParse(new ContractClause(List.copyOf(names),
                 SourceSpan.cover(tokens.get(start).span(), close.span())), current);
+    }
+
+    private ContractNameParse contractName(List<Token> tokens, int start) {
+        Token token = tokens.get(start);
+        if (token.kind() != Kind.IDENT) {
+            throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                    "Contract clause requires contract names", token.span());
+        }
+        int current = start + 1;
+        ArrayList<ContractName> arguments = new ArrayList<>();
+        int arity = LanguageSyntax.contractParameterArity(token.text());
+        for (int index = 0; index < arity && current < tokens.size()
+                && !tokens.get(current).text().equals(")"); index++) {
+            if (tokens.get(current).text().equals("(")) {
+                ContractParse grouped = contractClause(tokens, current);
+                if (Objects.requireNonNull(grouped).clause().names().size() != 1) {
+                    throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                            "A contract parameter must be one contract", grouped.clause().span());
+                }
+                arguments.add(grouped.clause().names().getFirst());
+                current = grouped.next();
+            } else {
+                ContractNameParse argument = contractName(tokens, current);
+                arguments.add(argument.name());
+                current = argument.next();
+            }
+        }
+        boolean nullable = false;
+        boolean optional = false;
+        SourceSpan end = arguments.isEmpty() ? token.span() : arguments.getLast().span();
+        if (current < tokens.size() && adjacent(end, tokens.get(current))
+                && tokens.get(current).text().equals("?")) {
+            nullable = true;
+            end = tokens.get(current++).span();
+        }
+        if (current < tokens.size() && adjacent(end, tokens.get(current))
+                && tokens.get(current).text().equals("~")) {
+            optional = true;
+            end = tokens.get(current++).span();
+        }
+        if (current < tokens.size() && adjacent(end, tokens.get(current))
+                && (tokens.get(current).text().equals("?") || tokens.get(current).text().equals("~"))) {
+            throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                    "Contract clause modifiers must use canonical form T, T?, T~, or T?~", tokens.get(current).span());
+        }
+        return new ContractNameParse(new ContractName(token.text(), List.copyOf(arguments), nullable, optional,
+                SourceSpan.cover(token.span(), end)), current);
     }
 
     private static boolean adjacent(Token left, Token right) {

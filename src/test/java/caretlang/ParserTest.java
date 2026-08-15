@@ -37,6 +37,23 @@ final class ParserTest {
     }
 
     @Test
+    void parsesParameterizedSequenceContractsWithoutChangingConjunctions() {
+        List<Stmt> program = new Parser("""
+                (Sequence Number positive) values = []
+                (Sequence (Sequence String)) nested = []
+                """).parseProgram();
+        ContractClause first = ((Assign) program.getFirst()).contracts();
+        assertEquals(2, first.names().size());
+        ContractName sequence = first.names().getFirst();
+        assertEquals("Sequence", sequence.name());
+        assertEquals(List.of("Number"), sequence.arguments().stream().map(ContractName::name).toList());
+        assertEquals("positive", first.names().get(1).name());
+        ContractName nested = ((Assign) program.get(1)).contracts().names().getFirst();
+        assertEquals("Sequence", nested.arguments().getFirst().name());
+        assertEquals("String", nested.arguments().getFirst().arguments().getFirst().name());
+    }
+
+    @Test
     void rejectsMalformedContractClausesAndParsesResultContracts() {
         LangException empty = assertThrows(LangException.class,
                 () -> new Parser("() value = 1").parseProgram());

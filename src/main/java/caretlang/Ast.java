@@ -7,8 +7,8 @@ final class Ast {
         SourceSpan span();
     }
     record ContractClause(List<ContractName> names, SourceSpan span) {}
-    record ContractName(String name, boolean nullable, boolean optional, SourceSpan span) {
-        ContractName(String name, SourceSpan span) { this(name, false, false, span); }
+    record ContractName(String name, List<ContractName> arguments, boolean nullable, boolean optional, SourceSpan span) {
+        ContractName(String name, SourceSpan span) { this(name, List.of(), false, false, span); }
     }
     record Parameter(String name, ContractClause contracts, SourceSpan span) {}
     record Assign(String name, boolean exported, ContractClause contracts, Expr value, SourceSpan span) implements Stmt {}
