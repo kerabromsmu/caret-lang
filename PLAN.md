@@ -140,7 +140,11 @@ symbol identities rather than source-span equality.
   absence alternatives, then order variants with the settled compiler-proven implication relation:
   nominal derivation, verified-refinement identity, constructor-declared variance, and component-wise
   strictness. Select the unique most-specific implementation and diagnose incomparable applicable
-  definitions without executing predicates to determine ordering.
+  definitions without executing predicates to determine ordering. Runtime applicability checks are
+  observational: require existing nominal membership, cache pure structural/refinement checks per
+  requirement identity and argument position, preserve original arguments, and never acquire
+  membership while considering candidates. Keep single-function contract violations distinct from
+  multi-variant no-applicable and ambiguous-overload diagnostics.
 - Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
   callables, SIMD values, formats, rules, and cycles as those kinds arrive. Contract failures identify
   the declaration/call and failing contract with related spans.

@@ -991,6 +991,10 @@ successful check produces an attributed value with that membership; existing ali
 unchanged. A failed statically decidable check is a compile-time error, while an undecidable check
 is retained for runtime and produces the same located contract-violation diagnostic on failure.
 Contract membership participates in checking and dispatch but not structural equality or hashing.
+Explicit clauses and equivalent ascription boundaries are the only operations that acquire nominal
+membership. Merely testing a contract as a predicate, considering an overload candidate, or proving
+that a value satisfies the nominal contract's bases and refinements does not attribute the value or
+make that nominal identity observable.
 
 Inference preserves relationships created by value flow. For example, `identity value = value` has
 one shared contract variable for its parameter and result. Several simultaneous requirements form
@@ -1314,6 +1318,39 @@ The compiler selects a uniquely most-specific variant when it can prove one. Oth
 set is dispatched at runtime using the arguments' actual memberships. No applicable variant and
 several incomparable applicable variants are distinct located runtime errors. Runtime-loaded code
 may supply values and its own overload sets, but it cannot add variants to an existing lexical set.
+
+## Overload applicability
+
+Applicability testing is observational and never acquires nominal membership. A nominal parameter
+requirement is applicable only when the argument already carries that descriptor, or a nominal
+descriptor that implies it through derivation. Passing the nominal contract's bases and refinements
+is insufficient by itself. An explicit nullable or optional alternative may nevertheless accept
+null or missing without attributing the nominal identity.
+
+Built-in, structural, parameterized, and verified-refinement requirements may be tested at runtime
+when static information cannot decide them. These checks receive the original argument and never
+replace it with an attributed value. A false membership or refinement result removes that candidate.
+A diagnostic raised while executing a verified pure refinement aborts the call with its ordinary
+diagnostic; it is not converted into a false result or a no-applicable-overload outcome.
+
+Within one call, the dispatcher caches each dynamic result by requirement identity and argument
+position. Equivalent uses of that same requirement on that same argument therefore execute at most
+once even when several variants share it. Distinct descriptor or refinement identities are distinct
+checks. The deterministic evaluation order is argument positions from left to right, then each
+parameter's normalized requirements in source-stable order. Variant declaration order may determine
+when an otherwise necessary check is scheduled, but never breaks an applicability or specificity
+tie.
+
+The selected variant receives the original arguments. Dispatch contributes no nominal attribution;
+membership established before the call remains available normally. When a multi-variant set has no
+applicable implementation, the diagnostic is `NO_APPLICABLE_OVERLOAD`. When several applicable
+maximal variants remain incomparable, it is `AMBIGUOUS_OVERLOAD`. Both diagnostics use the complete
+call span as their primary location and include the relevant variant declarations as related
+locations.
+
+A name with only one function definition does not perform overload selection. Its parameter
+boundary retains the ordinary `CONTRACT_VIOLATION` diagnostic and existing attribution behavior.
+Introducing overload support must not silently change diagnostics for ordinary single functions.
 
 ---
 
