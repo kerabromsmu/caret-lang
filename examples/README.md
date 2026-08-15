@@ -29,8 +29,10 @@ variant has executable `.caret` evidence.
 | `CORE-INFIX-001` | Named infix precedence, associativity, partial, and callable-parameter examples; invalid-target/arity fixtures |
 | `CORE-INFIX-002` | Symbolic prefix, infix, grouped subtraction, and symbolic partial examples |
 | `CORE-COMP-001` | Left-to-right pipelines, chaining, partial left operands, reflection, and invalid operand/arity fixtures |
-| `CONTRACT-CORE-001` | `contracts.caret`; built-in predicates, binding/parameter clauses, partial application, and reflection |
+| `CONTRACT-001`, `CONTRACT-CORE-001`, `CONTRACT-005` | `contracts.caret`; built-in and derived predicates, binding/parameter/result clauses, partial application, and reflection |
+| `CONTRACT-002` | `refinements.caret`; proven-pure predicate requirements and the invalid-refinement fixture |
 | `CONTRACT-INFER-001` | `contract_inference.caret`; generalized identity flow, numeric constraints, string `+`, truth semantics, and conditional joins; incompatible-constraint fixture |
+| `EFFECT-002` foundation | Focused Java tests cover transitive named-call effects, eager partial captures, lexical identity, reflection, and conservative dynamic calls; the full public effect requirement remains planned |
 | `CORE-TEXT-002` | Unicode code-point indexing/slicing and conversion section |
 | `CORE-COLL-001`, `CORE-COLL-002` | Persistent sequence/dictionary, safe lookup, replacement-order, and nested equality sections |
 

@@ -349,10 +349,13 @@ Caret also uses `#` for compile-time execution.
 For example:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 ```
 
-means that `shared` exists in the compile-time environment rather than becoming an ordinary runtime binding.
+means that the stable `clientServer` module ID is resolved through the compile-time environment's
+visible catalog and `shared` exists there rather than becoming an ordinary runtime binding. Planned
+imports also accept explicit source paths; both forms resolve to a canonical source file for loading
+and caching without injecting module IDs into lexical scope.
 
 Ordinary Caret can then transform it:
 
@@ -387,7 +390,7 @@ Together, those two mechanisms provide a basis for structural metaprogramming wi
 
 This section describes the planned compiler, module, staging, and reachability model; none of these
 facilities is implemented by the current tree-walking prototype. Suppose one source contains both
-sides of some client/server interaction.
+sides of some client/server interaction and declares the stable module ID `clientServer = module`.
 
 The client can be one compilation root:
 
@@ -404,7 +407,7 @@ server.caret
 Both can import the same source at compile time:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 ```
 
 The client selects:

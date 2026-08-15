@@ -69,6 +69,11 @@ totalWithTax subtotal rate =
 
 This keeps the common case compact while preserving an obvious visual structure.
 
+For deeply embedded source, planned `\\` and `\*` layout markers will temporarily remap physical
+indentation to the same effective logical nesting. They change only layout processing: they do not
+create scopes, close blocks, or perform control flow. The mappings can stack and are not implemented
+by the current prototype.
+
 ## Lazy decisions
 
 Caret's conditional expression uses `&` for the selected true branch and `!` for the alternative:
@@ -171,8 +176,8 @@ non-callable reference, and both `type` and its `kind` metadata identify it as `
 
 ## Values and collections
 
-The current prototype supports finite numbers, Unicode strings, Booleans, null, missing, and name
-values. It also provides persistent sequences and insertion-ordered dictionaries. Collection updates
+The current prototype supports finite numbers, Unicode strings, Booleans, null, and missing. It also
+provides persistent sequences and insertion-ordered dictionaries. Collection updates
 produce new values rather than mutating existing ones, and equality is structural for ordinary data.
 
 ```caret
@@ -221,8 +226,9 @@ Caret also plans a standard `ErrorTemplate` carrying a stable code, phase, messa
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return
 values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
-operations share one explicit envelope. None of this contract, dispatch, literal, template, or
-result syntax is implemented by the current prototype yet.
+operations share one explicit envelope. Structural templates, parameterized contracts, dispatch,
+universal literals, `ErrorTemplate`, and `Result` remain planned; the unary contract and refinement
+foundation described above is implemented.
 
 ## Contained mutability
 
@@ -257,6 +263,11 @@ with `@module == @root`. Complete semantic module code will be represented as im
 Caret values and convertible to canonical, implementation-independent Caret source, making program
 reification and canonical quines possible.
 
+Planned source modules may declare stable logical IDs such as `clientServer = module`. An import may
+use either a relative source path or a `ModuleId` resolved through the current environment's flat
+module catalog. Module IDs do not become lexical bindings, canonical source paths still identify
+module evaluation, and a sandbox sees only the catalog entries explicitly supplied to it.
+
 The same model anchors sandboxing. `sandbox source environment` accepts an immutable exported scope;
 the host can atomically replace that complete snapshot with `swapEnv` without restarting the plugin.
 Reflection respects that boundary, and canonical sandbox code excludes exposed host implementations.
@@ -279,11 +290,10 @@ supports lexical closures, direct and mutual recursion, partial application, exp
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 
-Contracts, structural templates, contract-based dispatch, universal collection literals, modules,
-root reification, sandboxing, compile-time execution, separate compilation roots, lambdas,
-mutability containers, and a compiler backend
-remain future work. The prototype exists to make the language's ideas executable and testable while
-its larger design evolves.
+Parameterized contracts, structural templates, contract-based dispatch, universal collection
+literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
+lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
+make the language's ideas executable and testable while its larger design evolves.
 
 To explore the implementation, syntax reference, and runnable examples, see the project
 [README](README.md), [language specification](LANGUAGE.md), and

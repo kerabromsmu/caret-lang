@@ -53,11 +53,25 @@ members available for lexical lookup without copying them, while resolver-only p
 `outer.name` recover shadowed enclosing names without exposing lexical environments as values.
 `with` and `outer` are specified but not implemented by the current prototype.
 
+Planned layout markers `\\` and `\*` remap physical indentation to effective logical indentation
+before ordinary layout parsing. `\\` establishes an adjusted baseline for a following
+indentation-defined region and `\*` restores the previous mapping; neither marker is an expression,
+scope, or control-flow operation. The mappings stack, an unmatched restoration is a no-op, and an
+active mapping may remain through end of file. These markers are specified but not implemented.
+
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code
 to canonical Caret syntax. Sandboxes will substitute a smaller visible root and expose only selected
-libraries and capabilities; effect declarations will not grant authority. The concrete root metadata,
-serialization rules, and sandbox syntax remain open design work and are not implemented.
+libraries, module IDs, and capabilities; effect declarations will not grant authority. Initial root
+metadata, semantic code equality and serialization, sandbox construction and lifecycle, and the
+shared `Result` envelope are specified but not implemented. Fine-grained module-code visibility,
+resumable sandbox state, and the standard compiler-environment interface remain deferred.
+
+Source modules may declare a stable logical ID with `clientServer = module`. Planned `import`
+overloads accept either an explicit path or a `ModuleId`; IDs are resolved from a flat,
+environment-visible catalog while canonical source paths remain the evaluation-cache and cycle
+detection identity. Catalog IDs occupy a namespace separate from lexical bindings, and sandbox
+catalogs reveal only explicitly supplied modules. Modules and both import forms remain unimplemented.
 
 Compile-time execution is planned through `#` rather than a separate macro language. `# name =
 expression` creates a compile-time-only binding, while `name = # expression` incorporates a staged
@@ -211,12 +225,15 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
+- Physical-to-logical layout baseline modifiers (`\\` and `\*`) are specified but not implemented.
 - Mutability containers and immutable scope-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
   base/requirement metadata.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
   quines, and `sandbox source environment` execution are specified but not implemented.
+- Stable module-ID declarations, catalog discovery, and path/`ModuleId` import overloads are
+  specified but not implemented.
 - Compile-time `#` execution, compile-time imports, independent compilation roots, staged
   reachability, and target-specific artifacts are specified but not implemented.
 

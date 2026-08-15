@@ -47,6 +47,8 @@ baseline.
   reconciled across the public introduction, conformance matrix, and this roadmap.
 - Root/module reification, canonical code equivalence, sandbox construction/lifecycle, SIMD
   grouping, general choices, unordered object traversal, and the initial JVM ABI are specified.
+- Physical-to-logical layout baseline mappings, stable module-ID declarations, catalog discovery,
+  path/ID import resolution, and environment-relative catalog visibility are specified.
 - `LANGUAGE.md` records the resolved infix, multiline, function-reference/result-contract,
   persistent state/object, module, bytes, contract, collection, and JVM backend decisions.
 - The shared structured-error payload is specified through `ErrorTemplate`, and the parameterized
@@ -72,32 +74,32 @@ the ordinary callable path; complete callable metadata remains the principal unf
 - Extend the structured logical-line engine already used by grouped expressions, dynamic lookups,
   ungrouped multiline argument lists, and indented bodies to lambdas, collection literals, `format`, `cycle`,
   rules, and trailing blocks as those constructs are implemented.
+- Add a pre-parse layout-mapping stack for planned terminal `\\` baseline adjustments and standalone
+  `\*` restoration lines. Compute effective logical indentation before ordinary layout handling;
+  preserve physical coordinates, stacking, valid EOF, unmatched-restoration no-op behavior, and
+  formatter-visible marker placement exactly as specified.
 - Preserve raw source columns and complete spans through desugaring. Add recovery boundaries so one
   malformed declaration does not erase useful later diagnostics in compiler mode.
 - Keep function application tighter than infix operators and make conditional branches lazy.
-- Add right-associative, syntax-level `$` below composition and conditionals. Lower it to the same
-  application node/protocol as whitespace calls so holes, contracts, effects, depth guards, and
-  diagnostics cannot diverge; extend precedence coverage when lambdas arrive in Phase 3.
+- Preserve implemented right-associative, syntax-level `$` below composition and conditionals on
+  the ordinary application path; extend precedence coverage when lambdas arrive in Phase 3.
 
 ### Name resolution and closures
 
-- Add a resolver pass that predeclares functions per block for direct and mutual recursion while
-  executing non-function bindings in source order.
-- Diagnose duplicate declarations and duplicate parameters. Permit parameters/body declarations to
-  shadow outer bindings and retain the established `^name = name` export pattern.
-- Assign lexical slots/upvalues independently of runtime environments. Verify closure capture and
-  eager partial capture against mutation introduced later.
-- Complete structural equality for scalar, scope, and collection values; reject callable equality
-  with a located diagnostic.
+- Preserve the resolver's implemented block-wide function predeclaration, source-ordered
+  non-function initialization, duplicate diagnostics, lexical depths/slots, closure capture, and
+  established `^name = name` export pattern as later declaration forms are added.
+- Extend resolver-owned lexical slots into explicit upvalue/lowering metadata for the compiler and
+  verify eager partial capture against mutation introduced later.
+- Preserve implemented structural equality for scalars, scopes, and collections and the located
+  rejection of callable equality as new value kinds arrive.
 
 ### Unified functions/operators and composition
 
-- Represent built-in operators and user functions through one callable protocol containing arity,
-  parameter/result contracts, effects, invocation, partial-application state, and reflection.
-- Support prefix symbolic calls (`+ 2 3`), prefix named calls, and infix binary calls (`2 add 3`)
-  using the precedence/associativity rules settled in Phase 0.
-- Preserve the rule that the expression start selects prefix versus infix interpretation; later
-  binary functions in a prefix argument sequence do not reclassify the call.
+- Extend the shared callable protocol already used by operators, user functions, composition, and
+  partials with complete parameter/result contract, public effect, and reflection metadata.
+- Preserve implemented prefix symbolic calls (`+ 2 3`), prefix named calls, and fixed-precedence
+  infix binary calls (`2 add 3`), including the expression-start classification rule.
 - Extend the implemented `>>` function composition with contract/effect metadata when those systems
   arrive. Its arity, holes, partial state, reflection, and incompatible-operand diagnostics already
   use the shared callable path.
@@ -121,13 +123,12 @@ symbol identities rather than source-span equality.
 
 ### Contract and type model
 
-- Parse `contract` construction, derivation lists, refinements, contracts before bindings and
-  parameters, and nullable/optional modifiers (`T?`, `T~`, `T?~`) into source-spanned semantic forms.
+- Extend the implemented source-spanned contract construction, derivation, refinement, binding,
+  parameter, and result forms with nullable/optional modifiers (`T?`, `T~`, `T?~`).
 - Represent derivation as a checked logical-inclusion graph supporting multiple bases. Reject cycles
   and retain enough provenance to explain failed membership and invalid derivation.
-- Make every contract a pure unary membership predicate. Allow ordinary pure Boolean predicates as
-  refinements, evaluate statically provable membership, and retain runtime checks when proof is
-  unavailable.
+- Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
+  static membership proofs where possible and retaining runtime checks when proof is unavailable.
 - Implement parameterized contracts through ordinary contract/function application, beginning with
   collection element contracts and `Container T` rather than introducing a separate generic-type
   subsystem.
@@ -354,9 +355,16 @@ symbol identities rather than source-span equality.
 
 ### Modules
 
-- After Phase 0 settles syntax, implement module identity, file resolution, imports, explicit exports,
-  private bindings, initialization order, duplicate/cyclic import diagnostics, and module-level
-  contract/effect interfaces.
+- Parse an optional top-level `moduleId = module` declaration into a namespace separate from lexical
+  bindings. Shallowly discover project declarations below each compilation-root directory, merge
+  environment-supplied IDs, and diagnose malformed, duplicate, colliding, and unresolved IDs with
+  all relevant source locations.
+- Implement both relative `String` path imports and catalog-resolved `ModuleId` imports, explicit
+  exports, private bindings, initialization order, and duplicate/cyclic import diagnostics. Use the
+  resolved canonical source path—not the logical ID—as the evaluation-cache and cycle-detection key,
+  so path and ID imports of the same source share one module value per environment generation.
+- Carry the visible module catalog through normal execution, staging, reflection, and sandboxes;
+  never inject IDs as runtime globals or expose catalog entries outside the current environment.
 - Compile/cache modules independently using a versioned semantic interface containing public names,
   types/contracts, effects, formats, and reflection descriptors.
 
@@ -509,15 +517,14 @@ symbol identities rather than source-span equality.
 
 ## Recommended next implementation step
 
-Low-precedence application, runtime user-contract derivation, generalized contract inference, and
-the minimum purity/effect analysis are complete. Next allow a proven pure unary Boolean callable as
-a refinement requirement in `contract` and ordinary contract clauses. Preserve runtime predicate
-checks when membership is not statically decidable, reject impure, unknown-purity, wrong-arity, and
-non-Boolean predicates with the stable refinement diagnostic, and retain parameterized contracts,
-overload dispatch, modifiers, and general effect declarations as subsequent slices. `with`/`outer`
-wait for the
-Phase 4 public named-member protocol rather than introducing an exported-scope-only semantic model
-that would later need replacement.
+Low-precedence application, runtime user-contract derivation, generalized contract inference, the
+minimum purity/effect analysis, and proven-predicate refinements are complete. Next implement
+nullable and optional contract modifiers (`T?`, `T~`, and `T?~`) as distinct unions over present
+values, null, and missing. Cover binding, parameter, result, predicate-membership, inference,
+reflection, partial-application, and diagnostic behavior without collapsing null into missing.
+Parameterized contracts, overload dispatch, and public effect declarations remain subsequent Phase
+2 slices. `with`/`outer` wait for the Phase 4 public named-member protocol rather than introducing an
+exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals
 

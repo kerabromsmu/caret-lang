@@ -12766,8 +12766,10 @@ Their later implementation must not weaken root substitution or permit authority
 ## Not implemented
 
 - trailing lambdas
-- parameterized contracts, dispatch, complete static type proof,
-  result contracts, effect inference, and ownership analysis
+- nullable/optional and parameterized contracts, overload dispatch, complete static type proof,
+  public effect declarations/enforcement/reflection, and ownership analysis; initial named-function
+  contract inference, result clauses, internal effect analysis, and predicate refinements are
+  implemented
 - universal collection literals, first-class fields, contract-selected representations, and persistent updates
 - mutability containers, container reads/writes, and field reification
 - `with`, resolver-only `outer` paths, and scoped member lookup
