@@ -136,8 +136,11 @@ symbol identities rather than source-span equality.
 - Extend the implemented ordinary contract/function parameterization beyond `Sequence T` as later
   value kinds arrive; keep general `Collection T` and mutable `Container T` aligned with Phase 4
   rather than introducing a separate generic-type subsystem.
-- Group same-named function definitions into overload sets. Select the unique most-specific
-  implementation across all parameter contracts and diagnose incomparable applicable definitions.
+- Group same-named function definitions into overload sets. Normalize parameter conjunctions and
+  absence alternatives, then order variants with the settled compiler-proven implication relation:
+  nominal derivation, verified-refinement identity, constructor-declared variance, and component-wise
+  strictness. Select the unique most-specific implementation and diagnose incomparable applicable
+  definitions without executing predicates to determine ordering.
 - Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
   callables, SIMD values, formats, rules, and cycles as those kinds arrive. Contract failures identify
   the declaration/call and failing contract with related spans.

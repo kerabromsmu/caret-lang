@@ -1022,6 +1022,45 @@ parameterization arguments. Assigning, returning, or otherwise passing an existi
 preserves its identity. Contract values are comparable by this identity even though ordinary
 callable values are not.
 
+## Contract implication and constraint normalization
+
+Static contract implication is a conservative, compiler-proven partial order. `A` implies `B` only
+when the compiler can prove that every value satisfying `A` also satisfies `B`. Unknown
+relationships are incomparable; implication analysis never executes refinement predicates or
+samples runtime values. `A` is strictly more specific than `B` when `A` implies `B` and `B` does not
+imply `A`.
+
+Descriptor identity implies itself, and aliases preserve that identity. Every contract implies
+`Any`. A nominal contract implies each declared base transitively and each of its declared
+refinement requirements. The reverse does not hold: satisfying the same bases and predicates does
+not grant or imply the nominal descriptor. A verified refinement implies only the same callable
+identity, including aliases of that callable; different predicates remain incomparable even when
+their implementations appear logically equivalent.
+
+Several requirements on one parameter form an anonymous conjunction. A conjunction implies each
+of its requirements, and one normalized conjunction implies another only when every requirement of
+the latter is implied by the former under the rules above. Normalization removes duplicate
+identities and requirements already implied by a stricter retained requirement. An unconstrained
+parameter and an explicit `Any` requirement are the same generic fallback and cannot distinguish
+two overload variants. A statically empty constraint is an invalid declaration rather than a
+dispatch variant that wins by accepting no values.
+
+Null and missing alternatives are normalized separately from the conjunction for ordinary present
+values. Their implication follows accepted-set inclusion: `T` implies both `T?` and `T~`; each of
+those implies `T?~`; and `T?` and `T~` are incomparable. Base implication must also hold, so `Int?`
+implies `Number?` when `Int` implies `Number`. For a conjunction, null is admitted only when every
+requirement admits null, and missing is admitted only when every requirement admits missing. This
+separate normalization also detects when the ordinary-value conjunction is empty but a shared null
+or missing alternative remains valid.
+
+Parameterized-contract constructors declare the variance of each parameter as language-owned
+metadata. Implication is considered only between applications of the same constructor, or through
+an independently declared base relationship. Immutable `Sequence` has a covariant element
+parameter, so `Sequence Int` implies `Sequence Number` when `Int` implies `Number`. Mutable
+`Container` parameters are invariant by default: `Container Int` and `Container Number` do not
+imply one another unless their argument descriptors are identical. No constructor is assumed
+covariant merely because its current implementation appears read-only.
+
 ---
 
 ## Contract composition
@@ -1266,8 +1305,10 @@ Function dispatch must not arbitrarily choose between ambiguous implementations.
 All definitions with the same name in one lexical block form one closed overload set. Every variant
 must have the same arity, and every pair must differ in the normalized requirements of at least one
 parameter; result contracts alone cannot distinguish variants. A generic variant may be the
-least-specific fallback. One variant is more specific when it is at least as restrictive on every
-parameter and strictly more restrictive on at least one.
+least-specific fallback. Variant ordering uses the contract-implication relation above: one variant
+is more specific when its normalized constraint implies the other variant's constraint on every
+parameter and the reverse implication fails on at least one parameter. Requirements that are
+unknown or incomparable never receive a source-order tie-break.
 
 The compiler selects a uniquely most-specific variant when it can prove one. Otherwise the closed
 set is dispatched at runtime using the arguments' actual memberships. No applicable variant and
