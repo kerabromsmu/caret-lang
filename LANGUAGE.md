@@ -38,6 +38,8 @@ strings rather than a separate name-literal syntax.
 Lexical, parse, and runtime errors include the one-based line and column of the smallest relevant
 source expression. Columns count raw source characters. A tab therefore advances the displayed
 column by one, although a leading tab still contributes two spaces to indentation depth.
+The planned layout-baseline modifiers do not change these coordinates: diagnostics continue to use
+physical source lines and columns even when effective logical indentation differs.
 Built-in argument validation retains individual argument spans, so an invalid operand points to
 that operand rather than the complete call.
 
@@ -142,7 +144,11 @@ Parameterized contracts, nullable/optional modifiers, overload dispatch, complet
 static inference/proof, the public effect system, and the full universal-collection model remain
 planned below.
 
-Indentation defines a multiline function body. If a body contains exported bindings (`^`), calling the function returns an immutable scope containing those exports. Otherwise it returns the final expression or assigned value.
+In the current prototype, physical indentation directly defines a multiline function body. The
+planned layout modifiers described below will first translate physical indentation into effective
+logical indentation; the ordinary block rules will then consume that logical indentation. If a
+body contains exported bindings (`^`), calling the function returns an immutable scope containing
+those exports. Otherwise it returns the final expression or assigned value.
 
 A zero-argument function is evaluated when its name is read. Use reflection syntax to refer to the
 function itself without invoking it:
@@ -348,6 +354,11 @@ Lambda construction will also bind more tightly than `$` once lambdas are implem
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
+The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, and `#`,
+they are consumed by layout handling before expression parsing and have no expression precedence.
+The roles remain separate: `$` groups syntax-level application, `@` reifies a binding or program
+entity, `#` changes execution stage, and `\\`/`\*` change only the mapping from physical to logical
+indentation.
 
 ## Implementation roadmap
 
@@ -466,9 +477,11 @@ planned contract/effect system.
 
 ### Ungrouped multiline application
 
-Outside an explicit delimiter, a physical line indented more deeply than a non-definition
-expression continues that expression. Each continuation expression is the next whitespace-applied
-argument at ordinary application precedence, and dedentation ends the call. Lower-precedence
+In the current prototype, outside an explicit delimiter, a physical line indented more deeply than
+a non-definition expression continues that expression. With layout modifiers, this rule instead
+compares effective logical indentation after the physical-to-logical mapping. Each continuation
+expression is the next whitespace-applied argument at ordinary application precedence, and logical
+dedentation ends the call. Lower-precedence
 operators on the initial line remain outside that application: `true & add` followed by indented
 `1` and `2` means `true & (add 1 2)`.
 
@@ -484,13 +497,284 @@ is equivalent to `result = add 1 (multiply 2 3)`. Blank and comment-only lines d
 continuation. An empty function-definition right side still opens a function body and takes
 precedence over continuation parsing.
 
-Sibling continuation arguments use the same indentation. A deeper line continues the immediately
-preceding argument; dedenting to an indentation other than an established enclosing level is a
-located layout error. A continuation line is an expression and cannot contain a definition.
+Sibling continuation arguments use the same effective indentation. A logically deeper line
+continues the immediately preceding argument; dedenting to a logical indentation other than an
+established enclosing level is a located layout error. A continuation line is an expression and
+cannot contain a definition.
 
 More-indented application is implemented by the current parser. Once lambdas are implemented, an
 indented trailing lambda will be the final call argument; its body will be delimited by its own
-indentation in the ordinary way.
+effective logical indentation in the ordinary way.
+
+### Planned layout baseline modifiers
+
+Caret normally derives logical block structure from physical indentation. The planned layout tokens
+`\\` and `\*` allow a region to occupy fewer physical source columns without changing its logical
+nesting. They are layout syntax only: neither token is an expression, operator, function, value,
+scope, binding, effect, or runtime operation.
+
+The relevant distinction is:
+
+```text
+physical indentation
+    columns occupied by source text in the file
+
+effective logical indentation
+    indentation supplied to Caret's ordinary layout parser
+```
+
+Layout handling computes effective logical indentation before ordinary indentation and expression
+parsing. All normal block, continuation, visibility, and evaluation rules then apply unchanged.
+
+#### `\\` adjusts the physical baseline
+
+`\\` is written as the final layout token on a construct that opens an indentation-defined region.
+It pushes the current physical-to-logical mapping and activates an adjusted mapping for the
+following region:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+connect url
+send request
+\*
+nextOperation
+```
+
+This has the same logical structure as:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer
+  connect url
+  send request
+nextOperation
+```
+
+The first nonblank, non-comment body line after `\\` establishes the adjusted physical baseline.
+That baseline maps to one logical child indentation level beneath the opening construct. Further
+physical indentation is interpreted relative to that baseline, preserving sibling and nested
+relationships. The adjustment is structural; it does not subtract a fixed number of source-space
+columns, depend on formatter width, or assign numeric meaning to individual backslash characters.
+Forms such as `\statement` or longer runs of backslashes are not graduated indentation controls.
+
+The marker changes only the baseline mapping. It does not open an additional block, close a block,
+create a semantic scope, change lexical visibility, alter evaluation order, or change the meaning
+of any declaration or expression.
+
+Relative indentation continues normally inside the adjusted region:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+response &
+  process response
+!
+  reportFailure
+\*
+```
+
+This is logically equivalent to:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer
+  response &
+    process response
+  !
+    reportFailure
+```
+
+Physical dedentation may close nested logical constructs according to the active mapping, but it
+does not restore the previous mapping. A `\\` adjustment remains active until a `\*` restoration or
+EOF. The layout processor must not infer the end of the adjustment merely because later source
+appears physically dedented; physical indentation is precisely the dimension being remapped.
+
+Consequently, an explicit restoration is unnecessary when the adjusted mapping may remain active
+through the end of the file:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+connect url
+send request
+```
+
+#### `\*` restores the previous mapping
+
+`\*` is normally written alone at the physical indentation appropriate to the adjusted region. It
+contributes no logical statement or indentation event. When a previous mapping exists, it pops the
+current mapping and restores that previous mapping before processing the next significant source
+line:
+
+<!-- caret-example: planned -->
+```caret
+main =
+  with import clientServer \\
+connect url
+send request
+\*
+  finish
+```
+
+`\*` does not mean end `with`, end function, end lambda, end scope, semantic dedent, return, or any
+other control operation. After restoration, the physical indentation of following lines is
+interpreted through the restored mapping.
+
+The markers are state modifiers rather than paired delimiters. An unmatched `\*` is a deterministic
+no-op. An active `\\` at EOF is valid, and EOF silently discards every remaining mapping. Tooling may
+warn about suspicious redundant markers, but such warnings do not alter program semantics.
+
+#### Stacking and nested indentation
+
+Mappings form a stack, so adjusted regions compose without acquiring block semantics:
+
+<!-- caret-example: planned -->
+```caret
+with outerModule \\
+outerCall
+
+with innerModule \\
+innerCall
+\*
+
+anotherOuterCall
+\*
+```
+
+The first `\*` restores the outer adjusted mapping; the second restores the original mapping. Each
+new `\\` anchors its first significant body line one logical child level below its own opening
+construct, even when that construct is already inside an adjusted region.
+
+Conceptually, every significant source line follows this pipeline:
+
+```text
+physical indentation
+    + active structural layout mapping
+    = effective logical indentation
+    -> ordinary Caret layout and expression parsing
+```
+
+There is no parallel expression parser for adjusted regions.
+
+#### Placement, strings, and comments
+
+The layout/lexer layer recognizes the exact `\\` and `\*` tokens before ordinary expression parsing.
+`\\` is valid as the terminal layout token of a header that permits or requires a following
+indentation-defined region, including `with`, function bodies, lambdas, conditionals, and other
+such constructs. A token in a syntactically impossible position may produce a located malformed-
+layout diagnostic. `\*` is a standalone restoration line; its lack of an active mapping is not an
+error.
+
+Marker spellings inside strings retain ordinary string-escape semantics and never affect layout:
+
+<!-- caret-example: planned -->
+```caret
+text = "text\\text"
+```
+
+Comments likewise cannot activate, restore, or otherwise change a layout mapping. Blank and
+comment-only lines do not establish the physical baseline awaited after `\\`.
+
+#### Interaction with `with` and other indentation-defined forms
+
+`with` is the primary motivating form:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer
+  connect url
+  send request
+```
+
+and:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+connect url
+send request
+\*
+```
+
+have identical lexical name resolution, visibility, `outer` behavior, field reification, effects,
+evaluation, and result. If `connect` is exported by the imported module, it resolves identically in
+both bodies.
+
+Function bodies, ungrouped multiline application, continuation indentation, indented or trailing
+lambdas, and nested conditionals all consume effective logical indentation after the same mapping
+step. A source line physically at column zero may therefore remain logically nested while an
+adjustment is active. Once `\*` restores the original mapping, following lines again derive their
+logical indentation from that mapping. None of these constructs receives special parsing rules for
+adjusted regions.
+
+For example, an ordinary function body and a multiline application may use the same transformation:
+
+<!-- caret-example: planned -->
+```caret
+main = \\
+initialize
+run
+\*
+
+result = combine \\
+first
+second
+\*
+```
+
+Likewise, a lambda body may be shifted without changing the lambda or its captures:
+
+<!-- caret-example: planned -->
+```caret
+normalize = text -> \\
+trimmed = trim text
+lowercase trimmed
+\*
+```
+
+#### Diagnostics and formatting
+
+Diagnostics continue to report existing physical source line and column positions. Tooling may
+display effective logical indentation separately, but it must not substitute logical positions for
+physical diagnostic locations. Neither an active mapping at EOF nor an unmatched restoration is a
+syntax error.
+
+A formatter must preserve the semantic effect of layout mappings. It may retain the explicit
+adjusted layout, or on an explicit normalization request rewrite the region using equivalent
+conventional indentation. It must not silently remove `\\` or `\*` while leaving physically shifted
+source unchanged. Moving or reindenting surrounding source must update the physical-to-logical
+mapping as necessary to preserve the same logical program. Formatter policy is not runtime
+semantics.
+
+#### Layout-modifier implementation requirements
+
+The initial implementation must:
+
+1. recognize `\\` outside strings and comments as a layout-baseline modifier;
+2. recognize `\*` outside strings and comments as layout restoration;
+3. retain physical indentation separately from effective logical indentation;
+4. apply the active mapping before ordinary indentation parsing;
+5. preserve relative sibling and nested indentation while a mapping is active;
+6. maintain nested mappings as a stack;
+7. make `\*` restore one previous mapping when available;
+8. make redundant or unmatched `\*` a deterministic no-op;
+9. permit an active `\\` through EOF;
+10. discard every remaining mapping at EOF without error;
+11. keep diagnostic line and column locations physical;
+12. leave runtime semantics, scopes, visibility, contracts, effects, and evaluation unchanged;
+13. use effective indentation uniformly for function bodies, `with`, lambdas, multiline
+    application, conditionals, and every other indentation-defined construct; and
+14. never interpret marker spellings inside strings or comments as layout syntax.
+
+#### Design principle
+
+Caret's indentation determines logical structure, but logical indentation need not always occupy
+the same physical source columns. `\\` temporarily shifts the physical indentation baseline while
+preserving logical nesting, and `\*` restores the previous baseline. The adjusted mapping continues
+until explicitly restored or EOF; ordinary physical dedentation cannot end it because physical
+indentation is what the modifier changes. After effective logical indentation is calculated, all
+normal Caret parsing and semantic rules apply unchanged.
 
 ### Core semantic decisions
 
@@ -3307,7 +3591,7 @@ A lambda may contain a single expression:
 x -> x * 2
 ```
 
-or an indented block:
+or a block at a deeper effective logical indentation:
 
 ```caret
 x ->
@@ -3315,7 +3599,9 @@ x ->
   doubled + 1
 ```
 
-The result of the final expression is the result of the lambda, following the same rules as an ordinary function body.
+The result of the final expression is the result of the lambda, following the same rules as an
+ordinary function body. Planned layout modifiers may shift the block physically, but do not change
+its extent, captures, parameters, or result.
 
 Example:
 
@@ -3907,7 +4193,8 @@ map (x -> x * 2) values
 
 rather than relying on context-sensitive parsing.
 
-An indented lambda body extends through the lambda's indentation block.
+An indented lambda body extends through its effective logical indentation block after any active
+layout mapping has been applied.
 
 ---
 
@@ -10303,6 +10590,9 @@ with value
   body
 ```
 
+The body is determined by effective logical indentation. The planned `\\` and `\*` layout markers
+may shift its physical baseline but do not change `with` name resolution or block semantics.
+
 `with` and `outer` are reserved spellings and cannot be declared as bindings or parameters.
 
 Example:
@@ -12481,6 +12771,7 @@ Their later implementation must not weaken root substitution or permit authority
 - universal collection literals, first-class fields, contract-selected representations, and persistent updates
 - mutability containers, container reads/writes, and field reification
 - `with`, resolver-only `outer` paths, and scoped member lookup
+- `\\` and `\*` physical-to-logical layout baseline modifiers
 - lambdas and higher-order standard collection operations
 - cycles and transactional previous/next state views
 - SIMD values and required vectorized application
