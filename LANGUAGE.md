@@ -2316,6 +2316,40 @@ This requires `transform` to be a pure function.
 
 A unary Boolean function that is itself effectful cannot be used as a contract.
 
+### Effect identities and catalogs
+
+An effect is a language-owned identity describing one category of observable behavior. Effect
+identities form a flat set: one effect does not imply another, and repeated names or aliases of the
+same identity normalize to one set member. `pure` is reserved declaration syntax for the empty
+allowed set, not an effect descriptor.
+
+The initial portable standard effect is `Output`, used by `print`. `StateRead` and `StateWrite` are
+reserved portable identities for the container model specified below. Other domains are supplied by
+the active execution environment through an explicit effect catalog. For example, an environment
+may expose `fs` and `net` for filesystem and network integrations, and the prototype test
+environment exposes `TestReport`. These illustrative catalog names do not imply that the
+corresponding capability exists in every environment.
+
+Effect names occupy an environment-relative namespace separate from ordinary values, contracts,
+module IDs, and lexical bindings. An ordinary binding cannot create or shadow an effect identity.
+The environment catalog may provide aliases, but every alias retains the descriptor identity of its
+target. A catalog entry that collides with a portable standard name is invalid unless it denotes
+that exact standard identity. Ordinary Caret source may reference visible effect names but cannot
+manufacture new identities in the initial language.
+
+Catalog visibility follows the current module, root, staging, and sandbox environment. Visibility
+permits a declaration to describe behavior; it does not provide a callable implementation,
+capability, permission, or authority. Declaring `fs` cannot make a filesystem binding appear,
+expand a sandbox projection, or turn an unavailable operation into an authorized one. Failure of an
+operation for lack of authority remains its ordinary structured operation failure.
+
+Every callable has language-owned metadata containing a known upper bound on the effects it may
+perform. Host callables and environment-provided operations must supply this metadata at their
+boundary. A dynamically obtained callable may be invoked only when its bound is known and is a
+subset of the caller's declared allowance. If no bound is available, analysis reports the located
+semantic diagnostic `UNKNOWN_CALL_EFFECTS`; there is no wildcard declaration and no attempt to
+permit the action first and inspect its effects afterward.
+
 ### Effect inference and tooling
 
 Effect inference is mandatory even when an explicit effect contract is present.
@@ -2325,6 +2359,10 @@ The compiler must infer the actual effect set and verify:
 ```text
 actual effects ⊆ declared allowed effects
 ```
+
+An omitted declaration and explicit `pure` both provide the empty allowed set. The inferred set is
+computed independently and never enlarged merely because a broader allowance was written. Catalog
+aliases are compared by descriptor identity during this subset check.
 
 IDE tooling should expose inferred effects directly at function declarations.
 
@@ -7721,6 +7759,11 @@ plugin:
 tutorial:
     fs -> virtual in-memory filesystem
 ```
+
+Here `fs` is a visible effect-catalog identity, not the filesystem capability itself. The
+environment separately chooses whether a callable implementation is present and what authority it
+holds. Replacing or restricting that implementation does not change the meaning of the effect set,
+and exposing the effect name alone grants nothing.
 
 Therefore:
 

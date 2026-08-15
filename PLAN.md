@@ -166,6 +166,11 @@ symbol identities rather than source-span equality.
 
 - Give every callable an inferred effect set and a declared maximum set. No effect declaration means
   an empty set; `pure` is the explicit spelling of that guarantee.
+- Resolve effects through a separate environment-relative catalog. Standardize `Output` and reserve
+  `StateRead`/`StateWrite`; require environment callables such as test, filesystem, or network
+  integrations to expose stable effect identities and known upper bounds without granting authority.
+- Reject invocation of a callable whose effect upper bound is unavailable with
+  `UNKNOWN_CALL_EFFECTS`; do not add an effect wildcard or runtime after-the-fact enforcement.
 - Define `StateRead` for explicit container dereference and `StateWrite` for `put`. Accessing or
   sharing a container reference is pure; effects describe observation but do not grant authority.
 - Infer effects transitively through calls, higher-order parameters, closures, composition, partials,
@@ -413,6 +418,9 @@ symbol identities rather than source-span equality.
 - Support direct, filtered, and virtual capabilities. Treat effect declarations as descriptions,
   never authority grants, and report unavailable authority through `Result` and `ErrorTemplate`.
   Apply the same boundary result envelope to construction, lifecycle, swaps, and exported calls.
+- Make effect-catalog visibility environment-relative and independent from callable/capability
+  projection. Nested sandboxes cannot introduce effect identities or implementations hidden by
+  their parent without explicit outer-host injection.
 - Project containers explicitly as shared read/write identities, read-only views, mediated values,
   snapshots, or virtual replacements. Reflection and field reification must not upgrade the chosen
   projection or recover hidden host mutation authority.
