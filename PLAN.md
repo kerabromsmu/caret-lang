@@ -100,6 +100,9 @@ the ordinary callable path; complete callable metadata remains the principal unf
   partials with complete parameter/result contract, public effect, and reflection metadata. Overload
   partials retain immutable viable-variant, sparse filled-position, bound-argument, and applicability-
   cache state while exposing their common remaining arity.
+- Replace contract-only semantic handling of declaration clauses with an analyzed split between
+  conjunctive value requirements and an optional effect allowance, preserving source spans and the
+  position-specific function, parameter, and assignment meanings.
 - Preserve implemented prefix symbolic calls (`+ 2 3`), prefix named calls, and fixed-precedence
   infix binary calls (`2 add 3`), including the expression-start classification rule.
 - Extend the implemented `>>` function composition with contract/effect metadata when those systems
@@ -169,6 +172,13 @@ symbol identities rather than source-span equality.
 - Resolve effects through a separate environment-relative catalog. Standardize `Output` and reserve
   `StateRead`/`StateWrite`; require environment callables such as test, filesystem, or network
   integrations to expose stable effect identities and known upper bounds without granting authority.
+- Classify mixed clause terms against both the contract/refinement namespace and effect catalog.
+  Reject ambiguous or unknown names, effects with absence modifiers or as parameterized-contract
+  arguments, and `pure` combined with a nonempty allowance; make ordering immaterial and normalize
+  aliases by descriptor identity.
+- Apply effect terms before functions as declared function allowances and before parameters or
+  assignments as subset constraints on the callable value's known upper bound. Do not infer an
+  implicit purity constraint when a parameter or assignment clause contains no effect terms.
 - Reject invocation of a callable whose effect upper bound is unavailable with
   `UNKNOWN_CALL_EFFECTS`; do not add an effect wildcard or runtime after-the-fact enforcement.
 - Define `StateRead` for explicit container dereference and `StateWrite` for `put`. Accessing or

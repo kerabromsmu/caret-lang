@@ -2343,6 +2343,51 @@ capability, permission, or authority. Declaring `fs` cannot make a filesystem bi
 expand a sandbox projection, or turn an unavailable operation into an authorized one. Failure of an
 operation for lack of authority remains its ordinary structured operation failure.
 
+### Mixed declaration clauses
+
+A parenthesized declaration clause may contain both value requirements and an effect allowance.
+Each term is resolved independently against the visible contract/refinement namespace and the
+environment-relative effect catalog. A contract or verified refinement contributes a conjunctive
+value requirement; an effect identity contributes to one effect allowance. Source order does not
+change this classification or its meaning. Duplicate contract requirements normalize under the
+ordinary contract rules, and repeated effect names or aliases normalize by effect-descriptor
+identity.
+
+If a name resolves in both namespaces, analysis reports the located semantic diagnostic
+`AMBIGUOUS_CLAUSE_NAME`; neither namespace takes precedence. If it resolves in neither namespace,
+analysis reports `UNKNOWN_CLAUSE_NAME`. `pure` is the reserved spelling of an empty effect allowance,
+so combining it with any named effect is invalid. Nullable and optional modifiers apply only to
+contract terms; applying `?` or `~` to `pure` or an effect name is invalid. A parameterized contract
+constructor consumes only its contract arguments: an effect term cannot be interpreted as one of
+those arguments. These errors are reported at the offending term while retaining the clause span
+for context.
+
+The position of the clause determines what its two parts constrain:
+
+* Before a named function, value requirements constrain the function result and the effect
+  allowance is the function's declared maximum effect set. For example, `(pure Int) calculate ...`
+  declares a pure function whose result satisfies `Int`.
+* Before a parameter, value requirements constrain the parameter value. When effect terms are
+  present, that value must also be callable and have a known effect upper bound that is a subset of
+  the stated allowance. Thus `(pure) transform` accepts only a callable with an empty bound, while
+  `(fs) transform` also accepts a pure callable.
+* Before an assignment, value requirements constrain the assigned value. When effect terms are
+  present, the assigned value must likewise be callable with a known upper bound contained in the
+  allowance. The allowance does not constrain evaluation of the initializer and does not describe
+  the callable's eventual result.
+
+Omitting effect terms from a parameter or assignment clause imposes no callable-effect constraint;
+it does not implicitly require the value to be pure. A later invocation still requires a known
+effect upper bound under the ordinary `UNKNOWN_CALL_EFFECTS` rule. By contrast, omitting an effect
+declaration from a named function continues to declare the function pure as specified above.
+
+The analyzed form of a clause therefore has separate `valueRequirements` and optional
+`effectAllowance` components while preserving term and clause source spans. The current syntax AST
+may retain unresolved clause terms until semantic analysis performs namespace-aware classification;
+it must not encode a silent contract-first or effect-first precedence. Callable result-contract
+metadata is independent: an assignment such as `(pure Int) callback = value` constrains `callback`
+itself to satisfy `Int`, not the result of calling it.
+
 Every callable has language-owned metadata containing a known upper bound on the effects it may
 perform. Host callables and environment-provided operations must supply this metadata at their
 boundary. A dynamically obtained callable may be invoked only when its bound is known and is a
