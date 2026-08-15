@@ -117,6 +117,9 @@ the ordinary callable path; complete callable metadata remains the principal unf
   position-specific function, parameter, and assignment meanings.
 - Preserve implemented prefix symbolic calls (`+ 2 3`), prefix named calls, and fixed-precedence
   infix binary calls (`2 add 3`), including the expression-start classification rule.
+- Attach the settled pure operator signatures to symbolic callable values. Represent `+` as its
+  closed numeric/string overload set so partial application, narrowing, composition, and reflection
+  use the ordinary callable path; keep truth and conditional laziness as syntax-level evaluation.
 - Extend the implemented `>>` function composition with contract/effect metadata when those systems
   arrive. Its arity, holes, partial state, reflection, and incompatible-operand diagnostics already
   use the shared callable path.
@@ -164,6 +167,13 @@ symbol identities rather than source-span equality.
   and retain enough provenance to explain failed membership and invalid derivation.
 - Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
   static membership proofs where possible and retaining runtime checks when proof is unavailable.
+- Implement the initial operator matrix over `Number`, `String`, structural `Eq`, and `Boolean?~`.
+  Preserve String-plus-Any language rendering, numeric-only ordering, Number-only arithmetic
+  guarantees, recursive callable rejection in equality, and lazy normalized truth operations.
+- Retain closed `+` alternatives across whole-block constraint collection, resolve them from operands
+  and context, and report `AMBIGUOUS_CONTRACT` rather than generalizing an operator constraint or
+  defaulting to Number. Use `INCOMPATIBLE_CONTRACTS` for statically impossible operands while
+  preserving established runtime operand, zero-divisor, non-finite, and callable-equality errors.
 - Extend the implemented ordinary contract/function parameterization beyond `Sequence T` as later
   value kinds arrive; keep general `Collection T` and mutable `Container T` aligned with Phase 4
   rather than introducing a separate generic-type subsystem.
@@ -581,9 +591,10 @@ minimum purity/effect analysis, proven-predicate refinements, and nullable/optio
 are complete. Initial parameterized contracts are also complete through `Sequence T`. Next implement
 closed same-name overload sets and unique most-specific contract dispatch, retaining a generic
 fallback and distinct no-applicable/ambiguous diagnostics. Public effect declarations remain a
-subsequent Phase 2 slice. Callable signatures, reflection, and explicit higher-order arrow contracts
-are now settled. The static operand and coercion contract matrix for built-in operators is the next
-unresolved Phase 2 blocker. `with`/`outer` wait for the Phase 4 public named-member protocol rather
+subsequent Phase 2 slice. Callable signatures, reflection, explicit higher-order arrow contracts,
+and the initial static operator matrix are now settled. Stable diagnostic codes for the remaining
+mixed-clause and callable-effect failures are the next unresolved Phase 2 blocker. `with`/`outer`
+wait for the Phase 4 public named-member protocol rather
 than introducing an exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals

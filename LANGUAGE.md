@@ -875,8 +875,9 @@ Function invocation has an interpreter-owned maximum depth. Both ordinary applic
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
 
-The complete operand/coercion rules for operators once static types exist remain a prerequisite for
-extending unified binary functions beyond the existing scalar operators.
+The planned static contract system preserves this runtime behavior through the normative operator
+matrix below. Concrete numeric representations added later require explicit specialized variants;
+they do not silently change these scalar rules.
 
 The self-interpreter may represent successful and failed operations as exported result scopes. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
@@ -1028,6 +1029,103 @@ definition group has been analyzed. Recursive uses inside that group are monomor
 external uses instantiate the generalized variables independently. Polymorphic recursion requires
 explicit contracts. An instantiation that remains ambiguous when a concrete contract is required
 is a compile-time error at the use site, rather than at the generic declaration.
+
+## Built-in operator contracts and coercions
+
+Built-in symbolic operators are pure ordinary callables whose signatures participate in the same
+partial application, overload narrowing, composition, and reflection rules as named functions.
+Unary syntax and lazy control syntax retain their dedicated parsing, but use the same contract
+facts during analysis.
+
+The initial scalar matrix is:
+
+| Form | Accepted operands | Result guarantee |
+| --- | --- | --- |
+| unary `-` | `Number` | `Number` |
+| binary `-`, `*`, `/`, `%` | `Number`, `Number` | `Number` |
+| `<`, `<=`, `>`, `>=` | `Number`, `Number` | `Boolean` |
+| `==`, `!=` | `Eq`, `Eq` | `Boolean` |
+| `not` | `Boolean?~` | `Boolean` |
+| `and`, `or` | `Boolean?~`, `Boolean?~` when evaluated | `Boolean` |
+
+There is no implicit numeric parsing, Boolean-to-number conversion, or null/missing propagation.
+The generic numeric variants guarantee only `Number`. A value may carry a narrower nominal numeric
+membership such as `Int`, but an arithmetic result does not automatically acquire or preserve that
+identity. A narrower guarantee requires an explicit checked result boundary or a future specialized
+operator variant.
+
+`+` is a closed overload set with these variants:
+
+```text
+[Number Number] -> Number
+[String String] -> String
+[String Any]    -> String
+[Any String]    -> String
+```
+
+The exact `String`, `String` variant is more specific than both broad concatenation variants and
+therefore prevents an ambiguity for two strings. If either operand is a string, the other operand
+is converted with Caret's deterministic, stack-safe, language-owned value rendering; Java
+`toString`, host identity text, and native implementation details are never used. Two non-string
+operands must satisfy the numeric variant.
+
+Ordering remains numeric in the initial matrix. String ordering and ordering for user contracts use
+named functions until the standard environment explicitly introduces additional closed symbolic-
+operator variants. Merely satisfying a user-defined contract named `Comparable` does not inject an
+implementation into `<`.
+
+### Structural equality capability
+
+`Eq` in the operator matrix is the standard structural capability descriptor used by the built-in
+equality operators. Scalar values, null, missing, contract values by descriptor identity,
+non-callable function references by target identity, and language-owned metadata descriptors
+satisfy it. Scopes and immutable collections satisfy it only when every recursively reachable
+member does. Planned containers satisfy it by stable container identity, without reading their
+contents.
+
+A live callable does not satisfy `Eq`, and neither does a structure containing one. A statically
+known violation and a violation discovered during recursive runtime comparison use
+`CALLABLE_EQUALITY`, preserving the existing diagnostic rather than converting it into ordinary
+inequality. Two Eq values with unrelated concrete kinds are nevertheless valid operands and compare
+false. Attributed nominal membership does not otherwise affect structural equality.
+
+The standard `Eq` descriptor is part of the execution environment used to type the built-in
+operators. A lexical contract binding that shadows its public name does not rewrite those operator
+signatures or manufacture standard Eq membership.
+
+### Truth operations and evaluation
+
+`Boolean?~` is exactly the established truth domain: Boolean, null, or missing. Null and missing are
+falsey. `not`, `and`, and `or` normalize their results to `Boolean`; they do not preserve null or
+missing. `and` evaluates its right operand only when the left is true, and `or` evaluates it only
+when the left is falsey. Conditional conditions use the same domain, evaluate only the selected
+branch, and retain the ordinary common-guarantee join for their result.
+
+Other eager binary operators evaluate operands from left to right before dispatch. All variants in
+this initial matrix have an empty effect set.
+
+### Operator constraint inference and failures
+
+An occurrence of `+` retains its closed numeric/string alternatives while constraints are collected
+across the complete lexical block. A known string operand selects a concatenation alternative; two
+known Number operands select numeric addition. Expected result contracts and later uses may resolve
+an earlier choice. Analysis neither defaults an unresolved choice to Number nor generalizes a
+hidden `supports +` constraint. If several alternatives remain at the end of analysis,
+`AMBIGUOUS_CONTRACT` identifies the operator and relevant operand constraints.
+
+Statically known operands that match no variant produce `INCOMPATIBLE_CONTRACTS` at the smallest
+incompatible operand or operator span, with related constraint locations where useful. Dynamically
+obtained values retain the existing located runtime operand diagnostics. Division or remainder by
+a provably zero divisor and a provably non-finite arithmetic result may be rejected statically;
+otherwise `DIVISION_BY_ZERO` and `NON_FINITE_RESULT` remain the runtime diagnostics at their
+established locations.
+
+Future concrete numeric contracts such as fixed-width integers and floats must add explicit
+operator variants specifying accepted pairs, result contracts, overflow, division, and conversion
+rules before those combinations are implemented. This initial matrix defines no implicit widening,
+signedness conversion, or mixed-representation promotion.
+
+## Contract declaration and identity
 
 Contract declarations are predeclared throughout their lexical block, so their bases may use
 forward references. Direct and indirect contract-derivation cycles are compile-time errors.

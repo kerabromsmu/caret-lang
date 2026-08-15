@@ -233,6 +233,15 @@ Compatibility is substitution-safe: parameters are contravariant, results covari
 must remain within the stated allowance. This arrow form is a first-class contract, distinct from a
 lambda because its left side is a bracketed requirement list. It is specified but not implemented.
 
+The planned static operator model preserves the prototype's compact behavior without adding hidden
+numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
+closed overload set: it adds two numbers or concatenates when either operand is a string, rendering
+the other value through Caret's own deterministic formatter. Equality uses a recursive structural
+`Eq` capability and continues to reject live callables even when nested. Boolean operations retain
+the existing Boolean/null/missing truth domain and lazy evaluation. An unresolved numeric-versus-
+string `+` is a compile-time ambiguity rather than silently defaulting to Number. This complete
+static matrix is specified but not implemented by the current inference pass.
+
 Contracts also have first-class null/missing unions. `Number?` accepts numbers or null, `Number~`
 accepts numbers or missing, and `Number?~` accepts all three while keeping null and missing
 observably distinct. The modified contracts remain unary predicates, work in clauses and aliases,
