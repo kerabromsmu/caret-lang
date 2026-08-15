@@ -103,6 +103,8 @@ final class ContractInference {
         EffectSummary effect = effects.get(function);
         return contract != null && effect != null && function.params().size() == 1
                 && contract.resultGuarantees().contains(BuiltinContract.BOOLEAN)
+                && !contract.resultGuarantees().contains(BuiltinContract.NULL)
+                && !contract.resultGuarantees().contains(BuiltinContract.MISSING)
                 && effect.isProvenPure();
     }
 
@@ -111,7 +113,9 @@ final class ContractInference {
         EffectSummary effect = effects.get(function);
         if (contract == null || effect == null) throw new IllegalArgumentException("Function was not analyzed");
         if (function.params().size() != 1) invalidRefinement(function, "must take exactly one parameter");
-        if (!contract.resultGuarantees().contains(BuiltinContract.BOOLEAN)) {
+        if (!contract.resultGuarantees().contains(BuiltinContract.BOOLEAN)
+                || contract.resultGuarantees().contains(BuiltinContract.NULL)
+                || contract.resultGuarantees().contains(BuiltinContract.MISSING)) {
             invalidRefinement(function, "must guarantee a Boolean result");
         }
         if (!effect.effects().isEmpty()) {
@@ -252,6 +256,7 @@ final class ContractInference {
             case Field ignored -> Shape.unknown();
             case DynamicField ignored -> Shape.unknown();
             case Reflect ignored -> Shape.unknown();
+            case ContractModifier ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
             case CollectionLiteral ignored -> Shape.concrete(BuiltinContract.SEQUENCE);
         };
@@ -359,8 +364,13 @@ final class ContractInference {
     private static EnumSet<BuiltinContract> clause(ContractClause clause) {
         EnumSet<BuiltinContract> result = EnumSet.noneOf(BuiltinContract.class);
         if (clause != null) {
-            for (ContractName name : clause.names()) BuiltinContract.named(name.name())
-                    .filter(contract -> contract != BuiltinContract.ANY).ifPresent(result::add);
+            for (ContractName name : clause.names()) {
+                BuiltinContract builtin = BuiltinContract.named(name.name()).orElse(null);
+                if (builtin == null || builtin == BuiltinContract.ANY) continue;
+                result.add(builtin);
+                if (name.nullable()) result.add(BuiltinContract.NULL);
+                if (name.optional()) result.add(BuiltinContract.MISSING);
+            }
         }
         return result;
     }
@@ -379,13 +389,16 @@ final class ContractInference {
             rejectDisjoint(shape.guarantees(), span);
             return;
         }
-        if (!shape.guarantees().isEmpty() && constraints.stream().noneMatch(shape.guarantees()::contains)) {
+        if (!shape.guarantees().isEmpty() && !constraints.containsAll(shape.guarantees())) {
             throw conflict(span, shape.guarantees(), constraints);
         }
     }
 
     private static void rejectDisjoint(Set<BuiltinContract> contracts, SourceSpan span) {
-        if (contracts.size() > 1) throw conflict(span, contracts, contracts);
+        long substantive = contracts.stream()
+                .filter(contract -> contract != BuiltinContract.NULL && contract != BuiltinContract.MISSING)
+                .count();
+        if (substantive > 1) throw conflict(span, contracts, contracts);
     }
 
     private static LangException conflict(SourceSpan span, Set<BuiltinContract> actual,
@@ -496,6 +509,7 @@ final class ContractInference {
                     .plus(expressionEffects(field.name(), visible));
             case Reflect reflect -> reflect.target() instanceof Name
                     ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
+            case ContractModifier modifier -> expressionEffects(modifier.target(), visible);
             case CollectionLiteral collection -> collection.elements().stream()
                     .map(element -> expressionEffects(element, visible))
                     .reduce(EffectSummary.PURE, EffectSummary::plus);
@@ -675,6 +689,7 @@ final class ContractInference {
             case Field field -> containsHole(field.target());
             case DynamicField field -> containsHole(field.target()) || containsHole(field.name());
             case Reflect reflect -> containsHole(reflect.target());
+            case ContractModifier modifier -> containsHole(modifier.target());
             case Group group -> containsHole(group.expression());
             case CollectionLiteral collection -> collection.elements().stream().anyMatch(ContractInference::containsHole);
             case Literal ignored -> false;

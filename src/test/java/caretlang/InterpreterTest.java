@@ -205,6 +205,62 @@ final class InterpreterTest {
     }
 
     @Test
+    void nullableAndOptionalContractsPreserveNullAndMissingAsDistinctStates() {
+        assertEquals("true\ntrue\ntrue\nfalse\nfalse\nNumber?~\n[Number]\n", execute("""
+                (Number?) nullable = ?
+                (Number~) optional = ~
+                (Number?~) either = ~
+                accepts = Number?~
+                print accepts ?
+                print accepts ~
+                print accepts 1
+                print Number? "wrong"
+                print Number~ ?
+                print (@accepts).name
+                print (@accepts).bases
+                """));
+
+        LangException nullableRejectsMissing = assertThrows(LangException.class,
+                () -> execute("(Number?) value = ~"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS,
+                nullableRejectsMissing.diagnostic().code());
+        LangException optionalRejectsNull = assertThrows(LangException.class,
+                () -> execute("(Number~) value = ?"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS,
+                optionalRejectsNull.diagnostic().code());
+    }
+
+    @Test
+    void modifiedContractsAreFirstClassNormalizedAndIdentityStable() {
+        assertEquals("true\ntrue\ntrue\nfalse\n", execute("""
+                First = contract Number
+                Second = contract Number
+                FirstNullable = First?
+                FirstNullableAlias = First?
+                print FirstNullable == FirstNullableAlias
+                print Null? == Null
+                print Any?~ == Any
+                print First? == Second?
+                """));
+
+        LangException error = assertThrows(LangException.class, () -> execute("value = 1?"));
+        assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.NOT_A_CONTRACT, error.diagnostic().code());
+    }
+
+    @Test
+    void modifiedRefinementClausesDoNotInvokePredicatesForAdmittedAbsence() {
+        assertEquals("?\n~\n2\n", execute("""
+                positive value = value > 0
+                keep (positive?) value = value
+                maybe (positive~) value = value
+                print keep ?
+                print maybe ~
+                print keep 2
+                """));
+    }
+
+    @Test
     void contractedFunctionsReturnCallableValuesWithoutRetainingParameterValidation() {
         assertEquals("true\n5\n", execute("""
                 returnContract (Any) value = Number

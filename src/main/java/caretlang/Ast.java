@@ -7,7 +7,9 @@ final class Ast {
         SourceSpan span();
     }
     record ContractClause(List<ContractName> names, SourceSpan span) {}
-    record ContractName(String name, SourceSpan span) {}
+    record ContractName(String name, boolean nullable, boolean optional, SourceSpan span) {
+        ContractName(String name, SourceSpan span) { this(name, false, false, span); }
+    }
     record Parameter(String name, ContractClause contracts, SourceSpan span) {}
     record Assign(String name, boolean exported, ContractClause contracts, Expr value, SourceSpan span) implements Stmt {}
     record ExprStmt(Expr expression, SourceSpan span) implements Stmt {}
@@ -16,7 +18,7 @@ final class Ast {
     record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
                        List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Hole, Group, CollectionLiteral {
+    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, ContractModifier, Hole, Group, CollectionLiteral {
         SourceSpan span();
     }
     record Literal(Value value, SourceSpan span) implements Expr {}
@@ -32,6 +34,7 @@ final class Ast {
     record Field(Expr target, String field, boolean optional, SourceSpan span) implements Expr {}
     record DynamicField(Expr target, Expr name, boolean optional, SourceSpan span) implements Expr {}
     record Reflect(Expr target, SourceSpan span) implements Expr {}
+    record ContractModifier(Expr target, boolean nullable, boolean optional, SourceSpan span) implements Expr {}
     /** index is zero for an ordinary left-to-right hole, otherwise one-based. */
     record Hole(int index, SourceSpan span) implements Expr {}
     record Group(Expr expression, SourceSpan span) implements Expr {}

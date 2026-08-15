@@ -6,6 +6,7 @@ import caretlang.Ast.Assign;
 import caretlang.Ast.Binary;
 import caretlang.Ast.Conditional;
 import caretlang.Ast.Compose;
+import caretlang.Ast.ContractModifier;
 import caretlang.Ast.DynamicField;
 import caretlang.Ast.Expr;
 import caretlang.Ast.ExprStmt;
@@ -142,11 +143,11 @@ final class Resolver {
                     }
                     return new Resolution.ContractBinding(name.name(),
                             new Resolution.Binding(depth, symbol.slot(), symbol.id(), symbol.declaration(), false,
-                                    symbol.refinementEligible()), name.span());
+                                    symbol.refinementEligible()), name.nullable(), name.optional(), name.span());
                 }
             }
             if (BuiltinContract.named(name.name()).isPresent()) {
-                return new Resolution.ContractBinding(name.name(), null, name.span());
+                return new Resolution.ContractBinding(name.name(), null, name.nullable(), name.optional(), name.span());
             }
             throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.UNKNOWN_CONTRACT,
                     "Unknown contract: " + name.name(), name.span());
@@ -210,6 +211,13 @@ final class Resolver {
                 resolveExpr(field.name(), scope, functionBody, deferred);
             }
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
+            case ContractModifier modifier -> {
+                resolveExpr(modifier.target(), scope, functionBody, deferred);
+                if (knownContractState(modifier.target(), scope) == ContractState.NON_CONTRACT) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.NOT_A_CONTRACT,
+                            "Binding is not a contract: " + modifier.target(), modifier.target().span());
+                }
+            }
             case Group group -> resolveExpr(group.expression(), scope, functionBody, deferred);
             case Ast.CollectionLiteral collection -> collection.elements().forEach(
                     element -> resolveExpr(element, scope, functionBody, deferred));
@@ -223,6 +231,22 @@ final class Resolver {
             if (symbol != null) return symbol.callableArity();
         }
         return null;
+    }
+
+    private ContractState knownContractState(Expr expression, Scope scope) {
+        if (expression instanceof ContractModifier) return ContractState.CONTRACT;
+        if (expression instanceof Apply apply && apply.function() instanceof Name name
+                && name.name().equals("contract")) return ContractState.CONTRACT;
+        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral) {
+            return ContractState.NON_CONTRACT;
+        }
+        if (!(expression instanceof Name name)) return ContractState.UNKNOWN;
+        for (Scope current = scope; current != null; current = current.parent) {
+            Symbol symbol = current.symbols.get(name.name());
+            if (symbol != null) return symbol.contractState();
+        }
+        return BuiltinContract.named(name.name()).isPresent()
+                ? ContractState.CONTRACT : ContractState.UNKNOWN;
     }
 
     private void resolveName(Name name, Scope scope, boolean functionBody, boolean deferred) {

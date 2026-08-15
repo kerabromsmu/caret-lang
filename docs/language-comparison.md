@@ -90,6 +90,8 @@ derived contracts and declaration clauses. Contract-specialized overload dispatc
 These contracts compare by descriptor identity. Aliases preserve equality, while separate
 constructions remain unequal even with identical requirements. Their reflective view lists public
 base and refinement requirement names rather than exposing interpreter implementation objects.
+The prototype also implements first-class `T?`, `T~`, and `T?~` contract unions for admitting null,
+missing, or both without treating those states as equivalent.
 
 A value satisfying `Int` may also satisfy broader contracts through derivation:
 

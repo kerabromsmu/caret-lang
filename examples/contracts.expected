@@ -8,3 +8,9 @@ Both
 one
 keeps its ordinary behavior
 [7, 5]
+true
+true
+true
+false
+Number?~
+[Number]

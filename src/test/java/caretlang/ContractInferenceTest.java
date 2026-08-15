@@ -69,6 +69,29 @@ final class ContractInferenceTest {
     }
 
     @Test
+    void nullableAndOptionalRequirementsFlowThroughKnownCalls() {
+        ContractInference.analyze(new Parser("""
+                identity (Number?~) value = value
+                nullable = identity ?
+                optional = identity ~
+                numeric = identity 1
+                """).parseProgram());
+
+        LangException error = assertThrows(LangException.class, () -> ContractInference.analyze(new Parser("""
+                numeric (Number?) value = value
+                invalid = numeric "wrong"
+                """).parseProgram()));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, error.diagnostic().code());
+
+        LangException possibleNull = assertThrows(LangException.class,
+                () -> ContractInference.analyze(new Parser("""
+                        maybe (Number?) value = value
+                        invalid = maybe ? * 2
+                        """).parseProgram()));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, possibleNull.diagnostic().code());
+    }
+
+    @Test
     void rejectsAnUnconstrainedGenericResultAtAnOrdinaryBindingUse() {
         LangException error = assertThrows(LangException.class, () -> ContractInference.analyze(new Parser("""
                 mixed condition =

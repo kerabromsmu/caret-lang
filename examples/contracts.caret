@@ -22,3 +22,13 @@ print (@Both).bases
 print seqGet ["zero" "one"] index
 print tagged
 print [(1 + 2 * 3) (add 2 3)]
+
+(Number?) nullable = ?
+(Number~) optional = ~
+NumberOrAbsent = Number?~
+print NumberOrAbsent 3
+print NumberOrAbsent ?
+print NumberOrAbsent ~
+print Number? ~
+print (@NumberOrAbsent).name
+print (@NumberOrAbsent).bases

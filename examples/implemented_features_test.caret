@@ -226,4 +226,19 @@ assert "separate contracts have distinct identity" (Positive != OtherPositive)
 assert "identical requirement lists do not imply equality" (CompositeOne != CompositeTwo)
 assertEqual "contract reflection lists refinements" (@Positive).requirements ["positive"]
 
+NumberOrNull = Number?
+NumberOrMissing = Number~
+NumberOrAbsent = Number?~
+assert "nullable contract accepts null" (NumberOrNull ?)
+assert "nullable contract rejects missing" (not NumberOrNull ~)
+assert "optional contract accepts missing" (NumberOrMissing ~)
+assert "optional contract rejects null" (not NumberOrMissing ?)
+assert "combined contract accepts numbers" (NumberOrAbsent 1)
+assert "combined contract accepts null" (NumberOrAbsent ?)
+assert "combined contract accepts missing" (NumberOrAbsent ~)
+assertEqual "modified contract reflection name" (@NumberOrAbsent).name "Number?~"
+assertEqual "modified contract reflection base" (@NumberOrAbsent).bases ["Number"]
+assert "redundant nullable modifier normalizes" (Null? == Null)
+assert "modified contract identity is stable" (Number? == Number?)
+
 // Expected failures are isolated in examples/errors/ and exercised by test.sh.

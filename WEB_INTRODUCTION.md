@@ -214,6 +214,11 @@ The prototype infers initial built-in constraints for unannotated named function
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
 each call instantiates those variables independently.
 
+Contracts also have first-class null/missing unions. `Number?` accepts numbers or null, `Number~`
+accepts numbers or missing, and `Number?~` accepts all three while keeping null and missing
+observably distinct. The modified contracts remain unary predicates, work in clauses and aliases,
+and expose canonical names and their wrapped base through reflection.
+
 In the planned collection model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable
 constructor—or a concrete fixed collection—to the ordinary `template` function derives an exact

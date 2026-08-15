@@ -140,9 +140,35 @@ Names and reflective metadata do not participate in equality. Contract reflectio
 `bases`, and language-owned refinement
 `requirements`.
 
-Parameterized contracts, nullable/optional modifiers, overload dispatch, complete
-static inference/proof, the public effect system, and the full universal-collection model remain
-planned below.
+Nullable and optional contract modifiers are implemented as adjacent postfix contract syntax:
+
+```caret
+Number?     // Number or null
+Number~     // Number or missing
+Number?~    // Number, null, or missing
+```
+
+These are first-class unary `Contract` values and may be called, stored, aliased, reflected, or used
+in binding, parameter, and result clauses. Whitespace distinguishes modification from application:
+`Number?` is one modified contract expression, while `Number ?` calls `Number` with null. Only the
+canonical suffix order is accepted; `T~?`, repeated suffixes, and longer combinations are invalid
+contract syntax.
+
+Null and missing remain separate union states. `T?` does not accept missing, and `T~` does not
+accept null unless `T` itself already accepts that state. Adding a state already accepted by the
+base normalizes to the base contract, so `Null? == Null` and `Any?~ == Any`. Other modified
+contracts are cached by base identity and admitted states: repeated evaluation over the same base
+has stable identity, while modifiers over distinct nominal contracts remain distinct. Reflection
+uses the canonical modified name and reports the wrapped contract in `bases`.
+
+Inside a clause, the same suffixes may modify a verified refinement requirement. An admitted null
+or missing value satisfies that requirement without invoking the predicate; ordinary values still
+run the predicate. Initial inference propagates built-in null/missing alternatives through named
+calls and retains runtime checks where user-contract or refinement membership is not statically
+decidable.
+
+Parameterized contracts, overload dispatch, complete static inference/proof, the public effect
+system, and the full universal-collection model remain planned below.
 
 In the current prototype, physical indentation directly defines a multiline function body. The
 planned layout modifiers described below will first translate physical indentation into effective
@@ -12766,7 +12792,7 @@ Their later implementation must not weaken root substitution or permit authority
 ## Not implemented
 
 - trailing lambdas
-- nullable/optional and parameterized contracts, overload dispatch, complete static type proof,
+- parameterized contracts, overload dispatch, complete static type proof,
   public effect declarations/enforcement/reflection, and ownership analysis; initial named-function
   contract inference, result clauses, internal effect analysis, and predicate refinements are
   implemented

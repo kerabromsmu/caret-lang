@@ -17,7 +17,9 @@ interpreter. The current prototype supports:
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
 - proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
-  and direct clauses.
+  and direct clauses; and
+- first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
+  distinction between null and missing.
 
 This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
 describes both the implemented language sketch and the larger planned language. Features described
@@ -220,8 +222,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
   dynamically. Initial named-function constraint inference and the internal purity analysis needed
   to validate refinement predicates are implemented;
-  parameterized contracts, dispatch, complete static proof,
-  nullable/optional type checking, and the public effect system are not implemented.
+  nullable/optional contract unions are implemented, while parameterized contracts, dispatch,
+  complete static proof, and the public effect system are not implemented.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.

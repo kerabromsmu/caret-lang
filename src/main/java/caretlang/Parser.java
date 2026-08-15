@@ -167,7 +167,25 @@ final class Parser {
                 throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
                         "Contract clause requires contract names", name.span());
             }
-            names.add(new ContractName(name.text(), name.span()));
+            boolean nullable = false;
+            boolean optional = false;
+            SourceSpan end = name.span();
+            if (current < tokens.size() && adjacent(name, tokens.get(current))
+                    && tokens.get(current).text().equals("?")) {
+                nullable = true;
+                end = tokens.get(current++).span();
+            }
+            if (current < tokens.size() && adjacent(end, tokens.get(current))
+                    && tokens.get(current).text().equals("~")) {
+                optional = true;
+                end = tokens.get(current++).span();
+            }
+            if (current < tokens.size() && adjacent(end, tokens.get(current))
+                    && (tokens.get(current).text().equals("?") || tokens.get(current).text().equals("~"))) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "Contract clause modifiers must use canonical form T, T?, T~, or T?~", tokens.get(current).span());
+            }
+            names.add(new ContractName(name.text(), nullable, optional, SourceSpan.cover(name.span(), end)));
         }
         if (current >= tokens.size() || names.isEmpty()) {
             SourceSpan span = tokens.get(start).span();
@@ -177,6 +195,14 @@ final class Parser {
         Token close = tokens.get(current++);
         return new ContractParse(new ContractClause(List.copyOf(names),
                 SourceSpan.cover(tokens.get(start).span(), close.span())), current);
+    }
+
+    private static boolean adjacent(Token left, Token right) {
+        return adjacent(left.span(), right);
+    }
+
+    private static boolean adjacent(SourceSpan left, Token right) {
+        return left.end().offset() == right.span().start().offset();
     }
 
     private SourceSpan functionSpan(List<Token> header, List<Stmt> body) {
@@ -428,6 +454,31 @@ final class Parser {
                     boolean optional = match("~");
                     SourceSpan end = optional ? previous().span() : close.span();
                     expr = new DynamicField(expr, name, optional, SourceSpan.cover(expr.span(), end));
+                    continue;
+                }
+                if ((peek().text().equals("?") || peek().text().equals("~"))
+                        && expr.span().end().offset() == peek().span().start().offset()) {
+                    boolean nullable = false;
+                    boolean optional = false;
+                    SourceSpan modifierEnd = expr.span();
+                    if (match("?")) {
+                        nullable = true;
+                        modifierEnd = previous().span();
+                    }
+                    if (peek().text().equals("~")
+                            && modifierEnd.end().offset() == peek().span().start().offset()) {
+                        match("~");
+                        optional = true;
+                        modifierEnd = previous().span();
+                    }
+                    if (!nullable && !optional) break;
+                    if ((peek().text().equals("?") || peek().text().equals("~"))
+                            && modifierEnd.end().offset() == peek().span().start().offset()) {
+                        throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                                "Contract clause modifiers must use canonical form T, T?, T~, or T?~");
+                    }
+                    expr = new ContractModifier(expr, nullable, optional,
+                            SourceSpan.cover(expr.span(), modifierEnd));
                     continue;
                 }
                 break;

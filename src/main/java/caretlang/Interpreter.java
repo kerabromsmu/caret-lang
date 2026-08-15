@@ -13,6 +13,8 @@ final class Interpreter {
     private final PrintStream output;
     private int callDepth;
     private ContractInference inference;
+    private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
+            new IdentityHashMap<>();
 
     Interpreter() {
         this(System.out);
@@ -115,6 +117,9 @@ final class Interpreter {
                                    Resolution resolution, Environment contractEnvironment, String subject) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+            Value underlyingValue = underlying(value);
+            if (reference.nullable() && underlyingValue == Value.Null.INSTANCE) continue;
+            if (reference.optional() && underlyingValue == Value.Missing.INSTANCE) continue;
             Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
                     : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
             if (resolved instanceof Value.Callable refinement && !(resolved instanceof Value.ContractValue)) {
@@ -136,7 +141,8 @@ final class Interpreter {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_CONTRACT,
                         "Binding is not a contract: " + reference.name(), reference.span());
             }
-            ContractDescriptor contract = contractValue.descriptor();
+            ContractDescriptor contract = modifiedContract(contractValue.descriptor(),
+                    reference.nullable(), reference.optional());
             if (contract instanceof UserContract user && user.canAcquire(value, valueSpan)) {
                 acquired.add(contract);
                 continue;
@@ -321,6 +327,15 @@ final class Interpreter {
                 targetValue = evalInner(target, env, resolution);
             }
             return reflect(targetValue);
+        }
+        if (expr instanceof ContractModifier(Expr target, boolean nullable, boolean optional,
+                                             SourceSpan ignored)) {
+            Value value = underlying(evalInner(target, env, resolution));
+            if (!(value instanceof Value.ContractValue contract)) {
+                throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.NOT_A_CONTRACT,
+                        "Binding is not a contract: " + target, target.span());
+            }
+            return new Value.ContractValue(modifiedContract(contract.descriptor(), nullable, optional));
         }
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
             return evalInner(expression, env, resolution);
@@ -691,6 +706,16 @@ final class Interpreter {
         if (value instanceof Value.ContractValue contract) return contract;
         if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
         return new Value.Scope(ValueSemantics.reflectionFields(value));
+    }
+
+    private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {
+        if (!nullable && !optional) return base;
+        boolean needsNull = nullable && !base.accepts(Value.Null.INSTANCE);
+        boolean needsMissing = optional && !base.accepts(Value.Missing.INSTANCE);
+        if (!needsNull && !needsMissing) return base;
+        int key = (needsNull ? 1 : 0) | (needsMissing ? 2 : 0);
+        return modifiedContracts.computeIfAbsent(base, ignored -> new HashMap<>())
+                .computeIfAbsent(key, ignored -> new ModifiedContract(base, needsNull, needsMissing));
     }
 
     private static Value underlying(Value value) {

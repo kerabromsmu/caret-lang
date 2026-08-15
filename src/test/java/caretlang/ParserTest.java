@@ -47,6 +47,38 @@ final class ParserTest {
     }
 
     @Test
+    void parsesCanonicalNullableAndOptionalContractModifiers() {
+        List<Stmt> program = new Parser("""
+                (Number?) nullable = ?
+                (String~) optional = ~
+                (Boolean?~) choose (Number?~) value = true
+                predicate = Number?~
+                """).parseProgram();
+        ContractName nullable = ((Assign) program.get(0)).contracts().names().getFirst();
+        assertTrue(nullable.nullable());
+        assertFalse(nullable.optional());
+        ContractName optional = ((Assign) program.get(1)).contracts().names().getFirst();
+        assertFalse(optional.nullable());
+        assertTrue(optional.optional());
+        FunctionDef function = (FunctionDef) program.get(2);
+        assertTrue(function.resultContracts().names().getFirst().nullable());
+        assertTrue(function.resultContracts().names().getFirst().optional());
+        assertInstanceOf(ContractModifier.class, ((Assign) program.get(3)).value());
+        Apply spacedApplication = assertInstanceOf(Apply.class, expression("Number ?"));
+        assertEquals("Number", ((Name) spacedApplication.function()).name());
+        assertInstanceOf(Literal.class, spacedApplication.argument());
+    }
+
+    @Test
+    void rejectsNonCanonicalContractModifierSpellings() {
+        for (String source : List.of("(Number~?) value = 1", "(Number??) value = 1",
+                "(Number~~) value = 1", "value = Number~?")) {
+            LangException error = assertThrows(LangException.class, () -> new Parser(source).parseProgram());
+            assertEquals(Diagnostic.Codes.PARSE_INVALID_CONTRACT, error.diagnostic().code(), source);
+        }
+    }
+
+    @Test
     void constructorDoesNotPreparseLaterHeadersOrReorderDiagnostics() {
         Parser parser = new Parser("print )\n(Number) identity value = value");
         LangException error = assertThrows(LangException.class, parser::parseProgram);

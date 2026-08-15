@@ -116,15 +116,16 @@ propagates known named-call effects, preserves unknown dynamic calls, and proves
 eligibility without exposing effect syntax. Proven unary Boolean callables now participate as
 first-class predicate requirements in derived contracts and direct clauses, including through
 aliases. Modifiers, parameterized contracts, dispatch, and the full public effect system remain
-subsequent Phase 2 slices; nullable/optional contract modifiers are the next implementation slice.
+subsequent Phase 2 slices. Nullable/optional contract modifiers are implemented as first-class,
+identity-stable contract unions without collapsing null into missing.
 The effect pass includes eagerly captured fixed operands in partial expressions, treats
 over-application through an unknown returned callable conservatively, and uses resolver-owned
 symbol identities rather than source-span equality.
 
 ### Contract and type model
 
-- Extend the implemented source-spanned contract construction, derivation, refinement, binding,
-  parameter, and result forms with nullable/optional modifiers (`T?`, `T~`, `T?~`).
+- Preserve implemented source-spanned contract construction, derivation, refinement, binding,
+  parameter, result, and nullable/optional modifier forms (`T?`, `T~`, `T?~`).
 - Represent derivation as a checked logical-inclusion graph supporting multiple bases. Reject cycles
   and retain enough provenance to explain failed membership and invalid derivation.
 - Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
@@ -518,13 +519,12 @@ symbol identities rather than source-span equality.
 ## Recommended next implementation step
 
 Low-precedence application, runtime user-contract derivation, generalized contract inference, the
-minimum purity/effect analysis, and proven-predicate refinements are complete. Next implement
-nullable and optional contract modifiers (`T?`, `T~`, and `T?~`) as distinct unions over present
-values, null, and missing. Cover binding, parameter, result, predicate-membership, inference,
-reflection, partial-application, and diagnostic behavior without collapsing null into missing.
-Parameterized contracts, overload dispatch, and public effect declarations remain subsequent Phase
-2 slices. `with`/`outer` wait for the Phase 4 public named-member protocol rather than introducing an
-exported-scope-only model that would later need replacement.
+minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
+are complete. Next implement parameterized contracts through ordinary contract application,
+beginning with collection element requirements and preserving contract identity, inference,
+reflection, and located runtime checks. Overload dispatch and public effect declarations remain
+subsequent Phase 2 slices. `with`/`outer` wait for the Phase 4 public named-member protocol rather
+than introducing an exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals
 
