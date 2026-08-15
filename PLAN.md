@@ -97,7 +97,9 @@ the ordinary callable path; complete callable metadata remains the principal unf
 ### Unified functions/operators and composition
 
 - Extend the shared callable protocol already used by operators, user functions, composition, and
-  partials with complete parameter/result contract, public effect, and reflection metadata.
+  partials with complete parameter/result contract, public effect, and reflection metadata. Overload
+  partials retain immutable viable-variant, sparse filled-position, bound-argument, and applicability-
+  cache state while exposing their common remaining arity.
 - Preserve implemented prefix symbolic calls (`+ 2 3`), prefix named calls, and fixed-precedence
   infix binary calls (`2 add 3`), including the expression-start classification rule.
 - Extend the implemented `>>` function composition with contract/effect metadata when those systems
@@ -144,7 +146,9 @@ symbol identities rather than source-span equality.
   observational: require existing nominal membership, cache pure structural/refinement checks per
   requirement identity and argument position, preserve original arguments, and never acquire
   membership while considering candidates. Keep single-function contract violations distinct from
-  multi-variant no-applicable and ambiguous-overload diagnostics.
+  multi-variant no-applicable and ambiguous-overload diagnostics. Narrow overload sets incrementally
+  as prefix or hole arguments fill known positions, fail when no variant survives, and defer final
+  selection and ambiguity until full arity without repeating cached parameter checks.
 - Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
   callables, SIMD values, formats, rules, and cycles as those kinds arrive. Contract failures identify
   the declaration/call and failing contract with related spans.

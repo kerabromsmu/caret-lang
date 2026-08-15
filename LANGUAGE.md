@@ -311,6 +311,19 @@ duplicated = pair _1 _1
 The highest hole number determines the resulting arity. Repeated numbers reuse the same argument.
 Numbered and unnumbered holes cannot be mixed in one partial expression.
 
+When the callable is an overload set, every supplied argument filters the viable variants for its
+known parameter position immediately. This includes fixed operands captured while constructing a
+hole partial, even when an earlier parameter remains a hole. The resulting partial callable retains
+the common arity, the sparse set of filled positions, every still-viable variant, and the cached
+applicability results for those positions. Supplying an argument creates a new immutable narrowed
+callable; the earlier partial remains reusable and independent.
+
+Narrowing does not commit early when only one variant remains. Selection and invocation occur only
+after every parameter position is filled, so a less-specific fallback remains available until its
+own later requirements fail and overload diagnostics remain distinct from ordinary single-function
+contract failures. If a supplied value eliminates the last viable variant, the partial application
+fails immediately with `NO_APPLICABLE_OVERLOAD` at that argument or application step.
+
 ## Scopes
 
 ```text
@@ -1351,6 +1364,33 @@ locations.
 A name with only one function definition does not perform overload selection. Its parameter
 boundary retains the ordinary `CONTRACT_VIOLATION` diagnostic and existing attribution behavior.
 Introducing overload support must not silently change diagnostics for ordinary single functions.
+
+## Partial overload sets
+
+Every overload variant has the same declared arity. Ordinary prefix application narrows the set as
+each argument fills the next parameter. Hole-based partial application uses the hole layout to map
+eager fixed operands and later supplied values to their parameter positions, so later fixed
+positions may be checked before earlier holes are filled. Applicability uses the same observational,
+per-requirement cache described above and never acquires membership.
+
+The narrowed state is persistent and immutable: it contains the original overload-set identity,
+the surviving variants, original bound arguments and source spans, filled parameter positions, and
+cached applicability results. Applying the same earlier partial along two paths produces independent
+states. A fixed operand's cached checks may be reused for the lifetime of every state derived from
+that partial; checks involving a newly supplied value belong only to that derived branch.
+
+No surviving variant is invoked before full arity, even when only one remains. At full arity the
+dispatcher selects the unique most-specific surviving variant. Several incomparable maximal
+variants produce `AMBIGUOUS_OVERLOAD`; no survivor produces `NO_APPLICABLE_OVERLOAD`. An early
+no-survivor diagnostic uses the smallest supplied argument or application step that eliminated the
+last candidate as its primary span. A final no-match uses the completed call span. Both retain
+related variant declaration locations.
+
+Applicability checks performed during narrowing satisfy the selected overload's parameter boundary
+and are not repeated at invocation. The selected implementation receives the original arguments,
+and its result contract is validated normally. Overload partials remain ordinary callable values:
+their remaining arity supports prefix/infix classification and composition, while contract/effect
+metadata is the conservative combination of the surviving variants until selection completes.
 
 ---
 
