@@ -255,6 +255,11 @@ equality, and fields or nested collections contribute recursively. Templates rem
 `Contract` values, so they can constrain parameters, collection elements, and dispatch without
 introducing a separate record or schema type system.
 
+Structural-template construction preserves the ordinary diagnostics for invalid field names,
+duplicate fields, contract requirements, and mixed hole styles. Only failures unique to template
+derivation—an ineligible constructor or a non-comparable captured value—use template-specific
+codes, with stable locations in both static and dynamic discovery.
+
 Caret also plans a standard `ErrorTemplate` carrying a stable code, phase, message, locations,
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return

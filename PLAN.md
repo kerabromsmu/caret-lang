@@ -305,7 +305,11 @@ symbol identities rather than source-span equality.
   Repeated numbered holes impose candidate equality; numbering changes parameter order but not
   collection shape, and mixed numbered/unnumbered holes remain invalid.
 - Validate statically known template membership and retain runtime checks when proof is unavailable.
-  Diagnose malformed holes, duplicate fields, and non-comparable fixed values with stable locations.
+  Diagnose invalid constructors and non-comparable fixed values with their settled template codes;
+  reuse ordinary field, contract, and hole codes for malformed dynamic keys, duplicate fields,
+  invalid contracted holes, and mixed hole styles. Preserve parser phase for malformed syntax and
+  keep behavioral codes stable across semantic and runtime discovery, with the offending construct
+  primary and the first duplicate field related.
 - Reflect template structure as metadata on `Contract` descriptors. Permit shared metadata and
   packed-layout derivation only when optimized and optimization-disabled behavior is identical.
 

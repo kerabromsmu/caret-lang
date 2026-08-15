@@ -9062,6 +9062,29 @@ Templates do not introduce another dictionary representation.
 
 ---
 
+### Template construction diagnostics
+
+Templates reuse ordinary language diagnostics when construction fails in an ordinary contract,
+field, or hole mechanism. The stable mapping is:
+
+* `TEMPLATE_INVALID_CONSTRUCTOR` when `template` receives a callable that is not an eligible,
+  reifiable collection constructor;
+* `TEMPLATE_NONCOMPARABLE_FIXED_VALUE` when a captured fixed value does not support Caret equality;
+* `INVALID_DYNAMIC_FIELD_NAME` when a dynamic key does not produce a valid field name;
+* `DUPLICATE_FIELD` when two elements resolve to the same field name;
+* the ordinary contract diagnostic, including `UNKNOWN_CONTRACT`, `NOT_A_CONTRACT`, or
+  `PARSE_INVALID_CONTRACT` as appropriate, when a contracted hole has an invalid requirement; and
+* `MIXED_HOLE_STYLES` when numbered and unnumbered holes are mixed.
+
+The code describes the failure independently of when it becomes knowable. Malformed syntax retains
+phase `PARSER`, a well-formed failure established by analysis uses phase `SEMANTIC`, and a failure
+that depends on a dynamically obtained value uses phase `RUNTIME`. Where the same behavioral code
+can arise during analysis or evaluation, those phases share that code. The invalid constructor,
+fixed value, dynamic key, contract term, or hole is the primary location. For `DUPLICATE_FIELD`, the
+later field is primary and the first field with that resolved name is a related location.
+
+---
+
 ### Nested templates
 
 Templates may contain nested collection structure.
