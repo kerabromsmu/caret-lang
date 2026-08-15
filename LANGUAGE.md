@@ -6404,37 +6404,129 @@ The `ruleCycle` `init` block assembles those reusable rule libraries with concre
 
 ## Planned modules and compilation
 
+### Source modules and stable module IDs
+
+A source module is one Caret source file. A file may optionally declare one stable logical
+`ModuleId` at file top level:
+
+```caret
+clientServer = module
+```
+
+This is a module-ID declaration, not an ordinary assignment. The left-hand name identifies the
+current source module in the compilation environment's module catalog. It is not a runtime binding,
+is neither private nor exported, does not require `^`, and does not appear in the module's exported
+scope. The declaration may occur at most once in a file and only at file/module top level.
+
+`module` remains reserved. Bare `module` is not a general expression and is valid only as the exact
+right-hand side of `moduleId = module`. A source file need not declare an ID; such a file remains
+importable by path. The declared ID uses the ordinary identifier spelling rules, but occupies the
+separate flat module-ID namespace. It may therefore have the same spelling as an unrelated ordinary
+lexical binding without either declaration shadowing or replacing the other.
+
+These terms remain distinct:
+
+* a **source module** is a Caret source file;
+* a **ModuleId** is its optional stable logical catalog identifier;
+* a **module value** is the immutable exported scope obtained by importing the source module; and
+* `@module` is the metadata/reflection reference for the module containing currently executing code.
+
 ### Import expressions
 
-A module is a Caret source file evaluated through an ordinary import expression:
+A source module is evaluated through an ordinary import expression. A string imports by physical
+source location:
 
 ```caret
 math = import "lib/math.caret"
 ```
 
-The path is resolved relative to the importing source file after normalizing `.` and `..`. The
-initial implementation requires the explicit file name and does not search a global package path.
+The path is resolved relative to the importing source file after normalizing `.` and `..`. A path
+import requires the explicit file name and does not search a global package path.
+A `ModuleId` imports through the compilation environment's module catalog:
+
+```caret
+shared = import clientServer
+```
+
+Conceptually, `import` has both contracts:
+
+```text
+import : String -> Module
+import : ModuleId -> Module
+```
+
+Module IDs form a compiler-known namespace, not an ordinary lexical scope. The compiler resolves an
+identifier through the module catalog where a `ModuleId` is required, notably as this `import`
+operand. Catalog entries are not injected as runtime globals. Consequently, a discovered
+`client = module` declaration in another file does not prevent ordinary code from declaring
+`client = createClient`.
+
 Successful module evaluation is cached by canonical source path for the lifetime of one execution
-environment generation. Every importer in that environment receives the same immutable module
-scope containing only top-level `^` exports. Sandboxes evaluate modules independently: immutable
-parsed or compiled artifacts may be shared, but evaluated modules, initialization effects,
-bindings, and mutable runtime state may not cross environment boundaries. Reloading a sandbox
-creates a fresh module-evaluation cache.
-Private bindings remain inaccessible through lookup and reflection.
+environment generation. A ModuleId is a stable lookup identity that resolves to a source module; it
+does not replace canonical source path as the actual loading, cycle-detection, or evaluation-cache
+key. Path and ID imports that resolve to the same canonical file therefore share one evaluated
+module value. Every importer in that environment receives the same immutable module scope
+containing only top-level `^` exports.
+
+Sandboxes evaluate modules independently: immutable parsed or compiled artifacts may be shared,
+but evaluated modules, initialization effects, bindings, and mutable runtime state may not cross
+environment boundaries. Reloading a sandbox creates a fresh module-evaluation cache. Private
+bindings remain inaccessible through lookup and reflection.
 
 An import cycle is a located module diagnostic that reports the import chain. A module that fails to
 load or evaluate is not cached as successful. Importing the same canonical module again does not
 repeat its initialization effects.
+
+### Module catalog discovery
+
+Before resolving ordinary imports for a compilation root, the normal compilation environment
+recursively examines Caret source files below the directory containing that root. It shallowly
+collects their top-level module-ID declarations without semantically compiling or evaluating every
+file. An unrelated, unreachable file with an ordinary semantic error therefore does not fail the
+build merely because it is below the root directory. A malformed module declaration may fail
+catalog construction.
+
+All discovered project IDs are entries in one flat project catalog. The normal environment combines
+that catalog with environment-supplied module IDs, including standard-library module IDs. Every
+visible ID must be unique. Duplicate project declarations and collisions with visible
+standard-library IDs are compilation errors even when no conflicting module is eventually imported;
+the diagnostic identifies every conflicting declaration or supplied catalog location. Importing an
+ID absent from the visible catalog is a located unresolved-ModuleId diagnostic.
+
+There is no implied package hierarchy, version namespace, wildcard import, package manifest, global
+package search path, or special standard-library spelling such as `std.collections`. Standard-library
+modules participate through the same visible catalog, so `import collections` is an ordinary
+ModuleId import when that ID is supplied by the environment.
+
+### Module diagnostics and implementation requirements
+
+The initial module implementation must:
+
+1. parse at most one well-formed `moduleId = module` declaration at file top level;
+2. diagnose a second declaration, a declaration in a nested scope, and malformed declaration forms;
+3. discover declarations shallowly below the compilation-root directory without compiling or
+   evaluating unrelated files;
+4. combine project and environment-supplied catalogs without injecting their IDs into lexical scope;
+5. diagnose every location participating in a duplicate project ID or visible standard-library
+   collision;
+6. resolve both `String` and `ModuleId` imports and diagnose an unresolved ModuleId at its use;
+7. preserve relative normalized path imports and canonical-source-path evaluation caching;
+8. treat path and ID imports resolving to the same canonical source as one module evaluation;
+9. retain the existing located canonical-source import-cycle diagnostic; and
+10. enforce environment-relative catalog visibility for normal execution, compile-time execution,
+    sandboxes, reflection, and code reification.
 
 ## `@root`, Program Reification, Quines, and Sandboxes
 
 ### Normative reference model
 
 `@root` and `@module` are synthetic, metadata-only reflection references. Neither corresponds to an
-ordinary scope object and neither is callable. Bare `root` and `module` are reserved, invalid as
-expressions, and cannot be defined as bindings or parameters. The parser recognizes each special
-reference as a primary expression, so compact access such as `@root.code` and `@module.code` is
-valid without changing the precedence of ordinary `@value` reflection and field access.
+ordinary scope object and neither is callable. Bare `root` is reserved and invalid as an expression.
+Bare `module` is likewise not a general expression; its sole non-reflective use is the right-hand
+marker in a top-level `moduleId = module` declaration. Neither spelling can be defined as an ordinary
+binding or parameter. The parser recognizes each special reference as a primary expression, so
+compact access such as `@root.code` and `@module.code` is valid without changing the precedence of
+ordinary `@value` reflection and field access.
 
 `@root` identifies the root metadata of the current execution environment. `@module` identifies
 the module containing the currently executing code. They compare equal exactly when that module is
@@ -6444,10 +6536,16 @@ loaded as the root module:
 @module == @root
 ```
 
+`@module` does not denote the optional ModuleId declared by that source file. The declaration is a
+catalog lookup identity; `@module` reflects the current source module. Module metadata may eventually
+expose its ID when present, but this specification does not yet assign a field name for it.
+
 The initial metadata common to these references consists of `kind`, `name`, visible binding
 `names`, and semantic `code`. Future catalogs such as `functions`, `contracts`, and `modules` may
 be added, but their entries are non-callable descriptors; ordinary bindings remain the invocation
 path.
+
+The existing reflective `name` metadata is not thereby defined as the optional stable ModuleId.
 
 An imported module may be reflected through its binding:
 
@@ -6493,12 +6591,13 @@ Structural code equality and canonical serialization:
   language-defined structural order; and
 * retain source/evaluation order whenever independence cannot be proved.
 
-Canonical serialization assigns deterministic names to alpha-equivalent private bindings. Import
-paths are normalized logical paths: `.` and `..` are resolved lexically, `/` is the separator on
-every platform, and absolute host filesystem paths are never emitted. Canonical code declares the
-portable imports and semantic dependencies required to parse it; missing or incompatible
-dependencies are located diagnostics. The form is shared by all Caret implementations rather than
-being JVM- or process-specific.
+Canonical serialization assigns deterministic names to alpha-equivalent private bindings. Path
+imports are emitted as normalized logical paths: `.` and `..` are resolved lexically, `/` is the
+separator on every platform, and absolute host filesystem paths are never emitted. A ModuleId import
+retains its stable logical ID rather than serializing the catalog's current physical source path.
+Canonical code declares the portable imports and semantic catalog dependencies required to parse
+it; missing or incompatible dependencies are located diagnostics. The form is shared by all Caret
+implementations rather than being JVM- or process-specific.
 
 Dynamically supplied host functions and capabilities are not serialized as code or dependency
 implementations. Canonical source refers to their exposed binding names normally and requires a
@@ -6900,6 +6999,18 @@ The sandboxed code sees `@root` as metadata describing the environment construct
 `environment`; it is not the environment handle or an ordinary capability scope.
 
 It cannot access the host application's root merely by referring to `@root`.
+
+The visible module catalog is also part of the substituted environment boundary. A sandbox does not
+automatically inherit the host project's discovered IDs or the normal environment's standard-library
+IDs. Only module IDs explicitly made visible to that sandbox environment may be resolved there.
+Selected application or standard-library modules may be supplied, but an absent ID behaves as an
+unavailable module. Catalog visibility grants lookup visibility only; it does not grant effects or
+authority unavailable through the sandbox environment.
+
+Imports, `@root`, `@module`, and code reflection executed inside the sandbox all use this restricted
+catalog and cannot reveal or resolve hidden host modules. The mechanism by which a host constructs
+the restricted catalog belongs to the sandbox/compiler environment interface and introduces no
+ordinary lexical bindings or additional Caret syntax.
 
 ---
 
@@ -7449,7 +7560,7 @@ A normal import integrates code into the ordinary program environment according 
 Conceptually:
 
 ```caret
-import module
+import "module.caret"
 ```
 
 means:
@@ -7466,7 +7577,9 @@ means:
 
 > evaluate this code under a substituted root and restricted authority.
 
-The precise module-loading syntax may be refined separately, but the semantic distinction must remain.
+An ordinary import may instead use a visible ModuleId. Either overload retains the semantic
+distinction from sandbox execution, whose catalog, root visibility, and authority are explicitly
+restricted.
 
 ---
 
@@ -11403,15 +11516,16 @@ This avoids a separate macro or compile-time function language.
 A module used for compile-time inspection or transformation should normally be bound at compile time:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 ```
 
 This means:
 
-1. `client-server.caret` is loaded and evaluated in the compile-time environment;
-2. its exported module value is bound to `shared`;
-3. `shared` may be inspected and transformed by later compile-time expressions;
-4. the binding `shared` is not automatically included as a runtime module.
+1. `clientServer` is resolved through the compile-time environment's visible module catalog;
+2. the resolved source module is loaded and evaluated in that environment;
+3. its exported module value is bound to `shared`;
+4. `shared` may be inspected and transformed by later compile-time expressions; and
+5. the binding `shared` is not automatically included as a runtime module.
 
 This differs from:
 
@@ -11425,6 +11539,9 @@ which is an ordinary runtime/program import according to the normal module seman
 
 Its stage follows the surrounding Caret execution stage.
 
+Both path and ModuleId overloads are available at either stage. Module-ID lookup is already known
+from catalog construction and does not itself evaluate the module or make it runtime-reachable.
+
 ---
 
 ## Compile-time import does not imply runtime inclusion
@@ -11432,7 +11549,7 @@ Its stage follows the surrounding Caret execution stage.
 Given:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 ```
 
 the complete imported module is available to compile-time Caret code.
@@ -11461,11 +11578,13 @@ artifact
 
 Compile-time availability and runtime inclusion are separate concepts.
 
-Compile-time imports use the same logical module identity, export visibility, initialization, and
-per-environment caching rules as ordinary imports. Reification may expose the complete semantic code
-permitted for a visible module, but it does not turn private bindings into accessible values or
-capabilities. A compiler must track every imported module and external input used by staging as a
-semantic build dependency even when none of that module is emitted at runtime.
+Compile-time imports use the same module lookup, export visibility, initialization, and
+per-environment caching rules as ordinary imports. Logical lookup identity and evaluation
+identity remain distinct: a ModuleId resolves through the visible catalog, while the resulting
+canonical source path keys evaluation and cycle detection. Reification may expose the complete
+semantic code permitted for a visible module, but it does not turn private bindings into accessible
+values or capabilities. A compiler must track every imported module and external input used by
+staging as a semantic build dependency even when none of that module is emitted at runtime.
 
 ---
 
@@ -11483,7 +11602,7 @@ table =
 and on program structures:
 
 ```caret
-# module = import "library.caret"
+# library = import "library.caret"
 ```
 
 Modules, rulesets, code descriptors, templates, formats, contracts, and other reifiable language values may therefore participate in compile-time computation where their contracts permit it.
@@ -11555,6 +11674,11 @@ compile server.caret
 
 Each source file is the root of its own compilation reachability graph.
 
+For each invocation, catalog discovery begins below the directory containing that root file. Two
+roots in the same directory therefore normally discover the same project IDs; roots compiled from
+different directory trees may have different visible project catalogs. Environment-supplied IDs,
+including the normal standard library, are then combined with that root's discovered project IDs.
+
 Caret does not require both targets to be declared inside one special project-level source construct.
 
 A build system may invoke the Caret compiler once per root.
@@ -11617,6 +11741,8 @@ A shared source file may define both sides of an interaction.
 For example, `client-server.caret`:
 
 ```caret
+clientServer = module
+
 ^client = context
 ^server = context
 
@@ -11663,7 +11789,7 @@ They are not strings or compiler keywords.
 `client.caret` may import the shared module at compile time:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 ```
 
 and construct the runtime client ruleset by filtering the shared interaction:
@@ -11692,6 +11818,12 @@ shared
 
 exists only during compilation.
 
+Here `clientServer` is the shared file's stable ModuleId, `shared` is the client root's local
+compile-time binding containing the imported module value, and `shared.client` is an exported
+context value from that module. These are three different semantic entities. The import remains
+valid if `client-server.caret` is moved to any other location below the directory used for this
+compilation root's catalog discovery, provided its `clientServer = module` declaration remains.
+
 The runtime artifact receives `clientRules` and whatever dependencies are reachable through them.
 
 ---
@@ -11701,7 +11833,7 @@ The runtime artifact receives `clientRules` and whatever dependencies are reacha
 `server.caret` performs the corresponding selection:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 
 serverRules =
   # shared.interaction filter $
@@ -11892,7 +12024,7 @@ Dependencies used only by that rule likewise need not be emitted.
 Thus:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 
 clientRules =
   # shared.interaction filter $
@@ -12015,7 +12147,7 @@ The compiler should issue a located diagnostic when a compile-time-only value is
 A binding declared:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 ```
 
 does not itself become part of the runtime program merely because later code uses it during compilation.
@@ -12131,7 +12263,7 @@ player.@health
 `#` controls execution stage:
 
 ```caret
-# module = import "module.caret"
+# loadedModule = import "module.caret"
 
 generated =
   # transform code
@@ -12180,36 +12312,40 @@ value = # expression
 7. Compile-time imports:
 
 ```caret
-# module = import "module.caret"
+# shared = import clientServer
 ```
 
-8. Compile-time imported modules that are not automatically emitted into the runtime artifact.
+8. Compile-time path imports and ModuleId imports resolved through the compile-time environment's
+visible catalog.
 
-9. Compile-time transformation of ordinary Caret values.
+9. Compile-time imported modules that are not automatically emitted into the runtime artifact.
 
-10. Compile-time transformation of rulesets and other reifiable program structures.
+10. Compile-time transformation of ordinary Caret values.
 
-11. Ordinary higher-order collection functions such as `filter` usable during compilation.
+11. Compile-time transformation of rulesets and other reifiable program structures.
 
-12. Values produced by compile-time expressions incorporated into the resulting program when they have valid runtime representation.
+12. Ordinary higher-order collection functions such as `filter` usable during compilation.
 
-13. Separate source roots compiled independently into separate artifacts.
+13. Values produced by compile-time expressions incorporated into the resulting program when they have valid runtime representation.
 
-14. Different roots importing the same shared module at compile time.
+14. Separate source roots compiled independently into separate artifacts.
 
-15. Different roots producing different runtime rulesets from that shared module.
+15. Different roots importing the same shared module by stable ModuleId at compile time.
 
-16. Normal reachability analysis after compile-time transformation.
+16. Different roots producing different runtime rulesets from that shared module.
 
-17. Unreachable unselected rules omitted from the resulting artifact.
+17. Normal reachability analysis after compile-time transformation.
 
-18. Dependencies required by selected rules retained automatically.
+18. Unreachable unselected rules omitted from the resulting artifact.
 
-19. Shared dependencies permitted to appear in several independently compiled artifacts.
+19. Dependencies required by selected rules retained automatically.
 
-20. Context values usable as compile-time filtering criteria.
+20. Shared dependencies permitted to appear in several independently compiled artifacts.
 
-21. Compile-time authority remaining subject to normal Caret effect and capability rules.
+21. Context values usable as compile-time filtering criteria.
+
+22. Compile-time authority and module-catalog visibility remaining subject to the compilation
+environment's normal effect, capability, reflection, and sandbox restrictions.
 
 The initial implementation may postpone:
 
@@ -12249,7 +12385,7 @@ A compilation target begins with an ordinary Caret source root.
 Different roots may inspect and transform the same shared source at compile time:
 
 ```caret
-# shared = import "client-server.caret"
+# shared = import clientServer
 ```
 
 and derive different runtime values:
@@ -12350,7 +12486,8 @@ Their later implementation must not weaken root substitution or permit authority
 - SIMD values and required vectorized application
 - bytes, formats, codecs, and structured format failures
 - contexts, rules, rulesets, persistent cycle objects, and rule cycles
-- modules, imports, JVM compiler backend, runtime ABI, and optimizer
+- modules, module-ID declarations/catalog discovery, path and ModuleId imports, JVM compiler
+  backend, runtime ABI, and optimizer
 - environment-relative `@root`, structured program reification, canonical code serialization, and quines
 - sandbox execution, capability isolation, reflective membranes, and nested sandboxes
 - `#` compile-time bindings/expressions, compile-time imports and transformation, separate
