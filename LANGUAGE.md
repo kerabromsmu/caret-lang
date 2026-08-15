@@ -2463,6 +2463,32 @@ constructor consumes only its contract arguments: an effect term cannot be inter
 those arguments. These errors are reported at the offending term while retaining the clause span
 for context.
 
+The stable diagnostic taxonomy is:
+
+* `CONFLICTING_EFFECT_ALLOWANCE` when `pure` is combined with one or more named effects;
+* `INVALID_EFFECT_MODIFIER` when `?` or `~` is applied to `pure` or an effect term;
+* `EFFECT_AS_CONTRACT_ARGUMENT` when an effect is supplied where a parameterized contract expects
+  a contract argument;
+* `EFFECT_CONSTRAINT_REQUIRES_CALLABLE` when an effect-constrained parameter or assignment receives
+  a non-callable value;
+* `EFFECT_ALLOWANCE_EXCEEDED` when a known callable upper bound or an inferred function effect set
+  is not a subset of its declared allowance; and
+* `UNKNOWN_CALL_EFFECTS` when the value is callable but no invocation-effect upper bound is
+  available, whether discovered while checking an effect-constrained value or while invoking it.
+
+The code describes the failure independently of when it becomes knowable. A statically established
+failure has phase `SEMANTIC`; the same failure discovered only at a dynamic value boundary has phase
+`RUNTIME` and retains the same code.
+
+Locations are deterministic. For an invalid clause term, that term is primary and the enclosing
+clause is retained as context. In a `pure` conflict, the later conflicting term is primary and the
+earlier term is a related location. For a parameter or assignment constraint, the supplied or
+assigned value is primary and the constraining clause is related. For an inferred function effect
+outside its allowance, the operation that introduces the disallowed effect is primary and the
+function declaration's allowance is related. Diagnostic details preserve the unexpected and
+allowed effect descriptor identities; rendering exposes an effect name only when that name is
+visible in the current environment.
+
 The position of the clause determines what its two parts constrain:
 
 * Before a named function, value requirements constrain the function result and the effect

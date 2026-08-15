@@ -216,7 +216,13 @@ symbol identities rather than source-span equality.
   assignments as subset constraints on the callable value's known upper bound. Do not infer an
   implicit purity constraint when a parameter or assignment clause contains no effect terms.
 - Reject invocation of a callable whose effect upper bound is unavailable with
-  `UNKNOWN_CALL_EFFECTS`; do not add an effect wildcard or runtime after-the-fact enforcement.
+  `UNKNOWN_CALL_EFFECTS`; use the same code when an unavailable bound prevents validation of an
+  effect-constrained parameter or assignment. Do not add an effect wildcard or runtime
+  after-the-fact enforcement.
+- Use distinct stable codes for conflicting `pure`/named allowances, effect absence modifiers,
+  effects used as contract arguments, non-callable constrained values, and known bounds or inferred
+  effects outside an allowance. Keep behavioral codes stable across semantic and runtime discovery,
+  with deterministic primary and related locations.
 - Define `StateRead` for explicit container dereference and `StateWrite` for `put`. Accessing or
   sharing a container reference is pure; effects describe observation but do not grant authority.
 - Infer effects transitively through calls, higher-order parameters, closures, composition, partials,
@@ -592,9 +598,9 @@ are complete. Initial parameterized contracts are also complete through `Sequenc
 closed same-name overload sets and unique most-specific contract dispatch, retaining a generic
 fallback and distinct no-applicable/ambiguous diagnostics. Public effect declarations remain a
 subsequent Phase 2 slice. Callable signatures, reflection, explicit higher-order arrow contracts,
-and the initial static operator matrix are now settled. Stable diagnostic codes for the remaining
-mixed-clause and callable-effect failures are the next unresolved Phase 2 blocker. `with`/`outer`
-wait for the Phase 4 public named-member protocol rather
+and the initial static operator matrix are now settled. Mixed-clause and callable-effect diagnostic
+codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
+unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather
 than introducing an exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals

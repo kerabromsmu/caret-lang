@@ -264,6 +264,11 @@ beyond `Sequence T`, dispatch, universal literals, `ErrorTemplate`, and `Result`
 the unary contract, refinement, and initial sequence-parameterization foundation described above
 is implemented.
 
+The planned effect system likewise assigns distinct stable codes to malformed mixed
+contract/effect clauses, non-callable effect constraints, unavailable callable effect bounds, and
+effects outside an allowance. A failure keeps the same behavioral code whether static analysis or
+a dynamic boundary discovers it, while its phase and source locations record where it was found.
+
 ## Contained mutability
 
 Caret values remain immutable by default. Planned mutability is introduced only through an explicit
