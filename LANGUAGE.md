@@ -2419,10 +2419,108 @@ group is analyzed. Each external use instantiates them freshly, while ordinary a
 scheme and all parameter/result relationships. Once a callable use is partially applied, that
 instance retains its substitutions and is not generalized again.
 
-The exact public Caret syntax for explicitly describing a callable-valued parameter or result is
-not yet settled. Until it is, the signature scheme is inferred from ordinary named functions and
-derived callables; a value clause such as `(Int) callback` continues to constrain `callback`
-itself, not the result of invoking it.
+#### Arrow-signature contracts
+
+A callable signature is an ordinary first-class structural contract written with a bracketed
+parameter-requirement list and a right-associative arrow:
+
+```caret
+[Int] -> Int
+[Int Text] -> (fs Boolean)
+[] -> Text
+```
+
+The bracketed left side determines exact remaining arity. Each element is one parameter position;
+a parenthesized element contains a conjunction of requirements for that one position. The right
+side is either one result requirement or a parenthesized mixed result/effect clause. It must always
+contain at least one result requirement; use `Any` explicitly for an unconstrained result. An
+omitted effect allowance means pure, exactly as for a named function. Existing mixed-clause rules
+apply to an explicit allowance such as `(fs Boolean)` or `(Boolean fs)`.
+
+The arrow is recognized as a signature contract only when its direct left operand is a bracketed
+list whose elements are parsed as contract requirements. Elsewhere `[...]` remains an ordinary
+collection, and an identifier or contracted-parameter header before `->` remains a lambda.
+Signature arrows are right-associative, so callable results may be described recursively;
+parentheses disambiguate a nested signature where necessary. Constructing or testing an arrow
+contract is pure and never invokes the candidate callable.
+
+Arrow signatures may be named like other contract values:
+
+```caret
+IntTransform = [Int] -> Int
+```
+
+They participate in ordinary declaration clauses:
+
+```caret
+apply ([Int] -> Int) transform (Int) value =
+  transform value
+
+([Int] -> Int) double = x -> x * 2
+```
+
+The outer clause constrains the callable value. A non-arrow value clause such as `(Int) callback`
+continues to constrain `callback` itself, not the result of invoking it. Nullable and optional
+modifiers apply to the complete grouped arrow contract under the ordinary modifier rules.
+
+Numbered holes have a separate contextual role as contract variables inside declaration headers
+and arrow-signature contracts. `_1`, `_2`, and later indices denote universally quantified contract
+variables; repeated occurrences preserve the same parameter/result relationship. Within a named
+function declaration, their scope is the complete result and parameter header. Within a lambda,
+their scope is all parameter clauses and the inferred result of that lambda. Otherwise the nearest
+standalone arrow-signature expression owns them. They do not escape into later declarations or the
+enclosing lexical block.
+
+For example:
+
+```caret
+(Sequence _2) map ([_1] -> _2) transform (Sequence _1) values =
+  ...
+```
+
+generalizes one input-element contract and one output-element contract, then instantiates both
+freshly at every use of `map`. Variables may appear as ordinary constructor arguments and within
+conjunctions such as `(_1 Number)`. All indices from `_1` through the highest used index must occur;
+their first occurrence order need not match numeric order. An unnumbered `_` is invalid in contract-
+variable context, and ordinary expression holes retain their existing partial-application meaning.
+
+A standalone generic arrow contract quantifies its own variables. A candidate then satisfies it
+only when the candidate scheme is at least as general; a monomorphic `Int -> Int` callable does not
+satisfy `[_1] -> _1`. Within a generalized enclosing header, the shared variables are instantiated
+for that enclosing callable use, so a concrete `Int -> Text` transform may satisfy the instantiated
+`[_1] -> _2` parameter of one `map` call.
+
+#### Callable-contract satisfaction and implication
+
+A candidate callable satisfies an arrow-signature contract only when its language-owned metadata
+proves all of the following:
+
+1. its remaining arity exactly matches the parameter list;
+2. each required parameter domain implies the candidate's corresponding accepted domain;
+3. the candidate's result guarantee implies the required result;
+4. its known effect upper bound is a subset of the signature allowance; and
+5. its generalized-variable relationships can be instantiated without breaking those conditions.
+
+Parameter checking is therefore contravariant, while result checking is covariant. An unavailable
+effect bound, unknown contract relationship, or insufficiently general variable scheme does not
+satisfy the contract. Used as an ordinary predicate, the arrow contract returns `false`; used at a
+binding, parameter, or result boundary, it produces that boundary's ordinary located contract
+failure. Checking is observational and structural: it does not call refinements, invoke the
+candidate, or acquire nominal membership.
+
+An overload set satisfies an arrow contract only when at least one surviving variant provably
+accepts the complete required parameter domain. In addition, every variant that may be selected for
+any permitted argument tuple must have a compatible result and effect bound. Unknown overlap is
+treated as possible overlap. The initial proof is conservative and does not combine several
+partial variant domains to claim coverage; a single variant, normally a generic fallback, must
+cover the whole required domain.
+
+Implication between two arrow contracts uses the same exact-arity, contravariant-parameter,
+covariant-result, variable-instantiation, and effect-subset rules. This participates in ordinary
+constraint normalization and overload specificity without executing predicates. Each evaluation
+of an arrow-signature expression still constructs a fresh contract identity under the normal
+contract-equality rule; structurally equivalent descriptors may mutually imply one another without
+being equal, while aliases preserve identity.
 
 #### Callable reflection schema
 
@@ -4300,15 +4398,15 @@ map (x -> x * 2) values
 
 but rejects an effectful lambda.
 
-Explicit function-value contracts may also be applied using the normal Caret contract mechanism where needed.
-
-Conceptually:
+Explicit function-value contracts use ordinary binding or parameter boundaries. For example:
 
 ```caret
-(pure) (x -> x * 2)
+([Int] -> (pure Int)) double = x -> x * 2
 ```
 
-requires the resulting lambda value to satisfy `pure`.
+requires the assigned lambda to accept `Int`, return `Int`, and be pure. A lambda passed directly to
+a higher-order parameter is checked against that parameter's arrow-signature contract in the same
+way. Mixed clauses are not a separate general expression-ascription syntax.
 
 Purity must always be verified from the lambda body; the contract is a requirement, not merely an annotation.
 
@@ -4335,9 +4433,8 @@ x ->
 
 returns `b`.
 
-Return-type or return-value contracts should follow the general Caret function-result contract mechanism once that syntax is finalized.
-
-Do not introduce a separate lambda-specific return-type syntax.
+Lambda result guarantees are expressed as part of an arrow-signature contract on a binding or
+surrounding higher-order parameter. Do not introduce a separate lambda-specific return-type syntax.
 
 ---
 

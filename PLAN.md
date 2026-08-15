@@ -108,6 +108,10 @@ the ordinary callable path; complete callable metadata remains the principal unf
   common-result and unioned-effect summary; never collapse alternative parameter domains into one
   conjunction. Retain immutable viable-variant, sparse filled-position, bound-argument, and
   applicability-cache state while exposing common remaining arity.
+- Parse right-associative `[requirements] -> result` arrow signatures as first-class structural
+  callable contracts without changing collection or lambda parsing. Support exact nullary and
+  multi-parameter arity, conjunctive parameter positions, mixed result/effect clauses, nesting, and
+  declaration-wide numbered contract variables with source spans.
 - Replace contract-only semantic handling of declaration clauses with an analyzed split between
   conjunctive value requirements and an optional effect allowance, preserving source spans and the
   position-specific function, parameter, and assignment meanings.
@@ -148,6 +152,14 @@ symbol identities rather than source-span equality.
 - Validate inferred callable needs and guarantees against declarations without silently
   strengthening parameter interfaces. Generalize undeclared signature components, instantiate them
   freshly per use, and retain substitutions in derived partial callables.
+- Implement arrow-contract satisfaction and implication with exact arity, contravariant parameters,
+  covariant results, effect-bound inclusion, and generalized-variable compatibility. Unknown
+  relationships return false as predicates and retain ordinary boundary contract failures; checks
+  never invoke the candidate or acquire nominal membership.
+- For overload values, require one variant to prove complete required-domain coverage and require
+  every potentially selectable overlapping variant to satisfy result and effect constraints. Treat
+  unknown overlap as possible and do not execute refinements or combine partial domains to prove
+  coverage in the initial implementation.
 - Represent derivation as a checked logical-inclusion graph supporting multiple bases. Reject cycles
   and retain enough provenance to explain failed membership and invalid derivation.
 - Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
@@ -569,9 +581,9 @@ minimum purity/effect analysis, proven-predicate refinements, and nullable/optio
 are complete. Initial parameterized contracts are also complete through `Sequence T`. Next implement
 closed same-name overload sets and unique most-specific contract dispatch, retaining a generic
 fallback and distinct no-applicable/ambiguous diagnostics. Public effect declarations remain a
-subsequent Phase 2 slice. The callable signature and public reflective schema are now settled, while
-explicit higher-order contract syntax must be resolved before Phases 1 and 2 can be declared
-complete. `with`/`outer` wait for the Phase 4 public named-member protocol rather
+subsequent Phase 2 slice. Callable signatures, reflection, and explicit higher-order arrow contracts
+are now settled. The static operand and coercion contract matrix for built-in operators is the next
+unresolved Phase 2 blocker. `with`/`outer` wait for the Phase 4 public named-member protocol rather
 than introducing an exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals

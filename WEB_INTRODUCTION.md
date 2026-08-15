@@ -217,6 +217,22 @@ The prototype infers initial built-in constraints for unannotated named function
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
 each call instantiates those variables independently.
 
+The planned language can state a higher-order callable contract directly. A bracketed parameter
+list followed by `->` describes exact arity, result guarantees, and an optional maximum effect set:
+
+```caret
+[Int] -> Int
+[Int Text] -> (fs Boolean)
+
+(Sequence _2) map ([_1] -> _2) transform (Sequence _1) values =
+  ...
+```
+
+Numbered contract variables relate the callable parameter to surrounding parameters and results.
+Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
+must remain within the stated allowance. This arrow form is a first-class contract, distinct from a
+lambda because its left side is a bracketed requirement list. It is specified but not implemented.
+
 Contracts also have first-class null/missing unions. `Number?` accepts numbers or null, `Number~`
 accepts numbers or missing, and `Number?~` accepts all three while keeping null and missing
 observably distinct. The modified contracts remain unary predicates, work in clauses and aliases,
@@ -299,7 +315,7 @@ supports lexical closures, direct and mutual recursion, partial application, exp
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 
-General parameterized contracts, structural templates, contract-based dispatch, universal
+General parameterized contracts, callable arrow contracts, structural templates, contract-based dispatch, universal
 collection literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
