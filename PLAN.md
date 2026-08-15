@@ -116,9 +116,11 @@ the ordinary callable path; complete callable metadata remains the principal unf
 - Extend the implemented `>>` function composition with contract/effect metadata when those systems
   arrive. Its arity, holes, partial state, reflection, and incompatible-operand diagnostics already
   use the shared callable path.
-- After its public schema is settled, expand function reflection over the shared signature model to
-  parameter descriptors, remaining arity, contracts, effects, captures where public, and reification
-  rules without making `@function` itself callable.
+- Expand function reflection over the settled nested `Function`/`Signature` schema, including
+  remaining parameter, result, effect, generalized-variable, and surviving-overload descriptors.
+  Apply environment-relative inferred-fact and descriptor-name filtering, preserve target-identity
+  reference equality, and expose no captures, bound values, provenance, implementation objects, or
+  authority. Keep `@function` itself non-callable.
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 
@@ -567,9 +569,9 @@ minimum purity/effect analysis, proven-predicate refinements, and nullable/optio
 are complete. Initial parameterized contracts are also complete through `Sequence T`. Next implement
 closed same-name overload sets and unique most-specific contract dispatch, retaining a generic
 fallback and distinct no-applicable/ambiguous diagnostics. Public effect declarations remain a
-subsequent Phase 2 slice. The callable signature model is now settled, while its public reflective
-schema and explicit higher-order contract syntax must be resolved before Phases 1 and 2 can be
-declared complete. `with`/`outer` wait for the Phase 4 public named-member protocol rather
+subsequent Phase 2 slice. The callable signature and public reflective schema are now settled, while
+explicit higher-order contract syntax must be resolved before Phases 1 and 2 can be declared
+complete. `with`/`outer` wait for the Phase 4 public named-member protocol rather
 than introducing an exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals

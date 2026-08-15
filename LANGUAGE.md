@@ -382,7 +382,9 @@ Current metadata:
 result is a `NOT_CALLABLE` error. Reflecting an existing function reference returns the same
 reference.
 
-The metadata representation is intentionally minimal. A later version should expose iterable field descriptors, parameter descriptors, mutability, ownership, nullability, optionality, and export status.
+This is the currently implemented subset. The planned callable schema below adds signature
+descriptors while preserving these fields and the non-callable reference behavior. Other value
+kinds gain their own descriptors as their corresponding language features are implemented.
 
 ## Operators and precedence
 
@@ -2420,9 +2422,89 @@ instance retains its substitutions and is not generalized again.
 The exact public Caret syntax for explicitly describing a callable-valued parameter or result is
 not yet settled. Until it is, the signature scheme is inferred from ordinary named functions and
 derived callables; a value clause such as `(Int) callback` continues to constrain `callback`
-itself, not the result of invoking it. The reflective field names and collection shapes that will
-expose signature schemes are also unresolved and are specified separately from this semantic
-model.
+itself, not the result of invoking it.
+
+#### Callable reflection schema
+
+Reflecting a callable produces an immutable, non-callable `Function` reference with a fixed public
+shape:
+
+```text
+kind        "Function"
+name        String or ~
+remaining   Number
+signature   Signature
+variants    Sequence Signature
+```
+
+`name` is the original declaration name when that name is visible in the current environment;
+otherwise it is `~`. An alias does not rename the target in reflection. A direct prefix partial of
+a named function or overload retains that visible declaration name, while a hole-expression
+partial, composition, lambda, or other anonymous derived callable reports `~`. `remaining` is the
+number of parameters in the callable's current public interface. `variants` is empty for an
+ordinary callable and contains the surviving exact variant signatures for an overload set or
+overload partial.
+
+The nested `Signature` has these fields:
+
+```text
+kind        "Signature"
+parameters  Sequence Parameter
+result      FunctionResult
+effects     FunctionEffects
+variables   Sequence SignatureVariable
+```
+
+`parameters` contains only parameters still accepted by this callable, in application order. Each
+`Parameter` has `kind = "Parameter"`, a zero-based `position` in that current list, `name` or `~`,
+effective `requirements`, explicit `declared` requirements or `~`, and visible `inferred`
+requirements or `~`. A derived hole parameter has no declaration of its own, so `declared` is `~`
+even when its effective requirements were synthesized from declared target positions.
+
+`FunctionResult` has `kind = "FunctionResult"`, effective `guarantees`, explicit `declared`
+guarantees or `~`, and visible `inferred` guarantees or `~`. `FunctionEffects` has
+`kind = "FunctionEffects"`, the currently usable `upperBound`, an explicit `declared` allowance or
+`~` for a derived callable, and visible `inferred` effects or `~`. A known empty sequence means no
+requirements or effects as appropriate; in particular, `upperBound = []` means proven pure.
+`upperBound = ~` means that no invocation bound is available and therefore remains subject to
+`UNKNOWN_CALL_EFFECTS`.
+
+Requirement sequences contain immutable, non-callable `ContractRef` metadata rather than the live
+callable contract binding. Effect sequences likewise contain non-callable `Effect` descriptors.
+Both preserve their underlying language-owned descriptor identity and expose `name` only when that
+name is visible; a hidden name is `~`. Reflection therefore describes a hidden identity when it is
+part of a visible signature without granting access to its private binding, predicate invocation,
+catalog entry, implementation, or authority.
+
+Generalized-variable occurrences use `VariableRef` values containing a zero-based `index` into
+`variables`. Each `SignatureVariable` definition contains that `index` and its normalized
+requirements. Indices are assigned by first occurrence in the signature. They are local references,
+not globally meaningful contract identities; canonical numbering makes structurally equivalent
+signature schemes compare equal modulo variable renaming.
+
+Every field above is present. `~` denotes information unavailable in the current reflective
+environment; fields are not dynamically omitted. Inside the defining module, inferred fields expose
+the stronger facts retained by analysis. Across a module boundary they are `~` when an explicit
+declaration is the public interface. When an inferred component is itself the undeclared public
+interface, that component remains visible. The effective requirement, guarantee, and upper-bound
+fields always contain exactly the facts on which code in the current environment may rely.
+
+An overload's top-level `signature` is its conservative summary. Its parameter requirements are
+`~` while several alternative domains survive; applicability consumers inspect `variants` rather
+than treating those alternatives as a conjunction. Common result guarantees and the unioned effect
+bound remain available. When narrowing leaves one variant, the summary is that specialized exact
+signature, while `variants` continues to identify the surviving overload variant.
+
+Function references compare by target callable identity as already specified. Signature,
+parameter, result, effect-summary, and variable metadata compare structurally after canonical
+variable numbering. `ContractRef` and `Effect` values compare by their underlying descriptor
+identity. Reflecting the same reference again returns the same view; a newly narrowed partial is a
+new callable identity with a new immutable view.
+
+Callable reflection never exposes capture names or values, bound partial values, implementation
+kind, source spans, native origin, Java objects, or capability handles. Authorized semantic-code
+reflection is the separate mechanism for inspecting code and still obeys module, sandbox, and
+authority visibility.
 
 #### Partial and composed signatures
 
