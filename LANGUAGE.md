@@ -1390,7 +1390,8 @@ Applicability checks performed during narrowing satisfy the selected overload's 
 and are not repeated at invocation. The selected implementation receives the original arguments,
 and its result contract is validated normally. Overload partials remain ordinary callable values:
 their remaining arity supports prefix/infix classification and composition, while contract/effect
-metadata is the conservative combination of the surviving variants until selection completes.
+metadata follows the variant-preserving signature and conservative summary rules below until
+selection completes.
 
 ---
 
@@ -2388,12 +2389,84 @@ it must not encode a silent contract-first or effect-first precedence. Callable 
 metadata is independent: an assignment such as `(pure Int) callback = value` constrains `callback`
 itself to satisfy `Int`, not the result of calling it.
 
-Every callable has language-owned metadata containing a known upper bound on the effects it may
-perform. Host callables and environment-provided operations must supply this metadata at their
-boundary. A dynamically obtained callable may be invoked only when its bound is known and is a
-subset of the caller's declared allowance. If no bound is available, analysis reports the located
-semantic diagnostic `UNKNOWN_CALL_EFFECTS`; there is no wildcard declaration and no attempt to
-permit the action first and inspect its effects afterward.
+### Callable signature metadata
+
+Every callable has a language-owned signature scheme shared by semantic analysis, interpreted and
+compiled invocation, derived callables, and later reflection. A scheme records the ordered
+parameter requirements, result guarantees, quantified contract variables and their relationships,
+declared effect allowance, inferred actual effects, remaining arity, and source provenance. This is
+semantic metadata, not a Java runtime object exposed to Caret.
+
+Declarations and inference remain distinct. A parameter declaration is a precondition promised by
+the callable interface. The implementation's inferred parameter needs must be satisfied by that
+declaration; analysis must reject an implementation that needs a stricter parameter instead of
+silently strengthening the declared interface. An inferred result must imply every declared result
+requirement, and inferred effects must be a subset of the declared allowance.
+
+Inside the defining module, analysis retains stronger inferred result guarantees and a narrower
+inferred effect set for checking, optimization, and diagnostics. Across a module boundary, an
+explicit declaration is the stable interface: consumers may rely on its result guarantees and
+declared effect allowance, but not on stronger implementation facts. When a component has no
+explicit parameter or result declaration, its generalized inferred component is its interface.
+Omitting a function effect declaration instead supplies the explicit empty allowance described
+above; inference must validate against it. Parameter requirements are not weakened or strengthened
+at either boundary.
+
+Unresolved contract variables are universally quantified after the complete recursive definition
+group is analyzed. Each external use instantiates them freshly, while ordinary aliases preserve the
+scheme and all parameter/result relationships. Once a callable use is partially applied, that
+instance retains its substitutions and is not generalized again.
+
+The exact public Caret syntax for explicitly describing a callable-valued parameter or result is
+not yet settled. Until it is, the signature scheme is inferred from ordinary named functions and
+derived callables; a value clause such as `(Int) callback` continues to constrain `callback`
+itself, not the result of invoking it. The reflective field names and collection shapes that will
+expose signature schemes are also unresolved and are specified separately from this semantic
+model.
+
+#### Partial and composed signatures
+
+Supplying an ordinary prefix argument validates that parameter, specializes the current signature
+variables, removes the filled parameter, and preserves the specialized result and invocation-effect
+metadata. A hole partial orders its public parameters by hole order. Every occurrence of one
+repeated numbered hole denotes the same future argument, so its public requirement is the
+normalized conjunction of the requirements at all target positions.
+
+Fixed operands in a hole partial are evaluated and checked when the partial is constructed. Effects
+from evaluating the callable expression, a composition operand, or a fixed operand belong to that
+construction expression. They are not repeated in the resulting callable's effect bound. The
+resulting callable describes only effects that may occur when its remaining parameters are supplied
+and its body or selected overload is invoked.
+
+For `left >> right`, the derived signature retains the parameters of `left`, the result guarantee
+of `right`, and the descriptor-identity union of both invocation-effect bounds. Analysis unifies
+the left result with the right parameter where possible. A statically proven incompatibility is a
+located semantic error at the composition; an undecidable relationship retains the ordinary right
+parameter check at invocation. An unavailable operand effect bound makes the composed invocation
+bound unavailable. The composition may remain a value, but completing its invocation then follows
+the ordinary `UNKNOWN_CALL_EFFECTS` rule.
+
+#### Overload signature summaries
+
+An overload set and every narrowed overload partial preserve the complete signature of each
+surviving variant. Parameter alternatives are never collapsed into one conjunctive requirement,
+because that would describe a different accepted domain. The generic summary exposes their common
+remaining arity, only result guarantees implied by every survivor, and the descriptor-identity
+union of every survivor's invocation-effect upper bound.
+
+Supplying an argument specializes variables and removes inapplicable variants, so the common result
+and effect summary may become narrower. At full arity, the selected variant supplies its exact
+signature and validates its result normally. If any surviving variant lacks an effect upper bound,
+the generic overload bound is unavailable until narrowing removes every such variant or selection
+chooses a variant with a known bound.
+
+Every callable has language-owned metadata containing either an upper bound on the effects it may
+perform or an explicit unavailable-bound state. Host callables and environment-provided operations
+must supply a known bound at their boundary. A dynamically obtained or conservatively derived
+callable may be invoked only when its bound is known and is a subset of the caller's declared
+allowance. If no bound is available, analysis reports the located semantic diagnostic
+`UNKNOWN_CALL_EFFECTS`; there is no wildcard declaration and no attempt to permit the action first
+and inspect its effects afterward.
 
 ### Effect inference and tooling
 

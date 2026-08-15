@@ -97,9 +97,17 @@ the ordinary callable path; complete callable metadata remains the principal unf
 ### Unified functions/operators and composition
 
 - Extend the shared callable protocol already used by operators, user functions, composition, and
-  partials with complete parameter/result contract, public effect, and reflection metadata. Overload
-  partials retain immutable viable-variant, sparse filled-position, bound-argument, and applicability-
-  cache state while exposing their common remaining arity.
+  partials with one language-owned signature scheme containing declared and inferred parameter,
+  result, generic-variable, effect, arity, and provenance data. Preserve stronger inferred facts
+  locally while projecting explicit declarations as stable cross-module interfaces.
+- Specialize signature instances through prefix and hole partials, including conjunctive repeated-
+  hole requirements and construction-time fixed-operand effects. Derive composition signatures
+  from left parameters, right results, compatibility constraints, and unioned invocation effects.
+  Keep construction effects separate from later callable invocation effects.
+- Preserve complete variant signatures in overload sets and partials alongside a conservative
+  common-result and unioned-effect summary; never collapse alternative parameter domains into one
+  conjunction. Retain immutable viable-variant, sparse filled-position, bound-argument, and
+  applicability-cache state while exposing common remaining arity.
 - Replace contract-only semantic handling of declaration clauses with an analyzed split between
   conjunctive value requirements and an optional effect allowance, preserving source spans and the
   position-specific function, parameter, and assignment meanings.
@@ -108,8 +116,9 @@ the ordinary callable path; complete callable metadata remains the principal unf
 - Extend the implemented `>>` function composition with contract/effect metadata when those systems
   arrive. Its arity, holes, partial state, reflection, and incompatible-operand diagnostics already
   use the shared callable path.
-- Expand function reflection to parameter descriptors, remaining arity, contracts, effects,
-  captures where public, and reification rules without making `@function` itself callable.
+- After its public schema is settled, expand function reflection over the shared signature model to
+  parameter descriptors, remaining arity, contracts, effects, captures where public, and reification
+  rules without making `@function` itself callable.
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 
@@ -134,6 +143,9 @@ symbol identities rather than source-span equality.
 
 - Preserve implemented source-spanned contract construction, derivation, refinement, binding,
   parameter, result, and nullable/optional modifier forms (`T?`, `T~`, `T?~`).
+- Validate inferred callable needs and guarantees against declarations without silently
+  strengthening parameter interfaces. Generalize undeclared signature components, instantiate them
+  freshly per use, and retain substitutions in derived partial callables.
 - Represent derivation as a checked logical-inclusion graph supporting multiple bases. Reject cycles
   and retain enough provenance to explain failed membership and invalid derivation.
 - Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
@@ -555,7 +567,9 @@ minimum purity/effect analysis, proven-predicate refinements, and nullable/optio
 are complete. Initial parameterized contracts are also complete through `Sequence T`. Next implement
 closed same-name overload sets and unique most-specific contract dispatch, retaining a generic
 fallback and distinct no-applicable/ambiguous diagnostics. Public effect declarations remain a
-subsequent Phase 2 slice. `with`/`outer` wait for the Phase 4 public named-member protocol rather
+subsequent Phase 2 slice. The callable signature model is now settled, while its public reflective
+schema and explicit higher-order contract syntax must be resolved before Phases 1 and 2 can be
+declared complete. `with`/`outer` wait for the Phase 4 public named-member protocol rather
 than introducing an exported-scope-only model that would later need replacement.
 
 ## Explicit assumptions and allowed deferrals
