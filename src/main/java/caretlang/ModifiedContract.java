@@ -24,9 +24,9 @@ final class ModifiedContract implements ContractDescriptor {
     }
 
     @Override public boolean accepts(Value value) {
-        value = ValueSemantics.underlying(value);
-        if (value == Value.Null.INSTANCE) return nullable || base.accepts(value);
-        if (value == Value.Missing.INSTANCE) return optional || base.accepts(value);
+        Value underlying = ValueSemantics.underlying(value);
+        if (underlying == Value.Null.INSTANCE) return nullable || base.accepts(value);
+        if (underlying == Value.Missing.INSTANCE) return optional || base.accepts(value);
         return base.accepts(value);
     }
 

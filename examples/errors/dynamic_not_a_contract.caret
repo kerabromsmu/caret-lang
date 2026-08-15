@@ -1,0 +1,3 @@
+identity value = value
+notContract = identity 1
+modified = notContract?

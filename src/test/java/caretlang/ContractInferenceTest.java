@@ -89,6 +89,15 @@ final class ContractInferenceTest {
                         invalid = maybe ? * 2
                         """).parseProgram()));
         assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, possibleNull.diagnostic().code());
+
+        for (String modifier : List.of("?", "~", "?~")) {
+            LangException unsafeBody = assertThrows(LangException.class,
+                    () -> ContractInference.analyze(new Parser("""
+                            unsafe (Number%s) value = value * 2
+                            """.formatted(modifier)).parseProgram()));
+            assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS,
+                    unsafeBody.diagnostic().code(), modifier);
+        }
     }
 
     @Test

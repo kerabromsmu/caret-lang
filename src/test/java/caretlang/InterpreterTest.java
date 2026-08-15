@@ -232,7 +232,7 @@ final class InterpreterTest {
 
     @Test
     void modifiedContractsAreFirstClassNormalizedAndIdentityStable() {
-        assertEquals("true\ntrue\ntrue\nfalse\n", execute("""
+        assertEquals("true\ntrue\ntrue\nfalse\ntrue\n[Number]\n", execute("""
                 First = contract Number
                 Second = contract Number
                 FirstNullable = First?
@@ -241,11 +241,62 @@ final class InterpreterTest {
                 print Null? == Null
                 print Any?~ == Any
                 print First? == Second?
+                print (Number?)~ == Number?~
+                print (@((Number?)~)).bases
                 """));
 
         LangException error = assertThrows(LangException.class, () -> execute("value = 1?"));
         assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
         assertEquals(Diagnostic.Codes.NOT_A_CONTRACT, error.diagnostic().code());
+    }
+
+    @Test
+    void modifiedNominalContractsPreserveAndAcquireMembership() {
+        assertEquals("true\ntrue\ntrue\ntrue\n", execute("""
+                Numeric = contract Number
+                (Numeric) attributed = 1
+                print Numeric? attributed
+
+                (Numeric?) acquired = 2
+                print Numeric acquired
+
+                MaybeNumeric = Numeric?
+                (MaybeNumeric) aliased = 3
+                print Numeric aliased
+
+                Derived = contract Numeric?
+                (Derived) derived = 4
+                print Numeric derived
+                """));
+    }
+
+    @Test
+    void modifiedClausesValidateRequirementsBeforeAcceptingAbsence() {
+        LangException error = assertThrows(LangException.class, () -> execute("""
+                identity value = value
+                notContract = identity 1
+                (notContract?) accepted = ?
+                """));
+        assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.NOT_A_CONTRACT, error.diagnostic().code());
+        assertTrue(error.getMessage().contains("Binding is not a contract: notContract"));
+    }
+
+    @Test
+    void dynamicModifierFailuresUseRuntimeDiagnosticsWithoutLeakingAstText() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        LangException error = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                print "effect happened"
+                identity value = value
+                notContract = identity 1
+                modified = notContract?
+                """).parseProgram()));
+        assertEquals("effect happened\n", bytes.toString(StandardCharsets.UTF_8));
+        assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.NOT_A_CONTRACT, error.diagnostic().code());
+        assertTrue(error.getMessage().contains("Binding is not a contract: notContract"));
+        assertFalse(error.getMessage().contains("Name["));
     }
 
     @Test

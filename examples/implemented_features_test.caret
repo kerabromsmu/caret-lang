@@ -240,5 +240,8 @@ assertEqual "modified contract reflection name" (@NumberOrAbsent).name "Number?~
 assertEqual "modified contract reflection base" (@NumberOrAbsent).bases ["Number"]
 assert "redundant nullable modifier normalizes" (Null? == Null)
 assert "modified contract identity is stable" (Number? == Number?)
+(Positive?) positiveValue = 2
+assert "modified nominal clause acquires base membership" (Positive positiveValue)
+assert "grouped modifiers flatten to canonical identity" ((Number?)~ == Number?~)
 
 // Expected failures are isolated in examples/errors/ and exercised by test.sh.

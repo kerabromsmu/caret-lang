@@ -54,7 +54,7 @@ final class ParserTest {
                 (Boolean?~) choose (Number?~) value = true
                 predicate = Number?~
                 """).parseProgram();
-        ContractName nullable = ((Assign) program.get(0)).contracts().names().getFirst();
+        ContractName nullable = ((Assign) program.getFirst()).contracts().names().getFirst();
         assertTrue(nullable.nullable());
         assertFalse(nullable.optional());
         ContractName optional = ((Assign) program.get(1)).contracts().names().getFirst();
@@ -64,6 +64,8 @@ final class ParserTest {
         assertTrue(function.resultContracts().names().getFirst().nullable());
         assertTrue(function.resultContracts().names().getFirst().optional());
         assertInstanceOf(ContractModifier.class, ((Assign) program.get(3)).value());
+        Apply derived = assertInstanceOf(Apply.class, expression("contract Number?"));
+        assertInstanceOf(ContractModifier.class, derived.argument());
         Apply spacedApplication = assertInstanceOf(Apply.class, expression("Number ?"));
         assertEquals("Number", ((Name) spacedApplication.function()).name());
         assertInstanceOf(Literal.class, spacedApplication.argument());

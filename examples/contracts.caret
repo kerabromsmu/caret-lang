@@ -32,3 +32,9 @@ print NumberOrAbsent ~
 print Number? ~
 print (@NumberOrAbsent).name
 print (@NumberOrAbsent).bases
+
+(Numeric?) nullableNumeric = 4
+print Numeric nullableNumeric
+DerivedNullable = contract Numeric?
+(DerivedNullable) derivedNullable = 5
+print Numeric derivedNullable

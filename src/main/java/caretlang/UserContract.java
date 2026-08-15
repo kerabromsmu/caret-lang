@@ -67,6 +67,13 @@ final class UserContract implements ContractDescriptor {
                 if (!builtin.accepts(value)) return false;
                 continue;
             }
+            if (current instanceof ModifiedContract modified) {
+                Value underlying = ValueSemantics.underlying(value);
+                if ((underlying == Value.Null.INSTANCE && modified.nullable())
+                        || (underlying == Value.Missing.INSTANCE && modified.optional())) continue;
+                pending.push(modified.base());
+                continue;
+            }
             if (!(current instanceof UserContract user)) {
                 if (!current.accepts(value)) return false;
                 continue;

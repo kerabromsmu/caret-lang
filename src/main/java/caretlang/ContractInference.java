@@ -78,6 +78,8 @@ final class ContractInference {
 
     private final IdentityHashMap<FunctionDef, FunctionContract> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<FunctionDef, EffectSummary> effects = new IdentityHashMap<>();
+    private final IdentityHashMap<List<EnumSet<BuiltinContract>>, List<Set<BuiltinContract>>>
+            declaredParameterDomains = new IdentityHashMap<>();
     private final Resolution resolution;
 
     private ContractInference(Resolution resolution) {
@@ -191,6 +193,7 @@ final class ContractInference {
             requirements.add(explicit);
             parameters.put(function.params().get(i).name(), i);
         }
+        declaredParameterDomains.put(requirements, requirements.stream().map(Set::copyOf).toList());
         Map<String, Shape> locals = new HashMap<>();
         Shape result = Shape.unknown();
         for (Stmt statement : function.body()) {
@@ -375,11 +378,20 @@ final class ContractInference {
         return result;
     }
 
-    private static void constrain(Shape shape, Set<BuiltinContract> constraints,
-                                  List<EnumSet<BuiltinContract>> requirements, SourceSpan span) {
+    private void constrain(Shape shape, Set<BuiltinContract> constraints,
+                           List<EnumSet<BuiltinContract>> requirements, SourceSpan span) {
         if (constraints.isEmpty()) return;
         if (shape.parameter() != null) {
             EnumSet<BuiltinContract> target = requirements.get(shape.parameter());
+            List<Set<BuiltinContract>> declared = declaredParameterDomains.get(requirements);
+            if (declared != null) {
+                Set<BuiltinContract> domain = declared.get(shape.parameter());
+                if ((domain.contains(BuiltinContract.NULL) && !constraints.contains(BuiltinContract.NULL))
+                        || (domain.contains(BuiltinContract.MISSING)
+                        && !constraints.contains(BuiltinContract.MISSING))) {
+                    throw conflict(span, domain, constraints);
+                }
+            }
             target.addAll(constraints);
             rejectDisjoint(target, span);
             return;

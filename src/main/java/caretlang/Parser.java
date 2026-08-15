@@ -339,7 +339,7 @@ final class Parser {
         private Expr namedInfix() {
             Expr expr = term(true);
             while (peek().kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(peek().text())
-                    && canStartAtom(peekNext())) {
+                    && canStartAtom(peekNext()) && !nextTokenIsAdjacentContractModifier()) {
                 Token function = tokens.get(current++);
                 Expr right = term(true);
                 expr = new NamedInfix(expr, new Name(function.text(), function.span()), right,
@@ -403,7 +403,8 @@ final class Parser {
             Expr expr = postfix();
             if (namedInfixOperand && expr instanceof Name
                     && peek().kind() == Kind.IDENT
-                    && LanguageSyntax.canBeNamedInfix(peek().text()) && canStartAtom(peekNext())) {
+                    && LanguageSyntax.canBeNamedInfix(peek().text()) && canStartAtom(peekNext())
+                    && !nextTokenIsAdjacentContractModifier()) {
                 Expr middle = postfix();
                 Expr last = postfix();
                 expr = new AmbiguousCall(expr, middle, last, SourceSpan.cover(expr.span(), last.span()));
@@ -411,7 +412,7 @@ final class Parser {
             while (canStartAtom(peek())) {
                 if (namedInfixOperand && isValueLed(expr)
                         && peek().kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(peek().text())
-                        && canStartAtom(peekNext())) break;
+                        && canStartAtom(peekNext()) && !nextTokenIsAdjacentContractModifier()) break;
                 Expr argument = postfix();
                 expr = new Apply(expr, argument, SourceSpan.cover(expr.span(), argument.span()));
             }
@@ -431,6 +432,13 @@ final class Parser {
         private Token peekNext() {
             int next = Math.min(current + 1, tokens.size() - 1);
             return tokens.get(next);
+        }
+
+        private boolean nextTokenIsAdjacentContractModifier() {
+            Token currentToken = peek();
+            Token nextToken = peekNext();
+            return (nextToken.text().equals("?") || nextToken.text().equals("~"))
+                    && currentToken.span().end().offset() == nextToken.span().start().offset();
         }
 
         private Expr postfix() {

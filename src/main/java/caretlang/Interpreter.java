@@ -117,9 +117,6 @@ final class Interpreter {
                                    Resolution resolution, Environment contractEnvironment, String subject) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
-            Value underlyingValue = underlying(value);
-            if (reference.nullable() && underlyingValue == Value.Null.INSTANCE) continue;
-            if (reference.optional() && underlyingValue == Value.Missing.INSTANCE) continue;
             Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
                     : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
             if (resolved instanceof Value.Callable refinement && !(resolved instanceof Value.ContractValue)) {
@@ -128,6 +125,9 @@ final class Interpreter {
                             "Invalid refinement predicate: " + reference.name()
                                     + " must be unary, Boolean-returning, and pure", reference.span());
                 }
+                Value underlyingValue = underlying(value);
+                if (reference.nullable() && underlyingValue == Value.Null.INSTANCE) continue;
+                if (reference.optional() && underlyingValue == Value.Missing.INSTANCE) continue;
                 Value result = underlying(invoke(refinement, new Value.Argument(value, valueSpan), reference.span()));
                 if (result instanceof Value.Bool(boolean accepted) && accepted) continue;
                 List<Diagnostic.Related> related = List.of(
@@ -138,13 +138,18 @@ final class Interpreter {
                                 + " rejected " + ValueSemantics.kind(value), valueSpan, related));
             }
             if (!(resolved instanceof Value.ContractValue contractValue)) {
-                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_CONTRACT,
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
                         "Binding is not a contract: " + reference.name(), reference.span());
             }
             ContractDescriptor contract = modifiedContract(contractValue.descriptor(),
                     reference.nullable(), reference.optional());
-            if (contract instanceof UserContract user && user.canAcquire(value, valueSpan)) {
-                acquired.add(contract);
+            Value underlyingValue = underlying(value);
+            if (underlyingValue == Value.Null.INSTANCE && contract.accepts(value)) continue;
+            if (underlyingValue == Value.Missing.INSTANCE && contract.accepts(value)) continue;
+            ContractDescriptor nominal = contract instanceof ModifiedContract modified
+                    ? modified.base() : contract;
+            if (nominal instanceof UserContract user && user.canAcquire(value, valueSpan)) {
+                acquired.add(nominal);
                 continue;
             }
             if (contract.accepts(value)) continue;
@@ -156,9 +161,9 @@ final class Interpreter {
                             + ", got " + ValueSemantics.kind(value), valueSpan, related));
         }
         if (acquired.isEmpty()) return value;
-        if (value instanceof Value.Attributed attributed) {
-            acquired.addAll(attributed.contracts());
-            return new Value.Attributed(attributed.value(), acquired);
+        if (value instanceof Value.Attributed(Value value1, Set<ContractDescriptor> contracts)) {
+            acquired.addAll(contracts);
+            return new Value.Attributed(value1, acquired);
         }
         return new Value.Attributed(value, acquired);
     }
@@ -332,8 +337,9 @@ final class Interpreter {
                                              SourceSpan ignored)) {
             Value value = underlying(evalInner(target, env, resolution));
             if (!(value instanceof Value.ContractValue contract)) {
-                throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.NOT_A_CONTRACT,
-                        "Binding is not a contract: " + target, target.span());
+                String subject = target instanceof Name name ? name.name() : ValueSemantics.kind(value);
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
+                        "Binding is not a contract: " + subject, target.span());
             }
             return new Value.ContractValue(modifiedContract(contract.descriptor(), nullable, optional));
         }
@@ -709,13 +715,20 @@ final class Interpreter {
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {
+        if (base instanceof ModifiedContract modified) {
+            nullable |= modified.nullable();
+            optional |= modified.optional();
+            base = modified.base();
+        }
         if (!nullable && !optional) return base;
         boolean needsNull = nullable && !base.accepts(Value.Null.INSTANCE);
         boolean needsMissing = optional && !base.accepts(Value.Missing.INSTANCE);
         if (!needsNull && !needsMissing) return base;
         int key = (needsNull ? 1 : 0) | (needsMissing ? 2 : 0);
-        return modifiedContracts.computeIfAbsent(base, ignored -> new HashMap<>())
-                .computeIfAbsent(key, ignored -> new ModifiedContract(base, needsNull, needsMissing));
+        ContractDescriptor normalizedBase = base;
+        return modifiedContracts.computeIfAbsent(normalizedBase, ignored -> new HashMap<>())
+                .computeIfAbsent(key,
+                        ignored -> new ModifiedContract(normalizedBase, needsNull, needsMissing));
     }
 
     private static Value underlying(Value value) {

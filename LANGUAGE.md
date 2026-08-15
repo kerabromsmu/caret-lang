@@ -161,11 +161,23 @@ contracts are cached by base identity and admitted states: repeated evaluation o
 has stable identity, while modifiers over distinct nominal contracts remain distinct. Reflection
 uses the canonical modified name and reports the wrapped contract in `bases`.
 
+Applying another modifier to a grouped modified contract flattens both modifiers onto the original
+base before normalization. `(Number?)~` and `Number?~` therefore denote the same descriptor and
+reflect the same `Number` base. For an ordinary value, a modified nominal clause checks or acquires
+the underlying nominal membership; the union wrapper does not hide existing attributed membership.
+Null and missing alternatives satisfy the union without acquiring nominal membership.
+
 Inside a clause, the same suffixes may modify a verified refinement requirement. An admitted null
 or missing value satisfies that requirement without invoking the predicate; ordinary values still
 run the predicate. Initial inference propagates built-in null/missing alternatives through named
 calls and retains runtime checks where user-contract or refinement membership is not statically
-decidable.
+decidable. An explicitly nullable or optional parameter cannot be used directly by an operation
+that rejects one of its declared alternatives; without flow-sensitive narrowing, that contradiction
+is a semantic incompatible-contract diagnostic.
+
+A modifier target known not to be a contract is rejected during semantic analysis before execution.
+When the target's contract status depends on runtime evaluation, failure is instead a located runtime
+`NOT_A_CONTRACT` diagnostic. It never reports Java AST or implementation details.
 
 Parameterized contracts, overload dispatch, complete static inference/proof, the public effect
 system, and the full universal-collection model remain planned below.

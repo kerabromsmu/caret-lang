@@ -206,6 +206,7 @@ expect_failure examples/errors/invalid_numbered_hole.caret unused
 expect_failure examples/errors/ambiguous_call_arity.caret unused
 expect_failure examples/errors/unknown_contract.caret unused
 expect_failure examples/errors/not_a_contract.caret unused
+expect_failure examples/errors/dynamic_not_a_contract.caret unused
 expect_failure examples/errors/contract_violation.caret unused
 expect_failure examples/errors/incompatible_inferred_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
