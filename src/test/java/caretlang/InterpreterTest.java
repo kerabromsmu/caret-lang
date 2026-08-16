@@ -587,6 +587,87 @@ final class InterpreterTest {
     }
 
     @Test
+    void callableReflectionExposesLanguageOwnedSignaturesAndSpecializesPrefixPartials() {
+        assertEquals("""
+                add
+                2
+                Parameter
+                0
+                left
+                Number
+                Number
+                FunctionResult
+                Number
+                FunctionEffects
+                0
+                add
+                1
+                right
+                0
+                """, execute("""
+                (Number) add (Number) left (Number) right =
+                  left + right
+                addOne = add 1
+
+                signature = (@add).signature
+                first = seqGet signature.parameters 0
+                firstRequirement = seqGet first.requirements 0
+                resultGuarantee = seqGet signature.result.guarantees 0
+                print (@add).name
+                print (@add).remaining
+                print first.kind
+                print first.position
+                print first.name
+                print firstRequirement.name
+                print (seqGet first.declared 0).name
+                print signature.result.kind
+                print resultGuarantee.name
+                print signature.effects.kind
+                print seqSize signature.effects.upperBound
+                print (@addOne).name
+                print (@addOne).remaining
+                print (seqGet (@addOne).signature.parameters 0).name
+                print seqSize (@addOne).variants
+                """));
+    }
+
+    @Test
+    void overloadAndCompositionReflectionUseSafeConservativeSignatureViews() {
+        assertEquals("2\n2\nOutput\n1\n~\n1\n", execute("""
+                (Number) show (Number) value (Number) suffix =
+                  value
+                (String) show (String) value (String) suffix =
+                  print value
+                stringify value = numberText value
+                pipeline = stringify >> print
+
+                meta = @show
+                print seqSize meta.variants
+                print seqSize meta.signature.parameters
+                print (seqGet meta.signature.effects.upperBound 0).name
+                narrowed = show 1
+                print seqSize (@narrowed).variants
+                print (@pipeline).name
+                print seqSize (@pipeline).signature.effects.upperBound
+                """));
+    }
+
+    @Test
+    void callableReflectionPreservesGeneralizedParameterResultRelationships() {
+        assertEquals("VariableRef\n0\nVariableRef\n0\n1\n", execute("""
+                identity value = value
+                signature = (@identity).signature
+                parameterVariable = seqGet (seqGet signature.parameters 0).requirements 0
+                resultVariable = seqGet signature.result.guarantees 0
+                print parameterVariable.kind
+                print parameterVariable.index
+                print resultVariable.kind
+                print resultVariable.index
+                print seqSize signature.variables
+                """));
+    }
+
+    @Test
     void functionReferencesAreReflectiveNonCallableAndUseTargetIdentity() {
         assertEquals("Function\n1\ntrue\nfalse\nFunction\n2\ntrue\n~\n", execute("""
                 identity value = value

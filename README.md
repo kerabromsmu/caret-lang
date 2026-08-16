@@ -285,7 +285,10 @@ print (@source).names
 ```
 
 `@scope`, `@sequence`, and `@dictionary` expose basic metadata such as `kind`, `size`, and, where
-applicable, `names`. `@function` returns a non-callable function reference exposing `kind` and
-remaining arity. Both `type (@function)` and `(@function).kind` report `"Function"`. References
-compare by target identity. Reflection exposes only public or exported
-bindings and does not invoke a reflected function.
+applicable, `names`. `@function` returns a non-callable function reference exposing `kind`, visible
+declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
+Signature metadata separates effective, declared, and inferred parameter/result facts and reports
+the known invocation-effect bound. Prefix partials specialize their remaining parameters, while
+compositions union known invocation effects. Both `type (@function)` and `(@function).kind` report
+`"Function"`. References compare by target identity. Reflection exposes no captures, bound arguments,
+Java implementation objects, or callable capability, and does not invoke a reflected function.

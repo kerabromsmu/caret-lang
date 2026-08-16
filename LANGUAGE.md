@@ -370,21 +370,27 @@ meta.names
 functionMeta = @function
 functionMeta.kind
 functionMeta.remaining
+functionMeta.signature
+functionMeta.variants
 ```
 
 Current metadata:
 
 - all values: `kind`
 - scopes: `size`, `names`
-- function references: `kind = "Function"`, `remaining`
+- function references: `kind = "Function"`, visible declaration `name` or `~`, `remaining`,
+  language-owned `signature`, and surviving overload `variants`
 
 `@function` is a reference and reflection mechanism, not an alternate call syntax. Applying the
 result is a `NOT_CALLABLE` error. Reflecting an existing function reference returns the same
 reference.
 
-This is the currently implemented subset. The planned callable schema below adds signature
-descriptors while preserving these fields and the non-callable reference behavior. Other value
-kinds gain their own descriptors as their corresponding language features are implemented.
+The callable schema below is implemented for the current named functions, built-ins, prefix
+partials, compositions, and closed overload sets. Its immutable descriptors separate effective,
+declared, and inferred facts; unknown information is `~`, while known-empty facts are empty
+sequences. Reflection exposes no captures, bound partial values, source provenance, native origin,
+implementation objects, or authority. Arrow-signature contracts and later callable kinds extend
+this same metadata model. Other value kinds gain descriptors with their corresponding features.
 
 ## Operators and precedence
 

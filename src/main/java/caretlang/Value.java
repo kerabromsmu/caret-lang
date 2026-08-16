@@ -1,5 +1,7 @@
 package caretlang;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -153,7 +155,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         public int size() { return size; }
 
-        @Override public Iterator<Value> iterator() {
+        @Override public @NotNull Iterator<Value> iterator() {
             return new Iterator<>() {
                 private final ArrayDeque<Node> pending = initial();
                 private Value next = advance();
@@ -360,6 +362,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     non-sealed interface Callable extends Value {
         Value apply(Argument argument, SourceSpan callSpan);
         int remainingArity();
+        default CallableSignature signature() {
+            return CallableSignature.unknown(java.util.Collections.nCopies(remainingArity(), null));
+        }
+        default List<CallableSignature> variantSignatures() { return List.of(); }
         default boolean refinementEligible() { return false; }
         default String publicName() { return "<anonymous>"; }
 
@@ -423,6 +429,9 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public int remainingArity() { return target.remainingArity(); }
+        @Override public CallableSignature signature() { return target.signature(); }
+        @Override public List<CallableSignature> variantSignatures() { return target.variantSignatures(); }
+        @Override public String publicName() { return target.publicName(); }
         @Override public boolean refinementEligible() { return target.refinementEligible(); }
         @Override public Value invokeZero(SourceSpan callSpan) { return target.invokeZero(callSpan); }
         @Override public String toString() { return target.toString(); }
@@ -497,6 +506,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return left.remainingArity();
         }
 
+        @Override public CallableSignature signature() {
+            return CallableSignature.compose(left.signature(), right.signature());
+        }
+
         @Override public String toString() {
             return "<composition/" + remainingArity() + ">";
         }
@@ -508,35 +521,34 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final BoundArguments bound;
         private final BiFunction<List<Argument>, SourceSpan, Value> implementation;
         private final boolean refinementEligible;
+        private final CallableSignature signature;
 
         public FunctionValue(String name, List<String> params, Function<List<Value>, Value> implementation) {
-            this(name, params, BoundArguments.empty(), valueImplementation(implementation), false);
-        }
-
-        FunctionValue(String name, List<String> params, Function<List<Value>, Value> implementation,
-                      boolean refinementEligible) {
-            this(name, params, BoundArguments.empty(), valueImplementation(implementation), refinementEligible);
+            this(name, params, BoundArguments.empty(), valueImplementation(implementation), false,
+                    CallableSignature.builtin(params, List.of()));
         }
 
         FunctionValue(String name, List<String> params,
                       BiFunction<List<Argument>, SourceSpan, Value> implementation) {
-            this(name, params, BoundArguments.empty(), implementation, false);
+            this(name, params, BoundArguments.empty(), implementation, false,
+                    CallableSignature.builtin(params, List.of()));
         }
 
         FunctionValue(String name, List<String> params,
                       BiFunction<List<Argument>, SourceSpan, Value> implementation,
-                      boolean refinementEligible) {
-            this(name, params, BoundArguments.empty(), implementation, refinementEligible);
+                      boolean refinementEligible, CallableSignature signature) {
+            this(name, params, BoundArguments.empty(), implementation, refinementEligible, signature);
         }
 
         private FunctionValue(String name, List<String> params, BoundArguments bound,
                               BiFunction<List<Argument>, SourceSpan, Value> implementation,
-                              boolean refinementEligible) {
+                              boolean refinementEligible, CallableSignature signature) {
             this.name = Objects.requireNonNull(name, "function name");
             this.params = List.copyOf(params);
             this.bound = Objects.requireNonNull(bound);
             this.implementation = Objects.requireNonNull(implementation, "function implementation");
             this.refinementEligible = refinementEligible;
+            this.signature = Objects.requireNonNull(signature);
         }
 
         private static BiFunction<List<Argument>, SourceSpan, Value> valueImplementation(
@@ -563,7 +575,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                         "Too many arguments for " + name, callSpan);
             }
-            return new FunctionValue(name, params, next, implementation, refinementEligible);
+            return new FunctionValue(name, params, next, implementation, refinementEligible, signature.dropFirst());
         }
 
         @Override public int remainingArity() {
@@ -573,6 +585,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public boolean refinementEligible() {
             return refinementEligible && bound.size() == 0;
         }
+
+        @Override public CallableSignature signature() { return signature; }
 
         @Override public String publicName() { return name; }
 
@@ -593,8 +607,67 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public Map<String, Value> fields() {
-            return Map.of("kind", new Str("Function"),
-                    "remaining", new Num(target.remainingArity()));
+            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+            fields.put("kind", new Str("Function"));
+            fields.put("name", target.publicName().equals("<anonymous>")
+                    ? Missing.INSTANCE : new Str(target.publicName()));
+            fields.put("remaining", new Num(target.remainingArity()));
+            fields.put("signature", signatureValue(target.signature()));
+            fields.put("variants", new Seq(target.variantSignatures().stream()
+                    .map(FunctionReference::signatureValue).toList()));
+            return Collections.unmodifiableMap(fields);
+        }
+
+        private static Value signatureValue(CallableSignature signature) {
+            return metadata("Signature", Map.of(
+                    "parameters", new Seq(java.util.stream.IntStream.range(0, signature.parameters().size())
+                            .mapToObj(index -> parameterValue(signature.parameters().get(index), index)).toList()),
+                    "result", resultValue(signature.result()),
+                    "effects", effectsValue(signature.effects()),
+                    "variables", new Seq(signature.variables().stream().map(FunctionReference::variableValue).toList())));
+        }
+
+        private static Value parameterValue(CallableSignature.Parameter parameter, int position) {
+            return metadata("Parameter", Map.of(
+                    "position", new Num(position),
+                    "name", parameter.name() == null ? Missing.INSTANCE : new Str(parameter.name()),
+                    "requirements", refs(parameter.requirements()),
+                    "declared", nullableRefs(parameter.declared()),
+                    "inferred", nullableRefs(parameter.inferred())));
+        }
+
+        private static Value resultValue(CallableSignature.Result result) {
+            return metadata("FunctionResult", Map.of("guarantees", refs(result.guarantees()),
+                    "declared", nullableRefs(result.declared()), "inferred", nullableRefs(result.inferred())));
+        }
+
+        private static Value effectsValue(CallableSignature.Effects effects) {
+            return metadata("FunctionEffects", Map.of("upperBound", nullableNames(effects.upperBound(), "Effect"),
+                    "declared", nullableNames(effects.declared(), "Effect"),
+                    "inferred", nullableNames(effects.inferred(), "Effect")));
+        }
+
+        private static Value variableValue(CallableSignature.Variable variable) {
+            return metadata("SignatureVariable", Map.of("index", new Num(variable.index()),
+                    "requirements", refs(variable.requirements())));
+        }
+
+        private static Value refs(List<String> names) { return nullableNames(names, "ContractRef"); }
+        private static Value nullableRefs(List<String> names) {
+            return names == null ? Missing.INSTANCE : refs(names);
+        }
+        private static Value nullableNames(List<String> names, String kind) {
+            return names == null ? Missing.INSTANCE : new Seq(names.stream()
+                    .map(name -> name.startsWith("_")
+                            ? metadata("VariableRef", Map.of("index", new Num(
+                                    Integer.parseInt(name.substring(1)) - 1)))
+                            : metadata(kind, Map.of("name", new Str(name)))).toList());
+        }
+        private static Value metadata(String kind, Map<String, Value> values) {
+            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+            fields.put("kind", new Str(kind));
+            fields.putAll(values);
+            return new Scope(fields);
         }
 
         @Override public boolean equals(Object other) {

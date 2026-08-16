@@ -121,7 +121,7 @@ final class Interpreter {
             Value result = executeBlock(function.body(), new Environment(parameters), resolution);
             return validateContracts(result, function.body().getLast().span(),
                     function.resultContracts(), resolution, env, "result of " + function.name());
-        }, refinementEligible);
+        }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference)));
     }
 
     private record OverloadVariant(FunctionDef definition, Value.FunctionValue function) {}
@@ -192,6 +192,22 @@ final class Interpreter {
 
         @Override public int remainingArity() {
             return all.getFirst().definition().params().size() - arguments.size();
+        }
+
+        @Override public CallableSignature signature() {
+            return CallableSignature.summarize(variantSignatures());
+        }
+
+        @Override public List<CallableSignature> variantSignatures() {
+            return viable.stream().map(variant -> specialize(variant.function().signature())).toList();
+        }
+
+        private CallableSignature specialize(CallableSignature signature) {
+            ArrayList<CallableSignature.Parameter> parameters = new ArrayList<>();
+            for (int index = 0; index < signature.parameters().size(); index++) {
+                if (!arguments.containsKey(index)) parameters.add(signature.parameters().get(index));
+            }
+            return signature.withParameters(parameters);
         }
 
         @Override public String publicName() { return name; }
@@ -271,9 +287,11 @@ final class Interpreter {
 
     private boolean requirementImplies(Object left, Object right) {
         if (left == right || right == BuiltinContract.ANY) return true;
-        if (left instanceof RefinementRequirement l && right instanceof RefinementRequirement r) {
-            return l.callable() == r.callable() && (!l.nullable() || r.nullable())
-                    && (!l.optional() || r.optional());
+        if (left instanceof RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) && right instanceof RefinementRequirement(
+                Value.Callable callable1, boolean nullable1, boolean optional1
+        )) {
+            return callable == callable1 && (!nullable || nullable1)
+                    && (!optional || optional1);
         }
         return left instanceof ContractDescriptor l && right instanceof ContractDescriptor r
                 && ContractRelations.implies(l, r);
@@ -434,9 +452,11 @@ final class Interpreter {
             if (argument instanceof Literal(Value fixed, SourceSpan span)) {
                 state = ((OverloadCallable) state).bind(position, new Value.Argument(fixed, span), expression.span());
             } else {
-                Expr normalized = AstRewriter.rewrite(argument, candidate -> candidate instanceof Hole hole
-                        && hole.index() == 0
-                        ? Optional.of(new Hole(++ordinaryIndex[0], hole.span())) : Optional.empty());
+                Expr normalized = AstRewriter.rewrite(argument, candidate -> candidate instanceof Hole(
+                        int index, SourceSpan span
+                )
+                        && index == 0
+                        ? Optional.of(new Hole(++ordinaryIndex[0], span)) : Optional.empty());
                 List<Integer> dependencies = analyzeHoles(normalized).indexes();
                 if (dependencies.isEmpty()) return null;
                 pending.add(new PendingOverloadArgument(position, normalized,
@@ -491,6 +511,10 @@ final class Interpreter {
         }
 
         @Override public int remainingArity() { return arity - arguments.size(); }
+        @Override public CallableSignature signature() {
+            return CallableSignature.unknown(Collections.nCopies(remainingArity(), null));
+        }
+        @Override public List<CallableSignature> variantSignatures() { return overload.variantSignatures(); }
         @Override public String toString() { return "<overload-partial " + display + "/" + remainingArity() + ">"; }
     }
 
@@ -835,10 +859,10 @@ final class Interpreter {
                     (args, span) -> binaryOperation(operator, args, span)));
         }
 
-        globals.define("print", new Value.FunctionValue("print", List.of("value"), args -> {
-            output.println(args.getFirst());
-            return args.getFirst();
-        }));
+        globals.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {
+            output.println(args.getFirst().value());
+            return args.getFirst().value();
+        }, false, CallableSignature.builtin(List.of("value"), List.of("Output"))));
 
         globals.define("type", new Value.FunctionValue("type", List.of("value"),
                 args -> new Value.Str(ValueSemantics.kind(args.getFirst()))));
@@ -917,7 +941,7 @@ final class Interpreter {
                     }
                     reporter.record(name, condition, new Value.Bool(true), condition.value(), span);
                     return Value.Missing.INSTANCE;
-                }));
+                }, false, CallableSignature.builtin(List.of("name", "condition"), List.of("TestReport"))));
         globals.define("assertEqual", new Value.FunctionValue("assertEqual", List.of("name", "actual", "expected"),
                 (args, span) -> {
                     String name = text(args.get(0));
@@ -925,7 +949,8 @@ final class Interpreter {
                     Value expected = args.get(2).value();
                     reporter.record(name, actual, expected, ValueSemantics.equal(actual, expected), span);
                     return Value.Missing.INSTANCE;
-                }));
+                }, false, CallableSignature.builtin(
+                        List.of("name", "actual", "expected"), List.of("TestReport"))));
     }
 
     private Value.FunctionValue function(String name, List<String> parameters,

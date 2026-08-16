@@ -67,6 +67,9 @@ diff -u examples/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
 "$CARET_LAUNCHER" examples/overloads.caret > "$CARET_TEST_TMP/overloads-output.txt"
 diff -u examples/overloads.expected "$CARET_TEST_TMP/overloads-output.txt"
 
+"$CARET_LAUNCHER" examples/callable_reflection.caret > "$CARET_TEST_TMP/callable-reflection-output.txt"
+diff -u examples/callable_reflection.expected "$CARET_TEST_TMP/callable-reflection-output.txt"
+
 "$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value

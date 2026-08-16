@@ -67,7 +67,9 @@ from lexical callable facts, with runtime fallback only when arity is genuinely 
 partial arguments use persistent O(1) accumulation, and language-owned value descriptors now
 centralize public kinds, basic reflection, structural equality, and stack-safe rendering. Trailing
 lambdas remain deferred to Phase 3. Right-associative low-precedence `$` application now lowers to
-the ordinary callable path; complete callable metadata remains the principal unfinished Phase 1 work.
+the ordinary callable path. Language-owned callable signature metadata and its safe reflective
+projection are implemented for named functions, built-ins, prefix partials, compositions, and
+closed overload sets. Arrow contracts and complete generic substitution remain unfinished.
 
 ### Layout and expressions
 
@@ -601,10 +603,10 @@ symbol identities rather than source-span equality.
 
 Low-precedence application, runtime user-contract derivation, generalized contract inference, the
 minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
-are complete. Initial parameterized contracts are also complete through `Sequence T`. Next implement
-the shared callable-signature scheme and expand callable reflection over it, building on the now
-implemented closed overload sets and runtime most-specific dispatch. Public effect declarations
-remain a subsequent Phase 2 slice. Callable signatures, reflection, explicit higher-order arrow contracts,
+are complete. Initial parameterized contracts are also complete through `Sequence T`. The shared
+callable-signature scheme and safe callable reflection are now implemented for the current callable
+kinds. Next parse and analyze first-class higher-order arrow contracts over that metadata. Public
+effect declarations remain a subsequent Phase 2 slice. Callable signatures, reflection, explicit higher-order arrow contracts,
 and the initial static operator matrix are now settled. Mixed-clause and callable-effect diagnostic
 codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
 unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather

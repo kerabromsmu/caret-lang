@@ -18,6 +18,7 @@ application {
 
 dependencies {
     implementation("org.jline:jline:3.30.0")
+    compileOnly("org.jetbrains:annotations:26.0.2")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.4")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")

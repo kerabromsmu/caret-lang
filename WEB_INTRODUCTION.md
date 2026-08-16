@@ -209,7 +209,10 @@ eligibility through aliases. The initial parameterized-contract slice implements
 ordinary contract application: it validates every sequence element, composes through aliases,
 nesting, and null/missing modifiers, and exposes its base and requirement through reflection.
 General parameterized contracts, complete static proof, and public effect declarations remain
-planned. Closed same-name overload sets are implemented: applicability observes existing contract
+planned. Callable reflection now exposes immutable language-owned signature metadata for remaining
+parameters, result facts, known invocation effects, and surviving overload variants without exposing
+captures, partial values, implementation objects, or authority. Closed same-name overload sets are
+implemented: applicability observes existing contract
 membership without acquiring it, and the unique most-specific applicable variant wins.
 
 ```caret
