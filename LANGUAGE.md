@@ -1432,6 +1432,14 @@ set is dispatched at runtime using the arguments' actual memberships. No applica
 several incomparable applicable variants are distinct located runtime errors. Runtime-loaded code
 may supply values and its own overload sets, but it cannot add variants to an existing lexical set.
 
+Different arities in one lexical overload set are rejected with the located semantic diagnostic
+`INCONSISTENT_OVERLOAD_ARITY`; the later declaration is primary and the first variant is related.
+If two variants have identical normalized parameter domains, including through contract aliases or
+redundant `Any` and duplicate conjunction terms, the later declaration retains the ordinary
+`DUPLICATE_DEFINITION` diagnostic and the original variant is related. Result contracts do not make
+otherwise identical parameter domains distinct. Both declaration failures occur before program
+effects execute.
+
 ## Overload applicability
 
 Applicability testing is observational and never acquires nominal membership. A nominal parameter

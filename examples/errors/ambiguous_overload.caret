@@ -1,0 +1,3 @@
+choose (Number) left (Any) right = "left"
+choose (Any) left (Number) right = "right"
+print (choose 1 2)

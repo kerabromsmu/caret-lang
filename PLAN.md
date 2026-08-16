@@ -142,8 +142,11 @@ aliases. Nullable/optional contract modifiers are implemented as first-class, id
 contract unions without collapsing null into missing. The initial parameterized-contract slice is
 also implemented as `Sequence T`, with constructor metadata preserved through aliases, recursive
 element validation, nesting, modifiers, identity semantics, reflection, and conservative outer-kind
-inference. General parameterization, dispatch, and the full public effect system remain subsequent
-Phase 2 slices.
+inference. General parameterization and the full public effect system remain subsequent Phase 2
+slices. Closed same-name overload sets now provide observational applicability, unique
+most-specific runtime selection, generic fallbacks, persistent prefix and hole narrowing,
+and distinct no-applicable/ambiguous diagnostics. Complete static selection and the settled
+signature/reflection schema remain planned.
 The effect pass includes eagerly captured fixed operands in partial expressions, treats
 over-application through an unknown returned callable conservatively, and uses resolver-owned
 symbol identities rather than source-span equality.
@@ -599,9 +602,9 @@ symbol identities rather than source-span equality.
 Low-precedence application, runtime user-contract derivation, generalized contract inference, the
 minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
 are complete. Initial parameterized contracts are also complete through `Sequence T`. Next implement
-closed same-name overload sets and unique most-specific contract dispatch, retaining a generic
-fallback and distinct no-applicable/ambiguous diagnostics. Public effect declarations remain a
-subsequent Phase 2 slice. Callable signatures, reflection, explicit higher-order arrow contracts,
+the shared callable-signature scheme and expand callable reflection over it, building on the now
+implemented closed overload sets and runtime most-specific dispatch. Public effect declarations
+remain a subsequent Phase 2 slice. Callable signatures, reflection, explicit higher-order arrow contracts,
 and the initial static operator matrix are now settled. Mixed-clause and callable-effect diagnostic
 codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
 unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather

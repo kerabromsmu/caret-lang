@@ -21,7 +21,9 @@ interpreter. The current prototype supports:
 - first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
   distinction between null and missing; and
 - initial parameterized contracts through `Sequence T`, including direct and aliased clauses,
-  nesting, modifiers, predicates, and reflection.
+  nesting, modifiers, predicates, and reflection; and
+- closed same-name function overload sets with contract-based most-specific dispatch, generic
+  fallbacks, prefix/infix calls, and persistent hole partials.
 
 This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
 describes both the implemented language sketch and the larger planned language. Features described
@@ -35,8 +37,8 @@ For a conceptual comparison with related language families, see
 article covers both implemented foundations and explicitly labeled planned features.
 
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
-Contracts form derivation graphs and act as predicates, while ordinary functions provide behavior
-through contract-based multiple dispatch. Collections likewise have one universal `[...]` literal:
+Contracts form derivation graphs and act as predicates, while the prototype now provides initial
+contract-based multiple dispatch for ordinary functions. Collections likewise have one universal `[...]` literal:
 surrounding contracts determine whether a value is a list, set, dictionary, packed buffer, or another
 representation. Named fields are first-class collection elements. These facilities are design
 targets, not features of the current prototype. A collection expression containing holes will be an
@@ -225,7 +227,7 @@ shadows this builtin-only grouping and follows ordinary application rules.
   dynamically. Initial named-function constraint inference and the internal purity analysis needed
   to validate refinement predicates are implemented;
   nullable/optional contract unions and the initial `Sequence T` parameterized contract are
-  implemented, while general parameterized contracts, dispatch, complete static proof, and the
+  implemented, while general parameterized contracts, complete static dispatch proof, and the
   public effect system are not implemented.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,

@@ -131,8 +131,14 @@ final class ContractInference {
     private void analyzeBlock(List<Stmt> statements, Map<String, FunctionContract> enclosing,
                               Map<String, CallableEffects> enclosingEffects) {
         LinkedHashMap<String, FunctionDef> definitions = new LinkedHashMap<>();
+        ArrayList<FunctionDef> allDefinitions = new ArrayList<>();
+        HashMap<String, Integer> definitionCounts = new HashMap<>();
         for (Stmt statement : statements) {
-            if (statement instanceof FunctionDef function) definitions.put(function.name(), function);
+            if (statement instanceof FunctionDef function) {
+                definitions.putIfAbsent(function.name(), function);
+                allDefinitions.add(function);
+                definitionCounts.merge(function.name(), 1, Integer::sum);
+            }
         }
 
         Map<String, FunctionContract> visible = new HashMap<>(enclosing);
@@ -143,6 +149,7 @@ final class ContractInference {
         do {
             changed = false;
             for (FunctionDef function : definitions.values()) {
+                if (definitionCounts.get(function.name()) > 1) continue;
                 FunctionContract inferred = infer(function, visible);
                 if (!inferred.equals(visible.get(function.name()))) {
                     visible.put(function.name(), inferred);
@@ -160,6 +167,7 @@ final class ContractInference {
         do {
             effectsChanged = false;
             for (FunctionDef function : definitions.values()) {
+                if (definitionCounts.get(function.name()) > 1) continue;
                 EffectSummary inferred = inferEffects(function.body(), visibleEffects);
                 CallableEffects previous = visibleEffects.get(function.name());
                 if (!inferred.equals(previous.summary())) {
@@ -170,10 +178,12 @@ final class ContractInference {
             }
         } while (effectsChanged);
 
-        for (FunctionDef function : definitions.values()) {
-            FunctionContract inferred = visible.get(function.name());
+        for (FunctionDef function : allDefinitions) {
+            FunctionContract inferred = definitionCounts.get(function.name()) > 1
+                    ? infer(function, visible) : visible.get(function.name());
             contracts.put(function, inferred);
-            effects.put(function, visibleEffects.get(function.name()).summary());
+            EffectSummary inferredEffects = inferEffects(function.body(), visibleEffects);
+            effects.put(function, inferredEffects);
             analyzeBlock(function.body(), visible, visibleEffects);
         }
         analyzeOrdinaryBindings(statements, visible);

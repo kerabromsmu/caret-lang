@@ -1,0 +1,3 @@
+select (String) value = value
+select (Boolean) value = value
+print (select 1)

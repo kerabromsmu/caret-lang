@@ -997,6 +997,147 @@ final class InterpreterTest {
                 """));
     }
 
+    @Test
+    void dispatchesClosedOverloadSetsToTheUniqueMostSpecificVariant() {
+        assertEquals("number\ntext\nfallback\n", execute("""
+                describe (Any) value = "fallback"
+                describe (Number) value = "number"
+                describe (String) value = "text"
+
+                print (describe 42)
+                print (describe "hello")
+                print (describe true)
+                """));
+    }
+
+    @Test
+    void overloadApplicabilityObservesNominalMembershipWithoutAcquiringIt() {
+        assertEquals("fallback\nnominal\nchild\n", execute("""
+                Base = contract Number
+                Child = contract Base
+
+                classify (Any) value = "fallback"
+                classify (Base) value = "nominal"
+                classify (Child) value = "child"
+
+                (Base) taggedBase = 1
+                (Child) taggedChild = 1
+                print (classify 1)
+                print (classify taggedBase)
+                print (classify taggedChild)
+                """));
+    }
+
+    @Test
+    void overloadsNarrowThroughPrefixApplicationAndReportDistinctFailures() {
+        assertEquals("number\n", execute("""
+                combine (Any) left (Any) right = "fallback"
+                combine (Number) left (Number) right = "number"
+                withNumber = combine 1
+                print (withNumber 2)
+                """));
+
+        LangException noMatch = expectDiagnostic("""
+                select (String) value = value
+                select (Boolean) value = value
+                print (select 1)
+                """, "No applicable overload: select", 3, 8);
+        assertEquals(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD, noMatch.diagnostic().code());
+        assertFalse(noMatch.diagnostic().related().isEmpty());
+
+        LangException ambiguous = expectDiagnostic("""
+                choose (Number) left (Any) right = "left"
+                choose (Any) left (Number) right = "right"
+                print (choose 1 2)
+                """, "Ambiguous overload: choose", 3, 8);
+        assertEquals(Diagnostic.Codes.AMBIGUOUS_OVERLOAD, ambiguous.diagnostic().code());
+        assertEquals(2, ambiguous.diagnostic().related().size());
+    }
+
+    @Test
+    void overloadHolePartialsNarrowSparsePositionsAndRemainReusable() {
+        assertEquals("number-text\nnumber-text\ntext-number\n", execute("""
+                route (Number) left (String) right = "number-text"
+                route (String) left (Number) right = "text-number"
+
+                numberFirst = route (_ + 0) "fixed"
+                textFirst = route _ 1
+                print (numberFirst 1)
+                print (numberFirst 2)
+                print (textFirst "fixed")
+                """));
+
+        LangException eliminated = expectDiagnostic("""
+                route (Number) left (String) right = "number-text"
+                route (String) left (Number) right = "text-number"
+                impossible = route (_ + 0) true
+                """, "No applicable overload: route", 3, 28);
+        assertEquals(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD, eliminated.diagnostic().code());
+    }
+
+    @Test
+    void overloadsSupportParameterizedAbsenceRefinementAndInfixRequirements() {
+        assertEquals("numbers\ntexts\nfallback\nmaybe-number\nmaybe-number\nfallback\npositive\nfallback\nmaybe-positive\n3\nab\n", execute("""
+                kind (Any) value = "fallback"
+                kind (Sequence Number) value = "numbers"
+                kind (Sequence String) value = "texts"
+                print (kind [1 2])
+                print (kind ["a" "b"])
+                print (kind [true])
+
+                maybe (Any) value = "fallback"
+                maybe (Number?) value = "maybe-number"
+                print (maybe ?)
+                print (maybe 1)
+                print (maybe ~)
+
+                positive value = value > 0
+                sign (Any) value = "fallback"
+                sign (positive) value = "positive"
+                print (sign 1)
+                print (sign (-1))
+
+                maybeSign (Any) value = "fallback"
+                maybeSign (positive?) value = "maybe-positive"
+                print (maybeSign ?)
+
+                merge (Number) left (Number) right = left + right
+                merge (String) left (String) right = left + right
+                print (1 merge 2)
+                print ("a" merge "b")
+                """));
+    }
+
+    @Test
+    void rejectsInvalidOverloadDeclarationsBeforeProgramEffects() {
+        ByteArrayOutputStream arityBytes = new ByteArrayOutputStream();
+        Interpreter arityInterpreter = new Interpreter(new PrintStream(arityBytes, true, StandardCharsets.UTF_8));
+        LangException arity = assertThrows(LangException.class, () -> arityInterpreter.execute(new Parser("""
+                print "must not happen"
+                action (Number) value = value
+                action (Number) left (Number) right = left
+                """).parseProgram()));
+        assertEquals(Diagnostic.Codes.INCONSISTENT_OVERLOAD_ARITY, arity.diagnostic().code());
+        assertEquals(3, arity.span().start().line());
+        assertEquals(1, arity.diagnostic().related().size());
+        assertEquals("", arityBytes.toString(StandardCharsets.UTF_8));
+
+        LangException duplicate = expectDiagnostic("""
+                action (Number Any Number) value = value
+                action (Number) value = value
+                """, "Duplicate definition: action", 2, 1);
+        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, duplicate.diagnostic().code());
+        assertEquals(1, duplicate.diagnostic().related().size());
+
+        LangException aliasDuplicate = expectDiagnostic("""
+                Base = contract Number
+                Alias = Base
+                action (Base) value = value
+                action (Alias) value = value
+                """, "Duplicate definition: action", 4, 1);
+        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, aliasDuplicate.diagnostic().code());
+    }
+
     private String execute(String source) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));

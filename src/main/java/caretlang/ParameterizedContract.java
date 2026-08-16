@@ -15,6 +15,9 @@ final class ParameterizedContract implements ContractDescriptor {
         }
     }
 
+    ContractDescriptor base() { return base; }
+    List<ContractDescriptor> arguments() { return arguments; }
+
     @Override public String publicName() {
         return base.publicName() + " " + arguments.stream()
                 .map(argument -> argument instanceof ParameterizedContract

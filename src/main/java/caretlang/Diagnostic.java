@@ -23,6 +23,9 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String PARSE_INVALID_CONTRACT = "PARSE_INVALID_CONTRACT";
         static final String DUPLICATE_DEFINITION = "DUPLICATE_DEFINITION";
         static final String DUPLICATE_PARAMETER = "DUPLICATE_PARAMETER";
+        static final String INCONSISTENT_OVERLOAD_ARITY = "INCONSISTENT_OVERLOAD_ARITY";
+        static final String NO_APPLICABLE_OVERLOAD = "NO_APPLICABLE_OVERLOAD";
+        static final String AMBIGUOUS_OVERLOAD = "AMBIGUOUS_OVERLOAD";
         static final String UNKNOWN_NAME = "UNKNOWN_NAME";
         static final String READ_BEFORE_INITIALIZATION = "READ_BEFORE_INITIALIZATION";
         static final String UNKNOWN_CONTRACT = "UNKNOWN_CONTRACT";

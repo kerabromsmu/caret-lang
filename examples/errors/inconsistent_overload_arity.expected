@@ -1,0 +1,2 @@
+Error: Line 2, column 1: Overload variants must have the same arity: action
+  Note: Line 1, column 1: First overload variant declared here

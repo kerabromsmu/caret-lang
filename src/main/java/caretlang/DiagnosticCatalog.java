@@ -42,6 +42,7 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     INCOMPATIBLE_CONTRACTS("SEMANTIC-INCOMPATIBLE-CONTRACTS", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, "Incompatible inferred contracts: .*", PUBLIC),
     AMBIGUOUS_CONTRACT("SEMANTIC-AMBIGUOUS-CONTRACT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.AMBIGUOUS_CONTRACT, "Ambiguous contract at use: .*", PUBLIC),
     INVALID_REFINEMENT("SEMANTIC-INVALID-REFINEMENT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT, "Invalid refinement predicate: .*", PUBLIC),
+    INCONSISTENT_OVERLOAD_ARITY("SEMANTIC-INCONSISTENT-OVERLOAD-ARITY", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INCONSISTENT_OVERLOAD_ARITY, "Overload variants must have the same arity: .*", PUBLIC),
 
     RUNTIME_DUPLICATE_DEFINITION("RUNTIME-DUPLICATE-DEFINITION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: .*", INTERNAL),
     RUNTIME_PREMATURE_READ("RUNTIME-PREMATURE-READ", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.READ_BEFORE_INITIALIZATION, "Binding read before initialization.*", INTERNAL),
@@ -72,6 +73,8 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     MIXED_HOLES("RUNTIME-MIXED-HOLES", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_HOLE_STYLES, "Cannot mix numbered and unnumbered holes", PUBLIC),
     INVALID_ASSERTION("RUNTIME-INVALID-ASSERTION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_ASSERTION, "Assertion condition must be Boolean, got: .*", PUBLIC),
     CONTRACT_VIOLATION("RUNTIME-CONTRACT-VIOLATION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CONTRACT_VIOLATION, "Contract violation for .*", PUBLIC),
+    NO_APPLICABLE_OVERLOAD("RUNTIME-NO-APPLICABLE-OVERLOAD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NO_APPLICABLE_OVERLOAD, "No applicable overload: .*", PUBLIC),
+    AMBIGUOUS_OVERLOAD("RUNTIME-AMBIGUOUS-OVERLOAD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.AMBIGUOUS_OVERLOAD, "Ambiguous overload: .*", PUBLIC),
     UNKNOWN_UNARY_OPERATOR("INTERNAL-UNKNOWN-UNARY-OPERATOR", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown unary operator: .*", INTERNAL),
     UNKNOWN_BINARY_OPERATOR("INTERNAL-UNKNOWN-BINARY-OPERATOR", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: .*", INTERNAL),
     INTERNAL_INVARIANT("INTERNAL-INVARIANT", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR, ".*", INTERNAL);

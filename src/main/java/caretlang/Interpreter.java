@@ -73,35 +73,217 @@ final class Interpreter {
                                                                                    Environment env,
                                                                                    Resolution resolution) {
         IdentityHashMap<FunctionDef, Value.Callable> functions = new IdentityHashMap<>();
+        LinkedHashMap<String, List<FunctionDef>> groups = new LinkedHashMap<>();
         for (Stmt statement : statements) {
             if (statement instanceof Assign assign) declare(env, assign.name(), assign.span());
-            else if (statement instanceof FunctionDef function) declare(env, function.name(), function.span());
+            else if (statement instanceof FunctionDef function) {
+                List<FunctionDef> group = groups.computeIfAbsent(function.name(), ignored -> new ArrayList<>());
+                if (group.isEmpty()) declare(env, function.name(), function.span());
+                group.add(function);
+            }
         }
-        for (Stmt statement : statements) {
-            if (statement instanceof FunctionDef function) {
-                List<String> parameterNames = function.params().stream().map(Parameter::name).toList();
-                boolean refinementEligible = inference != null && inference.isRefinementEligible(function);
-                Value.FunctionValue raw = new Value.FunctionValue(function.name(), parameterNames, args -> {
-                    Environment parameters = new Environment(env);
-                    for (int i = 0; i < function.params().size(); i++) {
-                        parameters.define(function.params().get(i).name(), args.get(i));
-                    }
-                    Value result = executeBlock(function.body(), new Environment(parameters), resolution);
-                    return validateContracts(result, function.body().getLast().span(),
-                            function.resultContracts(), resolution, env, "result of " + function.name());
-                }, refinementEligible);
+        for (var entry : groups.entrySet()) {
+            ArrayList<OverloadVariant> variants = new ArrayList<>();
+            for (FunctionDef function : entry.getValue()) {
+                Value.FunctionValue raw = rawFunction(function, env, resolution);
+                variants.add(new OverloadVariant(function, raw));
+            }
+            if (variants.size() == 1) {
+                OverloadVariant variant = variants.getFirst();
+                FunctionDef function = variant.definition();
                 Value.Callable value = function.params().stream().noneMatch(parameter -> parameter.contracts() != null)
-                        ? raw : new Value.ContractedCallable(raw, (index, argument) -> {
+                        ? variant.function() : new Value.ContractedCallable(variant.function(), (index, argument) -> {
                             Parameter parameter = function.params().get(index);
                             Value checked = validateContracts(argument.value(), argument.span(),
                                     parameter.contracts(), resolution, env, "parameter " + parameter.name());
                             return new Value.Argument(checked, argument.span());
                         });
-                env.initialize(function.name(), value);
+                env.initialize(entry.getKey(), value);
                 functions.put(function, value);
+            } else {
+                Value.Callable overload = new OverloadCallable(entry.getKey(), List.copyOf(variants),
+                        List.copyOf(variants), Map.of(), Map.of(), env, resolution);
+                env.initialize(entry.getKey(), overload);
+                for (OverloadVariant variant : variants) functions.put(variant.definition(), overload);
             }
         }
         return functions;
+    }
+
+    private Value.FunctionValue rawFunction(FunctionDef function, Environment env, Resolution resolution) {
+        List<String> parameterNames = function.params().stream().map(Parameter::name).toList();
+        boolean refinementEligible = inference != null && inference.isRefinementEligible(function);
+        return new Value.FunctionValue(function.name(), parameterNames, (arguments, ignoredCallSpan) -> {
+            Environment parameters = new Environment(env);
+            for (int i = 0; i < function.params().size(); i++) {
+                parameters.define(function.params().get(i).name(), arguments.get(i).value());
+            }
+            Value result = executeBlock(function.body(), new Environment(parameters), resolution);
+            return validateContracts(result, function.body().getLast().span(),
+                    function.resultContracts(), resolution, env, "result of " + function.name());
+        }, refinementEligible);
+    }
+
+    private record OverloadVariant(FunctionDef definition, Value.FunctionValue function) {}
+    private record ApplicabilityKey(Object requirement, int position) {}
+    private record RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) {}
+
+    private final class OverloadCallable implements Value.Callable {
+        private final String name;
+        private final List<OverloadVariant> all;
+        private final List<OverloadVariant> viable;
+        private final Map<Integer, Value.Argument> arguments;
+        private final Map<ApplicabilityKey, Boolean> cache;
+        private final Environment contractEnvironment;
+        private final Resolution resolution;
+
+        private OverloadCallable(String name, List<OverloadVariant> all, List<OverloadVariant> viable,
+                                 Map<Integer, Value.Argument> arguments, Map<ApplicabilityKey, Boolean> cache,
+                                 Environment contractEnvironment, Resolution resolution) {
+            this.name = name;
+            this.all = all;
+            this.viable = viable;
+            this.arguments = arguments;
+            this.cache = cache;
+            this.contractEnvironment = contractEnvironment;
+            this.resolution = resolution;
+        }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            int position = 0;
+            while (arguments.containsKey(position)) position++;
+            return bind(position, argument, callSpan);
+        }
+
+        private Value bind(int position, Value.Argument argument, SourceSpan callSpan) {
+            if (position < 0 || position >= all.getFirst().definition().params().size()
+                    || arguments.containsKey(position)) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                        "Invalid overload argument position", argument.span());
+            }
+            LinkedHashMap<ApplicabilityKey, Boolean> nextCache = new LinkedHashMap<>(cache);
+            ArrayList<OverloadVariant> survivors = new ArrayList<>();
+            for (OverloadVariant variant : viable) {
+                if (matches(variant.definition().params().get(position).contracts(), argument, position,
+                        nextCache, contractEnvironment, resolution)) survivors.add(variant);
+            }
+            LinkedHashMap<Integer, Value.Argument> nextArguments = new LinkedHashMap<>(arguments);
+            nextArguments.put(position, argument);
+            boolean complete = nextArguments.size() == all.getFirst().definition().params().size();
+            if (survivors.isEmpty()) {
+                throw overloadFailure(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD,
+                        "No applicable overload: " + name, complete ? callSpan : argument.span(), all);
+            }
+            if (!complete) {
+                return new OverloadCallable(name, all, List.copyOf(survivors), Map.copyOf(nextArguments),
+                        Map.copyOf(nextCache), contractEnvironment, resolution);
+            }
+            List<OverloadVariant> maximal = maximalVariants(survivors, contractEnvironment, resolution);
+            if (maximal.size() != 1) {
+                throw overloadFailure(Diagnostic.Codes.AMBIGUOUS_OVERLOAD,
+                        "Ambiguous overload: " + name, callSpan, maximal);
+            }
+            Value result = maximal.getFirst().function();
+            for (int index = 0; index < nextArguments.size(); index++) {
+                result = invoke((Value.Callable) result, nextArguments.get(index), callSpan);
+            }
+            return result;
+        }
+
+        @Override public int remainingArity() {
+            return all.getFirst().definition().params().size() - arguments.size();
+        }
+
+        @Override public String publicName() { return name; }
+        @Override public String toString() { return "<overload " + name + "/" + remainingArity() + ">"; }
+    }
+
+    private boolean matches(ContractClause clause, Value.Argument argument, int position,
+                            Map<ApplicabilityKey, Boolean> cache, Environment env, Resolution resolution) {
+        for (Resolution.ContractBinding binding : resolution.contracts(clause)) {
+            Object requirement = resolveRequirement(binding, env);
+            ApplicabilityKey key = new ApplicabilityKey(requirement, position);
+            Boolean accepted = cache.get(key);
+            if (accepted == null) {
+                accepted = requirement instanceof ContractDescriptor contract
+                        ? contract.accepts(argument.value())
+                        : refinementAccepts((RefinementRequirement) requirement, argument, binding.span());
+                cache.put(key, accepted);
+            }
+            if (!accepted) return false;
+        }
+        return true;
+    }
+
+    private boolean refinementAccepts(RefinementRequirement requirement, Value.Argument argument, SourceSpan span) {
+        Value raw = underlying(argument.value());
+        if (raw == Value.Null.INSTANCE && requirement.nullable()) return true;
+        if (raw == Value.Missing.INSTANCE && requirement.optional()) return true;
+        Value result = underlying(invoke(requirement.callable(), argument, span));
+        return result instanceof Value.Bool(boolean accepted) && accepted;
+    }
+
+    private Object resolveRequirement(Resolution.ContractBinding binding, Environment env) {
+        Value resolved = underlying(binding.binding() == null ? globals.get(binding.name())
+                : env.getAt(binding.binding().lexicalDepth(), binding.binding().slot()));
+        if (resolved instanceof Value.ContractValue contract) {
+            ContractDescriptor descriptor = contract.descriptor();
+            if (!binding.arguments().isEmpty()) {
+                descriptor = descriptor.parameterize(binding.arguments().stream()
+                        .map(argument -> (ContractDescriptor) resolveRequirement(argument, env)).toList());
+            }
+            return modifiedContract(descriptor, binding.nullable(), binding.optional());
+        }
+        if (resolved instanceof Value.Callable callable && callable.refinementEligible()) {
+            return new RefinementRequirement(callable, binding.nullable(), binding.optional());
+        }
+        throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
+                "Binding is not a contract: " + binding.name(), binding.span());
+    }
+
+    private List<OverloadVariant> maximalVariants(List<OverloadVariant> variants, Environment env,
+                                                  Resolution resolution) {
+        return variants.stream().filter(candidate -> variants.stream().noneMatch(other -> other != candidate
+                && moreSpecific(other, candidate, env, resolution))).toList();
+    }
+
+    private boolean moreSpecific(OverloadVariant left, OverloadVariant right, Environment env,
+                                 Resolution resolution) {
+        boolean strict = false;
+        for (int position = 0; position < left.definition().params().size(); position++) {
+            ContractClause l = left.definition().params().get(position).contracts();
+            ContractClause r = right.definition().params().get(position).contracts();
+            boolean lr = clauseImplies(l, r, env, resolution);
+            if (!lr) return false;
+            strict |= !clauseImplies(r, l, env, resolution);
+        }
+        return strict;
+    }
+
+    private boolean clauseImplies(ContractClause left, ContractClause right, Environment env,
+                                  Resolution resolution) {
+        List<Object> l = resolution.contracts(left).stream().map(binding -> resolveRequirement(binding, env)).toList();
+        List<Object> r = resolution.contracts(right).stream().map(binding -> resolveRequirement(binding, env)).toList();
+        if (r.isEmpty()) return true;
+        if (l.isEmpty()) return false;
+        return r.stream().allMatch(required -> l.stream().anyMatch(candidate -> requirementImplies(candidate, required)));
+    }
+
+    private boolean requirementImplies(Object left, Object right) {
+        if (left == right || right == BuiltinContract.ANY) return true;
+        if (left instanceof RefinementRequirement l && right instanceof RefinementRequirement r) {
+            return l.callable() == r.callable() && (!l.nullable() || r.nullable())
+                    && (!l.optional() || r.optional());
+        }
+        return left instanceof ContractDescriptor l && right instanceof ContractDescriptor r
+                && ContractRelations.implies(l, r);
+    }
+
+    private LangException overloadFailure(String code, String message, SourceSpan span,
+                                          List<OverloadVariant> variants) {
+        List<Diagnostic.Related> related = variants.stream().map(variant -> new Diagnostic.Related(
+                "Overload variant declared here", variant.definition().span())).toList();
+        return new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME, code, message, span, related));
     }
 
     private Value validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
@@ -210,6 +392,8 @@ final class Interpreter {
                 if (!analysis.indexes().isEmpty()) {
                     int arity = holeArity(expr, analysis.indexes());
                     Expr captured = captureNonHoleParts(expr, env, analysis.containsHole(), resolution);
+                    Value overloadPartial = overloadHolePartial(captured, arity, env, resolution);
+                    if (overloadPartial != null) return overloadPartial;
                     return new Value.HoleFunction(expr.toString(), arity,
                             supplied -> eval(captured, env, supplied, resolution));
                 }
@@ -228,6 +412,86 @@ final class Interpreter {
         } catch (LangException error) {
             throw error.withSpanIfAbsent(expr.span());
         }
+    }
+
+    private Value overloadHolePartial(Expr expression, int arity, Environment env, Resolution resolution) {
+        ArrayList<Expr> reversed = new ArrayList<>();
+        Expr callee = expression;
+        while (callee instanceof Apply apply) {
+            reversed.add(apply.argument());
+            callee = apply.function();
+        }
+        Collections.reverse(reversed);
+        if (!(callee instanceof Literal(Value value, SourceSpan ignored))
+                || !(underlying(value) instanceof OverloadCallable overload)
+                || reversed.size() != overload.all.getFirst().definition().params().size()) return null;
+
+        ArrayList<PendingOverloadArgument> pending = new ArrayList<>();
+        int[] ordinaryIndex = {0};
+        Value state = overload;
+        for (int position = 0; position < reversed.size(); position++) {
+            Expr argument = reversed.get(position);
+            if (argument instanceof Literal(Value fixed, SourceSpan span)) {
+                state = ((OverloadCallable) state).bind(position, new Value.Argument(fixed, span), expression.span());
+            } else {
+                Expr normalized = AstRewriter.rewrite(argument, candidate -> candidate instanceof Hole hole
+                        && hole.index() == 0
+                        ? Optional.of(new Hole(++ordinaryIndex[0], hole.span())) : Optional.empty());
+                List<Integer> dependencies = analyzeHoles(normalized).indexes();
+                if (dependencies.isEmpty()) return null;
+                pending.add(new PendingOverloadArgument(position, normalized,
+                        dependencies.stream().mapToInt(Integer::intValue).max().orElseThrow()));
+            }
+        }
+        if (!(state instanceof OverloadCallable narrowed)) return null;
+        return new OverloadHoleCallable(expression.toString(), narrowed, List.copyOf(pending),
+                List.of(), arity, env, resolution);
+    }
+
+    private record PendingOverloadArgument(int position, Expr expression, int readyAfter) {}
+
+    private final class OverloadHoleCallable implements Value.Callable {
+        private final String display;
+        private final OverloadCallable overload;
+        private final List<PendingOverloadArgument> pending;
+        private final List<Value.Argument> arguments;
+        private final int arity;
+        private final Environment environment;
+        private final Resolution resolution;
+
+        private OverloadHoleCallable(String display, OverloadCallable overload,
+                                     List<PendingOverloadArgument> pending, List<Value.Argument> arguments,
+                                     int arity, Environment environment, Resolution resolution) {
+            this.display = display;
+            this.overload = overload;
+            this.pending = pending;
+            this.arguments = arguments;
+            this.arity = arity;
+            this.environment = environment;
+            this.resolution = resolution;
+        }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            ArrayList<Value.Argument> nextArguments = new ArrayList<>(arguments);
+            nextArguments.add(argument);
+            Value state = overload;
+            ArrayList<PendingOverloadArgument> remaining = new ArrayList<>();
+            for (PendingOverloadArgument candidate : pending) {
+                if (candidate.readyAfter() <= nextArguments.size()) {
+                    Value value = eval(candidate.expression(), environment, nextArguments, resolution);
+                    state = ((OverloadCallable) state).bind(candidate.position(),
+                            new Value.Argument(value, candidate.expression().span()), callSpan);
+                } else {
+                    remaining.add(candidate);
+                }
+            }
+            if (nextArguments.size() == arity) return state;
+            return new OverloadHoleCallable(display, (OverloadCallable) state, List.copyOf(remaining),
+                    List.copyOf(nextArguments), arity, environment, resolution);
+        }
+
+        @Override public int remainingArity() { return arity - arguments.size(); }
+        @Override public String toString() { return "<overload-partial " + display + "/" + remainingArity() + ">"; }
     }
 
     private Value evalInnerUnchecked(Expr expr, Environment env, Resolution resolution) {

@@ -208,8 +208,20 @@ are first-class refinement requirements in derived contracts and direct clauses,
 eligibility through aliases. The initial parameterized-contract slice implements `Sequence T` as
 ordinary contract application: it validates every sequence element, composes through aliases,
 nesting, and null/missing modifiers, and exposes its base and requirement through reflection.
-General parameterized contracts, complete static proof, public effect declarations, and dispatch
-remain planned.
+General parameterized contracts, complete static proof, and public effect declarations remain
+planned. Closed same-name overload sets are implemented: applicability observes existing contract
+membership without acquiring it, and the unique most-specific applicable variant wins.
+
+```caret
+describe (Any) value = "fallback"
+describe (Number) value = "number"
+
+print (describe 42)
+```
+
+Overloads retain generic fallbacks and narrow through prefix, infix, and direct hole partials.
+No-match and incomparable-match calls have distinct located diagnostics; a single function keeps
+the ordinary parameter contract behavior.
 Contract equality follows descriptor identity: aliases compare equal, but separate constructions
 remain unequal even with identical requirements. Contract reflection exposes public base and
 refinement-requirement names without exposing implementation callables.
@@ -220,6 +232,7 @@ each call instantiates those variables independently.
 The planned language can state a higher-order callable contract directly. A bracketed parameter
 list followed by `->` describes exact arity, result guarantees, and an optional maximum effect set:
 
+<!-- caret-example: planned -->
 ```caret
 [Int] -> Int
 [Int Text] -> (fs Boolean)
@@ -265,7 +278,7 @@ cause, and subsystem details. Expected operation failures use values of that sha
 compiler and runtime diagnostics share the information model without becoming catchable return
 values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
 operations share one explicit envelope. Structural templates, general parameterized contracts
-beyond `Sequence T`, dispatch, universal literals, `ErrorTemplate`, and `Result` remain planned;
+beyond `Sequence T`, universal literals, `ErrorTemplate`, and `Result` remain planned;
 the unary contract, refinement, and initial sequence-parameterization foundation described above
 is implemented.
 
@@ -334,7 +347,7 @@ supports lexical closures, direct and mutual recursion, partial application, exp
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 
-General parameterized contracts, callable arrow contracts, structural templates, contract-based dispatch, universal
+General parameterized contracts, callable arrow contracts, structural templates, universal
 collection literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.

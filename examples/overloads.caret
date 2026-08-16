@@ -1,0 +1,13 @@
+describe (Any) value = "fallback"
+describe (Number) value = "number"
+describe (String) value = "text"
+
+combine (Any) left (Any) right = "fallback"
+combine (Number) left (Number) right = "numbers"
+
+numberPair = combine _ 2
+
+print (describe 42)
+print (describe "hello")
+print (describe true)
+print (numberPair 1)

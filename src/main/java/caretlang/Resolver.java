@@ -24,16 +24,18 @@ import caretlang.Ast.Unary;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 final class Resolver {
     private enum ContractState { CONTRACT, NON_CONTRACT, UNKNOWN }
     private record Symbol(int slot, int id, SourceSpan declaration, boolean initialized, Integer callableArity,
                           ContractState contractState, Integer contractParameterArity,
-                          Boolean refinementEligible) {
+                          Boolean refinementEligible, boolean functionGroup) {
         Symbol initializedSymbol() {
             return new Symbol(slot, id, declaration, true, callableArity, contractState,
-                    contractParameterArity, refinementEligible);
+                    contractParameterArity, refinementEligible, functionGroup);
         }
     }
 
@@ -50,7 +52,9 @@ final class Resolver {
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines = new IdentityHashMap<>();
     private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
+    private final java.util.Map<Integer, Integer> directAliases = new java.util.HashMap<>();
     private int nextSymbolId;
+    private Integer anyContractSymbol;
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
         Resolver resolver = new Resolver();
@@ -58,8 +62,12 @@ final class Resolver {
         for (Environment.LocalBinding binding : globals.localBindings()) {
             ContractState state = BuiltinContract.named(binding.name()).isPresent()
                     ? ContractState.CONTRACT : ContractState.UNKNOWN;
-            root.symbols.put(binding.name(), new Symbol(binding.slot(), resolver.nextSymbolId++, null, true,
-                    binding.callableArity(), state, binding.contractParameterArity(), binding.refinementEligible()));
+            int symbolId = resolver.nextSymbolId++;
+            root.symbols.put(binding.name(), new Symbol(binding.slot(), symbolId, null, true,
+                    binding.callableArity(), state, binding.contractParameterArity(), binding.refinementEligible(), false));
+            if (binding.name().equals("Any") && state == ContractState.CONTRACT) {
+                resolver.anyContractSymbol = symbolId;
+            }
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
@@ -80,13 +88,18 @@ final class Resolver {
                     Symbol initialized = symbol.initializedSymbol();
                     scope.symbols.put(assign.name(), new Symbol(initialized.slot(), initialized.id(),
                             initialized.declaration(), true, initialized.callableArity(), initialized.contractState(),
-                            parameterArity, initialized.refinementEligible()));
+                            parameterArity, initialized.refinementEligible(), initialized.functionGroup()));
+                    if (assign.value() instanceof Name alias) {
+                        Resolution.Binding target = names.get(alias);
+                        if (target != null) directAliases.put(initialized.id(), target.symbolId());
+                    }
                 }
                 case ExprStmt expression -> resolveExpr(expression.expression(), scope, functionBody, false);
                 case Ast.PrintLine line -> resolvePrintLine(line, scope, functionBody);
                 case FunctionDef function -> resolveFunction(function, scope);
             }
         }
+        validateOverloadDomains(statements);
     }
 
     private void predeclare(List<Stmt> statements, Scope scope) {
@@ -99,16 +112,83 @@ final class Resolver {
             };
             if (name == null) continue;
             Symbol original = scope.symbols.get(name);
-            if (original != null) duplicate(name, statement.span(), original);
             boolean function = statement instanceof FunctionDef;
             Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
+            if (original != null) {
+                if (function && original.functionGroup()) {
+                    if (!java.util.Objects.equals(original.callableArity(), arity)) {
+                        throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                                Diagnostic.Codes.INCONSISTENT_OVERLOAD_ARITY,
+                                "Overload variants must have the same arity: " + name,
+                                statement.span(), List.of(new Diagnostic.Related(
+                                "First overload variant declared here", original.declaration()))));
+                    }
+                    declarations.put(statement.span(), original.id());
+                    continue;
+                }
+                duplicate(name, statement.span(), original);
+            }
             ContractState state = statement instanceof Assign assign ? contractState(assign.value())
                     : ContractState.UNKNOWN;
             int symbolId = nextSymbolId++;
             scope.symbols.put(name, new Symbol(scope.nextSlot++, symbolId, statement.span(), function, arity, state,
-                    null, null));
+                    null, null, function));
             declarations.put(statement.span(), symbolId);
         }
+    }
+
+    private void validateOverloadDomains(List<Stmt> statements) {
+        LinkedHashMap<String, List<FunctionDef>> groups = new LinkedHashMap<>();
+        for (Stmt statement : statements) {
+            if (statement instanceof FunctionDef function) {
+                groups.computeIfAbsent(function.name(), ignored -> new ArrayList<>()).add(function);
+            }
+        }
+        for (var entry : groups.entrySet()) {
+            if (entry.getValue().size() < 2) continue;
+            LinkedHashMap<String, FunctionDef> domains = new LinkedHashMap<>();
+            for (FunctionDef function : entry.getValue()) {
+                String domain = function.params().stream().map(parameter -> domainKey(parameter.contracts()))
+                        .reduce((left, right) -> left + "|" + right).orElse("");
+                FunctionDef original = domains.putIfAbsent(domain, function);
+                if (original != null) {
+                    throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                            Diagnostic.Codes.DUPLICATE_DEFINITION,
+                            "Duplicate definition: " + entry.getKey(), function.span(),
+                            List.of(new Diagnostic.Related("First overload variant declared here",
+                                    original.span()))));
+                }
+            }
+        }
+    }
+
+    private String domainKey(Ast.ContractClause clause) {
+        if (clause == null) return "Any";
+        List<String> keys = contracts.getOrDefault(clause, List.of()).stream()
+                .filter(binding -> !isAny(binding)).map(this::contractKey)
+                .distinct().sorted(Comparator.naturalOrder()).toList();
+        return keys.isEmpty() ? "Any" : String.join("&", keys);
+    }
+
+    private boolean isAny(Resolution.ContractBinding binding) {
+        return binding.arguments().isEmpty() && !binding.nullable() && !binding.optional()
+                && ((binding.binding() == null && binding.name().equals("Any"))
+                || (binding.binding() != null && anyContractSymbol != null
+                && canonicalSymbol(binding.binding().symbolId()) == anyContractSymbol));
+    }
+
+    private String contractKey(Resolution.ContractBinding binding) {
+        String identity = binding.binding() == null ? "builtin:" + binding.name()
+                : "symbol:" + canonicalSymbol(binding.binding().symbolId());
+        String arguments = binding.arguments().stream().map(this::contractKey)
+                .reduce((left, right) -> left + "," + right).map(value -> "<" + value + ">").orElse("");
+        return identity + arguments + (binding.nullable() ? "?" : "") + (binding.optional() ? "~" : "");
+    }
+
+    private int canonicalSymbol(int symbol) {
+        HashSet<Integer> seen = new HashSet<>();
+        while (seen.add(symbol) && directAliases.containsKey(symbol)) symbol = directAliases.get(symbol);
+        return symbol;
     }
 
     private void resolvePrintLine(Ast.PrintLine line, Scope scope, boolean functionBody) {
@@ -131,7 +211,7 @@ final class Resolver {
             }
             parameters.symbols.put(parameter.name(),
                     new Symbol(parameters.nextSlot++, nextSymbolId++, parameter.span(), true, null,
-                            ContractState.UNKNOWN, null, null));
+                            ContractState.UNKNOWN, null, null, false));
         }
         resolveBlock(function.body(), new Scope(parameters), true);
     }
