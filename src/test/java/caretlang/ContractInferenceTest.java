@@ -309,4 +309,31 @@ final class ContractInferenceTest {
         ContractInference inference = ContractInference.analyze(program);
         assertTrue(inference.effects((Ast.FunctionDef) program.get(1)).unknownDynamicCall());
     }
+
+    @Test
+    void overloadEffectsUnionTransitivelyAndParticipateInRecursiveFixedPoints() {
+        List<Ast.Stmt> program = new Parser("""
+                visit (Number) value = visit "done"
+                visit (String) value = print value
+                caller value = visit value
+
+                uncertain (Number) value = dynamic value
+                uncertain (String) value = value
+                uncertainCaller value = uncertain value
+
+                (Boolean) candidate value = visit value
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        for (int index : List.of(0, 1, 2, 6)) {
+            assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT),
+                    inference.effects((Ast.FunctionDef) program.get(index)).effects());
+        }
+        assertTrue(inference.effects((Ast.FunctionDef) program.get(5)).unknownDynamicCall());
+
+        Ast.FunctionDef candidate = (Ast.FunctionDef) program.get(6);
+        LangException error = assertThrows(LangException.class, () -> inference.validateRefinement(candidate));
+        assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+        assertTrue(error.getMessage().contains("observable effects"));
+    }
 }

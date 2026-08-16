@@ -13,8 +13,27 @@ final class ContractRelations {
 
         Absence l = absence(left);
         Absence r = absence(right);
-        if (l.nullable && !r.nullable || l.optional && !r.optional) return false;
-        if (l.base != left || r.base != right) return implies(l.base, r.base);
+        if (!baseImpliesDomain(l.base, r)) return false;
+        if (l.nullable && !acceptsNull(r)) return false;
+        return !l.optional || acceptsMissing(r);
+    }
+
+    private static boolean baseImpliesDomain(ContractDescriptor left, Absence right) {
+        if (left == BuiltinContract.NULL && right.nullable) return true;
+        if (left == BuiltinContract.MISSING && right.optional) return true;
+        return rawImplies(left, right.base);
+    }
+
+    private static boolean acceptsNull(Absence domain) {
+        return domain.nullable || rawImplies(BuiltinContract.NULL, domain.base);
+    }
+
+    private static boolean acceptsMissing(Absence domain) {
+        return domain.optional || rawImplies(BuiltinContract.MISSING, domain.base);
+    }
+
+    private static boolean rawImplies(ContractDescriptor left, ContractDescriptor right) {
+        if (left == right || right == BuiltinContract.ANY) return true;
 
         if (left instanceof ParameterizedContract lp && right instanceof ParameterizedContract rp) {
             if (lp.base() != rp.base() || lp.arguments().size() != rp.arguments().size()) return false;
@@ -31,6 +50,7 @@ final class ContractRelations {
             ContractDescriptor current = pending.removeFirst();
             if (!visited.add(current)) continue;
             if (current == right) return true;
+            if (current instanceof ModifiedContract && implies(current, right)) return true;
             current.bases().forEach(pending::addLast);
         }
         return false;

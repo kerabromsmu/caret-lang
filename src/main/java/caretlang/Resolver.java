@@ -89,10 +89,8 @@ final class Resolver {
                     scope.symbols.put(assign.name(), new Symbol(initialized.slot(), initialized.id(),
                             initialized.declaration(), true, initialized.callableArity(), initialized.contractState(),
                             parameterArity, initialized.refinementEligible(), initialized.functionGroup()));
-                    if (assign.value() instanceof Name alias) {
-                        Resolution.Binding target = names.get(alias);
-                        if (target != null) directAliases.put(initialized.id(), target.symbolId());
-                    }
+                    Resolution.Binding target = aliasTarget(assign.value());
+                    if (target != null) directAliases.put(initialized.id(), target.symbolId());
                 }
                 case ExprStmt expression -> resolveExpr(expression.expression(), scope, functionBody, false);
                 case Ast.PrintLine line -> resolvePrintLine(line, scope, functionBody);
@@ -189,6 +187,11 @@ final class Resolver {
         HashSet<Integer> seen = new HashSet<>();
         while (seen.add(symbol) && directAliases.containsKey(symbol)) symbol = directAliases.get(symbol);
         return symbol;
+    }
+
+    private Resolution.Binding aliasTarget(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
+        return expression instanceof Name alias ? names.get(alias) : null;
     }
 
     private void resolvePrintLine(Ast.PrintLine line, Scope scope, boolean functionBody) {

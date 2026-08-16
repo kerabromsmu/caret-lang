@@ -167,8 +167,12 @@ final class ContractInference {
         do {
             effectsChanged = false;
             for (FunctionDef function : definitions.values()) {
-                if (definitionCounts.get(function.name()) > 1) continue;
-                EffectSummary inferred = inferEffects(function.body(), visibleEffects);
+                EffectSummary inferred = EffectSummary.PURE;
+                for (FunctionDef variant : allDefinitions) {
+                    if (variant.name().equals(function.name())) {
+                        inferred = inferred.plus(inferEffects(variant.body(), visibleEffects));
+                    }
+                }
                 CallableEffects previous = visibleEffects.get(function.name());
                 if (!inferred.equals(previous.summary())) {
                     visibleEffects.put(function.name(), new CallableEffects(

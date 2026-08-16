@@ -1073,6 +1073,14 @@ final class InterpreterTest {
                 impossible = route (_ + 0) true
                 """, "No applicable overload: route", 3, 28);
         assertEquals(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD, eliminated.diagnostic().code());
+
+        LangException supplied = expectDiagnostic("""
+                route (Number) left (String) right = "number-text"
+                route (String) left (Number) right = "text-number"
+                reordered = route _2 _1
+                reordered true
+                """, "No applicable overload: route", 4, 11);
+        assertEquals(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD, supplied.diagnostic().code());
     }
 
     @Test
@@ -1109,6 +1117,27 @@ final class InterpreterTest {
     }
 
     @Test
+    void explicitNullAndMissingVariantsOutrankModifiedContractAlternatives() {
+        assertEquals("null\nnullable\nmissing\noptional\nnull\nmissing\n", execute("""
+                nullable (Number?) value = "nullable"
+                nullable (Null) value = "null"
+                print (nullable ?)
+                print (nullable 1)
+
+                optional (Number~) value = "optional"
+                optional (Missing) value = "missing"
+                print (optional ~)
+                print (optional 1)
+
+                either (Number?~) value = "number"
+                either (Null) value = "null"
+                either (Missing) value = "missing"
+                print (either ?)
+                print (either ~)
+                """));
+    }
+
+    @Test
     void rejectsInvalidOverloadDeclarationsBeforeProgramEffects() {
         ByteArrayOutputStream arityBytes = new ByteArrayOutputStream();
         Interpreter arityInterpreter = new Interpreter(new PrintStream(arityBytes, true, StandardCharsets.UTF_8));
@@ -1131,10 +1160,11 @@ final class InterpreterTest {
 
         LangException aliasDuplicate = expectDiagnostic("""
                 Base = contract Number
-                Alias = Base
+                Alias = (Base)
+                NestedAlias = ((Alias))
                 action (Base) value = value
-                action (Alias) value = value
-                """, "Duplicate definition: action", 4, 1);
+                action (NestedAlias) value = value
+                """, "Duplicate definition: action", 5, 1);
         assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, aliasDuplicate.diagnostic().code());
     }
 

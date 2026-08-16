@@ -480,7 +480,7 @@ final class Interpreter {
                 if (candidate.readyAfter() <= nextArguments.size()) {
                     Value value = eval(candidate.expression(), environment, nextArguments, resolution);
                     state = ((OverloadCallable) state).bind(candidate.position(),
-                            new Value.Argument(value, candidate.expression().span()), callSpan);
+                            new Value.Argument(value, argument.span()), callSpan);
                 } else {
                     remaining.add(candidate);
                 }
