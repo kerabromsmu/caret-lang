@@ -3452,9 +3452,10 @@ Point =
 decodes into a value structurally equivalent to:
 
 ```caret
-data
+[
   ^x = 10.0
   ^y = 20.0
+]
 ```
 
 and encodes such a value back into the corresponding representation.
@@ -3984,11 +3985,11 @@ Formats may therefore normalize representations.
 
 ---
 
-## Relationship to Caret `data`
+## Relationship to Caret collections
 
 Formats decode into ordinary Caret values.
 
-Structured formats should normally produce `data` collections containing ordinary fields.
+Structured formats should normally produce heterogeneous collections containing ordinary fields.
 
 For example:
 
@@ -4003,17 +4004,18 @@ Packet =
 may decode to:
 
 ```caret
-data
+[
   ^length = 128
   ^type = 2
   ^payload = payloadBytes
+]
 ```
 
 The format subsystem must not introduce a separate object model for decoded data.
 
 The same value may therefore:
 
-* be created directly using `data`;
+* be created directly using collection syntax;
 * be decoded from a binary format;
 * be encoded into another format;
 * be passed through ordinary Caret functions;
@@ -4144,8 +4146,8 @@ decode Format representation
 encode Format value
 ```
 
-11. Decoding structured formats into ordinary Caret `data` values.
-12. Encoding ordinary compatible `data` values.
+11. Decoding structured formats into ordinary Caret collection values.
+12. Encoding ordinary compatible collection values.
 13. Pure explicit bidirectional codecs:
 
 ```caret
@@ -4773,24 +4775,23 @@ SIMD support does not require separate lambda syntax.
 
 ---
 
-## Lambdas in data definitions
+## Lambdas in collection definitions
 
-Because `data` blocks contain ordinary Caret expressions, lambda values may be stored directly in data structures.
+Because collections contain ordinary Caret expressions, lambda values may be stored directly in data structures.
 
 Example:
 
 ```caret
 operations =
-  data
+  [
     ^double = (x -> x * 2)
     ^positive = (x -> x > 0)
+  ]
 ```
 
 The resulting fields contain ordinary function values.
 
 Likewise, a lambda may calculate a field value through immediate application or higher-order functions.
-
-No special data-lambda syntax is required.
 
 ---
 
@@ -5017,7 +5018,7 @@ It may be:
 
 * an existing value;
 * a function producing a value;
-* a `data` structure;
+* a collection;
 * a returned scope;
 * another expression whose result becomes the initial cycle state.
 
@@ -5025,9 +5026,10 @@ Example:
 
 ```caret
 initial =
-  data
+  [
     ^i = 0
     ^sum = 0
+  ]
 
 result =
   cycle initial condition body prepare
@@ -5051,9 +5053,10 @@ A particularly important use of `cycle` is iteration over a structured scope.
 Example state:
 
 ```caret
-data
+[
   ^i = 0
   ^sum = 0
+]
 ```
 
 The cycle may transform this scope at every step.
@@ -5083,9 +5086,10 @@ result =
 produces a final state equivalent to:
 
 ```caret
-data
+[
   ^i = 10
   ^sum = 45
+]
 ```
 
 The exact collection/scope update functions may be provided by the standard library.
@@ -5234,9 +5238,10 @@ For example:
 
 ```caret
 initial =
-  data
+  [
     ^i = 0
     ^sum = 0
+  ]
 
 condition s =
   s.i < 10
@@ -5293,8 +5298,9 @@ Conceptually:
 
 ```caret
 initial =
-  data
+  [
     ^i = 0
+  ]
 
 condition s =
   s.i < 10
@@ -5327,9 +5333,10 @@ with value:
 
 ```caret
 initial =
-  data
+  [
     ^i = 1
     ^total = 1
+  ]
 
 condition s =
   s.i <= 10
@@ -5413,9 +5420,10 @@ The initial implementation should require a stable state shape across a cycle un
 For example, if the initial state is:
 
 ```caret
-data
+[
   ^i = 0
   ^sum = 0
+]
 ```
 
 then `body` and `prepare` should normally return values exposing compatible fields:
@@ -5428,17 +5436,19 @@ sum
 A transformation that sometimes returns:
 
 ```caret
-data
+[
   ^i = 1
+]
 ```
 
 and sometimes:
 
 ```caret
-data
+[
   ^i = 1
   ^sum = 10
   ^error = "..."
+]
 ```
 
 introduces variant state shapes.
@@ -5661,9 +5671,10 @@ Until then, early termination should be represented through the cycle condition 
 For example:
 
 ```caret
-data
+[
   ^done = false
   ^state = ...
+]
 ```
 
 with:
@@ -5790,7 +5801,7 @@ The initial implementation should support at minimum:
 5. A unary preparation transformation.
 6. Lambda expressions as phase arguments.
 7. Named functions as phase arguments.
-8. Structured `data` or scope values as cycle state.
+8. Heterogeneous collections / scope values as cycle state.
 9. Effect inference through all cycle phases.
 10. Contract checking of state transformations.
 11. Efficient lowering without mandatory immutable copying.
