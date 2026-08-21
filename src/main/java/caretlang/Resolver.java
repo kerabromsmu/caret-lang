@@ -51,6 +51,8 @@ final class Resolver {
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.ContractClause, List<Resolution.ContractBinding>> contracts = new IdentityHashMap<>();
+    private final IdentityHashMap<Ast.ContractClause, Resolution.AnalyzedClause> clauses = new IdentityHashMap<>();
+    private final EffectCatalog effectCatalog;
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines = new IdentityHashMap<>();
     private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
@@ -58,8 +60,10 @@ final class Resolver {
     private int nextSymbolId;
     private Integer anyContractSymbol;
 
-    static Resolution resolve(List<Stmt> program, Environment globals) {
-        Resolver resolver = new Resolver();
+    private Resolver(EffectCatalog effectCatalog) { this.effectCatalog = effectCatalog; }
+
+    static Resolution resolve(List<Stmt> program, Environment globals, EffectCatalog effectCatalog) {
+        Resolver resolver = new Resolver(effectCatalog);
         Scope root = new Scope(null);
         for (Environment.LocalBinding binding : globals.localBindings()) {
             ContractState state = BuiltinContract.named(binding.name()).isPresent()
@@ -73,8 +77,12 @@ final class Resolver {
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names, resolver.contracts, resolver.calls,
+        return new Resolution(resolver.names, resolver.contracts, resolver.clauses, resolver.calls,
                 resolver.builtinPrintLines, resolver.declarations);
+    }
+
+    static Resolution resolve(List<Stmt> program, Environment globals) {
+        return resolve(program, globals, EffectCatalog.standard(false));
     }
 
     private void resolveBlock(List<Stmt> statements, Scope scope, boolean functionBody) {
@@ -224,8 +232,30 @@ final class Resolver {
     private void resolverContracts(Ast.ContractClause clause, Scope scope) {
         if (clause == null) return;
         java.util.ArrayList<Resolution.ContractBinding> resolved = new java.util.ArrayList<>();
+        java.util.LinkedHashSet<EffectDescriptor> effects = new java.util.LinkedHashSet<>();
+        Ast.ContractName pure = null;
         for (int index = 0; index < clause.names().size(); index++) {
             Ast.ContractName name = clause.names().get(index);
+            boolean contractName = isKnownContractName(name.name(), scope);
+            EffectDescriptor effect = effectCatalog.resolve(name.name()).orElse(null);
+            if (name.name().equals("pure")) {
+                if (name.nullable() || name.optional()) invalidEffectModifier(name);
+                if (!name.arguments().isEmpty()) effectAsContractArgument(name.arguments().getFirst());
+                if (!effects.isEmpty()) conflictingAllowance(name, clause.names().getFirst());
+                pure = name;
+                continue;
+            }
+            if (effect != null && contractName) {
+                throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.AMBIGUOUS_CLAUSE_NAME,
+                        "Ambiguous clause name: " + name.name(), name.span());
+            }
+            if (effect != null) {
+                if (name.nullable() || name.optional()) invalidEffectModifier(name);
+                if (!name.arguments().isEmpty()) effectAsContractArgument(name.arguments().getFirst());
+                if (pure != null) conflictingAllowance(name, pure);
+                effects.add(effect);
+                continue;
+            }
             if (name.inline() != null) {
                 resolveExpr(name.inline(), scope, false, false);
                 resolved.add(new Resolution.ContractBinding(name.name(), null, List.of(), false, false,
@@ -248,6 +278,34 @@ final class Resolver {
             resolved.add(binding);
         }
         contracts.put(clause, List.copyOf(resolved));
+        clauses.put(clause, new Resolution.AnalyzedClause(List.copyOf(resolved),
+                pure != null || !effects.isEmpty() ? List.copyOf(effects) : null, clause.span()));
+    }
+
+    private boolean isKnownContractName(String name, Scope scope) {
+        if (BuiltinContract.named(name).isPresent()) return true;
+        for (Scope current = scope; current != null; current = current.parent) {
+            Symbol symbol = current.symbols.get(name);
+            if (symbol != null) return symbol.contractState() != ContractState.NON_CONTRACT;
+        }
+        return false;
+    }
+
+    private static void invalidEffectModifier(Ast.ContractName name) {
+        throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_EFFECT_MODIFIER,
+                "Effect terms cannot use null or missing modifiers: " + name.name(), name.span());
+    }
+
+    private static void effectAsContractArgument(Ast.ContractName name) {
+        throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.EFFECT_AS_CONTRACT_ARGUMENT,
+                "Effect cannot be used as a contract argument: " + name.name(), name.span());
+    }
+
+    private static void conflictingAllowance(Ast.ContractName later, Ast.ContractName earlier) {
+        throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.CONFLICTING_EFFECT_ALLOWANCE,
+                "pure cannot be combined with named effects", later.span(), List.of(
+                new Diagnostic.Related("Conflicting allowance starts here", earlier.span()))));
     }
 
     private Resolution.ContractBinding resolveContract(Ast.ContractName name, Scope scope) {
@@ -274,7 +332,12 @@ final class Resolver {
     }
 
     private List<Resolution.ContractBinding> resolveContractArguments(Ast.ContractName name, Scope scope) {
-        return name.arguments().stream().map(argument -> resolveContract(argument, scope)).toList();
+        return name.arguments().stream().map(argument -> {
+            if (argument.name().equals("pure") || effectCatalog.resolve(argument.name()).isPresent()) {
+                effectAsContractArgument(argument);
+            }
+            return resolveContract(argument, scope);
+        }).toList();
     }
 
     private Integer knownContractParameterArity(String name, Scope scope) {
@@ -364,6 +427,18 @@ final class Resolver {
                 arrow.parameters().forEach(parameter -> parameter.forEach(
                         requirement -> resolveExpr(requirement, scope, functionBody, deferred)));
                 resolveExpr(arrow.result(), scope, functionBody, deferred);
+                if (arrow.explicitPure() && !arrow.effectTerms().isEmpty()) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC,
+                            Diagnostic.Codes.CONFLICTING_EFFECT_ALLOWANCE,
+                            "pure cannot be combined with named effects", arrow.effectTerms().getFirst().span());
+                }
+                for (Name effect : arrow.effectTerms()) {
+                    if (effectCatalog.resolve(effect.name()).isEmpty()) {
+                        throw new LangException(Diagnostic.Phase.SEMANTIC,
+                                Diagnostic.Codes.UNKNOWN_CLAUSE_NAME,
+                                "Unknown clause name: " + effect.name(), effect.span());
+                    }
+                }
             }
         }
     }

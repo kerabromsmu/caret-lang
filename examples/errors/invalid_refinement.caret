@@ -1,2 +1,2 @@
-emitting value = print (value > 0)
+(Output) emitting value = print (value > 0)
 Invalid = contract emitting

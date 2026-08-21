@@ -87,7 +87,7 @@ final class ContractInference {
     }
 
     static ContractInference analyze(List<Stmt> program) {
-        return analyze(program, Resolver.resolve(program, new Environment(null)));
+        return analyze(program, Resolver.resolve(program, new Environment(null), EffectCatalog.standard(false)));
     }
 
     static ContractInference analyze(List<Stmt> program, Resolution resolution) {

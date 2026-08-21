@@ -58,6 +58,50 @@ final class InterpreterTest {
     }
 
     @Test
+    void effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced() {
+        assertEquals("3\n3\ntrue\n2\n", execute("""
+                (Output Number) noisy (Number) value =
+                  print value
+                  value
+                identity value = value
+                (pure) copy = identity
+                print noisy 3
+                print (([Number] -> (Output Number)) noisy)
+                print copy 2
+                """));
+
+        LangException exceeded = assertThrows(LangException.class, () -> execute("""
+                (Output Number) noisy (Number) value =
+                  print value
+                  value
+                use (pure) callback = callback 1
+                use noisy
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, exceeded.diagnostic().code());
+        assertEquals(Diagnostic.Codes.CONFLICTING_EFFECT_ALLOWANCE,
+                assertThrows(LangException.class, () -> execute("(pure Output) value = 1"))
+                        .diagnostic().code());
+        assertEquals(Diagnostic.Codes.INVALID_EFFECT_MODIFIER,
+                assertThrows(LangException.class, () -> execute("(Output?) value = 1"))
+                        .diagnostic().code());
+        assertEquals(Diagnostic.Codes.EFFECT_AS_CONTRACT_ARGUMENT,
+                assertThrows(LangException.class, () -> execute("(Sequence Output) value = []"))
+                        .diagnostic().code());
+        assertEquals(Diagnostic.Codes.EFFECT_CONSTRAINT_REQUIRES_CALLABLE,
+                assertThrows(LangException.class, () -> execute("(pure) value = 1"))
+                        .diagnostic().code());
+        assertEquals(Diagnostic.Codes.UNKNOWN_CLAUSE_NAME,
+                assertThrows(LangException.class,
+                        () -> execute("check = [Number] -> (TestReport Number)"))
+                        .diagnostic().code());
+        assertEquals(Diagnostic.Codes.AMBIGUOUS_CLAUSE_NAME,
+                assertThrows(LangException.class, () -> execute("""
+                        Output = contract
+                        (Output) value = 1
+                        """)).diagnostic().code());
+    }
+
+    @Test
     void arrowContractVariablesAreContiguousAndRequireGenericRelationships() {
         assertEquals("true\nfalse\n", execute("""
                 identity value = value
@@ -698,7 +742,7 @@ final class InterpreterTest {
         assertEquals("2\n2\nOutput\n1\n~\n1\n", execute("""
                 (Number) show (Number) value (Number) suffix =
                   value
-                (String) show (String) value (String) suffix =
+                (Output String) show (String) value (String) suffix =
                   print value
                 stringify value = numberText value
                 pipeline = stringify >> print
@@ -796,7 +840,7 @@ final class InterpreterTest {
     @Test
     void partialApplicationCapturesFixedOperandsEagerly() {
         assertEquals("captured\ncaptured\n", execute("""
-                announce value = print value
+                (Output) announce value = print value
                 first left right = left
                 partial = first (announce "captured") _
                 print partial "ignored"

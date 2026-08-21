@@ -73,7 +73,8 @@ final class AstTraversal {
                     parameters.add(List.copyOf(children.subList(offset, offset + parameter.size())));
                     offset += parameter.size();
                 }
-                yield new ArrowContract(parameters, children.get(offset), arrow.span());
+                yield new ArrowContract(parameters, children.get(offset), arrow.effectTerms(),
+                        arrow.explicitPure(), arrow.span());
             }
         };
     }

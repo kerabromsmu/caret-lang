@@ -210,7 +210,7 @@ are first-class refinement requirements in derived contracts and direct clauses,
 eligibility through aliases. The initial parameterized-contract slice implements `Sequence T` as
 ordinary contract application: it validates every sequence element, composes through aliases,
 nesting, and null/missing modifiers, and exposes its base and requirement through reflection.
-General parameterized contracts, complete static proof, and public effect declarations remain
+General parameterized contracts and complete static proof remain
 planned. Callable reflection now exposes immutable language-owned signature metadata for remaining
 parameters, result facts, known invocation effects, and surviving overload variants without exposing
 captures, partial values, implementation objects, or authority. Closed same-name overload sets are
@@ -362,7 +362,7 @@ supports lexical closures, direct and mutual recursion, partial application, leg
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 
-General parameterized contracts, explicit-effect and declaration-wide-variable arrow contracts,
+General parameterized contracts, declaration-wide-variable arrow contracts,
 structural templates, universal
 collection literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to

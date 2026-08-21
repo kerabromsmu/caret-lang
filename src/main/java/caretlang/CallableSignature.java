@@ -57,7 +57,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                 new Result(List.of(), null, null), new Effects(effects, null, effects), List.of());
     }
 
-    static CallableSignature inferred(FunctionDef function, ContractInference inference) {
+    static CallableSignature inferred(FunctionDef function, ContractInference inference, Resolution resolution) {
         ContractInference.FunctionContract facts = inference.contract(function);
         ContractInference.EffectSummary effectFacts = inference.effects(function);
         ArrayList<Parameter> parameters = new ArrayList<>();
@@ -81,10 +81,13 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         }
         List<String> effects = effectFacts == null || effectFacts.unknownDynamicCall() ? null
                 : effectFacts.effects().stream().map(CallableSignature::effectName).sorted().toList();
+        Resolution.AnalyzedClause analyzed = resolution.clause(function.resultContracts());
+        List<String> declaredEffects = analyzed == null || analyzed.effectAllowance() == null
+                ? List.of() : analyzed.effectAllowance().stream().map(EffectDescriptor::canonicalName).sorted().toList();
         return new CallableSignature(parameters,
                 new Result(union(declaredResult, inferredResult),
                         function.resultContracts() == null ? null : declaredResult, inferredResult),
-                new Effects(effects, null, effects), variables);
+                new Effects(declaredEffects, declaredEffects, effects), variables);
     }
 
     CallableSignature dropFirst() {

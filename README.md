@@ -26,6 +26,8 @@ interpreter. The current prototype supports:
   fallbacks, prefix/infix calls, and persistent hole partials.
 - first-class pure callable arrow contracts such as `[Number] -> Number`, including exact arity,
   structural predicate checks, inline higher-order clauses, and standalone numbered variables.
+- environment-relative effect identities and mixed declaration clauses, including explicit function
+  allowances, callable-value constraints, and effectful arrow contracts.
 
 This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
 describes both the implemented language sketch and the larger planned language. Features described
@@ -237,7 +239,7 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Universal collection literals, contract-selected representations, first-class fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- Arrow contracts currently use the inferred pure effect bound. Explicit arrow effect allowances,
+- Arrow contracts support explicit visible effect allowances. Declaration-wide contract variables,
   declaration-wide contract variables, and complete overload-domain proofs remain planned.
 - Physical-to-logical layout baseline modifiers (`\\` and `\*`) are specified but not implemented.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There

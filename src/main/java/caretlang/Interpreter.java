@@ -13,6 +13,7 @@ final class Interpreter {
     private final PrintStream output;
     private int callDepth;
     private ContractInference inference;
+    private final EffectCatalog effectCatalog;
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
 
@@ -22,6 +23,7 @@ final class Interpreter {
 
     Interpreter(PrintStream output, TestReporter testReporter) {
         this.output = output;
+        this.effectCatalog = EffectCatalog.standard(testReporter != null);
         installBuiltins();
         if (testReporter != null) installTestBuiltins(testReporter);
     }
@@ -29,12 +31,40 @@ final class Interpreter {
     void execute(List<Stmt> program) {
         int checkpoint = globals.checkpoint();
         try {
-            Resolution resolution = Resolver.resolve(program, globals);
+            Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
             inference = ContractInference.analyze(program, resolution);
+            validateEffectAllowances(program, resolution);
             executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
             globals.rollbackTo(checkpoint);
             throw failure;
+        }
+    }
+
+    private void validateEffectAllowances(List<Stmt> statements, Resolution resolution) {
+        for (Stmt statement : statements) {
+            if (!(statement instanceof FunctionDef function)) continue;
+            Resolution.AnalyzedClause clause = resolution.clause(function.resultContracts());
+            Set<String> allowed = clause == null || clause.effectAllowance() == null
+                    ? Set.of() : clause.effectAllowance().stream().map(EffectDescriptor::canonicalName)
+                    .collect(java.util.stream.Collectors.toSet());
+            ContractInference.EffectSummary actual = inference.effects(function);
+            // Unknown higher-order calls are rejected at the dynamic invocation boundary until
+            // parameter-effect substitution is available; known effects are checked here.
+            Set<String> inferred = actual.effects().stream().map(effect -> switch (effect) {
+                case OUTPUT -> "Output";
+                case TEST_REPORT -> "TestReport";
+            }).collect(java.util.stream.Collectors.toSet());
+            if (!allowed.containsAll(inferred)) {
+                Set<String> unexpected = new LinkedHashSet<>(inferred);
+                unexpected.removeAll(allowed);
+                throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                        Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED,
+                        "Function effect allowance exceeded: " + String.join(", ", unexpected),
+                        function.span(), clause == null ? List.of() : List.of(new Diagnostic.Related(
+                        "Declared effect allowance", clause.span()))));
+            }
+            validateEffectAllowances(function.body(), resolution);
         }
     }
 
@@ -120,8 +150,8 @@ final class Interpreter {
             }
             Value result = executeBlock(function.body(), new Environment(parameters), resolution);
             return validateContracts(result, function.body().getLast().span(),
-                    function.resultContracts(), resolution, env, "result of " + function.name());
-        }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference)));
+                    function.resultContracts(), resolution, env, "result of " + function.name(), false);
+        }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
     }
 
     private record OverloadVariant(FunctionDef definition, Value.FunctionValue function) {}
@@ -309,6 +339,12 @@ final class Interpreter {
 
     private Value validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
                                    Resolution resolution, Environment contractEnvironment, String subject) {
+        return validateContracts(value, valueSpan, clause, resolution, contractEnvironment, subject, true);
+    }
+
+    private Value validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
+                                   Resolution resolution, Environment contractEnvironment, String subject,
+                                   boolean constrainCallableEffects) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
             Value resolved = reference.inline() == null
@@ -371,12 +407,43 @@ final class Interpreter {
                     "Contract violation for " + subject + ": expected " + contract.publicName()
                             + ", got " + ValueSemantics.kind(value), valueSpan, related));
         }
+        if (constrainCallableEffects) validateEffectConstraint(value, valueSpan, clause, resolution);
         if (acquired.isEmpty()) return value;
         if (value instanceof Value.Attributed(Value value1, Set<ContractDescriptor> contracts)) {
             acquired.addAll(contracts);
             return new Value.Attributed(value1, acquired);
         }
         return new Value.Attributed(value, acquired);
+    }
+
+    private void validateEffectConstraint(Value value, SourceSpan valueSpan, ContractClause clause,
+                                          Resolution resolution) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        if (analyzed == null || analyzed.effectAllowance() == null) return;
+        Value candidate = underlying(value);
+        if (!(candidate instanceof Value.Callable callable)) {
+            throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.EFFECT_CONSTRAINT_REQUIRES_CALLABLE,
+                    "Effect constraint requires a callable value", valueSpan,
+                    List.of(new Diagnostic.Related("Effect constraint declared here", analyzed.span()))));
+        }
+        List<String> upper = callable.signature().effects().upperBound();
+        if (upper == null) {
+            throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.UNKNOWN_CALL_EFFECTS,
+                    "Callable invocation has no known effect upper bound", valueSpan,
+                    List.of(new Diagnostic.Related("Effect constraint declared here", analyzed.span()))));
+        }
+        Set<String> allowed = analyzed.effectAllowance().stream().map(EffectDescriptor::canonicalName)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!allowed.containsAll(upper)) {
+            LinkedHashSet<String> unexpected = new LinkedHashSet<>(upper);
+            unexpected.removeAll(allowed);
+            throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED,
+                    "Callable effect allowance exceeded: " + String.join(", ", unexpected), valueSpan,
+                    List.of(new Diagnostic.Related("Effect constraint declared here", analyzed.span()))));
+        }
     }
 
     private ContractDescriptor resolveContractDescriptor(Resolution.ContractBinding reference,
@@ -676,7 +743,8 @@ final class Interpreter {
             for (Expr element : elements) values.add(evalInner(element, env, resolution));
             return new Value.Seq(values);
         }
-        if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, SourceSpan ignored)) {
+        if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
+                                          boolean explicitPure, SourceSpan ignored)) {
             ArrayList<List<ContractDescriptor>> parameterDescriptors = new ArrayList<>();
             for (List<Expr> parameter : parameters) {
                 parameterDescriptors.add(parameter.stream()
@@ -684,7 +752,8 @@ final class Interpreter {
             }
             ContractDescriptor resultDescriptor = arrowRequirement(result, env, resolution);
             return new Value.ContractValue(new ArrowContractDescriptor(
-                    List.copyOf(parameterDescriptors), resultDescriptor, List.of()));
+                    List.copyOf(parameterDescriptors), resultDescriptor, effectTerms.stream()
+                    .map(effect -> effectCatalog.resolve(effect.name()).orElseThrow()).toList()));
         }
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }

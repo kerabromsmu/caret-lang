@@ -35,6 +35,14 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String AMBIGUOUS_CONTRACT = "AMBIGUOUS_CONTRACT";
         static final String INVALID_REFINEMENT = "INVALID_REFINEMENT";
         static final String INVALID_CONTRACT_VARIABLE = "INVALID_CONTRACT_VARIABLE";
+        static final String AMBIGUOUS_CLAUSE_NAME = "AMBIGUOUS_CLAUSE_NAME";
+        static final String UNKNOWN_CLAUSE_NAME = "UNKNOWN_CLAUSE_NAME";
+        static final String CONFLICTING_EFFECT_ALLOWANCE = "CONFLICTING_EFFECT_ALLOWANCE";
+        static final String INVALID_EFFECT_MODIFIER = "INVALID_EFFECT_MODIFIER";
+        static final String EFFECT_AS_CONTRACT_ARGUMENT = "EFFECT_AS_CONTRACT_ARGUMENT";
+        static final String EFFECT_CONSTRAINT_REQUIRES_CALLABLE = "EFFECT_CONSTRAINT_REQUIRES_CALLABLE";
+        static final String EFFECT_ALLOWANCE_EXCEEDED = "EFFECT_ALLOWANCE_EXCEEDED";
+        static final String UNKNOWN_CALL_EFFECTS = "UNKNOWN_CALL_EFFECTS";
         static final String NOT_CALLABLE = "NOT_CALLABLE";
         static final String INVALID_INFIX_ARITY = "INVALID_INFIX_ARITY";
         static final String INVALID_COMPOSITION_LEFT = "INVALID_COMPOSITION_LEFT";

@@ -2691,10 +2691,10 @@ instance retains its substitutions and is not generalized again.
 
 #### Arrow-signature contracts
 
-Implementation status: the prototype implements right-associative, exact-arity pure arrow
-contracts, inline or named clause use, structural predicate checking, contravariant parameters,
-covariant results, and standalone contiguous numbered variables. Explicit effect allowances,
-variables shared across an enclosing declaration header, complete substitution through derived
+Implementation status: the prototype implements right-associative, exact-arity arrow contracts,
+inline or named clause use, structural predicate checking, contravariant parameters,
+covariant results, explicit visible effect allowances, and standalone contiguous numbered variables.
+Variables shared across an enclosing declaration header, complete substitution through derived
 callables, and the full conservative overlap proof for overloads remain planned.
 
 A callable signature is an ordinary first-class structural contract written with a bracketed

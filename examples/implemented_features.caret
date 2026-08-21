@@ -71,7 +71,7 @@ inside = between 0 _ 10
 print inside 7
 
 first left right = left
-announce value = print value
+(Output) announce value = print value
 captured = first (announce "captured now") _
 print captured "ignored"
 

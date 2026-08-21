@@ -1,0 +1,12 @@
+(Output Number) noisy (Number) value =
+  print value
+  value
+
+identity value = value
+(pure) copy = identity
+
+EffectfulNumber = [Number] -> (Output Number)
+print (@EffectfulNumber).name
+print EffectfulNumber noisy
+print noisy 3
+print copy 2

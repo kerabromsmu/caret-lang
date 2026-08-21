@@ -62,10 +62,20 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
 | RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret` |
+| RUNTIME-EFFECT-CONSTRAINT-REQUIRES-CALLABLE | public | EFFECT_CONSTRAINT_REQUIRES_CALLABLE | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| RUNTIME-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| RUNTIME-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-INCOMPATIBLE-CONTRACTS | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_inferred_contracts.caret` |
 | SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
 | SEMANTIC-INVALID-REFINEMENT | public | INVALID_REFINEMENT | `ContractInferenceTest#validatesOnlyProvenPureUnaryBooleanRefinements`; `InterpreterTest#invalidRefinementsAreRejectedBeforeProgramEffects`; `examples/errors/invalid_refinement.caret` |
 | SEMANTIC-INVALID-CONTRACT-VARIABLE | public | INVALID_CONTRACT_VARIABLE | `InterpreterTest#arrowContractVariablesAreContiguousAndRequireGenericRelationships` |
+| SEMANTIC-AMBIGUOUS-CLAUSE-NAME | public | AMBIGUOUS_CLAUSE_NAME | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-UNKNOWN-CLAUSE-NAME | public | UNKNOWN_CLAUSE_NAME | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-CONFLICTING-EFFECT-ALLOWANCE | public | CONFLICTING_EFFECT_ALLOWANCE | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-INVALID-EFFECT-MODIFIER | public | INVALID_EFFECT_MODIFIER | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-EFFECT-AS-CONTRACT-ARGUMENT | public | EFFECT_AS_CONTRACT_ARGUMENT | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-INCONSISTENT-OVERLOAD-ARITY | public | INCONSISTENT_OVERLOAD_ARITY | `examples/errors/inconsistent_overload_arity.caret` |
 | RUNTIME-NO-APPLICABLE-OVERLOAD | public | NO_APPLICABLE_OVERLOAD | `examples/errors/no_applicable_overload.caret` |
 | RUNTIME-AMBIGUOUS-OVERLOAD | public | AMBIGUOUS_OVERLOAD | `examples/errors/ambiguous_overload.caret` |

@@ -335,19 +335,36 @@ final class Parser {
                 consume("]", "Expected ']'");
                 consume("->", "Expected '->' after arrow parameter requirements");
                 Expr result;
+                ArrayList<Name> effectTerms = new ArrayList<>();
+                boolean explicitPure = false;
                 if (peek().text().equals("[") && arrowClose(current) >= 0) {
                     result = arrow();
                 } else if (match("(")) {
-                    result = contractRequirement();
-                    if (!match(")")) throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
-                            "Arrow contract result currently requires exactly one result contract");
+                    ArrayList<Expr> resultRequirements = new ArrayList<>();
+                    while (!peek().text().equals(")")) {
+                        if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ')'");
+                        if (peek().kind() == Kind.IDENT && isEffectSpelling(peek().text())) {
+                            Token effect = tokens.get(current++);
+                            if (effect.text().equals("pure")) explicitPure = true;
+                            else effectTerms.add(new Name(effect.text(), effect.span()));
+                        } else resultRequirements.add(contractRequirement());
+                    }
+                    consume(")", "Expected ')'");
+                    if (resultRequirements.size() != 1) throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                            "Arrow contract requires exactly one result contract");
+                    result = resultRequirements.getFirst();
                 } else {
                     result = contractRequirement();
                 }
-                return new ArrowContract(List.copyOf(parameters), result,
+                return new ArrowContract(List.copyOf(parameters), result, effectTerms, explicitPure,
                         SourceSpan.cover(open.span(), result.span()));
             }
             return lowPrecedenceApplication();
+        }
+
+        private boolean isEffectSpelling(String name) {
+            return name.equals("pure") || name.equals("Output") || name.equals("StateRead")
+                    || name.equals("StateWrite") || name.equals("TestReport");
         }
 
         /** Returns the matching close only when it is immediately followed by an arrow. */

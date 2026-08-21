@@ -73,6 +73,9 @@ diff -u examples/callable_reflection.expected "$CARET_TEST_TMP/callable-reflecti
 "$CARET_LAUNCHER" examples/arrow_contracts.caret > "$CARET_TEST_TMP/arrow-contracts-output.txt"
 diff -u examples/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contracts-output.txt"
 
+"$CARET_LAUNCHER" examples/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
+diff -u examples/effects.expected "$CARET_TEST_TMP/effects-output.txt"
+
 "$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value

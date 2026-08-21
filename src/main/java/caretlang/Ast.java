@@ -46,9 +46,14 @@ final class Ast {
     record Group(Expr expression, SourceSpan span) implements Expr {}
     record CollectionLiteral(List<Expr> elements, SourceSpan span) implements Expr {}
     /** Contextual callable contract; each parameter entry is a conjunction of requirements. */
-    record ArrowContract(List<List<Expr>> parameters, Expr result, SourceSpan span) implements Expr {
+    record ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
+                         boolean explicitPure, SourceSpan span) implements Expr {
         ArrowContract {
             parameters = parameters.stream().map(List::copyOf).toList();
+            effectTerms = List.copyOf(effectTerms);
+        }
+        ArrowContract(List<List<Expr>> parameters, Expr result, SourceSpan span) {
+            this(parameters, result, List.of(), false, span);
         }
     }
 }

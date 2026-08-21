@@ -9,10 +9,10 @@ import java.util.Set;
 final class ArrowContractDescriptor implements ContractDescriptor {
     private final List<List<ContractDescriptor>> parameters;
     private final ContractDescriptor result;
-    private final List<String> effects;
+    private final List<EffectDescriptor> effects;
 
     ArrowContractDescriptor(List<List<ContractDescriptor>> parameters, ContractDescriptor result,
-                            List<String> effects) {
+                            List<EffectDescriptor> effects) {
         this.parameters = parameters.stream().map(List::copyOf).toList();
         this.result = result;
         this.effects = List.copyOf(effects);
@@ -20,11 +20,14 @@ final class ArrowContractDescriptor implements ContractDescriptor {
 
     List<List<ContractDescriptor>> parameters() { return parameters; }
     ContractDescriptor result() { return result; }
-    List<String> effects() { return effects; }
+    List<EffectDescriptor> effects() { return effects; }
 
     @Override public String publicName() {
         String left = String.join(" ", parameters.stream().map(ArrowContractDescriptor::parameterName).toList());
-        return "[" + left + "] -> " + result.publicName();
+        String right = effects.isEmpty() ? result.publicName() : "("
+                + String.join(" ", effects.stream().map(EffectDescriptor::canonicalName).toList())
+                + " " + result.publicName() + ")";
+        return "[" + left + "] -> " + right;
     }
 
     private static String parameterName(List<ContractDescriptor> requirements) {
@@ -68,8 +71,10 @@ final class ArrowContractDescriptor implements ContractDescriptor {
     }
 
     private boolean acceptsResultAndEffects(CallableSignature signature) {
-        if (signature.effects().upperBound() == null
-                || !new HashSet<>(effects).containsAll(signature.effects().upperBound())) return false;
+        if (signature.effects().upperBound() == null) return false;
+        Set<String> allowance = effects.stream().map(EffectDescriptor::canonicalName)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!allowance.containsAll(signature.effects().upperBound())) return false;
         List<String> guarantees = signature.result().guarantees();
         return guarantees.stream().anyMatch(candidate -> nameImplies(candidate, result.publicName()));
     }
@@ -96,7 +101,7 @@ final class ArrowContractDescriptor implements ContractDescriptor {
 
     private static boolean namesImply(List<ContractDescriptor> supplied, List<String> accepted) {
         if (accepted.isEmpty()) return true;
-        return accepted.stream().allMatch(target -> supplied.stream()
+        return accepted.stream().allMatch(target -> target.matches("_[1-9][0-9]*") || supplied.stream()
                 .anyMatch(source -> nameImplies(source.publicName(), target)));
     }
 
@@ -121,4 +126,3 @@ final class ArrowContractDescriptor implements ContractDescriptor {
         return BuiltinContract.named(name).orElse(null);
     }
 }
-
