@@ -9,7 +9,7 @@ interpreter. The current prototype supports:
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
-- exported immutable scopes, required/optional field access, and dynamic lookup;
+- legacy exported immutable scopes, required/optional field access, and dynamic lookup;
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
@@ -41,7 +41,10 @@ Contracts form derivation graphs and act as predicates, while the prototype now 
 contract-based multiple dispatch for ordinary functions. Collections likewise have one universal `[...]` literal:
 surrounding contracts determine whether a value is a list, set, dictionary, packed buffer, or another
 representation. Named fields are first-class collection elements. These facilities are design
-targets, not features of the current prototype. A collection expression containing holes will be an
+targets, not features of the current prototype. In the planned language, exported blocks are
+shorthand for named Collections; lexical scopes remain non-value name-resolution environments and
+the prototype's `Scope` kind is legacy behavior. A non-empty Collection is entirely positional or
+entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes will be an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
 or a concrete fixed collection, to the planned `template` function creates an exact structural
 contract. The same mechanism defines a standard structured error payload, while a generic
@@ -233,7 +236,7 @@ shadows this builtin-only grouping and follows ordinary application rules.
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - Physical-to-logical layout baseline modifiers (`\\` and `\*`) are specified but not implemented.
-- Mutability containers and immutable scope-update syntax are specified but not implemented. There
+- Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
   base/requirement metadata.
@@ -284,7 +287,7 @@ print (@source).kind
 print (@source).names
 ```
 
-`@scope`, `@sequence`, and `@dictionary` expose basic metadata such as `kind`, `size`, and, where
+The legacy prototype's `@scope`, plus `@sequence` and `@dictionary`, expose basic metadata such as `kind`, `size`, and, where
 applicable, `names`. `@function` returns a non-callable function reference exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports

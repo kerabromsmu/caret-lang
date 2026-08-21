@@ -16,7 +16,8 @@ Read `README.md` and `LANGUAGE.md` before making architectural or syntactic chan
 4. Missing and null are different states.
 5. Dynamic operations should not throw exceptions for expected conditions such as missing fields.
 6. Reflection should be a normal language feature rather than a separate cumbersome API.
-7. Returned scopes expose only explicitly exported bindings.
+7. Exported blocks produce named Collections containing only explicitly exported bindings; lexical
+   scopes are not first-class values.
 8. Immutable and functional programming should be supported without making mutable programming impossible.
 9. Do not add Java-like ceremony to the Caret language syntax.
 10. Do not silently invent syntax when the specification is unresolved. Document the issue and propose alternatives.
@@ -79,7 +80,7 @@ is equivalent to:
 condition & expression ! ~
 ```
 
-### Exported scope bindings
+### Exported collection bindings
 
 ```caret
 makePerson name age =
@@ -89,7 +90,9 @@ makePerson name age =
   ^age = age
 ```
 
-Only bindings marked with `^` belong to the returned scope and its reflective interface.
+Only bindings marked with `^` belong to the returned named Collection and its reflective interface.
+The block form is shorthand for an explicit named `[...]` Collection; other bindings remain lexical
+locals. The current prototype's separate `Scope` runtime kind is legacy implementation behavior.
 
 ### Null and missing
 
@@ -104,7 +107,7 @@ Text?~  // missing, null, or a Text value
 
 Missing and present-null must remain distinguishable.
 
-### Scope access
+### Named collection access
 
 ```caret
 person.name     // statically guaranteed access

@@ -23,9 +23,9 @@ variant has executable `.caret` evidence.
 | `CORE-LOWAPP-001`, `CORE-LOWAPP-002` | Right-associative `$` examples with arithmetic and conditional right operands; `errors/missing_dollar_operand.caret` |
 | `CORE-COND-001`, `CORE-BOOL-001` | Short-circuit Boolean and conditional section |
 | `CORE-PART-001`, `CORE-PART-002` | Ordinary/numbered hole section; `errors/mixed_holes.caret` |
-| `CORE-SCOPE-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | Exported-scope and lookup sections; missing-field and invalid-key fixtures |
-| `CORE-EQ-001` | Scope/collection equality sections; `errors/callable_equality.caret` |
-| `CORE-REFLECT-001` | Scope, scalar, operator, and function reflection section |
+| `CORE-SCOPE-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | Legacy prototype exported-scope and lookup sections; missing-field and invalid-key fixtures |
+| `CORE-EQ-001` | Legacy Scope/collection equality sections; `errors/callable_equality.caret` |
+| `CORE-REFLECT-001` | Legacy Scope, scalar, operator, and function reflection section |
 | `CORE-INFIX-001` | Named infix precedence, associativity, partial, and callable-parameter examples; invalid-target/arity fixtures |
 | `CORE-INFIX-002` | Symbolic prefix, infix, grouped subtraction, and symbolic partial examples |
 | `CORE-COMP-001` | Left-to-right pipelines, chaining, partial left operands, reflection, and invalid operand/arity fixtures |

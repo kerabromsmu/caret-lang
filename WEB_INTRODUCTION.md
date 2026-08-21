@@ -111,10 +111,10 @@ person.phone~
 Code can therefore state whether absence is expected instead of relying on exceptions for ordinary
 lookup failures.
 
-## Small, immutable scopes
+## Small, immutable exported values
 
-A function can return a scope by exporting bindings with `^`. Everything else in the function stays
-private:
+A function can return a named structured value by exporting bindings with `^`. Everything else in
+the function stays private:
 
 ```caret
 makePerson name birthYear =
@@ -127,9 +127,11 @@ print ada.name
 print ada.age
 ```
 
-Exported scopes are immutable and compare recursively by their contents. The same equality rules
-apply when values are nested, while callable values are deliberately not comparable. Scopes provide
-a compact foundation for building and returning named data without exposing implementation details.
+The current prototype represents this result with its legacy immutable `Scope` kind. In the planned
+language, the result is the named `Collection` containing those exported fields and is equivalent
+to writing an explicit `[...]` named collection. The same recursive equality rules apply when
+values are nested, while callable values are deliberately not comparable. Lexical scopes remain
+private name-resolution environments rather than first-class values.
 
 Planned `with person` blocks will make public named members available directly inside an expression.
 Local declarations take priority, followed by the current `with` members and then enclosing lexical
@@ -328,7 +330,7 @@ use either a relative source path or a `ModuleId` resolved through the current e
 module catalog. Module IDs do not become lexical bindings, canonical source paths still identify
 module evaluation, and a sandbox sees only the catalog entries explicitly supplied to it.
 
-The same model anchors sandboxing. `sandbox source environment` accepts an immutable exported scope;
+The same model anchors sandboxing. `sandbox source environment` accepts an immutable named Collection;
 the host can atomically replace that complete snapshot with `swapEnv` without restarting the plugin.
 Reflection respects that boundary, and canonical sandbox code excludes exposed host implementations.
 Declaring an effect describes an action without granting permission to perform it. Reloading, unlike
@@ -346,7 +348,7 @@ environment and is not implemented by the current interpreter.
 ## An evolving language experiment
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
-supports lexical closures, direct and mutual recursion, partial application, exported scopes,
+supports lexical closures, direct and mutual recursion, partial application, legacy exported scopes,
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 

@@ -187,7 +187,9 @@ In the current prototype, physical indentation directly defines a multiline func
 planned layout modifiers described below will first translate physical indentation into effective
 logical indentation; the ordinary block rules will then consume that logical indentation. If a
 body contains exported bindings (`^`), calling the function returns an immutable scope containing
-those exports. Otherwise it returns the final expression or assigned value.
+those exports. This `Scope` value and its built-in contract are legacy prototype behavior. In the
+planned language, the same source form produces the named `Collection` described below. Otherwise
+the prototype returns the final expression or assigned value.
 
 A zero-argument function is evaluated when its name is read. Use reflection syntax to refer to the
 function itself without invoking it:
@@ -196,7 +198,7 @@ function itself without invoking it:
 factory =
   ^value = 42
 
-factory          // calls factory and produces its exported scope
+factory          // calls factory and produces its legacy exported scope
 @factory         // reflects the factory function itself without calling it
 ```
 
@@ -347,7 +349,8 @@ Optional lookup returns `~`:
 a.enabled~
 ```
 
-Scopes are immutable in this prototype.
+Scopes are immutable in this prototype. `Scope` is a legacy prototype runtime kind, not a distinct
+value kind in the planned language. Planned exported values use the ordinary `Collection` model.
 
 ## Dynamic lookup
 
@@ -855,7 +858,8 @@ scope are errors. Parameters and declarations in a function body may shadow oute
 function-body declarations are nested inside the parameter scope so established forms such as
 `^name = name` export a parameter under the same name. Parent lookup is lexical.
 
-Equality is recursive and structural for scalar values, exported scopes, and collections. Scalar
+In the current prototype, equality is recursive and structural for scalar values, legacy exported
+scopes, sequences, and dictionaries. Scalar
 numeric equality therefore has the same result when numbers are nested in data; for example, `-0`
 and `0` compare equal both directly and inside a sequence. Encountering a callable anywhere in
 either compared structure is a `CALLABLE_EQUALITY` error. Function references compare by the
@@ -885,7 +889,7 @@ The planned static contract system preserves this runtime behavior through the n
 matrix below. Concrete numeric representations added later require explicit specialized variants;
 they do not silently change these scalar rules.
 
-The self-interpreter may represent successful and failed operations as exported result scopes. Its
+The self-interpreter may represent successful and failed operations as named result collections. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
 
 # Planned language specification
@@ -893,11 +897,57 @@ CLI adapter can then render a failed result as the normal located `Error:` diagn
 Everything below this heading is canonical design work unless an individual section explicitly
 states that its behavior is already implemented by the prototype above.
 
+## Collections and lexical scopes
+
+Caret has collections and lexical scopes, but no separate first-class `Scope` value. A lexical
+scope is an evaluator/compiler mechanism for declaration visibility, name resolution, captures,
+shadowing, parent lookup, and lifetime. It is not an ordinary Caret value and cannot itself be
+stored, returned, passed, indexed, or reflected.
+
+`Collection` is the ordinary first-class aggregate value model. A non-empty Collection is
+structurally either positional:
+
+```caret
+[1 2 3]
+```
+
+or named:
+
+```caret
+[
+  ^x = 1
+  ^y = 2
+]
+```
+
+A non-empty Collection cannot mix named Field elements with unnamed positional elements. Exported
+bindings in a block are shorthand for constructing the equivalent named Collection:
+
+```caret
+value =
+  ^x = 1
+  ^y = 2
+```
+
+is observationally equivalent to:
+
+```caret
+value =
+  [
+    ^x = 1
+    ^y = 2
+  ]
+```
+
+The empty Collection `[]` has no named/positional distinction. It vacuously satisfies ordinary
+collection contracts compatible with zero elements, without changing identity or acquiring a
+shape. Explicit structural contracts that require actual positions or fields remain unsatisfied.
+
 ### Not required for self-interpretation
 
 The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
 lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
-immutable collections, tagged exported scopes, and the planned text operations are sufficient.
+immutable collections, named exported collections, and the planned text operations are sufficient.
 
 ## Contracts, Type Derivation, and Collections
 
@@ -1515,6 +1565,9 @@ selection completes.
 
 `Collection` is the fundamental contract for values containing zero or more elements.
 
+It is the planned language's ordinary first-class aggregate model for both positional collections
+and named structured values. There is no additional `Scope` value category for named exports.
+
 More specific collection contracts derive from it.
 
 Conceptually:
@@ -1665,19 +1718,20 @@ An empty collection is:
 []
 ```
 
-Its element contract cannot be inferred from its contents.
-
-It may therefore obtain its type from context:
+It has no intrinsic named-versus-positional distinction because it contains no elements. It may be
+used under every ordinary collection contract whose requirements zero elements vacuously satisfy:
 
 ```caret
-(List Int) values = []
-
-(Set String) names = []
-
-(Packed Byte) buffer = []
+(Collection Int) a = []
+(List Int) b = []
+(Set String) c = []
+(Dictionary String Int) d = []
+(Packed Float32) e = []
 ```
 
-Without sufficient context it may remain a generic empty collection until additional constraints determine its element type.
+Contract checking does not mutate the identity of `[]` or turn it into a named or positional empty
+value. Explicit structural constraints remain independent: an exact non-empty `template`, or a
+future explicit `NonEmpty` contract, still requires its declared elements or fields.
 
 ---
 
@@ -1773,6 +1827,11 @@ extends an element through the closing bracket; use parentheses when another ele
 
 ## Named elements
 
+A non-empty Collection has exactly one structural shape. A positional Collection contains only
+unnamed values, while a named Collection contains only Field values. Static exported fields and
+dynamic `field` construction are both named elements. They may be combined with one another, but
+neither may be mixed with unnamed positional elements in the same non-empty Collection.
+
 `^` may construct named elements inside a collection:
 
 ```caret
@@ -1800,6 +1859,69 @@ Static member access may be used where the field is known:
 person.name
 person.age
 ```
+
+Dynamic lookup uses the same member model:
+
+```caret
+person["name"]~
+```
+
+A positional Collection does not acquire named fields merely because named Collections support
+member access.
+
+The following literal is invalid:
+
+```caret
+[
+  1
+  ^name = "Alice"
+  2
+]
+```
+
+Analysis must report the located diagnostic `MIXED_COLLECTION_SHAPE` at the first element whose
+shape conflicts with the earlier elements, retaining the collection literal as context. The same
+diagnostic applies whether the Field was produced by `^` or by `field`.
+
+## Exported-block shorthand
+
+When a function or ordinary block contains exported bindings, its result is the named Collection
+formed from those fields. These values are equivalent:
+
+```caret
+thing1 =
+  ^field1 = 1
+  ^field2 = 10
+
+thing2 =
+  [
+    ^field1 = 1
+    ^field2 = 10
+  ]
+```
+
+For example:
+
+```caret
+makeThing x =
+  temporary = calculate x
+  ^field1 = x
+  ^field2 = temporary
+```
+
+returns the same value as the explicit named Collection containing `field1` and `field2`.
+`temporary` remains a lexical local and is not a Collection element. A body with no exported
+bindings retains its ordinary final-expression result. No intermediate Scope object is created.
+
+Equality, reflection, contracts, and member access cannot distinguish exported-block shorthand
+from the equivalent explicit named Collection.
+
+```caret
+thing1 == thing2 // true
+```
+
+Both reflect with the ordinary Collection kind, shape, field names, and field metadata. Lexical
+scopes do not appear as reflectable values merely because the source block contains declarations.
 
 ---
 
@@ -2234,6 +2356,16 @@ PositiveInt = contract [Int positive]
 23. Distinction between common semantic contract and common physical representation.
 24. Packed collections with uniform representation metadata.
 25. Compiler/runtime freedom to optimize metadata representation without changing observable semantics.
+26. Non-empty Collections that are entirely positional or entirely named.
+27. A located `MIXED_COLLECTION_SHAPE` diagnostic for mixing Field and unnamed elements.
+28. Named fields constructed interchangeably with `^name = value` or `field key value`.
+29. One shape-neutral empty Collection satisfying zero-compatible collection contracts vacuously.
+30. Exact structural contracts remaining unsatisfied when their required positions or fields are absent.
+31. Exported blocks producing named Collections containing only their exported fields.
+32. Observational equivalence between exported-block shorthand and explicit named Collections.
+33. Imported module exports using the same named-Collection member model.
+34. `with` exposing named Collection fields without converting a Collection into a lexical scope.
+35. Lexical scopes remaining non-value compiler/evaluator environments.
 
 The initial implementation may postpone:
 
@@ -5019,7 +5151,6 @@ It may be:
 * an existing value;
 * a function producing a value;
 * a collection;
-* a returned scope;
 * another expression whose result becomes the initial cycle state.
 
 Example:
@@ -5046,9 +5177,9 @@ The exact handling of nullary functions follows the normal Caret function-refere
 
 ---
 
-## State as a scope
+## Named collection state
 
-A particularly important use of `cycle` is iteration over a structured scope.
+A particularly important use of `cycle` is iteration over a named Collection.
 
 Example state:
 
@@ -5059,7 +5190,7 @@ Example state:
 ]
 ```
 
-The cycle may transform this scope at every step.
+The cycle may transform this state Collection at every step.
 
 Conceptually:
 
@@ -5092,14 +5223,15 @@ produces a final state equivalent to:
 ]
 ```
 
-The exact collection/scope update functions may be provided by the standard library.
+The exact collection/state update functions may be provided by the standard library.
 
 The important semantic rule is that each phase receives the complete current state and returns the complete next state.
 
 ### Previous and next state views
 
-Cycle conditions, bodies, and preparation phases execute with a cycle-state view in addition to
-their ordinary lexical parameters.
+Cycle conditions, bodies, and preparation phases execute with a cycle-state lookup view over the
+state Collection in addition to their ordinary lexical parameters. This view is an evaluation and
+name-resolution mechanism, not a first-class Scope value.
 
 For every phase, unqualified state-field reads refer to the complete previous state. Name lookup
 checks local bindings and parameters first, then previous-state public fields, then the captured
@@ -5413,7 +5545,7 @@ The exact reusable abstractions should preferably be library functions rather th
 
 ---
 
-## Scope shape
+## State collection shape
 
 The initial implementation should require a stable state shape across a cycle unless the type system can prove a broader compatible type.
 
@@ -5801,7 +5933,7 @@ The initial implementation should support at minimum:
 5. A unary preparation transformation.
 6. Lambda expressions as phase arguments.
 7. Named functions as phase arguments.
-8. Heterogeneous collections / scope values as cycle state.
+8. Positional or named Collections as cycle state.
 9. Effect inference through all cycle phases.
 10. Contract checking of state transformations.
 11. Efficient lowering without mandatory immutable copying.
@@ -6622,7 +6754,9 @@ Numeric priorities or implicit source-order priorities are not required for the 
 
 ## Overview
 
-A `RuleSet` is a first-class reusable scope containing rules and supporting definitions.
+A `RuleSet` is a first-class reusable rule-system value. It has a lexical implementation
+environment containing rules and supporting declarations, plus a public named interface formed by
+its `^` exports. The private lexical environment is not a first-class Scope or Collection value.
 
 Rulesets may contain:
 
@@ -7121,7 +7255,7 @@ The runtime must retain sufficient trigger history to preserve this behavior.
 ## Object creation and destruction
 
 Objects in a rule cycle are persistent values with stable logical identities. An object version is
-an immutable public scope constructed with ordinary exported bindings:
+an immutable named Collection constructed with ordinary exported bindings:
 
 ```caret
 player = object
@@ -7357,7 +7491,7 @@ clientServer = module
 This is a module-ID declaration, not an ordinary assignment. The left-hand name identifies the
 current source module in the compilation environment's module catalog. It is not a runtime binding,
 is neither private nor exported, does not require `^`, and does not appear in the module's exported
-scope. The declaration may occur at most once in a file and only at file/module top level.
+Collection. The declaration may occur at most once in a file and only at file/module top level.
 
 `module` remains reserved. Bare `module` is not a general expression and is valid only as the exact
 right-hand side of `moduleId = module`. A source file need not declare an ID; such a file remains
@@ -7369,7 +7503,8 @@ These terms remain distinct:
 
 * a **source module** is a Caret source file;
 * a **ModuleId** is its optional stable logical catalog identifier;
-* a **module value** is the immutable exported scope obtained by importing the source module; and
+* a **module value** is the immutable named Collection of top-level exports obtained by importing
+  the source module; and
 * `@module` is the metadata/reflection reference for the module containing currently executing code.
 
 ### Import expressions
@@ -7406,8 +7541,9 @@ Successful module evaluation is cached by canonical source path for the lifetime
 environment generation. A ModuleId is a stable lookup identity that resolves to a source module; it
 does not replace canonical source path as the actual loading, cycle-detection, or evaluation-cache
 key. Path and ID imports that resolve to the same canonical file therefore share one evaluated
-module value. Every importer in that environment receives the same immutable module scope
-containing only top-level `^` exports.
+module value. Every importer in that environment receives the same immutable module value: a named
+Collection containing only top-level `^` exports. The source module's private lexical scope exists
+during evaluation but is not the imported value and cannot be reached through ordinary lookup.
 
 Sandboxes evaluate modules independently: immutable parsed or compiled artifacts may be shared,
 but evaluated modules, initialization effects, bindings, and mutable runtime state may not cross
@@ -7461,8 +7597,8 @@ The initial module implementation must:
 
 ### Normative reference model
 
-`@root` and `@module` are synthetic, metadata-only reflection references. Neither corresponds to an
-ordinary scope object and neither is callable. Bare `root` is reserved and invalid as an expression.
+`@root` and `@module` are synthetic, metadata-only reflection references. Neither corresponds to a
+lexical scope or ordinary Collection value and neither is callable. Bare `root` is reserved and invalid as an expression.
 Bare `module` is likewise not a general expression; its sole non-reflective use is the right-hand
 marker in a top-level `moduleId = module` declaration. Neither spelling can be defined as an ordinary
 binding or parameter. The parser recognizes each special reference as a primary expression, so
@@ -7531,6 +7667,11 @@ Structural code equality and canonical serialization:
 * may reorder elements only when semantic analysis proves them independent, using a
   language-defined structural order; and
 * retain source/evaluation order whenever independence cannot be proved.
+
+Semantic Code preserves lexical-scope relationships where name resolution, captures,
+alpha-equivalence, or private/public relationships require them. Those relationships are program
+structure, not serialized runtime Scope values. Canonical text may retain the shorter exported-block
+form instead of rewriting it as `[...]`; either form must reconstruct the same named Collection.
 
 Canonical serialization assigns deterministic names to alpha-equivalent private bindings. Path
 imports are emitted as normalized logical paths: `.` and `..` are resolved lexically, `/` is the
@@ -7840,13 +7981,22 @@ plugin = sandbox source environment
 ```
 
 `source` may be a module path or semantic `Code`, selected through ordinary contract dispatch.
-`environment` is an immutable exported scope. `sandbox` returns `Result Sandbox`; on success its
+`environment` is an immutable named Collection. `sandbox` returns `Result Sandbox`; on success its
 `value` is the stable `Sandbox` handle used below. Named members use the universal exported-field
 syntax:
 
 ```caret
 environment =
   ^clock = restrictedClock
+```
+
+This is shorthand for the equivalent explicit Collection:
+
+```caret
+environment =
+  [
+    ^clock = restrictedClock
+  ]
 ```
 
 The host may atomically replace the complete environment snapshot without stopping the plugin:
@@ -7936,8 +8086,9 @@ plugin =
   sandbox pluginCode environment
 ```
 
-The sandboxed code sees `@root` as metadata describing the environment constructed from
-`environment`; it is not the environment handle or an ordinary capability scope.
+The sandboxed code sees `@root` as metadata describing the lexical/name-resolution environment
+constructed from `environment`; it is not the supplied Collection, the environment handle, or an
+ordinary capability value.
 
 It cannot access the host application's root merely by referring to `@root`.
 
@@ -7973,9 +8124,11 @@ If the host exposes:
 
 ```caret
 environment =
-  ^log = safeLog
-  ^files = pluginFiles
-  ^clock = safeClock
+  [
+    ^log = safeLog
+    ^files = pluginFiles
+    ^clock = safeClock
+  ]
 ```
 
 then sandboxed code may use the ordinary visible bindings:
@@ -8077,8 +8230,10 @@ Sandbox
     permitted runtime capabilities
 ```
 
-The initial configuration is an immutable exported scope. `swapEnv` may atomically replace that
-complete snapshot while preserving the running sandbox generation.
+The initial configuration is an immutable named Collection. Root substitution constructs the
+sandbox's lexical/name-resolution environment from that value; the Collection is not itself a
+lexical root scope and does not make lexical environments reflectable. `swapEnv` may atomically
+replace the complete snapshot while preserving the running sandbox generation.
 
 ---
 
@@ -8976,6 +9131,12 @@ Runtime validation is required only where the contract cannot be proven statical
 ### Shape
 
 A template describes collection **shape** as well as element constraints.
+
+A non-empty template is structurally either positional or named, following the ordinary Collection
+rule. A template literal cannot mix named Field elements with unnamed positions; doing so produces
+`MIXED_COLLECTION_SHAPE`. There is no separate scope-template model. The specimen `[]` describes
+the exact empty shape, while every explicit non-empty template continues to require all of its
+declared positions or fields.
 
 For a positional collection:
 
@@ -10431,9 +10592,9 @@ Example:
 ```caret
 player =
   [
-    ^name "Alice"
-    ^health { (Int) 100 }
-    ^score { (Int) 0 }
+    ^name = "Alice"
+    ^health = { (Int) 100 }
+    ^score = { (Int) 0 }
   ]
 ```
 
@@ -10454,13 +10615,13 @@ This makes mutation boundaries visible in the value definition.
 Compare:
 
 ```caret
-^name "Alice"
+^name = "Alice"
 ```
 
 with:
 
 ```caret
-^health { (Int) 100 }
+^health = { (Int) 100 }
 ```
 
 The first is immutable data.
@@ -10527,11 +10688,11 @@ For example:
 ```caret
 player =
   [
-    ^name "Alice"
+    ^name = "Alice"
 
-    ^stats [
-      ^health { (Int) 100 }
-      ^strength 15
+    ^stats = [
+      ^health = { (Int) 100 }
+      ^strength = 15
     ]
   ]
 ```
@@ -10557,10 +10718,10 @@ Putting a container around a larger structure has different semantics:
 ```caret
 player =
   [
-    ^stats {
+    ^stats = {
       [
-        ^health 100
-        ^strength 15
+        ^health = 100
+        ^strength = 15
       ]
     }
   ]
@@ -10855,8 +11016,8 @@ For example, conceptually:
 ```caret
 Player =
   template [
-    ^name (String) _
-    ^health (Container Int) _
+    ^name = (String) _
+    ^health = (Container Int) _
   ]
 ```
 
@@ -10864,8 +11025,8 @@ A matching value may be:
 
 ```caret
 [
-  ^name "Alice"
-  ^health { (Int) 100 }
+  ^name = "Alice"
+  ^health = { (Int) 100 }
 ]
 ```
 
@@ -10888,9 +11049,9 @@ Example:
 ```caret
 player =
   [
-    ^name "Alice"
-    ^health { (Int nonnegative) 100 }
-    ^score { (Int) 0 }
+    ^name = "Alice"
+    ^health = { (Int nonnegative) 100 }
+    ^score = { (Int) 0 }
   ]
 ```
 
@@ -11235,9 +11396,9 @@ number = 11
 
 record =
   [
-    ^name "one"
-    ^number 10
-    ^content [1 2 3]
+    ^name = "one"
+    ^number = 10
+    ^content = [1 2 3]
   ]
 
 with record
@@ -11304,8 +11465,8 @@ For example:
 ```caret
 person =
   [
-    ^name "Alice"
-    ^age 42
+    ^name = "Alice"
+    ^age = 42
   ]
 
 with person
@@ -11313,15 +11474,14 @@ with person
   print age
 ```
 
-There is no separate `Record` type required.
-
-A heterogeneous collection with named fields is sufficient.
+There is no separate `Record` or `Scope` type required. A named Collection is the normal
+first-class structured value. `with` temporarily exposes its fields to lexical name resolution;
+the Collection does not become a lexical scope object.
 
 Likewise, `with` may operate on:
 
-* returned scopes;
-* rulesets;
-* structured collections;
+* exported or otherwise constructed named Collections;
+* rulesets through their public named interface;
 * `@root`;
 * sandbox roots;
 * other values exposing named members.
@@ -11345,7 +11505,7 @@ capability invocation path.
 
 Only members visible through the value's normal public interface participate in `with`.
 
-For a scope or ruleset:
+For a ruleset:
 
 ```caret
 system =
@@ -11384,7 +11544,8 @@ Inside a `with` block, unqualified names are resolved in the following order:
 ```text
 1. local bindings declared in the current lexical block
 2. named members exposed by the current `with` value
-3. enclosing lexical scopes
+3. named members from enclosing `with` layers, innermost first
+4. enclosing lexical bindings according to ordinary parent lookup
 ```
 
 For example:
@@ -11394,7 +11555,7 @@ number = 11
 
 record =
   [
-    ^number 10
+    ^number = 10
   ]
 
 with record
@@ -11425,7 +11586,7 @@ number = 11
 
 record =
   [
-    ^number 10
+    ^number = 10
   ]
 
 with record
@@ -11443,7 +11604,8 @@ number
 
 refers to the local value `20`.
 
-`outer.number` refers to the enclosing lexical environment.
+`outer.number` explicitly traverses the next lexical-resolution layer. In this example that is the
+enclosing `with` layer or lexical environment according to the nesting already specified.
 
 If direct access to the original structured value remains available, its member can still be accessed explicitly:
 
@@ -11466,7 +11628,7 @@ number = 11
 
 record =
   [
-    ^number 10
+    ^number = 10
   ]
 
 with record
@@ -11500,12 +11662,12 @@ x = 1
 
 a =
   [
-    ^x 2
+    ^x = 2
   ]
 
 b =
   [
-    ^x 3
+    ^x = 3
   ]
 
 with a
@@ -11523,7 +11685,7 @@ produces:
 1
 ```
 
-The scope chain is conceptually:
+The lexical-resolution layers are conceptually:
 
 ```text
 inner with b
@@ -11544,7 +11706,7 @@ outer.outer.name
 outer.outer.outer.value
 ```
 
-Each `outer` moves one level outward in the lexical scope chain.
+Each `outer` moves one level outward through the lexical-resolution layers.
 
 Each step crosses one enclosing `with` lookup layer. After the outermost `with`, lookup continues
 in the ordinary enclosing lexical scope. Normal initialization and visibility rules still apply;
@@ -11590,7 +11752,7 @@ Example:
 ```caret
 player =
   [
-    ^health { (Int) 100 }
+    ^health = { (Int) 100 }
   ]
 
 with player
@@ -12143,7 +12305,7 @@ outer.outer.name
 
 8. `with` working with heterogeneous collections containing named fields.
 
-9. `with` working with returned scopes and rulesets.
+9. `with` working with named Collections and ruleset public interfaces.
 
 10. Normal visibility rules inside `with`.
 

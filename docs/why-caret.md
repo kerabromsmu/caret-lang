@@ -20,7 +20,7 @@ be narrower: for certain rule-driven, structured, reflective, or controlled syst
 might resemble the thing its author is reasoning about.
 
 That is the larger design. The implementation today is much smaller: a Java 21 tree-walking
-interpreter with concise functions, lexical closures, partial application, immutable exported
+interpreter with concise functions, lexical closures, partial application, legacy immutable exported
 scopes, persistent sequence and dictionary primitives, basic reflection, a REPL, and source-located
 diagnostics. Most of the ideas discussed below are specified future work, not production-ready
 features. That gap is important because it also identifies the kinds of early users who could most
@@ -52,7 +52,7 @@ The language also distinguishes null, written `?`, from missing, written `~`. Th
 matters in data-heavy and reflective programs: a field can be present with a null value, present
 with a missing value, or absent altogether.
 
-Functions can return first-class scopes by marking only their public bindings with `^`:
+Functions mark public result fields with `^`:
 
 ```caret
 makeCounter initial =
@@ -61,9 +61,11 @@ makeCounter initial =
   ^description = "counter"
 ```
 
-Everything not exported remains private. The same export convention is intended to carry into
-modules and rulesets, giving Caret one small vocabulary for constructing public interfaces rather
-than a separate visibility system for every abstraction.
+Everything not exported remains private. The prototype currently represents this result with a
+legacy `Scope` value; the planned language treats the block as shorthand for the equivalent named
+Collection. Lexical scope remains an execution-time name-resolution mechanism. The same export
+convention carries into modules and rulesets, giving Caret one small vocabulary for constructing
+public interfaces rather than a separate visibility system for every abstraction.
 
 These features are useful, but they are not the main reason Caret may be interesting. They are the
 compact substrate on which the broader experiments are meant to compose.
@@ -147,7 +149,8 @@ natural priorities if rule-oriented users find that Caret expresses their system
 People building small languages face a recurring choice. They can embed a DSL in a host language
 and inherit its syntax and authority, or build a separate parser, evaluator, diagnostics system,
 module model, and tooling stack. Caret is exploring a middle ground: a compact host whose own code,
-contracts, scopes, and rules are intended to be inspectable as language-owned values.
+contracts, Collections, and rules are intended to be inspectable as language-owned values. Lexical
+scopes themselves are deliberately not values.
 
 The `@` operator provides reflection. In the current prototype it exposes modest metadata such as a
 value's kind, public names, collection size, or function arity. The planned model goes further with

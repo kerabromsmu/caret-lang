@@ -14,7 +14,7 @@ and located diagnostics. “Complete” means each normative language feature ha
 
 The existing prototype already implements scalar values, `?` and `~`, bindings and functions,
 closures, indentation-based bodies, whitespace application, conditionals, Boolean/arithmetic
-operators, exported scopes, partial application and numbered holes, static/optional/dynamic lookup,
+operators, legacy exported scopes, partial application and numbered holes, static/optional/dynamic lookup,
 basic reflection, Unicode text primitives, persistent sequences/dictionaries, Caret-native tests,
 located diagnostics (including rendered related spans), guarded callable invocation, and the REPL.
 Logical-line construction is owned by the lexer, and an initial semantic-validation pass diagnoses
@@ -93,7 +93,7 @@ closed overload sets. Arrow contracts and complete generic substitution remain u
   established `^name = name` export pattern as later declaration forms are added.
 - Extend resolver-owned lexical slots into explicit upvalue/lowering metadata for the compiler and
   verify eager partial capture against mutation introduced later.
-- Preserve implemented structural equality for scalars, scopes, and collections and the located
+- Preserve implemented structural equality for scalars, legacy scopes, and collections and the located
   rejection of callable equality as new value kinds arrive.
 
 ### Unified functions/operators and composition
@@ -278,19 +278,21 @@ symbol identities rather than source-span equality.
 
 ### Fields and dictionary-like collections
 
-- Implement `^name expression` fields and `field name value` dynamic construction as first-class
-  collection elements. Dictionary-like values are collections of fields, not a separate `data` kind.
-- Support named and unnamed elements, computed values, conditional fields, and nested collections.
+- Implement `^name = expression` fields and `field name value` dynamic construction as first-class
+  collection elements. Dictionary-like values are collections of fields, with no separate aggregate kind.
+- Require every non-empty collection to be entirely positional or entirely named; diagnose mixed
+  Field and unnamed elements. Keep `[]` shape-neutral and valid under zero-compatible contracts.
 - Support static and dynamic access, optional lookup, and exact missing/null/present-`~` behavior.
 - Validate statically known collections against structural contracts and retain dynamic checks when
-  needed. Keep named-field collections distinct from executable exported scopes.
+  needed. Lower exported blocks directly to observationally equivalent named Collections, excluding
+  private lexical bindings and introducing no intermediate Scope value.
 - Add packed collections only after representation analysis can require uniform layouts. Integrate
   later with SIMD and formats without changing observable contract membership.
 
 ### Scoped member lookup
 
 - Implement `with value` as an expression over the common public named-member protocol, beginning
-  with exported scopes and extending to structured collections, rulesets, root/module metadata,
+  with named Collections and extending to rulesets, root/module metadata,
   and sandbox projections as those value kinds arrive. Evaluate the target once and preserve member
   identity rather than copying or destructuring fields.
 - Resolve names in local-declaration, current-`with`-member, enclosing-lexical order. Keep ordinary
@@ -320,7 +322,7 @@ symbol identities rather than source-span equality.
 
 ### Persistent updates and contained mutation
 
-- Implement immutable scope/collection update syntax, including nested updates and
+- Implement immutable collection update syntax, including nested updates and
   shape/contract checking.
 - Implement `{ value }` and `{ (Contract...) value }`, postfix `container{}`, and `put container
   value`. Infer stable content contracts, validate initial and replacement values, return the stored
@@ -348,7 +350,7 @@ symbol identities rather than source-span equality.
 
 - Implement `cycle` as an expression over an initial state, pure unary condition, unary body, and
   unary prepare transformation. Support omitted body/prepare forms exactly as specified.
-- Accept named functions, lambdas, partials, structured scopes, and collections as phase values. Enforce a
+- Accept named functions, lambdas, partials, and positional or named Collections as phase values. Enforce a
   stable state shape and compatible contracts across iterations.
 - Infer phase effects while requiring the condition to remain pure. Lower to an internal loop/tail
   recursion without mandatory immutable copying, preserving functional observable semantics.
@@ -610,7 +612,7 @@ effect declarations remain a subsequent Phase 2 slice. Callable signatures, refl
 and the initial static operator matrix are now settled. Mixed-clause and callable-effect diagnostic
 codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
 unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather
-than introducing an exported-scope-only model that would later need replacement.
+than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals
 

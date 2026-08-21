@@ -10,7 +10,7 @@ What makes it interesting is how these ideas start fitting together around a fai
 
 Caret is being designed around a recurring principle:
 
-> If something can be represented as an ordinary value, function, contract, collection, or scope, avoid inventing a separate language mechanism for it.
+> If something can be represented as an ordinary value, function, contract, or Collection, avoid inventing a separate language mechanism for it.
 
 That principle turns out to connect features that are normally found in quite different kinds of languages.
 
@@ -192,8 +192,8 @@ Named fields are elements of collections rather than members of a separate objec
 ```caret
 person =
   [
-    ^name "Alice"
-    ^age 42
+    ^name = "Alice"
+    ^age = 42
   ]
 ```
 
@@ -233,8 +233,8 @@ This becomes particularly useful inside otherwise immutable structures:
 ```caret
 player =
   [
-    ^name "Alice"
-    ^health { (Int) 100 }
+    ^name = "Alice"
+    ^health = { (Int) 100 }
   ]
 ```
 
@@ -515,7 +515,7 @@ a special mutable object system
 
 Caret repeatedly asks:
 
-> Can this be expressed through contracts, values, collections, functions, scopes, rules, reflection, and execution stages that already exist?
+> Can this be expressed through contracts, values, Collections, functions, lexical name resolution, rules, reflection, and execution stages that already exist?
 
 That produces some unusual connections.
 
