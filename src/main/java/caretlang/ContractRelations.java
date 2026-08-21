@@ -10,6 +10,12 @@ final class ContractRelations {
 
     static boolean implies(ContractDescriptor left, ContractDescriptor right) {
         if (left == right || right == BuiltinContract.ANY) return true;
+        if (left instanceof ArrowContractDescriptor arrowLeft
+                && right instanceof ArrowContractDescriptor arrowRight) {
+            return arrowLeft.implies(arrowRight);
+        }
+        if (left instanceof ContractVariableDescriptor leftVariable
+                || right instanceof ContractVariableDescriptor) return left.equals(right);
 
         Absence l = absence(left);
         Absence r = absence(right);

@@ -34,6 +34,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String INCOMPATIBLE_CONTRACTS = "INCOMPATIBLE_CONTRACTS";
         static final String AMBIGUOUS_CONTRACT = "AMBIGUOUS_CONTRACT";
         static final String INVALID_REFINEMENT = "INVALID_REFINEMENT";
+        static final String INVALID_CONTRACT_VARIABLE = "INVALID_CONTRACT_VARIABLE";
         static final String NOT_CALLABLE = "NOT_CALLABLE";
         static final String INVALID_INFIX_ARITY = "INVALID_INFIX_ARITY";
         static final String INVALID_COMPOSITION_LEFT = "INVALID_COMPOSITION_LEFT";

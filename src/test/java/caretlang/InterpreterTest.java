@@ -11,6 +11,68 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void arrowContractsInspectCallableSignaturesWithoutInvokingCandidates() {
+        assertEquals("true\nfalse\ntrue\nfalse\ntrue\n", execute("""
+                (Number) double (Number) value = value + value
+                (String) stringify (Any) value = numberText 1
+                NumberTransform = [Number] -> Number
+                BroadTransform = [Any] -> Number
+                LooseResult = [Number] -> Any
+                PairTransform = [Number Number] -> Number
+                print NumberTransform double
+                print BroadTransform double
+                print LooseResult double
+                print PairTransform double
+                print NumberTransform == NumberTransform
+                """));
+
+        assertEquals("true\ntrue\n", execute("""
+                (Number) double (Number) value = value + value
+                MaybeTransform = ([Number] -> Number)?~
+                print MaybeTransform double
+                print MaybeTransform ?
+                """));
+    }
+
+    @Test
+    void arrowContractsWorkInNamedDeclarationClausesAndRejectMismatches() {
+        assertEquals("true\n", execute("""
+                NumberTransform = [Number] -> Number
+                (Number) double (Number) value = value + value
+                (NumberTransform) transform = double
+                print NumberTransform transform
+                """));
+
+        LangException mismatch = assertThrows(LangException.class, () -> execute("""
+                NumberTransform = [Number] -> Number
+                (String) stringify (Any) value = numberText 1
+                (NumberTransform) transform = stringify
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, mismatch.diagnostic().code());
+
+        assertEquals("6\n", execute("""
+                (Number) double (Number) value = value + value
+                (Number) apply ([Number] -> Number) transform (Number) value = transform value
+                print apply double 3
+                """));
+    }
+
+    @Test
+    void arrowContractVariablesAreContiguousAndRequireGenericRelationships() {
+        assertEquals("true\nfalse\n", execute("""
+                identity value = value
+                (Number) double (Number) value = value + value
+                GenericIdentity = [_1] -> _1
+                print GenericIdentity identity
+                print GenericIdentity double
+                """));
+
+        LangException skipped = assertThrows(LangException.class,
+                () -> execute("Transform = [_2] -> _2"));
+        assertEquals(Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, skipped.diagnostic().code());
+    }
+
+    @Test
     void constructsUnaryBaseAndMultiplyDerivedContracts() {
         assertEquals("false\nfalse\nAB\n[Tag, Numeric]\n[1, two, true]\n", execute("""
                 Tag = contract ~

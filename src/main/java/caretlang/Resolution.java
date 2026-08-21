@@ -11,7 +11,12 @@ final class Resolution {
     record Binding(int lexicalDepth, int slot, int symbolId, SourceSpan declarationSpan,
                    boolean captured, Boolean refinementEligible) {}
     record ContractBinding(String name, Binding binding, java.util.List<ContractBinding> arguments,
-                           boolean nullable, boolean optional, SourceSpan span) {}
+                           boolean nullable, boolean optional, Ast.Expr inline, SourceSpan span) {
+        ContractBinding(String name, Binding binding, java.util.List<ContractBinding> arguments,
+                        boolean nullable, boolean optional, SourceSpan span) {
+            this(name, binding, arguments, nullable, optional, null, span);
+        }
+    }
 
     private final IdentityHashMap<Name, Binding> names;
     private final IdentityHashMap<ContractClause, java.util.List<ContractBinding>> contracts;

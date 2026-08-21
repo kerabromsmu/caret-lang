@@ -234,12 +234,20 @@ The prototype infers initial built-in constraints for unannotated named function
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
 each call instantiates those variables independently.
 
-The planned language can state a higher-order callable contract directly. A bracketed parameter
+The prototype can state a pure higher-order callable contract directly. A bracketed parameter
 list followed by `->` describes exact arity, result guarantees, and an optional maximum effect set:
+
+```caret
+[Number] -> Number
+
+(Number) apply ([Number] -> Number) transform (Number) value =
+  transform value
+```
+
+The complete planned form also permits explicit effect allowances and declaration-wide variables:
 
 <!-- caret-example: planned -->
 ```caret
-[Int] -> Int
 [Int Text] -> (fs Boolean)
 
 (Sequence _2) map ([_1] -> _2) transform (Sequence _1) values =
@@ -249,7 +257,9 @@ list followed by `->` describes exact arity, result guarantees, and an optional 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
 must remain within the stated allowance. This arrow form is a first-class contract, distinct from a
-lambda because its left side is a bracketed requirement list. It is specified but not implemented.
+lambda because its left side is a bracketed requirement list. Exact arity, pure effect bounds,
+contravariant parameters, covariant results, inline clauses, and standalone variables are
+implemented; explicit allowances and variables shared across a complete declaration header remain planned.
 
 The planned static operator model preserves the prototype's compact behavior without adding hidden
 numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
@@ -352,7 +362,8 @@ supports lexical closures, direct and mutual recursion, partial application, leg
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 
-General parameterized contracts, callable arrow contracts, structural templates, universal
+General parameterized contracts, explicit-effect and declaration-wide-variable arrow contracts,
+structural templates, universal
 collection literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.

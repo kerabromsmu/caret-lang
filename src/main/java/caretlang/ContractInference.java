@@ -275,7 +275,9 @@ final class ContractInference {
             case Reflect ignored -> Shape.unknown();
             case ContractModifier ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
+            case ContractVariable ignored -> Shape.unknown();
             case CollectionLiteral ignored -> Shape.concrete(BuiltinContract.SEQUENCE);
+            case ArrowContract ignored -> Shape.unknown();
         };
     }
 
@@ -513,6 +515,7 @@ final class ContractInference {
         return switch (expression) {
             case Literal ignored -> EffectSummary.PURE;
             case Hole ignored -> EffectSummary.PURE;
+            case ContractVariable ignored -> EffectSummary.PURE;
             case Name name -> {
                 CallableEffects callable = resolvedCallable(name, visible);
                 yield callable != null && callable.arity() == 0 ? callable.summary() : EffectSummary.PURE;
@@ -539,6 +542,7 @@ final class ContractInference {
             case CollectionLiteral collection -> collection.elements().stream()
                     .map(element -> expressionEffects(element, visible))
                     .reduce(EffectSummary.PURE, EffectSummary::plus);
+            case ArrowContract ignored -> EffectSummary.PURE;
         };
     }
 
@@ -702,6 +706,7 @@ final class ContractInference {
     private static boolean containsHole(Expr expression) {
         return switch (expression) {
             case Hole ignored -> true;
+            case ContractVariable ignored -> false;
             case Unary unary -> containsHole(unary.operand());
             case Binary binary -> containsHole(binary.left()) || containsHole(binary.right());
             case Compose compose -> containsHole(compose.left()) || containsHole(compose.right());
@@ -718,6 +723,7 @@ final class ContractInference {
             case ContractModifier modifier -> containsHole(modifier.target());
             case Group group -> containsHole(group.expression());
             case CollectionLiteral collection -> collection.elements().stream().anyMatch(ContractInference::containsHole);
+            case ArrowContract ignored -> false;
             case Literal ignored -> false;
             case Name ignored -> false;
         };

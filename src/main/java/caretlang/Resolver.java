@@ -2,9 +2,11 @@ package caretlang;
 
 import caretlang.Ast.Apply;
 import caretlang.Ast.AmbiguousCall;
+import caretlang.Ast.ArrowContract;
 import caretlang.Ast.Assign;
 import caretlang.Ast.Binary;
 import caretlang.Ast.Conditional;
+import caretlang.Ast.ContractVariable;
 import caretlang.Ast.Compose;
 import caretlang.Ast.ContractModifier;
 import caretlang.Ast.DynamicField;
@@ -224,6 +226,12 @@ final class Resolver {
         java.util.ArrayList<Resolution.ContractBinding> resolved = new java.util.ArrayList<>();
         for (int index = 0; index < clause.names().size(); index++) {
             Ast.ContractName name = clause.names().get(index);
+            if (name.inline() != null) {
+                resolveExpr(name.inline(), scope, false, false);
+                resolved.add(new Resolution.ContractBinding(name.name(), null, List.of(), false, false,
+                        name.inline(), name.span()));
+                continue;
+            }
             Resolution.ContractBinding binding = resolveContract(name, scope);
             if (name.arguments().isEmpty()) {
                 Integer arity = knownContractParameterArity(name.name(), scope);
@@ -284,6 +292,7 @@ final class Resolver {
     }
 
     private ContractState contractState(Expr expression) {
+        if (expression instanceof ArrowContract) return ContractState.CONTRACT;
         if (expression instanceof Apply apply && apply.function() instanceof Name name
                 && name.name().equals("contract")) return ContractState.CONTRACT;
         if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral) {
@@ -297,6 +306,7 @@ final class Resolver {
             case Name name -> resolveName(name, scope, functionBody, deferred);
             case Literal ignored -> { }
             case Hole ignored -> { }
+            case ContractVariable ignored -> { }
             case Unary unary -> resolveExpr(unary.operand(), scope, functionBody, deferred);
             case Binary binary -> {
                 resolveExpr(binary.left(), scope, functionBody, deferred);
@@ -349,6 +359,12 @@ final class Resolver {
             case Group group -> resolveExpr(group.expression(), scope, functionBody, deferred);
             case Ast.CollectionLiteral collection -> collection.elements().forEach(
                     element -> resolveExpr(element, scope, functionBody, deferred));
+            case ArrowContract arrow -> {
+                validateContractVariables(arrow);
+                arrow.parameters().forEach(parameter -> parameter.forEach(
+                        requirement -> resolveExpr(requirement, scope, functionBody, deferred)));
+                resolveExpr(arrow.result(), scope, functionBody, deferred);
+            }
         }
     }
 
@@ -362,6 +378,7 @@ final class Resolver {
     }
 
     private ContractState knownContractState(Expr expression, Scope scope) {
+        if (expression instanceof ArrowContract) return ContractState.CONTRACT;
         if (expression instanceof ContractModifier) return ContractState.CONTRACT;
         if (expression instanceof Apply apply && apply.function() instanceof Name name
                 && name.name().equals("contract")) return ContractState.CONTRACT;
@@ -375,6 +392,23 @@ final class Resolver {
         }
         return BuiltinContract.named(name.name()).isPresent()
                 ? ContractState.CONTRACT : ContractState.UNKNOWN;
+    }
+
+    private void validateContractVariables(ArrowContract arrow) {
+        java.util.TreeSet<Integer> indexes = new java.util.TreeSet<>();
+        AstTraversal.walkPreOrder(arrow, expression -> {
+            if (expression instanceof ContractVariable variable) indexes.add(variable.index());
+        });
+        if (indexes.isEmpty()) return;
+        int expected = 1;
+        for (int index : indexes) {
+            if (index != expected) {
+                throw new LangException(Diagnostic.Phase.SEMANTIC,
+                        Diagnostic.Codes.INVALID_CONTRACT_VARIABLE,
+                        "Contract variable indices must be contiguous from _1", arrow.span());
+            }
+            expected++;
+        }
     }
 
     private void resolveName(Name name, Scope scope, boolean functionBody, boolean deferred) {

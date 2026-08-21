@@ -160,6 +160,26 @@ final class Parser {
 
     private ContractParse contractClause(List<Token> tokens, int start) {
         if (start >= tokens.size() || !tokens.get(start).text().equals("(")) return null;
+        if (start + 1 < tokens.size() && tokens.get(start + 1).text().equals("[")) {
+            int depth = 1;
+            int close = start + 1;
+            for (; close < tokens.size(); close++) {
+                if (tokens.get(close).text().equals("(")) depth++;
+                else if (tokens.get(close).text().equals(")") && --depth == 0) break;
+            }
+            if (close >= tokens.size()) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "Expected ')' after arrow contract clause", tokens.get(start).span());
+            }
+            Expr inline = new ExprParser(tokens.subList(start + 1, close), tokens.get(close).span().start()).parse();
+            if (!(inline instanceof ArrowContract)) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "Contract clause requires an arrow contract", inline.span());
+            }
+            SourceSpan span = SourceSpan.cover(tokens.get(start).span(), tokens.get(close).span());
+            return new ContractParse(new ContractClause(List.of(new ContractName(
+                    "<arrow>", List.of(), false, false, inline, inline.span())), span), close + 1);
+        }
         ArrayList<ContractName> names = new ArrayList<>();
         int current = start + 1;
         while (current < tokens.size() && !tokens.get(current).text().equals(")")) {
@@ -287,9 +307,106 @@ final class Parser {
         }
 
         Expr parse() {
-            Expr expression = lowPrecedenceApplication();
+            Expr expression = arrow();
             if (!atEnd()) throw error("Unexpected token: " + peek().text());
             return expression;
+        }
+
+        private Expr arrow() {
+            if (peek().text().equals("[") && arrowClose(current) >= 0) {
+                Token open = tokens.get(current++);
+                ArrayList<List<Expr>> parameters = new ArrayList<>();
+                while (!peek().text().equals("]")) {
+                    if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
+                    if (match("(")) {
+                        ArrayList<Expr> conjunction = new ArrayList<>();
+                        while (!peek().text().equals(")")) {
+                            if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ')'");
+                            conjunction.add(contractRequirement());
+                        }
+                        consume(")", "Expected ')'");
+                        if (conjunction.isEmpty()) throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                                "Arrow parameter requirement cannot be empty");
+                        parameters.add(List.copyOf(conjunction));
+                    } else {
+                        parameters.add(List.of(contractRequirement()));
+                    }
+                }
+                consume("]", "Expected ']'");
+                consume("->", "Expected '->' after arrow parameter requirements");
+                Expr result;
+                if (peek().text().equals("[") && arrowClose(current) >= 0) {
+                    result = arrow();
+                } else if (match("(")) {
+                    result = contractRequirement();
+                    if (!match(")")) throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                            "Arrow contract result currently requires exactly one result contract");
+                } else {
+                    result = contractRequirement();
+                }
+                return new ArrowContract(List.copyOf(parameters), result,
+                        SourceSpan.cover(open.span(), result.span()));
+            }
+            return lowPrecedenceApplication();
+        }
+
+        /** Returns the matching close only when it is immediately followed by an arrow. */
+        private int arrowClose(int start) {
+            int depth = 0;
+            for (int index = start; index < tokens.size(); index++) {
+                String text = tokens.get(index).text();
+                if (text.equals("[") || text.equals("(")) depth++;
+                else if (text.equals("]") || text.equals(")")) {
+                    depth--;
+                    if (depth == 0) {
+                        return text.equals("]") && index + 1 < tokens.size()
+                                && tokens.get(index + 1).text().equals("->") ? index : -1;
+                    }
+                }
+            }
+            return -1;
+        }
+
+        private Expr contractRequirement() {
+            if (peek().text().equals("_")) {
+                throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "Unnumbered contract variable is invalid");
+            }
+            if (peek().kind() != Kind.IDENT) {
+                throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "Arrow contract requires contract names");
+            }
+            Token name = tokens.get(current++);
+            Expr requirement = name.text().matches("_[1-9][0-9]*")
+                    ? numberedContractVariable(name) : new Name(name.text(), name.span());
+            int arity = name.text().startsWith("_") ? 0 : LanguageSyntax.contractParameterArity(name.text());
+            for (int index = 0; index < arity; index++) {
+                Expr argument = contractRequirement();
+                requirement = new Apply(requirement, argument,
+                        SourceSpan.cover(requirement.span(), argument.span()));
+            }
+            SourceSpan end = requirement.span();
+            boolean nullable = false;
+            boolean optional = false;
+            if (peek().text().equals("?") && adjacent(end, peek())) {
+                nullable = true;
+                end = tokens.get(current++).span();
+            }
+            if (peek().text().equals("~") && adjacent(end, peek())) {
+                optional = true;
+                end = tokens.get(current++).span();
+            }
+            return nullable || optional ? new ContractModifier(requirement, nullable, optional,
+                    SourceSpan.cover(requirement.span(), end)) : requirement;
+        }
+
+        private Expr numberedContractVariable(Token token) {
+            try {
+                return new ContractVariable(Integer.parseInt(token.text().substring(1)), token.span());
+            } catch (NumberFormatException ignored) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_HOLE,
+                        "Numbered contract variable index is too large", token.span());
+            }
         }
 
         private Expr lowPrecedenceApplication() {
@@ -564,7 +681,7 @@ final class Parser {
                 if (atEnd()) {
                     throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ')'");
                 }
-                Expr expr = lowPrecedenceApplication();
+                Expr expr = arrow();
                 consume(")", "Expected ')'");
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }

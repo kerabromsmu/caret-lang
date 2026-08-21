@@ -7,8 +7,12 @@ final class Ast {
         SourceSpan span();
     }
     record ContractClause(List<ContractName> names, SourceSpan span) {}
-    record ContractName(String name, List<ContractName> arguments, boolean nullable, boolean optional, SourceSpan span) {
-        ContractName(String name, SourceSpan span) { this(name, List.of(), false, false, span); }
+    record ContractName(String name, List<ContractName> arguments, boolean nullable, boolean optional,
+                        Expr inline, SourceSpan span) {
+        ContractName(String name, List<ContractName> arguments, boolean nullable, boolean optional, SourceSpan span) {
+            this(name, arguments, nullable, optional, null, span);
+        }
+        ContractName(String name, SourceSpan span) { this(name, List.of(), false, false, null, span); }
     }
     record Parameter(String name, ContractClause contracts, SourceSpan span) {}
     record Assign(String name, boolean exported, ContractClause contracts, Expr value, SourceSpan span) implements Stmt {}
@@ -18,7 +22,7 @@ final class Ast {
     record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
                        List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, ContractModifier, Hole, Group, CollectionLiteral {
+    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, ContractModifier, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract {
         SourceSpan span();
     }
     record Literal(Value value, SourceSpan span) implements Expr {}
@@ -37,6 +41,14 @@ final class Ast {
     record ContractModifier(Expr target, boolean nullable, boolean optional, SourceSpan span) implements Expr {}
     /** index is zero for an ordinary left-to-right hole, otherwise one-based. */
     record Hole(int index, SourceSpan span) implements Expr {}
+    /** One-based source index; normalized to zero-based signature metadata. */
+    record ContractVariable(int index, SourceSpan span) implements Expr {}
     record Group(Expr expression, SourceSpan span) implements Expr {}
     record CollectionLiteral(List<Expr> elements, SourceSpan span) implements Expr {}
+    /** Contextual callable contract; each parameter entry is a conjunction of requirements. */
+    record ArrowContract(List<List<Expr>> parameters, Expr result, SourceSpan span) implements Expr {
+        ArrowContract {
+            parameters = parameters.stream().map(List::copyOf).toList();
+        }
+    }
 }

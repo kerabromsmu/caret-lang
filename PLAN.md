@@ -69,7 +69,9 @@ centralize public kinds, basic reflection, structural equality, and stack-safe r
 lambdas remain deferred to Phase 3. Right-associative low-precedence `$` application now lowers to
 the ordinary callable path. Language-owned callable signature metadata and its safe reflective
 projection are implemented for named functions, built-ins, prefix partials, compositions, and
-closed overload sets. Arrow contracts and complete generic substitution remain unfinished.
+closed overload sets. Pure exact-arity arrow contracts now work as named or inline structural
+predicates; explicit arrow allowances, declaration-wide variables, and complete generic
+substitution remain unfinished.
 
 ### Layout and expressions
 
@@ -607,9 +609,11 @@ Low-precedence application, runtime user-contract derivation, generalized contra
 minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
 are complete. Initial parameterized contracts are also complete through `Sequence T`. The shared
 callable-signature scheme and safe callable reflection are now implemented for the current callable
-kinds. Next parse and analyze first-class higher-order arrow contracts over that metadata. Public
-effect declarations remain a subsequent Phase 2 slice. Callable signatures, reflection, explicit higher-order arrow contracts,
-and the initial static operator matrix are now settled. Mixed-clause and callable-effect diagnostic
+kinds. Pure exact-arity higher-order arrow contracts are now parsed and analyzed over that metadata,
+including inline clauses, variance checks, standalone variables, and a runnable example. Next add
+the environment-relative effect catalog and mixed-clause analysis needed for explicit arrow and
+public declaration effect allowances. Callable signatures, reflection, explicit higher-order arrow contracts,
+and the initial static operator matrix are settled. Mixed-clause and callable-effect diagnostic
 codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
 unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather
 than introducing a separate exported Scope value model.

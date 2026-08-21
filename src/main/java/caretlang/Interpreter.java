@@ -217,7 +217,7 @@ final class Interpreter {
     private boolean matches(ContractClause clause, Value.Argument argument, int position,
                             Map<ApplicabilityKey, Boolean> cache, Environment env, Resolution resolution) {
         for (Resolution.ContractBinding binding : resolution.contracts(clause)) {
-            Object requirement = resolveRequirement(binding, env);
+            Object requirement = resolveRequirement(binding, env, resolution);
             ApplicabilityKey key = new ApplicabilityKey(requirement, position);
             Boolean accepted = cache.get(key);
             if (accepted == null) {
@@ -239,14 +239,17 @@ final class Interpreter {
         return result instanceof Value.Bool(boolean accepted) && accepted;
     }
 
-    private Object resolveRequirement(Resolution.ContractBinding binding, Environment env) {
-        Value resolved = underlying(binding.binding() == null ? globals.get(binding.name())
-                : env.getAt(binding.binding().lexicalDepth(), binding.binding().slot()));
+    private Object resolveRequirement(Resolution.ContractBinding binding, Environment env,
+                                      Resolution resolution) {
+        Value resolved = binding.inline() == null
+                ? underlying(binding.binding() == null ? globals.get(binding.name())
+                : env.getAt(binding.binding().lexicalDepth(), binding.binding().slot()))
+                : evalInner(binding.inline(), env, resolution);
         if (resolved instanceof Value.ContractValue contract) {
             ContractDescriptor descriptor = contract.descriptor();
             if (!binding.arguments().isEmpty()) {
                 descriptor = descriptor.parameterize(binding.arguments().stream()
-                        .map(argument -> (ContractDescriptor) resolveRequirement(argument, env)).toList());
+                        .map(argument -> (ContractDescriptor) resolveRequirement(argument, env, resolution)).toList());
             }
             return modifiedContract(descriptor, binding.nullable(), binding.optional());
         }
@@ -278,8 +281,8 @@ final class Interpreter {
 
     private boolean clauseImplies(ContractClause left, ContractClause right, Environment env,
                                   Resolution resolution) {
-        List<Object> l = resolution.contracts(left).stream().map(binding -> resolveRequirement(binding, env)).toList();
-        List<Object> r = resolution.contracts(right).stream().map(binding -> resolveRequirement(binding, env)).toList();
+        List<Object> l = resolution.contracts(left).stream().map(binding -> resolveRequirement(binding, env, resolution)).toList();
+        List<Object> r = resolution.contracts(right).stream().map(binding -> resolveRequirement(binding, env, resolution)).toList();
         if (r.isEmpty()) return true;
         if (l.isEmpty()) return false;
         return r.stream().allMatch(required -> l.stream().anyMatch(candidate -> requirementImplies(candidate, required)));
@@ -308,8 +311,10 @@ final class Interpreter {
                                    Resolution resolution, Environment contractEnvironment, String subject) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
-            Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
-                    : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
+            Value resolved = reference.inline() == null
+                    ? underlying(reference.binding() == null ? globals.get(reference.name())
+                    : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()))
+                    : evalInner(reference.inline(), contractEnvironment, resolution);
             if (!reference.arguments().isEmpty()) {
                 if (!(resolved instanceof Value.ContractValue constructor)) {
                     throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
@@ -321,7 +326,7 @@ final class Interpreter {
                             "Binding is not a contract: " + reference.name(), reference.span());
                 }
                 List<ContractDescriptor> arguments = reference.arguments().stream()
-                        .map(argument -> resolveContractDescriptor(argument, contractEnvironment))
+                        .map(argument -> resolveContractDescriptor(argument, contractEnvironment, resolution))
                         .toList();
                 resolved = new Value.ContractValue(descriptor.parameterize(arguments));
             }
@@ -375,9 +380,12 @@ final class Interpreter {
     }
 
     private ContractDescriptor resolveContractDescriptor(Resolution.ContractBinding reference,
-                                                         Environment contractEnvironment) {
-        Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
-                : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()));
+                                                         Environment contractEnvironment,
+                                                         Resolution resolution) {
+        Value resolved = reference.inline() == null
+                ? underlying(reference.binding() == null ? globals.get(reference.name())
+                : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()))
+                : evalInner(reference.inline(), contractEnvironment, resolution);
         if (!(resolved instanceof Value.ContractValue contract)) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
                     "Binding is not a contract: " + reference.name(), reference.span());
@@ -389,7 +397,7 @@ final class Interpreter {
                         "Binding is not a contract: " + reference.name(), reference.span());
             }
             descriptor = descriptor.parameterize(reference.arguments().stream()
-                    .map(argument -> resolveContractDescriptor(argument, contractEnvironment)).toList());
+                    .map(argument -> resolveContractDescriptor(argument, contractEnvironment, resolution)).toList());
         }
         return modifiedContract(descriptor, reference.nullable(), reference.optional());
     }
@@ -533,6 +541,9 @@ final class Interpreter {
         if (expr instanceof Hole) {
             throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Internal error: unresolved hole");
         }
+        if (expr instanceof ContractVariable) {
+            throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Internal error: contract variable outside arrow contract");
+        }
         if (expr instanceof Unary(String operator1, Expr operand, SourceSpan ignored)) {
             Value value = evalInner(operand, env, resolution);
             return switch (operator1) {
@@ -665,7 +676,37 @@ final class Interpreter {
             for (Expr element : elements) values.add(evalInner(element, env, resolution));
             return new Value.Seq(values);
         }
+        if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, SourceSpan ignored)) {
+            ArrayList<List<ContractDescriptor>> parameterDescriptors = new ArrayList<>();
+            for (List<Expr> parameter : parameters) {
+                parameterDescriptors.add(parameter.stream()
+                        .map(requirement -> arrowRequirement(requirement, env, resolution)).toList());
+            }
+            ContractDescriptor resultDescriptor = arrowRequirement(result, env, resolution);
+            return new Value.ContractValue(new ArrowContractDescriptor(
+                    List.copyOf(parameterDescriptors), resultDescriptor, List.of()));
+        }
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
+    }
+
+    private ContractDescriptor arrowRequirement(Expr expression, Environment env, Resolution resolution) {
+        if (expression instanceof ContractVariable variable) {
+            return new ContractVariableDescriptor(variable.index());
+        }
+        if (expression instanceof ContractModifier modifier) {
+            return modifiedContract(arrowRequirement(modifier.target(), env, resolution),
+                    modifier.nullable(), modifier.optional());
+        }
+        if (expression instanceof Apply apply) {
+            ContractDescriptor constructor = arrowRequirement(apply.function(), env, resolution);
+            return constructor.parameterize(List.of(arrowRequirement(apply.argument(), env, resolution)));
+        }
+        Value value = underlying(evalInner(expression, env, resolution));
+        if (!(value instanceof Value.ContractValue contract)) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
+                    "Arrow requirement is not a contract", expression.span());
+        }
+        return contract.descriptor();
     }
 
     private Value invokeNamedInfix(Value left, SourceSpan leftSpan, Value function,

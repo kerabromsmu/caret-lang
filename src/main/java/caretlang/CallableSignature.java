@@ -130,6 +130,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     }
 
     private static String name(ContractName contract) {
+        if (contract.inline() instanceof Ast.ArrowContract arrow) return "<arrow:" + arrow.parameters().size() + ">";
         String arguments = contract.arguments().isEmpty() ? "" : " "
                 + String.join(" ", contract.arguments().stream().map(CallableSignature::name).toList());
         return contract.name() + arguments + (contract.nullable() ? "?" : "")

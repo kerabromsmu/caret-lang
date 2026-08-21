@@ -9,6 +9,35 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ParserTest {
     @Test
+    void parsesRightAssociativeExactArityArrowContracts() {
+        ArrowContract unary = assertInstanceOf(ArrowContract.class, expression("[Number] -> String"));
+        assertEquals(1, unary.parameters().size());
+        assertEquals("Number", ((Name) unary.parameters().getFirst().getFirst()).name());
+        assertEquals("String", ((Name) unary.result()).name());
+
+        ArrowContract nullary = assertInstanceOf(ArrowContract.class, expression("[] -> String"));
+        assertTrue(nullary.parameters().isEmpty());
+        ArrowContract nested = assertInstanceOf(ArrowContract.class,
+                expression("[Number] -> [String] -> Boolean"));
+        assertInstanceOf(ArrowContract.class, nested.result());
+
+        ArrowContract conjunction = assertInstanceOf(ArrowContract.class,
+                expression("[(Number Any) String] -> Boolean"));
+        assertEquals(2, conjunction.parameters().size());
+        assertEquals(2, conjunction.parameters().getFirst().size());
+
+        FunctionDef inline = assertInstanceOf(FunctionDef.class,
+                new Parser("apply ([Number] -> Number) transform (Number) value = transform value")
+                        .parseProgram().getFirst());
+        assertInstanceOf(ArrowContract.class, inline.params().getFirst().contracts()
+                .names().getFirst().inline());
+
+        LangException unnumbered = assertThrows(LangException.class,
+                () -> expression("[_] -> Any"));
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_CONTRACT, unnumbered.diagnostic().code());
+    }
+
+    @Test
     void parsesEagerCollectionLiteralsAsElementBoundaries() {
         CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class, expression("[A B]"));
         assertEquals(List.of("A", "B"), literal.elements().stream()

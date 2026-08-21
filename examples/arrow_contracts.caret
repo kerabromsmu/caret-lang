@@ -1,0 +1,13 @@
+(Number) double (Number) value = value + value
+
+(Number) apply ([Number] -> Number) transform (Number) value =
+  transform value
+
+NumberTransform = [Number] -> Number
+BroadTransform = [Any] -> Number
+LooseResult = [Number] -> Any
+
+print NumberTransform double
+print BroadTransform double
+print LooseResult double
+print apply double 21

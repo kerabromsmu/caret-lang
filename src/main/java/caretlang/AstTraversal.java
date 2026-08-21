@@ -14,6 +14,7 @@ final class AstTraversal {
             case Literal ignored -> List.of();
             case Name ignored -> List.of();
             case Hole ignored -> List.of();
+            case ContractVariable ignored -> List.of();
             case Unary unary -> List.of(unary.operand());
             case Binary binary -> List.of(binary.left(), binary.right());
             case Compose compose -> List.of(compose.left(), compose.right());
@@ -28,6 +29,8 @@ final class AstTraversal {
             case ContractModifier modifier -> List.of(modifier.target());
             case Group group -> List.of(group.expression());
             case CollectionLiteral collection -> collection.elements();
+            case ArrowContract arrow -> java.util.stream.Stream.concat(
+                    arrow.parameters().stream().flatMap(List::stream), java.util.stream.Stream.of(arrow.result())).toList();
         };
     }
 
@@ -44,6 +47,7 @@ final class AstTraversal {
             case Literal literal -> literal;
             case Name name -> name;
             case Hole hole -> hole;
+            case ContractVariable variable -> variable;
             case Unary unary -> new Unary(unary.operator(), children.get(0), unary.span());
             case Binary binary -> new Binary(binary.operator(), children.get(0), children.get(1), binary.span());
             case Compose compose -> new Compose(children.get(0), children.get(1), compose.span());
@@ -62,6 +66,15 @@ final class AstTraversal {
                     modifier.optional(), modifier.span());
             case Group group -> new Group(children.getFirst(), group.span());
             case CollectionLiteral collection -> new CollectionLiteral(children, collection.span());
+            case ArrowContract arrow -> {
+                int offset = 0;
+                java.util.ArrayList<List<Expr>> parameters = new java.util.ArrayList<>();
+                for (List<Expr> parameter : arrow.parameters()) {
+                    parameters.add(List.copyOf(children.subList(offset, offset + parameter.size())));
+                    offset += parameter.size();
+                }
+                yield new ArrowContract(parameters, children.get(offset), arrow.span());
+            }
         };
     }
 }

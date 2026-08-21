@@ -26,7 +26,7 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     PARSE_INVALID_DEFINITION("PARSE-INVALID-DEFINITION", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Invalid assignment or function definition.*", PUBLIC),
     PARSE_CONTINUATION_DEFINITION("PARSE-CONTINUATION-DEFINITION", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Continuation argument must be an expression.*", PUBLIC),
     PARSE_RESERVED_BINDING("PARSE-RESERVED-BINDING", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_RESERVED_BINDING, "Reserved spelling cannot be used as a binding name: .*", PUBLIC),
-    PARSE_INVALID_CONTRACT("PARSE-INVALID-CONTRACT", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT, ".*[Cc]ontract clause.*", PUBLIC),
+    PARSE_INVALID_CONTRACT("PARSE-INVALID-CONTRACT", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT, ".*[Cc]ontract.*", PUBLIC),
     PARSE_UNCLOSED_DELIMITER("PARSE-UNCLOSED-DELIMITER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected .*", PUBLIC),
     PARSE_INVALID_HOLE("PARSE-INVALID-HOLE", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_HOLE, "Numbered hole index is too large", PUBLIC),
     PARSE_INVALID_NUMBER("PARSE-INVALID-NUMBER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_NUMBER, "Invalid number literal", INTERNAL),
@@ -42,6 +42,8 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     INCOMPATIBLE_CONTRACTS("SEMANTIC-INCOMPATIBLE-CONTRACTS", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, "Incompatible inferred contracts: .*", PUBLIC),
     AMBIGUOUS_CONTRACT("SEMANTIC-AMBIGUOUS-CONTRACT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.AMBIGUOUS_CONTRACT, "Ambiguous contract at use: .*", PUBLIC),
     INVALID_REFINEMENT("SEMANTIC-INVALID-REFINEMENT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT, "Invalid refinement predicate: .*", PUBLIC),
+    INVALID_CONTRACT_VARIABLE("SEMANTIC-INVALID-CONTRACT-VARIABLE", Diagnostic.Phase.SEMANTIC,
+            Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, "Contract variable indices must be contiguous from _1", PUBLIC),
     INCONSISTENT_OVERLOAD_ARITY("SEMANTIC-INCONSISTENT-OVERLOAD-ARITY", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INCONSISTENT_OVERLOAD_ARITY, "Overload variants must have the same arity: .*", PUBLIC),
 
     RUNTIME_DUPLICATE_DEFINITION("RUNTIME-DUPLICATE-DEFINITION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: .*", INTERNAL),
