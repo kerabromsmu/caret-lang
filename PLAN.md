@@ -2,7 +2,8 @@
 
 ## Goal and completion criteria
 
-Implement every behavior described by `LANGUAGE.md` in dependency order while preserving Caret's
+Implement every behavior described by the canonical specification corpus indexed by `LANGUAGE.md`
+in dependency order while preserving Caret's
 compact syntax, missing/null distinction, lexical scoping, immutable-first semantics, reflection,
 and located diagnostics. “Complete” means each normative language feature has:
 
@@ -562,9 +563,9 @@ symbol identities rather than source-span equality.
   collections, encode/decode round trips, optimizer equivalence, and scheduler stability.
 - Establish performance suites for parsing, closures/partials, collection updates, cycles, SIMD,
   formats, rule propagation, module compilation, code serialization, sandbox startup, and REPL latency.
-- After all planned language features and their conformance requirements are complete, generate a
-  developer-learning site from canonical `LANGUAGE.md` sections. Use MkDocs Material with separate
-  Markdown pages, persistent left-pane navigation, search, breadcrumbs, and previous/next links;
+- After all planned language features and their conformance requirements are complete, publish the
+  canonical `LANGUAGE.md` and `spec/` corpus as a developer-learning site. Use MkDocs Material with
+  persistent left-pane navigation, search, breadcrumbs, and previous/next links;
   distinguish implemented, planned, deferred, and unresolved material from `CONFORMANCE.md`.
 - Generate a coverage manifest mapping every normative specification section to the site, and fail
   strict builds on uncovered sections, duplicate anchors, broken links, missing navigation entries,
