@@ -1,4 +1,5 @@
-# Caret language specification
+Caret language specification
+============================
 
 The opening section describes the prototype as it currently behaves. Later sections describe the
 planned language and are explicitly separated from implemented behavior.
@@ -94,7 +95,7 @@ The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the planned
 `with`, `outer`, `root`, and `module`, `_`, and numbered holes such as `_1` are reserved and cannot
 be used as binding or parameter names.
 
-### Contract foundation currently implemented
+## Contract foundation currently implemented
 
 The prototype provides first-class unary contracts matching its existing runtime kinds: `Any`,
 `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Scope`, `Sequence`, and `Dictionary`.
@@ -423,13 +424,13 @@ The roles remain separate: `$` groups syntax-level application, `@` reifies a bi
 entity, `#` changes execution stage, and `\\`/`\*` change only the mapping from physical to logical
 indentation.
 
-## Implementation roadmap
+# Implementation roadmap
 
 The following facilities and semantic decisions are planned prerequisites for implementing a
 Caret interpreter in Caret. They describe the current design direction, not behavior implemented
 by this prototype.
 
-### Source text operations
+## Source text operations
 
 The prototype provides the text primitives needed by a Caret lexer:
 
@@ -445,7 +446,7 @@ Text indexes count Unicode code points rather than UTF-16 code units. Slices use
 `[start, end)` bounds. An invalid index, invalid bounds, or failed numeric conversion returns `~`
 instead of throwing for an expected condition.
 
-### Immutable collections
+## Immutable collections
 
 The prototype provides immutable sequences and insertion-ordered dictionaries through:
 
@@ -467,7 +468,7 @@ an absent key from a present key whose value is
 `~`.
 Collection literal syntax is not required for the initial self-interpreter.
 
-### Unified binary functions and operators
+## Unified binary functions and operators
 
 A binary operator and a function taking two parameters are the same kind of callable
 value. Either may be called with prefix notation or placed between its arguments with infix
@@ -515,7 +516,7 @@ That spelling is only a design direction and is not valid Caret syntax.
 Analyzed named infix calls invoke the same callable values as prefix application. A non-callable
 infix target or a callable whose remaining arity is not two produces a located runtime diagnostic.
 
-### Function composition
+## Function composition
 
 `left >> right` creates an ordinary callable that applies `left` and passes its result to `right`:
 
@@ -538,7 +539,7 @@ value is itself callable. Composition uses the ordinary invocation path and ther
 call-depth checks and argument locations. Contract and effect propagation will be added with the
 planned contract/effect system.
 
-### Ungrouped multiline application
+## Ungrouped multiline application
 
 In the current prototype, outside an explicit delimiter, a physical line indented more deeply than
 a non-definition expression continues that expression. With layout modifiers, this rule instead
@@ -569,277 +570,7 @@ More-indented application is implemented by the current parser. Once lambdas are
 indented trailing lambda will be the final call argument; its body will be delimited by its own
 effective logical indentation in the ordinary way.
 
-### Planned layout baseline modifiers
-
-Caret normally derives logical block structure from physical indentation. The planned layout tokens
-`\\` and `\*` allow a region to occupy fewer physical source columns without changing its logical
-nesting. They are layout syntax only: neither token is an expression, operator, function, value,
-scope, binding, effect, or runtime operation.
-
-The relevant distinction is:
-
-```text
-physical indentation
-    columns occupied by source text in the file
-
-effective logical indentation
-    indentation supplied to Caret's ordinary layout parser
-```
-
-Layout handling computes effective logical indentation before ordinary indentation and expression
-parsing. All normal block, continuation, visibility, and evaluation rules then apply unchanged.
-
-#### `\\` adjusts the physical baseline
-
-`\\` is written as the final layout token on a construct that opens an indentation-defined region.
-It pushes the current physical-to-logical mapping and activates an adjusted mapping for the
-following region:
-
-<!-- caret-example: planned -->
-```caret
-with import clientServer \\
-connect url
-send request
-\*
-nextOperation
-```
-
-This has the same logical structure as:
-
-<!-- caret-example: planned -->
-```caret
-with import clientServer
-  connect url
-  send request
-nextOperation
-```
-
-The first nonblank, non-comment body line after `\\` establishes the adjusted physical baseline.
-That baseline maps to one logical child indentation level beneath the opening construct. Further
-physical indentation is interpreted relative to that baseline, preserving sibling and nested
-relationships. The adjustment is structural; it does not subtract a fixed number of source-space
-columns, depend on formatter width, or assign numeric meaning to individual backslash characters.
-Forms such as `\statement` or longer runs of backslashes are not graduated indentation controls.
-
-The marker changes only the baseline mapping. It does not open an additional block, close a block,
-create a semantic scope, change lexical visibility, alter evaluation order, or change the meaning
-of any declaration or expression.
-
-Relative indentation continues normally inside the adjusted region:
-
-<!-- caret-example: planned -->
-```caret
-with import clientServer \\
-response &
-  process response
-!
-  reportFailure
-\*
-```
-
-This is logically equivalent to:
-
-<!-- caret-example: planned -->
-```caret
-with import clientServer
-  response &
-    process response
-  !
-    reportFailure
-```
-
-Physical dedentation may close nested logical constructs according to the active mapping, but it
-does not restore the previous mapping. A `\\` adjustment remains active until a `\*` restoration or
-EOF. The layout processor must not infer the end of the adjustment merely because later source
-appears physically dedented; physical indentation is precisely the dimension being remapped.
-
-Consequently, an explicit restoration is unnecessary when the adjusted mapping may remain active
-through the end of the file:
-
-<!-- caret-example: planned -->
-```caret
-with import clientServer \\
-connect url
-send request
-```
-
-#### `\*` restores the previous mapping
-
-`\*` is normally written alone at the physical indentation appropriate to the adjusted region. It
-contributes no logical statement or indentation event. When a previous mapping exists, it pops the
-current mapping and restores that previous mapping before processing the next significant source
-line:
-
-<!-- caret-example: planned -->
-```caret
-main =
-  with import clientServer \\
-connect url
-send request
-\*
-  finish
-```
-
-`\*` does not mean end `with`, end function, end lambda, end scope, semantic dedent, return, or any
-other control operation. After restoration, the physical indentation of following lines is
-interpreted through the restored mapping.
-
-The markers are state modifiers rather than paired delimiters. An unmatched `\*` is a deterministic
-no-op. An active `\\` at EOF is valid, and EOF silently discards every remaining mapping. Tooling may
-warn about suspicious redundant markers, but such warnings do not alter program semantics.
-
-#### Stacking and nested indentation
-
-Mappings form a stack, so adjusted regions compose without acquiring block semantics:
-
-<!-- caret-example: planned -->
-```caret
-with outerModule \\
-outerCall
-
-with innerModule \\
-innerCall
-\*
-
-anotherOuterCall
-\*
-```
-
-The first `\*` restores the outer adjusted mapping; the second restores the original mapping. Each
-new `\\` anchors its first significant body line one logical child level below its own opening
-construct, even when that construct is already inside an adjusted region.
-
-Conceptually, every significant source line follows this pipeline:
-
-```text
-physical indentation
-    + active structural layout mapping
-    = effective logical indentation
-    -> ordinary Caret layout and expression parsing
-```
-
-There is no parallel expression parser for adjusted regions.
-
-#### Placement, strings, and comments
-
-The layout/lexer layer recognizes the exact `\\` and `\*` tokens before ordinary expression parsing.
-`\\` is valid as the terminal layout token of a header that permits or requires a following
-indentation-defined region, including `with`, function bodies, lambdas, conditionals, and other
-such constructs. A token in a syntactically impossible position may produce a located malformed-
-layout diagnostic. `\*` is a standalone restoration line; its lack of an active mapping is not an
-error.
-
-Marker spellings inside strings retain ordinary string-escape semantics and never affect layout:
-
-<!-- caret-example: planned -->
-```caret
-text = "text\\text"
-```
-
-Comments likewise cannot activate, restore, or otherwise change a layout mapping. Blank and
-comment-only lines do not establish the physical baseline awaited after `\\`.
-
-#### Interaction with `with` and other indentation-defined forms
-
-`with` is the primary motivating form:
-
-<!-- caret-example: planned -->
-```caret
-with import clientServer
-  connect url
-  send request
-```
-
-and:
-
-<!-- caret-example: planned -->
-```caret
-with import clientServer \\
-connect url
-send request
-\*
-```
-
-have identical lexical name resolution, visibility, `outer` behavior, field reification, effects,
-evaluation, and result. If `connect` is exported by the imported module, it resolves identically in
-both bodies.
-
-Function bodies, ungrouped multiline application, continuation indentation, indented or trailing
-lambdas, and nested conditionals all consume effective logical indentation after the same mapping
-step. A source line physically at column zero may therefore remain logically nested while an
-adjustment is active. Once `\*` restores the original mapping, following lines again derive their
-logical indentation from that mapping. None of these constructs receives special parsing rules for
-adjusted regions.
-
-For example, an ordinary function body and a multiline application may use the same transformation:
-
-<!-- caret-example: planned -->
-```caret
-main = \\
-initialize
-run
-\*
-
-result = combine \\
-first
-second
-\*
-```
-
-Likewise, a lambda body may be shifted without changing the lambda or its captures:
-
-<!-- caret-example: planned -->
-```caret
-normalize = text -> \\
-trimmed = trim text
-lowercase trimmed
-\*
-```
-
-#### Diagnostics and formatting
-
-Diagnostics continue to report existing physical source line and column positions. Tooling may
-display effective logical indentation separately, but it must not substitute logical positions for
-physical diagnostic locations. Neither an active mapping at EOF nor an unmatched restoration is a
-syntax error.
-
-A formatter must preserve the semantic effect of layout mappings. It may retain the explicit
-adjusted layout, or on an explicit normalization request rewrite the region using equivalent
-conventional indentation. It must not silently remove `\\` or `\*` while leaving physically shifted
-source unchanged. Moving or reindenting surrounding source must update the physical-to-logical
-mapping as necessary to preserve the same logical program. Formatter policy is not runtime
-semantics.
-
-#### Layout-modifier implementation requirements
-
-The initial implementation must:
-
-1. recognize `\\` outside strings and comments as a layout-baseline modifier;
-2. recognize `\*` outside strings and comments as layout restoration;
-3. retain physical indentation separately from effective logical indentation;
-4. apply the active mapping before ordinary indentation parsing;
-5. preserve relative sibling and nested indentation while a mapping is active;
-6. maintain nested mappings as a stack;
-7. make `\*` restore one previous mapping when available;
-8. make redundant or unmatched `\*` a deterministic no-op;
-9. permit an active `\\` through EOF;
-10. discard every remaining mapping at EOF without error;
-11. keep diagnostic line and column locations physical;
-12. leave runtime semantics, scopes, visibility, contracts, effects, and evaluation unchanged;
-13. use effective indentation uniformly for function bodies, `with`, lambdas, multiline
-    application, conditionals, and every other indentation-defined construct; and
-14. never interpret marker spellings inside strings or comments as layout syntax.
-
-#### Design principle
-
-Caret's indentation determines logical structure, but logical indentation need not always occupy
-the same physical source columns. `\\` temporarily shifts the physical indentation baseline while
-preserving logical nesting, and `\*` restores the previous baseline. The adjusted mapping continues
-until explicitly restored or EOF; ordinary physical dedentation cannot end it because physical
-indentation is what the modifier changes. After effective logical indentation is calculated, all
-normal Caret parsing and semantic rules apply unchanged.
-
-### Core semantic decisions
+## Core semantic decisions
 
 Blocks predeclare their function bindings before executing statements. This supports direct and
 mutual recursion. Other bindings are initialized in source order and cannot be read before their
@@ -892,6 +623,12 @@ they do not silently change these scalar rules.
 The self-interpreter may represent successful and failed operations as named result collections. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
 
+## Not required for self-interpretation
+
+The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
+lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
+immutable collections, named exported collections, and the planned text operations are sufficient.
+
 # Planned language specification
 
 Everything below this heading is canonical design work unless an individual section explicitly
@@ -943,12 +680,6 @@ The empty Collection `[]` has no named/positional distinction. It vacuously sati
 collection contracts compatible with zero elements, without changing identity or acquiring a
 shape. Explicit structural contracts that require actual positions or fields remain unsatisfied.
 
-### Not required for self-interpretation
-
-The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
-lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
-immutable collections, named exported collections, and the planned text operations are sufficient.
-
 ## Contracts, Type Derivation, and Collections
 
 ### Overview
@@ -995,9 +726,9 @@ Its specific collection contract and representation are determined by inference 
 
 ---
 
-# Contracts
+### Contracts
 
-## Contract definition
+#### Contract definition
 
 `contract` constructs a contract.
 
@@ -1031,7 +762,7 @@ An `Int` therefore satisfies all three contracts.
 
 ---
 
-## Contracts as predicates
+#### Contracts as predicates
 
 Every contract may be used as a Boolean membership predicate:
 
@@ -1055,7 +786,7 @@ It does not need to execute a runtime predicate when derivation already proves m
 
 ---
 
-## Contract inference and nominal ascription
+#### Contract inference and nominal ascription
 
 An explicit contract clause confirms membership already carried by a value. Otherwise it attempts
 to establish the named nominal membership by checking every inherited contract and refinement. A
@@ -1086,7 +817,7 @@ external uses instantiate the generalized variables independently. Polymorphic r
 explicit contracts. An instantiation that remains ambiguous when a concrete contract is required
 is a compile-time error at the use site, rather than at the generic declaration.
 
-## Built-in operator contracts and coercions
+#### Built-in operator contracts and coercions
 
 Built-in symbolic operators are pure ordinary callables whose signatures participate in the same
 partial application, overload narrowing, composition, and reflection rules as named functions.
@@ -1130,7 +861,7 @@ named functions until the standard environment explicitly introduces additional 
 operator variants. Merely satisfying a user-defined contract named `Comparable` does not inject an
 implementation into `<`.
 
-### Structural equality capability
+##### Structural equality capability
 
 `Eq` in the operator matrix is the standard structural capability descriptor used by the built-in
 equality operators. Scalar values, null, missing, contract values by descriptor identity,
@@ -1149,7 +880,7 @@ The standard `Eq` descriptor is part of the execution environment used to type t
 operators. A lexical contract binding that shadows its public name does not rewrite those operator
 signatures or manufacture standard Eq membership.
 
-### Truth operations and evaluation
+##### Truth operations and evaluation
 
 `Boolean?~` is exactly the established truth domain: Boolean, null, or missing. Null and missing are
 falsey. `not`, `and`, and `or` normalize their results to `Boolean`; they do not preserve null or
@@ -1160,7 +891,7 @@ branch, and retain the ordinary common-guarantee join for their result.
 Other eager binary operators evaluate operands from left to right before dispatch. All variants in
 this initial matrix have an empty effect set.
 
-### Operator constraint inference and failures
+##### Operator constraint inference and failures
 
 An occurrence of `+` retains its closed numeric/string alternatives while constraints are collected
 across the complete lexical block. A known string operand selects a concatenation alternative; two
@@ -1181,7 +912,7 @@ operator variants specifying accepted pairs, result contracts, overflow, divisio
 rules before those combinations are implemented. This initial matrix defines no implicit widening,
 signedness conversion, or mixed-representation promotion.
 
-## Contract declaration and identity
+#### Contract declaration and identity
 
 Contract declarations are predeclared throughout their lexical block, so their bases may use
 forward references. Direct and indirect contract-derivation cycles are compile-time errors.
@@ -1195,7 +926,7 @@ parameterization arguments. Assigning, returning, or otherwise passing an existi
 preserves its identity. Contract values are comparable by this identity even though ordinary
 callable values are not.
 
-## Contract implication and constraint normalization
+#### Contract implication and constraint normalization
 
 Static contract implication is a conservative, compiler-proven partial order. `A` implies `B` only
 when the compiler can prove that every value satisfying `A` also satisfies `B`. Unknown
@@ -1236,7 +967,7 @@ covariant merely because its current implementation appears read-only.
 
 ---
 
-## Contract composition
+#### Contract composition
 
 `contract` may combine multiple contracts:
 
@@ -1291,7 +1022,7 @@ and transitively all contracts derived by `Number`.
 
 ---
 
-## Type derivation
+### Type derivation
 
 Type derivation is contract inclusion.
 
@@ -1326,7 +1057,7 @@ If several derivation paths lead to `Eq`, the resulting value simply satisfies `
 
 ---
 
-## Refinement predicates
+#### Refinement predicates
 
 Ordinary pure unary Boolean functions may participate in contracts.
 
@@ -1372,7 +1103,7 @@ Thus Caret uses the same mechanism for:
 
 ---
 
-## Contracts do not contain operations
+#### Contracts do not contain operations
 
 A contract does not contain a method table or list of allowed operations.
 
@@ -1421,7 +1152,7 @@ Operations belong to functions, not types.
 
 ---
 
-## Functional polymorphism
+#### Functional polymorphism
 
 Several definitions of the same function may specialize different parameter contracts.
 
@@ -1496,7 +1227,7 @@ redundant `Any` and duplicate conjunction terms, the later declaration retains t
 otherwise identical parameter domains distinct. Both declaration failures occur before program
 effects execute.
 
-## Overload applicability
+#### Overload applicability
 
 Applicability testing is observational and never acquires nominal membership. A nominal parameter
 requirement is applicable only when the argument already carries that descriptor, or a nominal
@@ -1529,7 +1260,7 @@ A name with only one function definition does not perform overload selection. It
 boundary retains the ordinary `CONTRACT_VIOLATION` diagnostic and existing attribution behavior.
 Introducing overload support must not silently change diagnostics for ordinary single functions.
 
-## Partial overload sets
+#### Partial overload sets
 
 Every overload variant has the same declared arity. Ordinary prefix application narrows the set as
 each argument fills the next parameter. Hole-based partial application uses the hole layout to map
@@ -1559,9 +1290,9 @@ selection completes.
 
 ---
 
-# Collections
+### Collections
 
-## General collection contract
+#### General collection contract
 
 `Collection` is the fundamental contract for values containing zero or more elements.
 
@@ -1622,7 +1353,7 @@ Packed T
 
 ---
 
-## Parameterized collection contracts
+##### Parameterized collection contracts
 
 Collection contracts may be parameterized.
 
@@ -1672,9 +1403,9 @@ a generic-type grammar.
 
 ---
 
-# Collection literals
+#### Collection literals
 
-## Universal collection syntax
+##### Universal collection syntax
 
 Caret has one collection literal syntax:
 
@@ -1710,7 +1441,7 @@ Different contracts may result in different behavior and physical representation
 
 ---
 
-## Empty collection
+##### Empty collection
 
 An empty collection is:
 
@@ -1735,7 +1466,7 @@ future explicit `NonEmpty` contract, still requires its declared elements or fie
 
 ---
 
-## Heterogeneous collections
+##### Heterogeneous collections
 
 Collections may contain values of different types:
 
@@ -1760,7 +1491,7 @@ Individual elements retain enough metadata to determine their actual contracts a
 
 ---
 
-## Homogeneous collections
+##### Homogeneous collections
 
 A collection such as:
 
@@ -1791,7 +1522,7 @@ The implementation need not repeat identical type metadata for every element.
 
 ---
 
-## Collection expressions
+##### Collection expressions
 
 Elements inside `[]` are ordinary Caret expressions.
 
@@ -1823,9 +1554,9 @@ extends an element through the closing bracket; use parentheses when another ele
 
 ---
 
-# Named fields and dictionaries
+#### Named fields and dictionaries
 
-## Named elements
+##### Named elements
 
 A non-empty Collection has exactly one structural shape. A positional Collection contains only
 unnamed values, while a named Collection contains only Field values. Static exported fields and
@@ -1883,7 +1614,7 @@ Analysis must report the located diagnostic `MIXED_COLLECTION_SHAPE` at the firs
 shape conflicts with the earlier elements, retaining the collection literal as context. The same
 diagnostic applies whether the Field was produced by `^` or by `field`.
 
-## Exported-block shorthand
+##### Exported-block shorthand
 
 When a function or ordinary block contains exported bindings, its result is the named Collection
 formed from those fields. These values are equivalent:
@@ -1925,7 +1656,7 @@ scopes do not appear as reflectable values merely because the source block conta
 
 ---
 
-## Dynamic keys
+##### Dynamic keys
 
 For keys that cannot be expressed as static identifiers, ordinary field construction may be used:
 
@@ -1959,7 +1690,7 @@ Caret does not require a separate `{ key: value }` literal syntax.
 
 ---
 
-## Nested collections
+##### Nested collections
 
 Collections may contain collections:
 
@@ -1998,9 +1729,9 @@ No separate object, record, JSON, or array literal syntax is required.
 
 ---
 
-# Collection metadata
+#### Collection metadata
 
-## Logical versus physical metadata
+##### Logical versus physical metadata
 
 Caret distinguishes between:
 
@@ -2029,7 +1760,7 @@ where some values are represented as integers and others as floating-point value
 
 ---
 
-## Per-element metadata
+##### Per-element metadata
 
 A heterogeneous collection may require metadata for each element.
 
@@ -2059,7 +1790,7 @@ The observable semantics must only preserve sufficient information to recover ea
 
 ---
 
-## Shared collection metadata
+##### Shared collection metadata
 
 When every element shares the same relevant metadata, that metadata may belong to the collection instead of every element.
 
@@ -2095,7 +1826,7 @@ This sharing is semantically invisible and may be performed automatically.
 
 ---
 
-## Contract-homogeneous but representation-heterogeneous collections
+##### Contract-homogeneous but representation-heterogeneous collections
 
 A common contract does not necessarily provide enough information to remove all per-element metadata.
 
@@ -2127,9 +1858,9 @@ The collection may store `Number` as shared metadata while retaining enough per-
 
 ---
 
-# Packed collections
+#### Packed collections
 
-## Shared representation
+##### Shared representation
 
 A packed collection has a uniform statically known element representation.
 
@@ -2152,7 +1883,7 @@ Individual elements require no separate type or layout descriptor.
 
 ---
 
-## Packed versus homogeneous
+##### Packed versus homogeneous
 
 A homogeneous semantic contract is weaker than a packed representation.
 
@@ -2194,7 +1925,7 @@ Collection T !=> Packed T
 
 ---
 
-## Packed structural values
+##### Packed structural values
 
 Packed elements need not be primitive scalars.
 
@@ -2238,7 +1969,7 @@ This is suitable for:
 
 ---
 
-## Metadata placement rule
+##### Metadata placement rule
 
 The semantic rule is:
 
@@ -2272,7 +2003,7 @@ has a complete common element layout and needs no per-element representation met
 
 ---
 
-# Relationship to formats
+# Relationship to formats (see [formats](#Formats))
 
 Contracts and physical representation are separate concepts.
 
@@ -3298,7 +3029,7 @@ The compiler/runtime derives both directions from the same `Format` value wherev
 
 ---
 
-## Formats as relations
+### Formats as relations
 
 A format is relational rather than inherently directional.
 
@@ -3343,7 +3074,7 @@ The format system must not implicitly search arbitrary solution spaces when neit
 
 ---
 
-## `Format` as a first-class value
+### `Format` as a first-class value
 
 `Format` is a first-class Caret value.
 
@@ -3390,7 +3121,7 @@ They should normally be library-level functions or standard format primitives ra
 
 ---
 
-## Formats as specialized collections
+### Formats as specialized collections
 
 `Format` satisfies the general Caret `Collection` model.
 
@@ -3452,7 +3183,7 @@ Version2 =
 
 ---
 
-## Format composition
+### Format composition
 
 Caret's normal `>>` composition operator is also used for format construction and relational composition.
 
@@ -3496,7 +3227,7 @@ This allows format composition to define both encoder and decoder behavior from 
 
 ---
 
-## Primitive formats
+### Primitive formats
 
 Primitive representation formats are themselves `Format` values.
 
@@ -3552,7 +3283,7 @@ Object =
 
 ---
 
-## Fields
+### Fields
 
 A field relates a named member of an in-memory data structure to a representation described by another format.
 
@@ -3604,7 +3335,7 @@ No separate name-literal syntax is required.
 
 ---
 
-## References to earlier fields
+### References to earlier fields
 
 Later format elements may depend on values decoded or encoded earlier in the same structure.
 
@@ -3632,7 +3363,7 @@ The precise dependency-resolution rules may be expanded later, but dependencies 
 
 ---
 
-## Constant representation elements
+### Constant representation elements
 
 A constant format element represents data that appears in the external representation but normally does not need to appear as a logical in-memory field.
 
@@ -3676,7 +3407,7 @@ This is useful for:
 
 ---
 
-## Repeated formats
+### Repeated formats
 
 Repeated structures are created by format combinators rather than special looping syntax.
 
@@ -3719,7 +3450,7 @@ The implementation should avoid requiring the user to write separate loops for e
 
 ---
 
-## Conditional formats
+### Conditional formats
 
 A format may conditionally include another format.
 
@@ -3756,7 +3487,7 @@ The compiler/runtime should derive both directions from the same condition where
 
 ---
 
-## General choices and format selection
+### General choices and format selection
 
 Caret has a general choice expression. It is also used by formats to describe alternatives based on
 data patterns or discriminators:
@@ -3789,7 +3520,7 @@ Pattern matching in formats should therefore be treated relationally where pract
 
 ---
 
-## Format constraints
+### Format constraints
 
 Ordinary Caret contracts may constrain values represented by a format.
 
@@ -3824,7 +3555,7 @@ This connects format validation directly to Caret's normal contract system.
 
 ---
 
-## Automatic bidirectionality
+### Automatic bidirectionality
 
 Format components should define both directions automatically whenever their relation contains enough information to do so.
 
@@ -3856,7 +3587,7 @@ The common format description should generate both behaviors.
 
 ---
 
-## Explicit codecs
+### Explicit codecs
 
 Not every transformation can be inverted automatically.
 
@@ -3904,7 +3635,7 @@ They are components of the format relation itself.
 
 ---
 
-## Codec composition
+### Codec composition
 
 Explicit codecs compose with ordinary declarative formats.
 
@@ -3952,7 +3683,7 @@ The complete encoder and decoder are derived from the composed relation.
 
 ---
 
-## Representation transformations versus logical transformations
+### Representation transformations versus logical transformations
 
 A codec may alter either the physical representation or the logical value.
 
@@ -3988,7 +3719,7 @@ Libraries may provide more descriptive wrapper functions for common purposes, bu
 
 ---
 
-## Purity of format definitions
+### Purity of format definitions
 
 A `Format` describes data relationships and should normally be pure.
 
@@ -4027,7 +3758,7 @@ This separation must be preserved.
 
 ---
 
-## Decode and encode operations
+### Decode and encode operations
 
 The standard library should expose explicit directional operations:
 
@@ -4053,7 +3784,7 @@ A future relational application syntax may permit direction to be inferred from 
 
 ---
 
-## Failure
+### Failure
 
 Decoding may fail because:
 
@@ -4091,7 +3822,7 @@ Errors should be capable of carrying useful information such as:
 
 ---
 
-## Canonical representations and round trips
+### Canonical representations and round trips
 
 A bidirectional format does not necessarily imply that every raw representation round-trips byte-for-byte.
 
@@ -4123,7 +3854,7 @@ Formats may therefore normalize representations.
 
 ---
 
-## Relationship to Caret collections
+### Relationship to Caret collections
 
 Formats decode into ordinary Caret values.
 
@@ -4163,7 +3894,7 @@ The same value may therefore:
 
 ---
 
-## Formats are independent of transport
+### Formats are independent of transport
 
 A format describes representation, not where that representation comes from.
 
@@ -4193,7 +3924,7 @@ This allows the same `Format` to be reused across files, REST clients, servers, 
 
 ---
 
-## Extensibility
+### Extensibility
 
 Most format functionality should be implementable as ordinary Caret functions.
 
@@ -4226,7 +3957,7 @@ Do not hard-code individual file formats, protocol fields, compression algorithm
 
 ---
 
-## Reflection
+### Reflection
 
 Formats are first-class values and should be reflectable.
 
@@ -4259,7 +3990,7 @@ Format reflection should make it possible to build tooling such as:
 
 ---
 
-## Implementation requirements
+### Implementation requirements
 
 The initial implementation should support at minimum:
 
@@ -4310,7 +4041,7 @@ These later capabilities should not require changing the fundamental model that 
 
 ---
 
-## Design principle
+### Design principle
 
 The central principle is:
 
@@ -4367,7 +4098,7 @@ Lambda parameters are separated by whitespace, consistently with ordinary Caret 
 
 ---
 
-## Lambda bodies
+### Lambda bodies
 
 A lambda may contain a single expression:
 
@@ -4400,7 +4131,7 @@ No braces, commas, or explicit `return` keyword are required.
 
 ---
 
-## Parameter contracts
+### Parameter contracts
 
 Lambda parameters use the same contract syntax as named-function parameters.
 
@@ -4437,7 +4168,7 @@ The compiler should statically verify contracts wherever possible and retain run
 
 ---
 
-## Arity
+### Arity
 
 A lambda's arity is the number of explicitly declared parameters.
 
@@ -4471,7 +4202,7 @@ creates an ordinary two-argument function and may be used anywhere another binar
 
 ---
 
-## Application
+### Application
 
 Lambda values are called using ordinary whitespace application.
 
@@ -4495,7 +4226,7 @@ Application is left-associative according to the normal Caret rules.
 
 ---
 
-## Partial application
+### Partial application
 
 Multi-parameter lambdas support ordinary partial application.
 
@@ -4535,7 +4266,7 @@ inside = between 0 _ 10
 
 ---
 
-## Lambdas versus holes
+### Lambdas versus holes
 
 Caret supports both explicit lambdas and implicit partial application through `_`.
 
@@ -4573,7 +4304,7 @@ A hole `_` always denotes a future argument to an existing application expressio
 
 ---
 
-## Closures
+### Closures
 
 A lambda may reference bindings from its lexical environment.
 
@@ -4607,7 +4338,7 @@ The compiler may copy, borrow, share, or move captured values according to the a
 
 ---
 
-## Capture timing
+### Capture timing
 
 Captured expressions are evaluated according to normal lexical evaluation semantics when the closure is created.
 
@@ -4630,7 +4361,7 @@ where supplied expressions are evaluated when the partial function is constructe
 
 ---
 
-## Purity and effects
+### Purity and effects
 
 Lambda effects are inferred exactly like effects of named functions.
 
@@ -4690,7 +4421,7 @@ Purity must always be verified from the lambda body; the contract is a requireme
 
 ---
 
-## Lambda return values
+### Lambda return values
 
 A lambda returns the value produced by its body.
 
@@ -4716,7 +4447,7 @@ surrounding higher-order parameter. Do not introduce a separate lambda-specific 
 
 ---
 
-## Nullary lambdas
+### Nullary lambdas
 
 Caret may represent a zero-argument anonymous function as:
 
@@ -4754,7 +4485,7 @@ The exact invocation syntax for a stored nullary function should remain consiste
 
 ---
 
-## Reification
+### Reification
 
 A lambda is already a function value.
 
@@ -4778,7 +4509,7 @@ Do not redefine `@` as lambda syntax.
 
 ---
 
-## Higher-order functions
+### Higher-order functions
 
 Lambdas are ordinary function values and may be:
 
@@ -4827,7 +4558,7 @@ Both may support equivalent partial use where appropriate, but reflection must p
 
 ---
 
-## Function composition
+### Function composition
 
 Lambda values participate in ordinary `>>` composition.
 
@@ -4853,7 +4584,7 @@ A composition is pure only if every participating function is pure.
 
 ---
 
-## Lambdas in collection operations
+### Lambdas in collection operations
 
 Lambdas may be used directly with collection functions.
 
@@ -4885,7 +4616,7 @@ Where a contract must be referenced repeatedly or participate in static reasonin
 
 ---
 
-## Lambdas and SIMD
+### Lambdas and SIMD
 
 Pure lambdas may participate in SIMD application when their operations are vectorizable.
 
@@ -4913,7 +4644,7 @@ SIMD support does not require separate lambda syntax.
 
 ---
 
-## Lambdas in collection definitions
+### Lambdas in collection definitions
 
 Because collections contain ordinary Caret expressions, lambda values may be stored directly in data structures.
 
@@ -4933,7 +4664,7 @@ Likewise, a lambda may calculate a field value through immediate application or 
 
 ---
 
-## Parsing and precedence
+### Parsing and precedence
 
 `->` introduces a lambda and has low precedence.
 
@@ -4980,7 +4711,7 @@ layout mapping has been applied.
 
 ---
 
-## Implementation requirements
+### Implementation requirements
 
 The initial implementation should support at minimum:
 
@@ -5033,7 +4764,7 @@ These implementation optimizations must not alter the semantic rule that a lambd
 
 ---
 
-## Design principle
+### Design principle
 
 Lambda syntax should remain a minimal anonymous form of ordinary Caret function syntax.
 
@@ -5112,7 +4843,7 @@ The cycle repeatedly transforms `S` until `condition` becomes false.
 
 ---
 
-## Fundamental semantics
+### Fundamental semantics
 
 Given:
 
@@ -5148,7 +4879,7 @@ The final state is the value of the entire `cycle` expression.
 
 ---
 
-## Initialization
+### Initialization
 
 `init` creates the initial state.
 
@@ -5183,7 +4914,7 @@ The exact handling of nullary functions follows the normal Caret function-refere
 
 ---
 
-## Named collection state
+### Named collection state
 
 A particularly important use of `cycle` is iteration over a named Collection.
 
@@ -5233,7 +4964,7 @@ The exact collection/state update functions may be provided by the standard libr
 
 The important semantic rule is that each phase receives the complete current state and returns the complete next state.
 
-### Previous and next state views
+#### Previous and next state views
 
 Cycle conditions, bodies, and preparation phases execute with a cycle-state lookup view over the
 state Collection in addition to their ordinary lexical parameters. This view is an evaluation and
@@ -5275,7 +5006,7 @@ exported state writes or access a changing `next` value. This preserves conditio
 
 ---
 
-## Functional semantics
+### Functional semantics
 
 Cycles are semantically compatible with immutable data.
 
@@ -5310,7 +5041,7 @@ Such optimizations must not change the observable immutable semantics.
 
 ---
 
-## Equivalence to tail recursion
+### Equivalence to tail recursion
 
 A cycle can be expressed as tail recursion.
 
@@ -5346,7 +5077,7 @@ It is a convenient and optimizable representation of a common recursive state tr
 
 ---
 
-## Body and prepare are separate
+### Body and prepare are separate
 
 `body` and `prepare` deliberately have separate roles.
 
@@ -5398,7 +5129,7 @@ Keeping `body` and `prepare` separate makes conventional iteration easy to expre
 
 ---
 
-## Omitted prepare phase
+### Omitted prepare phase
 
 When no separate preparation step is needed, the identity function may be used.
 
@@ -5418,7 +5149,7 @@ prepare : S -> S
 
 ---
 
-## Omitted body phase
+### Omitted body phase
 
 Similarly, a cycle whose meaningful work occurs entirely in the preparation transformation may use `identity` as its body:
 
@@ -5430,7 +5161,7 @@ No special loop form is required.
 
 ---
 
-## Example: counting
+### Example: counting
 
 Conceptually:
 
@@ -5467,7 +5198,7 @@ with value:
 
 ---
 
-## Example: accumulation
+### Example: accumulation
 
 ```caret
 initial =
@@ -5501,7 +5232,7 @@ This is preferable to requiring a separate externally mutable accumulator.
 
 ---
 
-## Lambdas with cycles
+### Lambdas with cycles
 
 Cycle phases may be supplied directly as lambdas.
 
@@ -5529,7 +5260,7 @@ No separate "loop lambda" syntax is required.
 
 ---
 
-## Partial application
+### Partial application
 
 Because `cycle` is an ordinary higher-order function, partial application may be used to define reusable cycle forms.
 
@@ -5551,7 +5282,7 @@ The exact reusable abstractions should preferably be library functions rather th
 
 ---
 
-## State collection shape
+### State collection shape
 
 The initial implementation should require a stable state shape across a cycle unless the type system can prove a broader compatible type.
 
@@ -5602,7 +5333,7 @@ The initial implementation may reject incompatible state-shape changes.
 
 ---
 
-## Contracts
+### Contracts
 
 Cycle phase contracts follow ordinary Caret rules.
 
@@ -5633,7 +5364,7 @@ A phase that violates the required state contract causes a compile-time error wh
 
 ---
 
-## Purity and effects
+### Purity and effects
 
 `cycle` itself does not imply mutation or effects.
 
@@ -5675,7 +5406,7 @@ Effects must not be hidden merely because they occur inside iteration.
 
 ---
 
-## Condition purity
+### Condition purity
 
 The cycle condition must normally be pure.
 
@@ -5693,7 +5424,7 @@ The initial implementation should require cycle conditions to be pure.
 
 ---
 
-## State ownership
+### State ownership
 
 Cycle state follows normal Caret ownership and lifetime rules.
 
@@ -5717,7 +5448,7 @@ Functional cycle semantics must therefore not imply mandatory copying.
 
 ---
 
-## Cycles over collections
+### Cycles over collections
 
 Collection iteration can be implemented using `cycle`, although high-level collection operations should remain available.
 
@@ -5738,7 +5469,7 @@ Use `cycle` when the iteration requires explicit multi-value state or a more gen
 
 ---
 
-## Cycles and SIMD
+### Cycles and SIMD
 
 A cycle may be optimized using SIMD when its transformations satisfy normal SIMD requirements.
 
@@ -5756,7 +5487,7 @@ The compiler may nevertheless auto-vectorize suitable pure cycles where safe.
 
 ---
 
-## Cycles and formats
+### Cycles and formats
 
 Streaming or incremental format processing may eventually use cycles internally.
 
@@ -5777,7 +5508,7 @@ The format system should not require application programmers to manually write s
 
 ---
 
-## Early termination
+### Early termination
 
 A future version of Caret may support explicit cycle-control values such as:
 
@@ -5824,21 +5555,21 @@ condition s =
 
 ---
 
-## Nested cycles
+### Nested cycles
 
 A cycle is an expression and may therefore be used inside another cycle.
 
 Example conceptually:
 
 ```caret
-outerResult =
-  cycle outerInitial outerCondition
-    (outer ->
+outsideResult =
+  cycle outsideInitial outsideCondition
+    (outside ->
       innerResult =
         cycle innerInitial innerCondition innerBody innerPrepare
 
-      combine outer innerResult)
-    outerPrepare
+      combine outside innerResult)
+    outsidePrepare
 ```
 
 No special nesting syntax is required.
@@ -5847,7 +5578,7 @@ Each cycle has its own state value.
 
 ---
 
-## Relationship to conventional loops
+### Relationship to conventional loops
 
 Common imperative loop forms can be expressed through `cycle`.
 
@@ -5889,7 +5620,7 @@ Libraries may provide convenience abstractions where useful.
 
 ---
 
-## Implementation model
+### Implementation model
 
 The compiler should initially lower:
 
@@ -5928,7 +5659,7 @@ No intermediate state copies are required unless observable semantics demand the
 
 ---
 
-## Implementation requirements
+### Implementation requirements
 
 The initial implementation should support at minimum:
 
@@ -5956,7 +5687,7 @@ The initial implementation may postpone:
 
 ---
 
-## Design principle
+### Design principle
 
 A Caret cycle is not fundamentally a mutable loop.
 
@@ -13571,6 +13302,277 @@ artifact
 ```
 
 Client/server separation is one application of this mechanism, not a special language feature.
+
+### Planned layout baseline modifiers
+
+Caret normally derives logical block structure from physical indentation. The planned layout tokens
+`\\` and `\*` allow a region to occupy fewer physical source columns without changing its logical
+nesting. They are layout syntax only: neither token is an expression, operator, function, value,
+scope, binding, effect, or runtime operation.
+
+The relevant distinction is:
+
+```text
+physical indentation
+    columns occupied by source text in the file
+
+effective logical indentation
+    indentation supplied to Caret's ordinary layout parser
+```
+
+Layout handling computes effective logical indentation before ordinary indentation and expression
+parsing. All normal block, continuation, visibility, and evaluation rules then apply unchanged.
+
+#### `\\` adjusts the physical baseline
+
+`\\` is written as the final layout token on a construct that opens an indentation-defined region.
+It pushes the current physical-to-logical mapping and activates an adjusted mapping for the
+following region:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+connect url
+send request
+\*
+nextOperation
+```
+
+This has the same logical structure as:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer
+  connect url
+  send request
+nextOperation
+```
+
+The first nonblank, non-comment body line after `\\` establishes the adjusted physical baseline.
+That baseline maps to one logical child indentation level beneath the opening construct. Further
+physical indentation is interpreted relative to that baseline, preserving sibling and nested
+relationships. The adjustment is structural; it does not subtract a fixed number of source-space
+columns, depend on formatter width, or assign numeric meaning to individual backslash characters.
+Forms such as `\statement` or longer runs of backslashes are not graduated indentation controls.
+
+The marker changes only the baseline mapping. It does not open an additional block, close a block,
+create a semantic scope, change lexical visibility, alter evaluation order, or change the meaning
+of any declaration or expression.
+
+Relative indentation continues normally inside the adjusted region:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+response &
+  process response
+!
+  reportFailure
+\*
+```
+
+This is logically equivalent to:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer
+  response &
+    process response
+  !
+    reportFailure
+```
+
+Physical dedentation may close nested logical constructs according to the active mapping, but it
+does not restore the previous mapping. A `\\` adjustment remains active until a `\*` restoration or
+EOF. The layout processor must not infer the end of the adjustment merely because later source
+appears physically dedented; physical indentation is precisely the dimension being remapped.
+
+Consequently, an explicit restoration is unnecessary when the adjusted mapping may remain active
+through the end of the file:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+connect url
+send request
+```
+
+#### `\*` restores the previous mapping
+
+`\*` is normally written alone at the physical indentation appropriate to the adjusted region. It
+contributes no logical statement or indentation event. When a previous mapping exists, it pops the
+current mapping and restores that previous mapping before processing the next significant source
+line:
+
+<!-- caret-example: planned -->
+```caret
+main =
+  with import clientServer \\
+connect url
+send request
+\*
+  finish
+```
+
+`\*` does not mean end `with`, end function, end lambda, end scope, semantic dedent, return, or any
+other control operation. After restoration, the physical indentation of following lines is
+interpreted through the restored mapping.
+
+The markers are state modifiers rather than paired delimiters. An unmatched `\*` is a deterministic
+no-op. An active `\\` at EOF is valid, and EOF silently discards every remaining mapping. Tooling may
+warn about suspicious redundant markers, but such warnings do not alter program semantics.
+
+#### Stacking and nested indentation
+
+Mappings form a stack, so adjusted regions compose without acquiring block semantics:
+
+<!-- caret-example: planned -->
+```caret
+with outerModule \\
+outerCall
+
+with innerModule \\
+innerCall
+\*
+
+anotherOuterCall
+\*
+```
+
+The first `\*` restores the outer adjusted mapping; the second restores the original mapping. Each
+new `\\` anchors its first significant body line one logical child level below its own opening
+construct, even when that construct is already inside an adjusted region.
+
+Conceptually, every significant source line follows this pipeline:
+
+```text
+physical indentation
+    + active structural layout mapping
+    = effective logical indentation
+    -> ordinary Caret layout and expression parsing
+```
+
+There is no parallel expression parser for adjusted regions.
+
+#### Placement, strings, and comments
+
+The layout/lexer layer recognizes the exact `\\` and `\*` tokens before ordinary expression parsing.
+`\\` is valid as the terminal layout token of a header that permits or requires a following
+indentation-defined region, including `with`, function bodies, lambdas, conditionals, and other
+such constructs. A token in a syntactically impossible position may produce a located malformed-
+layout diagnostic. `\*` is a standalone restoration line; its lack of an active mapping is not an
+error.
+
+Marker spellings inside strings retain ordinary string-escape semantics and never affect layout:
+
+<!-- caret-example: planned -->
+```caret
+text = "text\\text"
+```
+
+Comments likewise cannot activate, restore, or otherwise change a layout mapping. Blank and
+comment-only lines do not establish the physical baseline awaited after `\\`.
+
+#### Interaction with `with` and other indentation-defined forms
+
+`with` is the primary motivating form:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer
+  connect url
+  send request
+```
+
+and:
+
+<!-- caret-example: planned -->
+```caret
+with import clientServer \\
+connect url
+send request
+\*
+```
+
+have identical lexical name resolution, visibility, `outer` behavior, field reification, effects,
+evaluation, and result. If `connect` is exported by the imported module, it resolves identically in
+both bodies.
+
+Function bodies, ungrouped multiline application, continuation indentation, indented or trailing
+lambdas, and nested conditionals all consume effective logical indentation after the same mapping
+step. A source line physically at column zero may therefore remain logically nested while an
+adjustment is active. Once `\*` restores the original mapping, following lines again derive their
+logical indentation from that mapping. None of these constructs receives special parsing rules for
+adjusted regions.
+
+For example, an ordinary function body and a multiline application may use the same transformation:
+
+<!-- caret-example: planned -->
+```caret
+main = \\
+initialize
+run
+\*
+
+result = combine \\
+first
+second
+\*
+```
+
+Likewise, a lambda body may be shifted without changing the lambda or its captures:
+
+<!-- caret-example: planned -->
+```caret
+normalize = text -> \\
+trimmed = trim text
+lowercase trimmed
+\*
+```
+
+#### Diagnostics and formatting
+
+Diagnostics continue to report existing physical source line and column positions. Tooling may
+display effective logical indentation separately, but it must not substitute logical positions for
+physical diagnostic locations. Neither an active mapping at EOF nor an unmatched restoration is a
+syntax error.
+
+A formatter must preserve the semantic effect of layout mappings. It may retain the explicit
+adjusted layout, or on an explicit normalization request rewrite the region using equivalent
+conventional indentation. It must not silently remove `\\` or `\*` while leaving physically shifted
+source unchanged. Moving or reindenting surrounding source must update the physical-to-logical
+mapping as necessary to preserve the same logical program. Formatter policy is not runtime
+semantics.
+
+#### Layout-modifier implementation requirements
+
+The initial implementation must:
+
+1. recognize `\\` outside strings and comments as a layout-baseline modifier;
+2. recognize `\*` outside strings and comments as layout restoration;
+3. retain physical indentation separately from effective logical indentation;
+4. apply the active mapping before ordinary indentation parsing;
+5. preserve relative sibling and nested indentation while a mapping is active;
+6. maintain nested mappings as a stack;
+7. make `\*` restore one previous mapping when available;
+8. make redundant or unmatched `\*` a deterministic no-op;
+9. permit an active `\\` through EOF;
+10. discard every remaining mapping at EOF without error;
+11. keep diagnostic line and column locations physical;
+12. leave runtime semantics, scopes, visibility, contracts, effects, and evaluation unchanged;
+13. use effective indentation uniformly for function bodies, `with`, lambdas, multiline
+    application, conditionals, and every other indentation-defined construct; and
+14. never interpret marker spellings inside strings or comments as layout syntax.
+
+#### Design principle
+
+Caret's indentation determines logical structure, but logical indentation need not always occupy
+the same physical source columns. `\\` temporarily shifts the physical indentation baseline while
+preserving logical nesting, and `\*` restores the previous baseline. The adjusted mapping continues
+until explicitly restored or EOF; ordinary physical dedentation cannot end it because physical
+indentation is what the modifier changes. After effective logical indentation is calculated, all
+normal Caret parsing and semantic rules apply unchanged.
+
 
 
 ### Compiler target and compatibility
