@@ -6,7 +6,8 @@ Caret is an experimental concise programming language. Its syntax should remove 
 
 The current implementation is a Java 21 tree-walking interpreter.
 
-Read `README.md` and `LANGUAGE.md` before making architectural or syntactic changes.
+Read `README.md`, `LANGUAGE.md`, and the linked canonical feature documents relevant to the change
+before making architectural or syntactic changes.
 
 ## Core design principles
 
@@ -198,15 +199,17 @@ lambdas, and ordinary expressions; it lowers to the ordinary callable path.
   environment assignments, command chains, or substitutions inside the `bash -lc` program string;
   those command shapes do not match the project's persistent Gradle-only approval rules.
 * Run the full test suite after changes.
-* Update `LANGUAGE.md` whenever observable language behavior changes.
+* Update the canonical owning document under `spec/` whenever observable language behavior changes.
+  Update `LANGUAGE.md` only for corpus navigation, global invariants, or terminology shared by the
+  whole language.
 * Update `WEB_INTRODUCTION.md` whenever a language feature is added or altered so the public-facing
   description and examples remain accurate.
 * Include representative Caret programs as integration tests.
 * For every newly implemented language feature, add or extend a runnable `.caret` example that
   demonstrates the feature, and exercise that example from the integration test suite.
-* `LANGUAGE.md` remains the canonical language specification. After the Phase 13 documentation
-  generator exists, do not hand-edit generated site pages; update their canonical inputs and
-  regenerate them instead.
+* `LANGUAGE.md` and its linked `spec/` documents collectively remain the canonical language
+  specification. After the Phase 13 documentation generator exists, do not hand-edit generated site
+  pages; update these canonical inputs and regenerate them instead.
 * The final documentation release must provide a MkDocs Material site split into approachable
   Markdown pages with left-pane navigation, plus a shared-source “Learn Caret in Y Minutes” entry.
   Published examples must be executable or explicitly labeled conceptual/planned.

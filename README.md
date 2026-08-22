@@ -29,9 +29,10 @@ interpreter. The current prototype supports:
 - environment-relative effect identities and mixed declaration clauses, including explicit function
   allowances, callable-value constraints, and effectful arrow contracts.
 
-This is deliberately a language experiment, not a production compiler. [LANGUAGE.md](LANGUAGE.md)
-describes both the implemented language sketch and the larger planned language. Features described
-there as planned are not necessarily available in this prototype. [PLAN.md](PLAN.md) gives the
+This is deliberately a language experiment, not a production compiler. The
+[language specification index](LANGUAGE.md) and its linked canonical feature documents describe
+both the implemented language sketch and the larger planned language. Features described there as
+planned are not necessarily available in this prototype. [PLAN.md](PLAN.md) gives the
 implementation roadmap, and [CONFORMANCE.md](CONFORMANCE.md) maps specification requirements to
 their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS.md) inventories
 every current diagnostic message variant and its exact fixture or focused test evidence.
@@ -94,9 +95,9 @@ stages the remainder of its current expression boundary rather than participatin
 operator precedence. The standard compiler environment remains unresolved, and no staging support
 is implemented yet.
 
-After the language and conformance roadmap is complete, the project plans to generate a searchable
-MkDocs Material learning site from `LANGUAGE.md`, split into approachable Markdown pages with a
-left-hand table of contents. The same release-hardening work will produce a runnable, implemented-only
+After the language and conformance roadmap is complete, the project plans to publish the canonical
+feature documents as a searchable MkDocs Material learning site with a left-hand table of contents.
+The same release-hardening work will produce a runnable, implemented-only
 “Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
 
 See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable

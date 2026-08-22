@@ -1,6 +1,7 @@
 # Caret language conformance matrix
 
-This matrix tracks the normative requirements in [LANGUAGE.md](LANGUAGE.md). A feature is
+This matrix tracks the normative requirements in the [language specification index](LANGUAGE.md)
+and its linked canonical feature documents. A feature is
 `implemented` only when the current Java prototype supports it and the row names automated test and
 runnable-example evidence. `planned` behavior is specified but unavailable, `deferred` behavior is
 explicitly postponed by the specification, and `unresolved` behavior still needs a language-design
@@ -231,7 +232,7 @@ reused for another behavior.
 | COMPILER-002       | Interpreted and compiled modes agree on values, ordering, reflection, diagnostics, streams, and status.                   | planned     | `—`                                                                                                                                                                       | `—`                                        | Shared conformance fixtures are mandatory.                                             |
 | COMPILER-ABI-001   | The JVM backend uses opaque class names, a documented facade, and versioned ABI with rejection/recompile on incompatibility. | planned   | `—`                                                                                                                                                                       | `—`                                        | Backend-specific ABI never defines portable Caret semantics.                           |
 | OPT-001            | Optimizations preserve observable semantics and can be disabled for differential testing.                                 | planned     | `—`                                                                                                                                                                       | `—`                                        | Includes pure folding, closure/cycle/SIMD/format/rule specialization.                  |
-| DOCS-SITE-001      | A generated Markdown site splits canonical `LANGUAGE.md` into navigable learning pages with left-pane contents/search.   | planned     | `—` | `—` | MkDocs Material is the initial renderer; generated pages are not canonical sources.    |
+| DOCS-SITE-001      | A generated site publishes the canonical specification corpus with left-pane navigation and search.                     | planned     | `—` | `—` | MkDocs Material is the initial renderer; canonical inputs remain in `LANGUAGE.md` and `spec/`. |
 | DOCS-COVERAGE-001  | Every normative language section is mapped to the site with valid links, navigation, and synchronized conformance status. | planned    | `—` | `—` | Strict generation rejects omissions, contradictions, or non-reproducible output.       |
 | DOCS-EXAMPLE-001   | Every published Caret example is executable or explicitly marked conceptual/planned.                                     | planned     | `—` | `—` | Implemented examples run through the integration harness.                              |
 | DOCS-LEARNXY-001   | A shared-source “Learn Caret in Y Minutes” page and upstream contribution teach implemented language behavior concisely. | planned     | `—` | `—` | External submission remains a separately authorized release action.                    |

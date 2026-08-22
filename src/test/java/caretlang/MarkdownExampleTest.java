@@ -17,13 +17,24 @@ final class MarkdownExampleTest {
             assertFencesParse(document, Files.readString(Path.of(document)));
         }
 
-        String language = Files.readString(Path.of("LANGUAGE.md"));
-        assertFencesParse("LANGUAGE.md implemented prototype",
-                language.substring(0, language.indexOf("# Planned language specification")));
+        assertFencesParse("source/layout implemented sections", prefixBefore(
+                "spec/01-source-layout-and-diagnostics.md", "<a id=\"planned-layout-baseline-modifiers\"></a>"));
+        assertFencesParse("functions/operators implemented sections", prefixBefore(
+                "spec/03-functions-operators-and-lambdas.md", "<a id=\"lambda-functions\"></a>"));
+        assertFencesParse("contracts implemented sections", prefixBefore(
+                "spec/04-contracts-inference-and-dispatch.md",
+                "<a id=\"contracts-type-derivation-and-collections\"></a>"));
 
         String comparison = Files.readString(Path.of("docs/language-comparison.md"));
         assertFencesParse("docs/language-comparison.md prototype sections",
                 comparison.substring(0, comparison.indexOf("> **Planned example:**")));
+    }
+
+    private String prefixBefore(String document, String marker) throws IOException {
+        String markdown = Files.readString(Path.of(document));
+        int boundary = markdown.indexOf(marker);
+        if (boundary < 0) fail("Missing implemented/planned boundary in " + document + ": " + marker);
+        return markdown.substring(0, boundary);
     }
 
     private void assertFencesParse(String document, String markdown) {
