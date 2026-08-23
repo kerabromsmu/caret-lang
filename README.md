@@ -55,6 +55,12 @@ or a concrete fixed collection, to the planned `template` function creates an ex
 contract. The same mechanism defines a standard structured error payload, while a generic
 three-field `Result` contract supplies the planned public success/failure envelope.
 
+In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
+ordinary callable bindings, not parser constructs with function-like spelling. They use normal
+application, partial application, aliasing, dispatch, effects, reflection, and compile-time
+execution rules, even though they may consume or produce specialized semantic values. These
+planned facilities are not thereby implemented by the current prototype.
+
 Explicit mutability is planned through stable-identity containers rather than mutable bindings or
 deeply mutable objects. `{ (Int) 100 }` constructs a container, `container{}` reads its current
 content, and `put container value` performs a contract-checked replacement. Containers can be

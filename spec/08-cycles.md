@@ -9,6 +9,18 @@
 
 A Caret cycle is a generalized iterative state transformation.
 
+`cycle` is an ordinary Caret higher-order function of four arguments:
+
+```caret
+cycle initial condition body prepare
+```
+
+This is ordinary whitespace application, including ordinary multiline application. There is no
+cycle-expression grammar. Lookup, aliases, arity, prefix partial application, hole partial
+application, overload dispatch, callable contracts, effects, reflection, and staging are the same
+as for other functions. Any specialized analysis or lowering attaches to the resolved
+language-owned `cycle` callable identity, never to the spelling of an identifier.
+
 Rather than giving `for`, `while`, and similar loops unrelated semantics, Caret models iteration as repeated transformation of a state value.
 
 Conceptually:
@@ -24,25 +36,18 @@ prepare next state
     ↺
 ```
 
-A cycle produces a final value.
-
-It is therefore an expression, not merely a control-flow statement.
-
-Conceptually:
-
-```text
-cycle : Init -> Condition -> Body -> Prepare -> Result
-```
+An ordinary `cycle` invocation produces a final value and may occur wherever its result expression
+is accepted; it is not a separate control-flow statement form.
 
 For a state type `S`:
 
 ```text
-init      : () -> S
+initial   : S
 condition : S -> Bool
 body      : S -> S
 prepare   : S -> S
 
-cycle     : S
+cycle : [S [S] -> Bool [S] -> S [S] -> S] -> S
 ```
 
 The cycle repeatedly transforms `S` until `condition` becomes false.
@@ -82,7 +87,7 @@ S -> S -> S -> ...
 
 Each stage receives a state and produces the next state.
 
-The final state is the value of the entire `cycle` expression.
+The final state is the value returned by the ordinary `cycle` invocation.
 
 ---
 
@@ -177,8 +182,10 @@ The important semantic rule is that each phase receives the complete current sta
 ### Previous and next state views
 
 Cycle conditions, bodies, and preparation phases execute with a cycle-state lookup view over the
-state Collection in addition to their ordinary lexical parameters. This view is an evaluation and
-name-resolution mechanism, not a first-class Scope value.
+state Collection in addition to their ordinary lexical parameters. This view is a phase
+name-resolution mechanism and invocation semantic supplied while the language-owned `cycle`
+function calls its phase functions, not a first-class Scope value or parsing attached to a `cycle`
+expression or identifier spelling.
 
 For every phase, unqualified state-field reads refer to the complete previous state. Name lookup
 checks local bindings and parameters first, then previous-state public fields, then the captured
@@ -610,7 +617,7 @@ result =
 
 is pure if all supplied components are pure.
 
-If a phase has effects, those effects propagate to the cycle expression according to the ordinary effect system.
+If a phase has effects, those effects propagate to the `cycle` invocation according to the ordinary effect system.
 
 Example:
 
@@ -786,7 +793,7 @@ condition s =
 <a id="nested-cycles"></a>
 ## Nested cycles
 
-A cycle is an expression and may therefore be used inside another cycle.
+The result expression of one ordinary `cycle` invocation may be used inside another invocation.
 
 Example conceptually:
 
@@ -853,7 +860,7 @@ Libraries may provide convenience abstractions where useful.
 <a id="implementation-model"></a>
 ## Implementation model
 
-The compiler should initially lower:
+The compiler may recognize an invocation of the language-owned `cycle` callable and lower:
 
 ```caret
 cycle initial condition body prepare
@@ -873,7 +880,9 @@ loop:
     goto loop
 ```
 
-This imperative pseudocode is an implementation strategy only.
+This imperative pseudocode is an implementation strategy only. It is an optimization of an
+ordinary function invocation and must preserve observable lookup, dispatch, argument evaluation,
+contract, effect, and result semantics.
 
 The observable language semantics remain immutable state transformation.
 
@@ -895,7 +904,7 @@ No intermediate state copies are required unless observable semantics demand the
 
 The initial implementation should support at minimum:
 
-1. `cycle` as an expression that returns its final state.
+1. `cycle` as an ordinary four-argument function that returns its final state.
 2. An initial state value.
 3. A pure unary Boolean condition.
 4. A unary body transformation.
@@ -944,7 +953,7 @@ and producing the final state as its result.
 This provides conventional iteration while remaining compatible with:
 
 * immutable data;
-* first-class scopes;
+* named and positional Collections;
 * contracts;
 * effect inference;
 * lambdas;
@@ -954,4 +963,3 @@ This provides conventional iteration while remaining compatible with:
 * SIMD optimization.
 
 The core model should remain small enough that more specialized iteration constructs can be implemented as ordinary Caret functions rather than additional language syntax.
-

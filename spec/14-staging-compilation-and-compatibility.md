@@ -278,6 +278,12 @@ The function has one definition.
 
 This avoids a separate macro or compile-time function language.
 
+The ordinary callable rule includes `contract`, `template`, `format`, `rule`, `cycle`, and
+`sandbox`. Any of them may execute under `#` when its callable and arguments are available, its
+effects are permitted, required authority exists, and any result that crosses the stage boundary
+is representable there. None has special staging syntax. Language-owned callable identity may
+enable static analysis or lowering, but lexical spelling alone does not affect parsing or staging.
+
 ---
 
 <a id="compile-time-imports"></a>
@@ -541,25 +547,23 @@ clientServer = module
 
 ^interaction =
   ruleset
-    sendLogin = rule
-      C client
-      T loginRequested
-      E
-        request = makeLoginRequest
-        send server $ encode LoginRequest request
+    sendLogin = rule [
+      ^C = client
+      ^T = loginRequestedTrigger
+      ^E = sendLoginRequest
+    ]
 
-    authenticate = rule
-      C server
-      T loginReceived
-      E
-        result = authenticateRequest
-        send client result
+    authenticate = rule [
+      ^C = server
+      ^T = loginReceivedTrigger
+      ^E = authenticateAndReply
+    ]
 
-    showLoginResult = rule
-      C client
-      T loginResultReceived
-      E
-        showResult
+    showLoginResult = rule [
+      ^C = client
+      ^T = loginResultReceivedTrigger
+      ^E = showResult
+    ]
 ```
 
 The shared ruleset describes both client-side and server-side behavior.
@@ -730,16 +734,16 @@ Strings remain appropriate only when an API intentionally operates on names.
 <a id="complex-context-expressions"></a>
 ### Complex context expressions
 
-A rule context may contain combinations such as:
+A RuleDefinition `C` field may refer to ordinary first-class context combinations such as:
 
 ```caret
-C client and authenticated
+client and authenticated
 ```
 
 or:
 
 ```caret
-C client or server
+client or server
 ```
 
 The filtering predicate may use ordinary context-inspection functions to determine whether a rule is relevant.

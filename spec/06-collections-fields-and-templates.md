@@ -1019,6 +1019,11 @@ Templates use the ordinary Caret contract system.
 
 They do not introduce a separate type system.
 
+`template specimen` is ordinary whitespace application. There is no `template` parser production,
+template-only invocation syntax, or spelling-based semantic rule. Inspection of a collection
+constructor descriptor is behavior of the resolved language-owned `template` callable and its
+contracts. Aliases retain the same ordinary callable behavior.
+
 ---
 
 <a id="template-construction"></a>
@@ -1294,10 +1299,11 @@ Runtime validation is required only where the contract cannot be proven statical
 A template describes collection **shape** as well as element constraints.
 
 A non-empty template is structurally either positional or named, following the ordinary Collection
-rule. A template literal cannot mix named Field elements with unnamed positions; doing so produces
+rule. A Collection specimen supplied to `template` cannot mix named Field elements with unnamed
+positions; doing so produces
 `MIXED_COLLECTION_SHAPE`. There is no separate scope-template model. The specimen `[]` describes
-the exact empty shape, while every explicit non-empty template continues to require all of its
-declared positions or fields.
+the exact empty shape. Every explicit non-empty template requires all declared positions and all
+named fields not explicitly designated optional by the general semantics below.
 
 For a positional collection:
 
@@ -1385,6 +1391,14 @@ Field names are part of the template structure. For the initial exact model, nam
 exact set of field names and the field ordering defined by the universal collection model. Missing,
 additional, or reordered fields are incompatible whenever that ordering is observable for the
 candidate collection.
+
+The general template model also supports members explicitly designated optional by the template
+descriptor. A candidate may omit any such member; if present, it must occupy the ordinary named
+Collection shape and satisfy the member's fixed-value, hole, or contract requirement. Members not
+declared by the template remain incompatible, so optional members do not make a template open.
+This capability is required by structural contracts such as `RuleDefinition`. Its final Caret
+surface spelling is unresolved; implementations and examples must not invent a feature-specific
+spelling or silently treat `T?`, `T~`, or optional lookup syntax as an optional-field declaration.
 
 The template system does not require a separate record-schema syntax.
 
@@ -1900,7 +1914,8 @@ Point =
   ]
 ```
 
-The language therefore does not need separate collection and template literal grammars.
+The language therefore has only ordinary Collection literal grammar; `template` consumes the
+resulting value or eligible constructor through ordinary application.
 
 ---
 
@@ -2034,7 +2049,8 @@ template [
 
 requires exactly two positions.
 
-For named structures, the fields described by the template are part of its required shape.
+For named structures, required fields described by the template are part of its required shape;
+members explicitly designated optional follow the general rule above.
 
 The initial implementation should treat additional unmatched structural members as incompatible unless another contract explicitly provides open/extensible-template semantics.
 
@@ -2092,6 +2108,7 @@ Reflection may expose information such as:
 shape
 element count
 field names
+required/optional field membership
 hole positions
 hole contracts
 fixed positions
@@ -2210,10 +2227,13 @@ fields, and malformed contracted holes.
 
 23. Identical observable behavior with shared-template and packed-layout optimizations disabled.
 
+24. General optional named members, including reflection of required/optional membership, for
+structural contracts that require them such as `RuleDefinition`; the final declaration spelling is
+unresolved.
+
 The initial implementation may postpone:
 
 * open structural templates;
-* optional template fields;
 * variable-length positional templates;
 * repeated subpatterns;
 * template unions;

@@ -29,6 +29,29 @@ add 2 3
 
 Application is left-associative and has high precedence.
 
+The standard bindings `rule`, `template`, `format`, `cycle`, `contract`, and `sandbox` use this
+ordinary application machinery. They are not keywords, declaration forms, literals, macros, DSL
+introducers, or parser constructs. Parsing `someName argument` is independent of whether
+`someName` has one of those spellings. Normal multiline application, arity, prefix and hole partial
+application, aliases, contract-based overload dispatch, callable contracts and effects,
+reflection/reification, `#` execution, lexical lookup, and shadowing apply unchanged. No second
+invocation mechanism exists for these functions.
+
+An implementation may intrinsically recognize the resolved language-owned callable identity for
+static analysis, optimization, staging, or runtime support. It must not infer special behavior from
+the lexical identifier. Consequently aliases preserve the callable behavior of non-nullary
+constructors, subject to the ordinary nullary-function and callable-reference rules:
+
+```caret
+makeRule = rule
+makeTemplate = template
+makeContract = contract
+iterate = cycle
+isolate = sandbox
+```
+
+Their results may still be specialized semantic values rather than undifferentiated Collections.
+
 ```text
 f x y
 ```
@@ -55,7 +78,7 @@ result = (
     2
 )
 
-value = scope[
+value = record[
   "field"
 ]~
 ```
@@ -978,4 +1001,3 @@ They use the same:
 * SIMD rules
 
 as named functions.
-

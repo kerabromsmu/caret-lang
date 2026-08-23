@@ -41,6 +41,19 @@ N  Name (string-literal ID)
 
 All CATEN components are optional.
 
+`rule` is an ordinary unary Caret function:
+
+```text
+rule : RuleDefinition -> Rule
+```
+
+`RuleDefinition` is a structural contract produced through the ordinary `template` function. Its
+optional named Collection fields are `C`, `A`, `T`, `E`, and `N`; those letters are field names,
+not clauses, keywords, or parser constructs. `rule definition` uses ordinary application, lookup,
+aliases, arity, partial application, contracts, effects, reflection, and staging. The compiler may
+recognize the resolved language-owned `rule` callable identity, but never the lexical spelling
+alone. There is no `RuleExpression` production or rule-only block-argument grammar.
+
 ---
 
 <a id="rules"></a>
@@ -49,20 +62,44 @@ All CATEN components are optional.
 <a id="basic-definition"></a>
 ### Basic definition
 
-A rule is a first-class Caret value.
+A rule is a first-class specialized Caret value returned by the ordinary `rule` function.
 
 Example:
 
 ```caret
-capture = rule
-  C game and playerTurn
-  A on
-  T captureRequested and validCapture
-  E
-    move selectedPiece target
-    destroy targetPiece
-  N "capture"
+captureEffect state =
+  move selectedPiece target
+  destroy targetPiece
+
+definition = [
+  ^C = gamePlayerTurnContext
+  ^A = on
+  ^T = captureTrigger
+  ^E = captureEffect
+  ^N = "capture"
+]
+
+capture = rule definition
 ```
+
+Equivalently, an explicit named Collection may be supplied directly:
+
+```caret
+capture = rule [
+  ^C = gamePlayerTurnContext
+  ^A = on
+  ^T = captureTrigger
+  ^E = captureEffect
+  ^N = "capture"
+]
+```
+
+The example uses ordinary first-class phase functions rather than hidden unevaluated syntax.
+`RuleDefinition` requires general optional-template-member semantics. The final surface spelling
+for optional template members, and the exact first-class contracts for deferred `C`, `T`, and `E`
+values, remain unresolved dependencies. Implementations must not substitute a rule-specific AST,
+lazy-expression wrapper, or parser exception. `C` must retain the persistent/context behavior
+below, `T` must remain observable and reevaluable, and `E` executes only when the rule is applied.
 
 The components are:
 
@@ -88,7 +125,9 @@ up
 down
 ```
 
-A rule may apply only while its `C` expression is up.
+A rule may apply only while the persistent context value represented by its `C` field is up. The
+exact first-class contract by which `C` preserves or computes a context is unresolved; it is not an
+unevaluated source expression captured by the parser.
 
 Contexts may be combined using ordinary Boolean expressions:
 
@@ -101,10 +140,11 @@ dialog or cutscene
 Example:
 
 ```caret
-attack = rule
-  C game and playerTurn
-  T attackRequested
-  E performAttack
+attack = rule [
+  ^C = gamePlayerTurnContext
+  ^T = attackTrigger
+  ^E = performAttack
+]
 ```
 
 If:
@@ -217,10 +257,11 @@ off
 Example:
 
 ```caret
-specialAttack = rule
-  A off
-  T specialRequested
-  E performSpecialAttack
+specialAttack = rule [
+  ^A = off
+  ^T = specialTrigger
+  ^E = performSpecialAttack
+]
 ```
 
 An inactive rule cannot apply.
@@ -247,14 +288,18 @@ Active state
 <a id="trigger"></a>
 ### Trigger
 
-`T` defines the condition or Boolean combination of conditions that causes a rule to become applicable.
+`T` stores the first-class trigger value or function that defines the observable condition or
+Boolean combination causing a rule to become applicable. The rule engine reevaluates that value
+according to the semantics below; Rule construction does not evaluate the trigger eagerly. The
+exact trigger contract remains unresolved and is not hidden parser-retained syntax.
 
 Example:
 
 ```caret
-death = rule
-  T player.health <= 0
-  E destroy player
+death = rule [
+  ^T = deathTrigger
+  ^E = destroyPlayer
+]
 ```
 
 Normal persistent conditions use transition semantics.
@@ -289,13 +334,15 @@ T triggers
 Context fronts may be used directly:
 
 ```caret
-beginTurn = rule
-  T rise playerTurn
-  E prepareTurn
+beginTurn = rule [
+  ^T = beginTurnTrigger
+  ^E = prepareTurn
+]
 
-resume = rule
-  T fall dialog
-  E resumeGame
+resume = rule [
+  ^T = resumeTrigger
+  ^E = resumeGame
+]
 ```
 
 This is particularly important for chaining rules.
@@ -308,9 +355,10 @@ This is particularly important for chaining rules.
 For example:
 
 ```caret
-rule
-  C combat
-  T enemy.health <= 0
+rule [
+  ^C = combat
+  ^T = enemyDeathTrigger
+]
 ```
 
 If:
@@ -324,8 +372,9 @@ becomes true while `combat` is down, subsequently raising `combat` does not retr
 If entering combat should itself cause evaluation as an event, it should be expressed explicitly:
 
 ```caret
-rule
-  T rise combat and enemy.health <= 0
+rule [
+  ^T = combatEnemyDeathTrigger
+]
 ```
 
 ---
@@ -338,19 +387,16 @@ rule
 Example:
 
 ```caret
-capture = rule
-  T validCapture
-  E
-    move selectedPiece target
-    destroy capturedPiece
-    addScore currentPlayer captureValue
+capture = rule [
+  ^T = validCaptureTrigger
+  ^E = captureEffect
+]
 ```
 
-`E` is an ordinary Caret block.
+The function or descriptor stored in `E` may use an ordinary Caret block and call ordinary
+functions. Constructing the Rule does not execute it.
 
-It may call ordinary functions.
-
-Like an ordinary `cycle` transformation, an `E` block executes against persistent previous and
+Like an ordinary `cycle` transformation, the callable or descriptor stored in `E` executes against persistent previous and
 next rule-cycle state. Unqualified state reads observe the previous state, `^field = value` writes
 the next state, and `next.field` observes writes already made by the current effect. Unmentioned
 fields carry forward. The complete next state becomes visible atomically after the selected rule's
@@ -387,40 +433,41 @@ An effect involving networking, file access, GUI state, or other externally obse
 <a id="name"></a>
 ### Name
 
-`N` optionally identifies a rule with a string literal. It does not accept a bare identifier or an
+`N` optionally identifies a rule with a string value under the RuleDefinition contract. The current
+model requires a construction-time string literal; it does not accept a bare identifier or an
 arbitrary runtime string expression.
 
 Example:
 
 ```caret
-rule
-  N "capture"
-  T validCapture
-  E capturePiece
+rule [
+  ^N = "capture"
+  ^T = validCaptureTrigger
+  ^E = capturePiece
+]
 ```
 
-When a rule is assigned directly:
+Assignment does not supply `N` implicitly:
 
 ```caret
-capture = rule
-  T validCapture
-  E capturePiece
+capture = rule [
+  ^T = validCaptureTrigger
+  ^E = capturePiece
+]
 ```
 
-the implementation should normally infer:
-
-```text
-N "capture"
-```
-
-unless another explicit string-literal ID is supplied.
+This Rule has the documented anonymous/internal identity. An ordinary reflective descriptor may
+independently expose `capture` as its visible binding or declaration name, but that metadata is not
+the CATEN `N` field. The ordinary `rule` function cannot inspect its caller's syntax or assignment
+left-hand side.
 
 Binding name and rule identity are conceptually distinct:
 
 ```caret
-r = rule
-  N "capture"
-  ...
+r = rule [
+  ^N = "capture"
+  ^T = captureTrigger
+]
 ```
 
 ---
@@ -428,7 +475,8 @@ r = rule
 <a id="optional-caten-components"></a>
 ### Optional CATEN components
 
-All CATEN components are optional.
+All CATEN fields are optional through the general optional named-template-member semantics. This is
+not rule-specific missing-field behavior.
 
 Recommended defaults are:
 
@@ -471,13 +519,15 @@ Other rules may respond to those fronts.
 Example:
 
 ```caret
-capture = rule
-  T captureRequested
-  E capturePiece
+capture = rule [
+  ^T = captureRequestedTrigger
+  ^E = capturePiece
+]
 
-score = rule
-  T fall @capture.context
-  E addScore currentPlayer captureValue
+score = rule [
+  ^T = captureCompletionTrigger
+  ^E = addCaptureScore
+]
 ```
 
 The implicit context exists even when the rule has no explicit `E`.
@@ -497,13 +547,15 @@ If several rules are simultaneously applicable and no ordering relationship betw
 For example:
 
 ```caret
-a = rule
-  T event
-  E effectA
+a = rule [
+  ^T = eventTrigger
+  ^E = effectA
+]
 
-b = rule
-  T event
-  E effectB
+b = rule [
+  ^T = eventTrigger
+  ^E = effectB
+]
 ```
 
 If both become applicable, either sequence is valid:
@@ -560,13 +612,15 @@ Therefore the first selected rule may alter whether another previously applicabl
 Example:
 
 ```caret
-a = rule
-  T condition
-  E disableSomething
+a = rule [
+  ^T = conditionTrigger
+  ^E = disableSomething
+]
 
-b = rule
-  T condition and somethingEnabled
-  E otherEffect
+b = rule [
+  ^T = enabledConditionTrigger
+  ^E = otherEffect
+]
 ```
 
 If both initially become applicable and `a` executes first, its effect may make `b` no longer applicable.
@@ -608,9 +662,10 @@ A developer may explicitly state that arbitrary ordering is acceptable.
 The `unordered` contract marks such intent:
 
 ```caret
-(unordered) ambientEffect = rule
-  T event
-  E updateAmbientEffect
+(unordered) ambientEffect = rule [
+  ^T = eventTrigger
+  ^E = updateAmbientEffect
+]
 ```
 
 A ruleset may similarly declare that unordered interactions among its relevant rules are intentional:
@@ -651,13 +706,15 @@ The preferred mechanism is a causal relationship between rules.
 For example:
 
 ```caret
-damage = rule
-  T attack
-  E applyDamage
+damage = rule [
+  ^T = attackTrigger
+  ^E = applyDamage
+]
 
-death = rule
-  T fall @damage.context
-  E checkDeath
+death = rule [
+  ^T = damageCompletionTrigger
+  ^E = checkDeath
+]
 ```
 
 `death` cannot precede completion of `damage`.
@@ -675,17 +732,20 @@ This is a semantic dependency rather than a source-order convention.
 A sequence of rules may be defined explicitly through rule contexts:
 
 ```caret
-first = rule
-  T start
-  E firstEffect
+first = rule [
+  ^T = startTrigger
+  ^E = firstEffect
+]
 
-second = rule
-  T fall @first.context
-  E secondEffect
+second = rule [
+  ^T = firstCompletionTrigger
+  ^E = secondEffect
+]
 
-third = rule
-  T fall @second.context
-  E thirdEffect
+third = rule [
+  ^T = secondCompletionTrigger
+  ^E = thirdEffect
+]
 ```
 
 This imposes:
@@ -706,16 +766,18 @@ third
 Caret should provide concise sugar for this common pattern:
 
 ```caret
-chain
-  rule
-    T start
-    E firstEffect
-
-  rule
-    E secondEffect
-
-  rule
-    E thirdEffect
+chain [
+  rule [
+    ^T = startTrigger
+    ^E = firstEffect
+  ]
+  rule [
+    ^E = secondEffect
+  ]
+  rule [
+    ^E = thirdEffect
+  ]
+]
 ```
 
 This is equivalent to connecting each subsequent rule to:
@@ -724,7 +786,8 @@ This is equivalent to connecting each subsequent rule to:
 fall @previous.context
 ```
 
-The chain therefore compiles to ordinary rules and ordinary contexts.
+The Collection supplied to `chain` contains ordinary Rule values. The chain therefore compiles to
+ordinary rules and ordinary contexts; it does not license CATEN clause parsing.
 
 It does not introduce a separate execution mechanism.
 
@@ -736,14 +799,16 @@ It does not introduce a separate execution mechanism.
 A chained rule may additionally specify a trigger:
 
 ```caret
-chain
-  rule
-    T start
-    E first
-
-  rule
-    T ready
-    E second
+chain [
+  rule [
+    ^T = startTrigger
+    ^E = first
+  ]
+  rule [
+    ^T = readyTrigger
+    ^E = second
+  ]
+]
 ```
 
 The effective trigger of the second rule is conceptually:
@@ -818,17 +883,20 @@ Example:
 ```caret
 Combat attacker target damage =
   ruleset
-    prepare = rule
-      T attackRequested attacker
-      E prepareAttack attacker
+    prepare = rule [
+      ^T = attackerRequestTrigger
+      ^E = prepareAttackerEffect
+    ]
 
-    ^attack = rule
-      T fall @prepare.context
-      E damage target (damage attacker target)
+    ^attack = rule [
+      ^T = prepareCompletionTrigger
+      ^E = applyTargetDamageEffect
+    ]
 
-    cleanup = rule
-      T fall @attack.context
-      E finishAttack attacker
+    cleanup = rule [
+      ^T = attackCompletionTrigger
+      ^E = finishAttackerEffect
+    ]
 ```
 
 ---
@@ -891,9 +959,10 @@ TurnSystem players =
 
     ^turn = context down
 
-    ^next = rule
-      T endTurn
-      E advancePlayer players
+    ^next = rule [
+      ^T = endTurnTrigger
+      ^E = advancePlayerEffect
+    ]
 ```
 
 External code may access:
@@ -924,14 +993,19 @@ Rules are exported in exactly the same way:
 ```caret
 Movement board pieces =
   ruleset
-    validate = rule
-      ...
+    validate = rule [
+      ^T = validationTrigger
+      ^E = validateMovement
+    ]
 
-    update = rule
-      ...
+    update = rule [
+      ^T = updateTrigger
+      ^E = updateMovement
+    ]
 
-    ^completed = rule
-      ...
+    ^completed = rule [
+      ^T = completionTrigger
+    ]
 ```
 
 External users may refer to:
@@ -1050,9 +1124,10 @@ game =
       enemy = object
         ^health = 50
 
-      gameOver = rule
-        T player.health <= 0
-        E lower cycle
+      gameOver = rule [
+        ^T = gameOverTrigger
+        ^E = endCycle
+      ]
 ```
 
 ---
@@ -1145,9 +1220,10 @@ The cycle runs while that context is up.
 A rule may terminate the cycle:
 
 ```caret
-finish = rule
-  T completed
-  E lower cycle
+finish = rule [
+  ^T = completedTrigger
+  ^E = endCycle
+]
 ```
 
 The cycle ends when its master context goes down.
@@ -1235,11 +1311,9 @@ does not create a scheduling constraint.
 For example:
 
 ```caret
-firstInSource = rule
-  ...
+firstInSource = rule firstDefinition
 
-secondInSource = rule
-  ...
+secondInSource = rule secondDefinition
 ```
 
 does not imply:
@@ -1296,9 +1370,10 @@ Repeated evaluation must not repeatedly fire a continuously true trigger.
 For:
 
 ```caret
-rule
-  T x > 10
-  E ...
+rule [
+  ^T = greaterThanTenTrigger
+  ^E = effect
+]
 ```
 
 application occurs on the relevant transition:
@@ -1439,7 +1514,8 @@ prepare:
 The initial implementation should support at minimum:
 
 1. A first-class `Rule` value.
-2. Optional CATEN clauses:
+2. The ordinary unary `rule : RuleDefinition -> Rule` callable and optional CATEN named fields in
+the general template-derived `RuleDefinition` contract:
 
 ```text
 C Context
@@ -1448,6 +1524,9 @@ T Trigger
 E Effect
 N Name (string-literal ID)
 ```
+
+The general optional-template-member capability is required for this initial rule model even
+though its final surface declaration spelling remains unresolved.
 
 3. Persistent up/down contexts.
 4. Boolean context combinations.
@@ -1543,4 +1622,3 @@ Rulesets package reusable parameterized behavior.
 `^` defines their public interface.
 
 The `ruleCycle` `init` block assembles those reusable rule libraries with concrete objects and configuration, allowing systems such as games, interpreters, simulations, and workflows to be built primarily by composition rather than explicit control flow.
-

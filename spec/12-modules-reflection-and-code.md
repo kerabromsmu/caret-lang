@@ -189,7 +189,13 @@ environments apply their own visibility boundary.
 remain semantic import references and never inline imported module bodies; those bodies are
 available separately through the imported module's reflection reference. Built-in and native
 operations appear as portable semantic external references containing their language identity,
-contract, and effects, never a JVM class, Java method, native address, or backend body.
+contract, and effects, never a JVM class, Java method, native address, or backend body. Source
+references and invocations of `rule`, `template`, `format`, `cycle`, `contract`, and `sandbox` are
+represented by these ordinary binding/external references and ordinary function application
+structure. Semantic Code must not introduce dedicated source-expression node kinds merely because
+a binding has one of those spellings. The specialized `Rule`, `Format`, `Contract`, or `Sandbox`
+value produced by a call may retain its own language-owned descriptor; that result descriptor is
+distinct from the source-level construction operation.
 The semantic code graph preserves shared references rather than duplicating referenced definitions;
 canonical text emits each definition once and uses canonical references at every other occurrence.
 
@@ -219,6 +225,10 @@ Dynamically supplied host functions and capabilities are not serialized as code 
 implementations. Canonical source refers to their exposed binding names normally and requires a
 compatible environment when evaluated again. Reflection and serialization reveal no host body,
 native identity, origin, or private capture.
+
+Canonical serialization preserves the distinction between an ordinary call that constructs a
+specialized value and the specialized descriptor of an already produced value. It may not rewrite
+one into name-triggered construction syntax.
 
 <a id="overview"></a>
 ### Overview
@@ -514,4 +524,3 @@ redundant grouping
 do not invalidate the quine.
 
 ---
-

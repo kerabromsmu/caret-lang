@@ -100,7 +100,17 @@ Formats may be:
 * placed in collections;
 * inspected through reflection.
 
-Format construction should use ordinary Caret functions rather than special grammar for each format feature.
+Format construction uses ordinary Caret functions rather than special grammar for format features.
+In particular, `format` is an ordinary nullary function, conceptually:
+
+```text
+format : [] -> Format
+```
+
+Bare `format` produces an appropriate new empty Format through Caret's normal implicit invocation
+of named nullary functions. It is neither an empty-format literal nor the empty Format value itself,
+and the parser does not special-case its spelling. Each result follows the ordinary identity and
+equality semantics of Format values; this nullary-call rule does not otherwise redefine them.
 
 For example:
 
@@ -113,7 +123,7 @@ Packet =
   >> field (bytes length) "payload"
 ```
 
-`format` is the empty format.
+The first pipeline value is the empty Format returned by that ordinary nullary call.
 
 Functions such as:
 
@@ -129,7 +139,8 @@ codec
 
 construct or transform formats.
 
-They should normally be library-level functions or standard format primitives rather than separate parser constructs.
+Together with `decode` and `encode`, they are ordinary Caret functions, whether supplied as
+library-level bindings or standard format primitives, rather than separate parser constructs.
 
 ---
 
@@ -1030,7 +1041,7 @@ Format reflection should make it possible to build tooling such as:
 The initial implementation should support at minimum:
 
 1. A first-class immutable `Format` value.
-2. An empty `format`.
+2. The ordinary nullary `format` function returning an empty `Format`.
 3. Format composition using ordinary functions and `>>`.
 4. Primitive formats for common integer and byte representations.
 5. Named fields using ordinary string names:
@@ -1092,4 +1103,3 @@ codec decode encode
 ```
 
 Complex formats are built from smaller bidirectional relations using ordinary Caret functions, collections, contracts, partial application, and composition.
-

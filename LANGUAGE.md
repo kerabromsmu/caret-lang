@@ -35,6 +35,16 @@ initial implementation target.
 7. Sandbox, module, reflection, staging, and capability boundaries never amplify authority.
 8. Immutable and functional programming are supported without prohibiting explicit contained
    mutability.
+9. Specialized semantic values do not require specialized construction syntax. `contract`,
+   `template`, `format`, `rule`, `cycle`, and `sandbox` are ordinary Caret callable bindings. Their
+   lookup, application, arity, partial application, aliases, contracts, effects, reflection, and
+   staging follow the ordinary function model; specialized behavior belongs to the resolved
+   language-owned callable identity and to the values it consumes or produces, not to its lexical
+   spelling.
+
+This invariant does not imply that every language facility is a function. Established syntax such
+as `->`, `[...]`, container braces, contract clauses, `#`, `@`, `$`, layout markers, and module-ID
+declarations remains syntax where its owning specification says so.
 
 ## Specification documents
 

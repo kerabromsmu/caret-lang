@@ -9,7 +9,8 @@
 <a id="construction-environment-updates-and-access"></a>
 ### Construction, environment updates, and access
 
-The shared construction form is:
+`sandbox` is an ordinary Caret function. The shared construction form is ordinary whitespace
+application:
 
 ```caret
 plugin = sandbox source environment
@@ -24,6 +25,22 @@ syntax:
 environment =
   ^clock = restrictedClock
 ```
+
+Conceptually, the language-owned callable has ordinary overload signatures for each accepted source
+contract, with an immutable named Collection environment and a `Result Sandbox` result. There is no
+sandbox expression or sandbox-specific application grammar. For example, subject to the same
+contracts, effects, and authority checks as any other partial application:
+
+```caret
+withEnvironment = sandbox _ environment
+```
+
+Security mediation, root substitution, catalog restriction, reflective membranes, lifecycle
+state, and environment generation are semantics of invoking this privileged standard callable and
+of the resulting `Sandbox` value. Compiler recognition attaches to that callable identity rather
+than its lexical spelling. `sandbox` retains ordinary callable effect metadata: describing those
+effects grants no authority, and aliases or partial applications cannot widen any capability or
+visibility boundary.
 
 This is shorthand for the equivalent explicit Collection:
 

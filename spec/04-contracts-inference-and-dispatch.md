@@ -173,7 +173,17 @@ Its specific collection contract and representation are determined by inference 
 <a id="contract-definition"></a>
 #### Contract definition
 
-`contract` constructs a contract.
+`contract` is an ordinary unary Caret function that constructs a contract. It has no declaration
+grammar or parser-level construction form. Its one argument is `~`, one base contract, one
+predicate, or one ordinary Collection of requirements. Consequently:
+
+```caret
+Number = contract [Eq Comparable Arithmetic]
+```
+
+is an ordinary assignment whose right-hand side calls `contract` once with a single Collection.
+Static knowledge of nominal contract construction attaches to the resolved language-owned
+`contract` callable identity, never merely to an identifier spelled `contract`.
 
 A base contract with no additional value restriction may be defined as:
 
@@ -313,7 +323,7 @@ implementation into `<`.
 `Eq` in the operator matrix is the standard structural capability descriptor used by the built-in
 equality operators. Scalar values, null, missing, contract values by descriptor identity,
 non-callable function references by target identity, and language-owned metadata descriptors
-satisfy it. Scopes and immutable collections satisfy it only when every recursively reachable
+satisfy it. Immutable collections satisfy `Eq` only when every recursively reachable
 member does. Planned containers satisfy it by stable container identity, without reading their
 contents.
 
@@ -362,10 +372,11 @@ rules before those combinations are implemented. This initial matrix defines no 
 signedness conversion, or mixed-representation promotion.
 
 <a id="contract-declaration-and-identity"></a>
-#### Contract declaration and identity
+#### Contract binding and identity
 
-Contract declarations are predeclared throughout their lexical block, so their bases may use
-forward references. Direct and indirect contract-derivation cycles are compile-time errors.
+Bindings whose values are contracts are predeclared throughout their lexical block where the
+ordinary declaration rules require it, so their bases may use forward references. Direct and
+indirect contract-derivation cycles are compile-time errors.
 `contract` always takes exactly one ordinary argument: `~`, one contract or predicate, or one
 collection of requirements.
 
