@@ -309,3 +309,9 @@ the known invocation-effect bound. Prefix partials specialize their remaining pa
 compositions union known invocation effects. Both `type (@function)` and `(@function).kind` report
 `"Function"`. References compare by target identity. Reflection exposes no captures, bound arguments,
 Java implementation objects, or callable capability, and does not invoke a reflected function.
+
+## License
+
+Caret, including its interpreter, language specification, examples, and
+documentation, is licensed under the [Apache License 2.0](LICENSE), unless
+otherwise noted.
