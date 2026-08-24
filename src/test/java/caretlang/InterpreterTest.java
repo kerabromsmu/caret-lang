@@ -983,7 +983,7 @@ final class InterpreterTest {
 
     @Test
     void exportedBlocksAndNamedLiteralsAreEquivalentCollections() {
-        assertEquals("true\nCollection\nnamed\n2\nname,age\nAda\n~\n", execute("""
+        assertEquals("true\nCollection\nnamed\n2\nage,name\nAda\n~\n", execute("""
                 exported =
                   ^name = "Ada"
                   ^age = 42
@@ -995,6 +995,23 @@ final class InterpreterTest {
                 print (@literal).names
                 print literal.name
                 print literal.absent~
+                """));
+    }
+
+    @Test
+    void emptyCollectionsAreShapeNeutralAndNamedFieldsHaveCanonicalOrder() {
+        assertEquals("Collection\nempty\n0\ntrue\ntrue\na,with,z\n1\ntrue\n", execute("""
+                empty = []
+                first = [^z = 2 ^with = 1 ^a = 3]
+                second = [^a = 3 ^z = 2 ^with = 1]
+                print (@empty).kind
+                print (@empty).shape
+                print (@empty).size
+                print Sequence empty
+                print Dictionary empty
+                print (@first).names
+                print first.with
+                print first == second
                 """));
     }
 

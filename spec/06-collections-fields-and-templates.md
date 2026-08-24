@@ -75,6 +75,12 @@ The empty Collection `[]` has no named/positional distinction. It vacuously sati
 collection contracts compatible with zero elements, without changing identity or acquiring a
 shape. Explicit structural contracts that require actual positions or fields remain unsatisfied.
 
+Named Collection values evaluate field expressions in source order, then store, traverse, render,
+and reflect fields in locale-independent, case-sensitive Unicode code-point lexicographic order.
+Declaration order therefore does not affect named-Collection equality. Reserved binding spellings
+remain valid static field names because fields are members, not lexical bindings. Dictionary key
+iteration continues to preserve insertion order.
+
 <a id="collections"></a>
 ### Collections
 

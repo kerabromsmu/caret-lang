@@ -5,20 +5,24 @@ import java.util.Optional;
 
 enum BuiltinContract implements ContractDescriptor {
     ANY("Any") { @Override public boolean accepts(Value value) { return true; } },
-    NUMBER("Number") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.NUMBER); } },
-    STRING("String") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.STRING); } },
-    BOOLEAN("Boolean") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.BOOLEAN); } },
-    NULL("Null") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.NULL); } },
-    MISSING("Missing") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.MISSING); } },
-    FUNCTION("Function") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.FUNCTION); } },
+    NUMBER("Number") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.NUMBER); } },
+    STRING("String") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.STRING); } },
+    BOOLEAN("Boolean") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.BOOLEAN); } },
+    NULL("Null") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.NULL); } },
+    MISSING("Missing") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.MISSING); } },
+    FUNCTION("Function") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.FUNCTION); } },
     COLLECTION("Collection") {
         @Override public boolean accepts(Value value) {
             value = ValueSemantics.underlying(value);
-            return value instanceof Value.NamedCollection || value instanceof Value.Seq || value instanceof Value.Dict;
+            return value instanceof Value.NamedCollection || value instanceof Value.EmptyCollection
+                    || value instanceof Value.Seq || value instanceof Value.Dict;
         }
     },
     SEQUENCE("Sequence") {
-        @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.SEQUENCE); }
+        @Override public boolean accepts(Value value) {
+            value = ValueSemantics.underlying(value);
+            return value instanceof Value.EmptyCollection || ValueKind.of(value) == ValueKind.SEQUENCE;
+        }
         @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
         @Override public int parameterArity() { return 1; }
         @Override public ContractDescriptor parameterize(java.util.List<ContractDescriptor> arguments) {
@@ -27,7 +31,10 @@ enum BuiltinContract implements ContractDescriptor {
         }
     },
     DICTIONARY("Dictionary") {
-        @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.DICTIONARY); }
+        @Override public boolean accepts(Value value) {
+            value = ValueSemantics.underlying(value);
+            return value instanceof Value.EmptyCollection || ValueKind.of(value) == ValueKind.DICTIONARY;
+        }
         @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
     };
 
@@ -36,9 +43,9 @@ enum BuiltinContract implements ContractDescriptor {
     public String publicName() { return publicName; }
     public abstract boolean accepts(Value value);
 
-    private static boolean kind(Value value, ValueSemantics.Descriptor descriptor) {
+    private static boolean kind(Value value, ValueKind descriptor) {
         value = ValueSemantics.underlying(value);
-        return ValueSemantics.descriptor(value) == descriptor;
+        return ValueKind.of(value) == descriptor;
     }
 
     static Optional<BuiltinContract> named(String name) {

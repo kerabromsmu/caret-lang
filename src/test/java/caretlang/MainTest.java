@@ -86,8 +86,16 @@ final class MainTest {
                 10
                 ~
                 10
-                [^kind = Collection, ^shape = named, ^size = 2, ^names = name,count]
+                [^kind = Collection, ^names = count,name, ^shape = named, ^size = 2]
                 """, invocation.output());
+        assertEquals("", invocation.error());
+    }
+
+    @Test
+    void collectionOrderingExampleRunsEndToEnd() {
+        Invocation invocation = run(Path.of("examples/collection_order.caret"));
+        assertEquals(0, invocation.exitCode());
+        assertEquals("Collection\nempty\ntrue\ntrue\na,with,z\n1\n", invocation.output());
         assertEquals("", invocation.error());
     }
 

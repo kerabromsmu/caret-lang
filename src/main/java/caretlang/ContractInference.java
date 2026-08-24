@@ -369,7 +369,7 @@ final class ContractInference {
     }
 
     private static Shape literal(Value value) {
-        return switch (ValueSemantics.descriptor(value)) {
+        return switch (ValueKind.of(value)) {
             case NUMBER -> Shape.concrete(BuiltinContract.NUMBER);
             case STRING -> Shape.concrete(BuiltinContract.STRING);
             case BOOLEAN -> Shape.concrete(BuiltinContract.BOOLEAN);

@@ -300,7 +300,9 @@ print (@source).kind
 print (@source).names
 ```
 
-Named Collection reflection exposes `kind`, `shape`, `size`, and ordered `names`; sequence and
+Named Collection reflection exposes `kind`, `shape`, `size`, and canonical `names`. Named fields are
+ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
+order; their value expressions are still evaluated in source order. Sequence and
 dictionary reflection expose their applicable collection metadata. `@function` returns a
 non-callable function reference exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.

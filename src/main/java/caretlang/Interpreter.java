@@ -6,12 +6,9 @@ import java.io.PrintStream;
 import java.util.*;
 
 final class Interpreter {
-    // Keep the language-owned guard below typical JVM stack limits so diagnostics do not depend on
-    // host stack size or whether a StackOverflowError happens first.
-    private static final int MAX_CALL_DEPTH = 256;
     private final Environment globals = new Environment(null);
     private final PrintStream output;
-    private int callDepth;
+    private final CallableDispatcher calls = new CallableDispatcher();
     private ContractInference inference;
     private final EffectCatalog effectCatalog;
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
@@ -739,7 +736,8 @@ final class Interpreter {
             return evalInner(expression, env, resolution);
         }
         if (expr instanceof CollectionLiteral(List<CollectionElement> elements, SourceSpan ignored)) {
-            if (elements.isEmpty() || elements.getFirst() instanceof PositionalElement) {
+            if (elements.isEmpty()) return Value.EmptyCollection.INSTANCE;
+            if (elements.getFirst() instanceof PositionalElement) {
                 ArrayList<Value> values = new ArrayList<>(elements.size());
                 for (CollectionElement element : elements) {
                     values.add(evalInner(element.value(), env, resolution));
@@ -824,27 +822,11 @@ final class Interpreter {
     }
 
     private Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan span) {
-        return withinCallDepth(span, () -> callable.apply(argument, span));
+        return calls.invoke(callable, argument, span);
     }
 
     private Value invokeZero(Value.Callable callable, SourceSpan span) {
-        return withinCallDepth(span, () -> callable.invokeZero(span));
-    }
-
-    private Value withinCallDepth(SourceSpan span, java.util.function.Supplier<Value> invocation) {
-        if (callDepth >= MAX_CALL_DEPTH) {
-            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
-                    "Maximum Caret call depth exceeded", span);
-        }
-        callDepth++;
-        try {
-            return invocation.get();
-        } catch (StackOverflowError exhaustedStack) {
-            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
-                    "Maximum Caret call depth exceeded", span);
-        } finally {
-            callDepth--;
-        }
+        return calls.invokeZero(callable, span);
     }
 
     private Value applyBinaryOperator(String operator, Value left, SourceSpan leftSpan,
@@ -1092,6 +1074,7 @@ final class Interpreter {
 
     private Value.Seq sequence(Value.Argument argument) {
         Value raw = underlying(argument.value());
+        if (raw instanceof Value.EmptyCollection) return new Value.Seq(List.of());
         if (raw instanceof Value.Seq sequence) return sequence;
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
@@ -1099,6 +1082,7 @@ final class Interpreter {
 
     private Value.Dict dictionary(Value.Argument argument) {
         Value raw = underlying(argument.value());
+        if (raw instanceof Value.EmptyCollection) return new Value.Dict(Map.of());
         if (raw instanceof Value.Dict dictionary) return dictionary;
         throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
                 "Expected dictionary, got: " + argument.value(), argument.span());
@@ -1135,7 +1119,7 @@ final class Interpreter {
         Optional<Value> value = reflective.find(name);
         if (value.isPresent()) return value.get();
         if (optional) return Value.Missing.INSTANCE;
-        if (target instanceof Value.NamedCollection) {
+        if (target instanceof Value.NamedCollection || target instanceof Value.EmptyCollection) {
             throw runtime(Diagnostic.Codes.MISSING_FIELD, "Collection has no field: " + name);
         }
         throw runtime(Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: " + name);

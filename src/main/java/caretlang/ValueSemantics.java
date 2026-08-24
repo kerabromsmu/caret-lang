@@ -10,16 +10,6 @@ import java.util.Optional;
 
 /** Language-owned policies for public kinds, reflection, equality, and value rendering. */
 final class ValueSemantics {
-    enum Descriptor {
-        NUMBER("Number"), STRING("String"), BOOLEAN("Boolean"), NULL("Null"), MISSING("Missing"),
-        COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), FUNCTION("Function"),
-        CONTRACT("Contract"), REFLECTIVE("Reflective");
-
-        private final String publicName;
-        Descriptor(String publicName) { this.publicName = publicName; }
-        String publicName() { return publicName; }
-    }
-
     private ValueSemantics() {}
 
     static Value underlying(Value value) {
@@ -27,32 +17,16 @@ final class ValueSemantics {
         return value;
     }
 
-    static Descriptor descriptor(Value value) {
-        Objects.requireNonNull(value);
-        value = underlying(value);
-        return switch (value) {
-            case Value.Num ignored -> Descriptor.NUMBER;
-            case Value.Str ignored -> Descriptor.STRING;
-            case Value.Bool ignored -> Descriptor.BOOLEAN;
-            case Value.Null ignored -> Descriptor.NULL;
-            case Value.Missing ignored -> Descriptor.MISSING;
-            case Value.NamedCollection ignored -> Descriptor.COLLECTION;
-            case Value.Seq ignored -> Descriptor.SEQUENCE;
-            case Value.Dict ignored -> Descriptor.DICTIONARY;
-            case Value.FunctionReference ignored -> Descriptor.FUNCTION;
-            case Value.ContractValue ignored -> Descriptor.CONTRACT;
-            case Value.Attributed attributed -> descriptor(attributed.value());
-            case Value.Reflective ignored -> Descriptor.REFLECTIVE;
-            case Value.Callable ignored -> Descriptor.FUNCTION;
-        };
-    }
-
-    static String kind(Value value) { return descriptor(value).publicName(); }
+    static String kind(Value value) { return ValueKind.of(value).publicName(); }
 
     static Map<String, Value> reflectionFields(Value value) {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("kind", new Value.Str(kind(value)));
         switch (value) {
+            case Value.EmptyCollection ignored -> {
+                fields.put("shape", new Value.Str("empty"));
+                fields.put("size", new Value.Num(0));
+            }
             case Value.NamedCollection collection -> {
                 fields.put("shape", new Value.Str("named"));
                 fields.put("size", new Value.Num(collection.fields().size()));
@@ -87,6 +61,7 @@ final class ValueSemantics {
                 if (x.descriptor() != y.descriptor()) return false;
                 continue;
             }
+            if (isEmptyCollection(a) && isEmptyCollection(b)) continue;
             if (a instanceof Value.Callable || b instanceof Value.Callable) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY,
                         "Callable values cannot be compared for equality", null);
@@ -122,6 +97,7 @@ final class ValueSemantics {
             Object item = pending.pop();
             switch (item) {
                 case String text -> output.append(text);
+                case Value.EmptyCollection ignored -> output.append("[]");
                 case Value.NamedCollection collection -> pushMap(collection.fields(), "[", "]", "^", pending);
                 case Value.Dict dictionary -> {
                     pending.push("]");
@@ -157,6 +133,13 @@ final class ValueSemantics {
             }
         }
         return output.toString();
+    }
+
+    private static boolean isEmptyCollection(Value value) {
+        return value instanceof Value.EmptyCollection
+                || value instanceof Value.Seq sequence && sequence.size() == 0
+                || value instanceof Value.Dict dictionary && dictionary.size() == 0
+                || value instanceof Value.NamedCollection collection && collection.fields().isEmpty();
     }
 
     private static void pushMap(Map<String, Value> values, String open, String close,

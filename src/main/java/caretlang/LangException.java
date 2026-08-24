@@ -1,17 +1,10 @@
 package caretlang;
 
 // Language diagnostics are process-local and are never Java-serialized.
+@SuppressWarnings("serial") // Language diagnostics are process-local and are never Java-serialized.
 public final class LangException extends RuntimeException {
     private final Diagnostic diagnostic;
     private final DiagnosticCatalog catalogEntry;
-
-    public LangException(String message) {
-        throw new IllegalArgumentException("Free-form language diagnostics are not permitted");
-    }
-
-    LangException(String message, SourceSpan span) {
-        throw new IllegalArgumentException("Free-form language diagnostics are not permitted");
-    }
 
     LangException(Diagnostic.Phase phase, String code, String message, SourceSpan span) {
         this(new Diagnostic(phase, code, message, span), DiagnosticCatalog.identify(phase, code, message));

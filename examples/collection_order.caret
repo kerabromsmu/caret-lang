@@ -1,0 +1,10 @@
+// Empty collections are shape-neutral; named fields use canonical code-point order.
+empty = []
+named = [^with = 1 ^z = 2 ^a = 3]
+
+print (@empty).kind
+print (@empty).shape
+print Sequence empty
+print Dictionary empty
+print (@named).names
+print named.with

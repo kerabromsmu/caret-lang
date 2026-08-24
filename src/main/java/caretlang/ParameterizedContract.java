@@ -28,6 +28,7 @@ final class ParameterizedContract implements ContractDescriptor {
     @Override public boolean accepts(Value value) {
         value = ValueSemantics.underlying(value);
         if (!base.accepts(value)) return false;
+        if (value instanceof Value.EmptyCollection) return true;
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
             ContractDescriptor element = arguments.getFirst();
             return sequence.values().stream().allMatch(element::accepts);

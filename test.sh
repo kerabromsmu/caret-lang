@@ -47,7 +47,7 @@ A
 ~
 10
 Collection
-name,count
+count,name
 1
 EXPECTED
 diff -u "$CARET_TEST_TMP/expected.txt" "$CARET_TEST_TMP/output.txt"
@@ -75,6 +75,9 @@ diff -u examples/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contracts-outpu
 
 "$CARET_LAUNCHER" examples/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
 diff -u examples/effects.expected "$CARET_TEST_TMP/effects-output.txt"
+
+"$CARET_LAUNCHER" examples/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
+diff -u examples/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
 
 "$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'

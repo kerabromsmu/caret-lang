@@ -180,6 +180,9 @@ non-callable reference, and both `type` and its `kind` metadata identify it as `
 The current prototype supports finite numbers, Unicode strings, Booleans, null, and missing. It also
 provides persistent sequences and insertion-ordered dictionaries. Collection updates
 produce new values rather than mutating existing ones, and equality is structural for ordinary data.
+The bare `[]` value is a shape-neutral empty Collection accepted by compatible sequence and
+dictionary contracts. Named Collection fields traverse and reflect in locale-independent,
+case-sensitive Unicode code-point order, while their expressions evaluate in source order.
 
 ```caret
 items = seqAdd (seqAdd seqEmpty "first") "second"

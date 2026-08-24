@@ -53,6 +53,14 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return "~"; }
     }
 
+    /** The single shape-neutral empty collection literal. */
+    enum EmptyCollection implements Reflective {
+        INSTANCE;
+        @Override public Optional<Value> find(String name) { return Optional.empty(); }
+        @Override public Map<String, Value> fields() { return Map.of(); }
+        @Override public String toString() { return "[]"; }
+    }
+
     non-sealed interface Reflective extends Value {
         Optional<Value> find(String name);
         Map<String, Value> fields();
@@ -62,7 +70,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final LinkedHashMap<String, Value> fields;
 
         public NamedCollection(Map<String, Value> fields) {
-            this.fields = checkedMap(fields);
+            this.fields = CollectionRuntime.canonicalNamedFields(checkedMap(fields));
         }
 
         public Optional<Value> find(String name) {
