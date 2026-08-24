@@ -56,7 +56,7 @@ a or b
 `and` and `or` short-circuit.
 
 <a id="scopes"></a>
-## Scopes
+## Named Collections and lexical scopes
 
 ```text
 makeA =
@@ -79,8 +79,9 @@ Optional lookup returns `~`:
 a.enabled~
 ```
 
-Scopes are immutable in this prototype. `Scope` is a legacy prototype runtime kind, not a distinct
-value kind in the planned language. Planned exported values use the ordinary `Collection` model.
+Exported blocks produce immutable named Collections. An explicit named literal such as
+`[^name = "A" ^count = 10]` produces the same value. Lexical scopes remain private evaluator and
+resolver mechanisms rather than first-class values.
 
 <a id="dynamic-lookup"></a>
 ## Dynamic lookup
@@ -112,7 +113,7 @@ functionMeta.variants
 Current metadata:
 
 - all values: `kind`
-- scopes: `size`, `names`
+- named Collections: `shape = "named"`, `size`, `names`
 - function references: `kind = "Function"`, visible declaration `name` or `~`, `remaining`,
   language-owned `signature`, and surviving overload `variants`
 
@@ -147,8 +148,8 @@ scope are errors. Parameters and declarations in a function body may shadow oute
 function-body declarations are nested inside the parameter scope so established forms such as
 `^name = name` export a parameter under the same name. Parent lookup is lexical.
 
-In the current prototype, equality is recursive and structural for scalar values, legacy exported
-scopes, sequences, and dictionaries. Scalar
+In the current prototype, equality is recursive and structural for scalar values, named Collections,
+sequences, and dictionaries. Scalar
 numeric equality therefore has the same result when numbers are nested in data; for example, `-0`
 and `0` compare equal both directly and inside a sequence. Encountering a callable anywhere in
 either compared structure is a `CALLABLE_EQUALITY` error. Function references compare by the
@@ -187,4 +188,3 @@ CLI adapter can then render a failed result as the normal located `Error:` diagn
 The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
 lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
 immutable collections, named exported collections, and the planned text operations are sufficient.
-

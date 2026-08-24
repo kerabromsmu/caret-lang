@@ -82,14 +82,14 @@ join left right = left + right
 duplicated = join _1 _1
 print duplicated "x"
 
-// Exported scopes expose only ^ bindings. Scopes compare structurally.
+// Exported blocks and explicit named Collections are equivalent and compare structurally.
 makePerson name age =
   privateAge = age + 1
   ^name = name
   ^age = age
 
 person = makePerson "Ada" 36
-samePerson = makePerson "Ada" 36
+samePerson = [^name = "Ada" ^age = 36]
 print person.name
 print person.age
 print person.privateAge~
@@ -105,6 +105,7 @@ print person["phone"]~
 
 // Reflection exposes value kind and public metadata without invoking functions.
 print (@person).kind
+print (@person).shape
 print (@person).size
 print (@person).names
 print (@factorial).kind

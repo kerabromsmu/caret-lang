@@ -276,7 +276,10 @@ final class ContractInference {
             case ContractModifier ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
             case ContractVariable ignored -> Shape.unknown();
-            case CollectionLiteral ignored -> Shape.concrete(BuiltinContract.SEQUENCE);
+            case CollectionLiteral collection -> collection.elements().stream()
+                    .anyMatch(NamedElement.class::isInstance)
+                    ? Shape.concrete(BuiltinContract.COLLECTION)
+                    : Shape.concrete(BuiltinContract.SEQUENCE);
             case ArrowContract ignored -> Shape.unknown();
         };
     }
@@ -373,7 +376,7 @@ final class ContractInference {
             case NULL -> Shape.concrete(BuiltinContract.NULL);
             case MISSING -> Shape.concrete(BuiltinContract.MISSING);
             case FUNCTION -> Shape.concrete(BuiltinContract.FUNCTION);
-            case SCOPE -> Shape.concrete(BuiltinContract.SCOPE);
+            case COLLECTION -> Shape.concrete(BuiltinContract.COLLECTION);
             case SEQUENCE -> Shape.concrete(BuiltinContract.SEQUENCE);
             case DICTIONARY -> Shape.concrete(BuiltinContract.DICTIONARY);
             default -> Shape.unknown();
@@ -417,16 +420,25 @@ final class ContractInference {
             rejectDisjoint(shape.guarantees(), span);
             return;
         }
-        if (!shape.guarantees().isEmpty() && !constraints.containsAll(shape.guarantees())) {
+        if (!shape.guarantees().isEmpty() && shape.guarantees().stream().anyMatch(actual ->
+                constraints.stream().noneMatch(required -> ContractRelations.implies(actual, required)))) {
             throw conflict(span, shape.guarantees(), constraints);
         }
     }
 
     private static void rejectDisjoint(Set<BuiltinContract> contracts, SourceSpan span) {
-        long substantive = contracts.stream()
+        List<BuiltinContract> substantive = contracts.stream()
                 .filter(contract -> contract != BuiltinContract.NULL && contract != BuiltinContract.MISSING)
-                .count();
-        if (substantive > 1) throw conflict(span, contracts, contracts);
+                .toList();
+        for (int left = 0; left < substantive.size(); left++) {
+            for (int right = left + 1; right < substantive.size(); right++) {
+                BuiltinContract a = substantive.get(left);
+                BuiltinContract b = substantive.get(right);
+                if (!ContractRelations.implies(a, b) && !ContractRelations.implies(b, a)) {
+                    throw conflict(span, contracts, contracts);
+                }
+            }
+        }
     }
 
     private static LangException conflict(SourceSpan span, Set<BuiltinContract> actual,
@@ -540,7 +552,7 @@ final class ContractInference {
                     ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
             case ContractModifier modifier -> expressionEffects(modifier.target(), visible);
             case CollectionLiteral collection -> collection.elements().stream()
-                    .map(element -> expressionEffects(element, visible))
+                    .map(element -> expressionEffects(element.value(), visible))
                     .reduce(EffectSummary.PURE, EffectSummary::plus);
             case ArrowContract ignored -> EffectSummary.PURE;
         };
@@ -722,7 +734,8 @@ final class ContractInference {
             case Reflect reflect -> containsHole(reflect.target());
             case ContractModifier modifier -> containsHole(modifier.target());
             case Group group -> containsHole(group.expression());
-            case CollectionLiteral collection -> collection.elements().stream().anyMatch(ContractInference::containsHole);
+            case CollectionLiteral collection -> collection.elements().stream()
+                    .map(CollectionElement::value).anyMatch(ContractInference::containsHole);
             case ArrowContract ignored -> false;
             case Literal ignored -> false;
             case Name ignored -> false;

@@ -44,7 +44,17 @@ final class Ast {
     /** One-based source index; normalized to zero-based signature metadata. */
     record ContractVariable(int index, SourceSpan span) implements Expr {}
     record Group(Expr expression, SourceSpan span) implements Expr {}
-    record CollectionLiteral(List<Expr> elements, SourceSpan span) implements Expr {}
+    sealed interface CollectionElement permits PositionalElement, NamedElement {
+        Expr value();
+        SourceSpan span();
+    }
+    record PositionalElement(Expr value, SourceSpan span) implements CollectionElement {}
+    record NamedElement(String name, Expr value, SourceSpan span) implements CollectionElement {}
+    record CollectionLiteral(List<CollectionElement> elements, SourceSpan span) implements Expr {
+        CollectionLiteral {
+            elements = List.copyOf(elements);
+        }
+    }
     /** Contextual callable contract; each parameter entry is a conjunction of requirements. */
     record ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                          boolean explicitPure, SourceSpan span) implements Expr {

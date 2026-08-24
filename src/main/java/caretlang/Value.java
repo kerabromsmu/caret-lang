@@ -14,8 +14,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Objects.requireNonNull(value);
             contracts = Set.copyOf(contracts);
         }
-        @SuppressWarnings("NullableProblems")
-        @Override public String toString() { return value.toString(); }
+        @Override public @NotNull String toString() { return value.toString(); }
     }
 
     record Argument(Value value, SourceSpan span) {
@@ -29,8 +28,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         public Num {
             if (!Double.isFinite(value)) throw new IllegalArgumentException("Caret numbers must be finite");
         }
-        @SuppressWarnings("NullableProblems")
-        @Override public String toString() {
+        @Override public @NotNull String toString() {
             long asLong = (long) value;
             return value == asLong ? Long.toString(asLong) : Double.toString(value);
         }
@@ -38,13 +36,11 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
     record Str(String value) implements Value {
         public Str { Objects.requireNonNull(value, "string value"); }
-        @SuppressWarnings("NullableProblems")
-        @Override public String toString() { return value; }
+        @Override public @NotNull String toString() { return value; }
     }
 
     record Bool(boolean value) implements Value {
-        @SuppressWarnings("NullableProblems")
-        @Override public String toString() { return Boolean.toString(value); }
+        @Override public @NotNull String toString() { return Boolean.toString(value); }
     }
 
     enum Null implements Value {
@@ -62,10 +58,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         Map<String, Value> fields();
     }
 
-    final class Scope implements Reflective {
+    final class NamedCollection implements Reflective {
         private final LinkedHashMap<String, Value> fields;
 
-        public Scope(Map<String, Value> fields) {
+        public NamedCollection(Map<String, Value> fields) {
             this.fields = checkedMap(fields);
         }
 
@@ -82,7 +78,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public boolean equals(Object other) {
-            return other instanceof Scope scope && fields.equals(scope.fields);
+            return other instanceof NamedCollection collection && fields.equals(collection.fields);
         }
 
         @Override public int hashCode() {
@@ -667,7 +663,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
             fields.put("kind", new Str(kind));
             fields.putAll(values);
-            return new Scope(fields);
+            return new NamedCollection(fields);
         }
 
         @Override public boolean equals(Object other) {

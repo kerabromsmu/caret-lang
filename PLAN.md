@@ -15,7 +15,7 @@ and located diagnostics. “Complete” means each normative language feature ha
 
 The existing prototype already implements scalar values, `?` and `~`, bindings and functions,
 closures, indentation-based bodies, whitespace application, conditionals, Boolean/arithmetic
-operators, legacy exported scopes, partial application and numbered holes, static/optional/dynamic lookup,
+operators, exported named Collections, partial application and numbered holes, static/optional/dynamic lookup,
 basic reflection, Unicode text primitives, persistent sequences/dictionaries, Caret-native tests,
 located diagnostics (including rendered related spans), guarded callable invocation, and the REPL.
 Logical-line construction is owned by the lexer, and an initial semantic-validation pass diagnoses
@@ -96,7 +96,7 @@ substitution remain unfinished.
   established `^name = name` export pattern as later declaration forms are added.
 - Extend resolver-owned lexical slots into explicit upvalue/lowering metadata for the compiler and
   verify eager partial capture against mutation introduced later.
-- Preserve implemented structural equality for scalars, legacy scopes, and collections and the located
+- Preserve implemented structural equality for scalars, named Collections, and positional collections and the located
   rejection of callable equality as new value kinds arrive.
 
 ### Unified functions/operators and composition
@@ -147,11 +147,12 @@ aliases. Nullable/optional contract modifiers are implemented as first-class, id
 contract unions without collapsing null into missing. The initial parameterized-contract slice is
 also implemented as `Sequence T`, with constructor metadata preserved through aliases, recursive
 element validation, nesting, modifiers, identity semantics, reflection, and conservative outer-kind
-inference. General parameterization and the full public effect system remain subsequent Phase 2
-slices. Closed same-name overload sets now provide observational applicability, unique
+inference. Environment-relative public effect identities, declaration allowances, callable
+constraints, and effectful arrow contracts are implemented; complete higher-order propagation and
+catalog aliasing remain subsequent Phase 2 slices. Closed same-name overload sets now provide observational applicability, unique
 most-specific runtime selection, generic fallbacks, persistent prefix and hole narrowing,
-and distinct no-applicable/ambiguous diagnostics. Complete static selection and the settled
-signature/reflection schema remain planned.
+and distinct no-applicable/ambiguous diagnostics. Complete static selection remains planned; the
+initial signature/reflection schema is implemented.
 The effect pass includes eagerly captured fixed operands in partial expressions, treats
 over-application through an unknown returned callable conservatively, and uses resolver-owned
 symbol identities rather than source-span equality.
@@ -196,7 +197,7 @@ symbol identities rather than source-span equality.
   multi-variant no-applicable and ambiguous-overload diagnostics. Narrow overload sets incrementally
   as prefix or hole arguments fill known positions, fail when no variant survives, and defer final
   selection and ambiguity until full arity without repeating cached parameter checks.
-- Introduce built-in scalar/value contracts and structural contracts for scopes, collections,
+- Introduce built-in scalar/value contracts and structural contracts for named Collections,
   callables, SIMD values, formats, rules, and cycles as those kinds arrive. Contract failures identify
   the declaration/call and failing contract with related spans.
 - Extend eligible hole functions with language-owned collection-constructor descriptors retaining
@@ -265,13 +266,17 @@ symbol identities rather than source-span equality.
 
 ## Phase 4 — Universal collections, fields, and mutability containers
 
+Current foundation: `Collection` is implemented as the general contract for named Collections,
+Sequences, and Dictionaries. Positional and static named `[...]` literals are implemented, exported
+blocks lower directly to equivalent named Collections, and mixed shapes are diagnosed. The steps
+below describe the remaining contextual, first-class Field, template, and representation work.
+
 ### Collection protocol and literals
 
 - Generalize existing sequences/dictionaries behind `Collection` and capability contracts while
   keeping persistent semantics and insertion-ordered dictionary fields.
-- Implement the universal `[...]` literal, including empty, homogeneous, heterogeneous, and nested
-  values. Infer content contracts and apply contextual contracts without assigning a fixed container
-  meaning to square brackets.
+- Complete contextual behavior for `[...]`, including shape-neutral empty values and inferred
+  content contracts, without assigning a fixed container meaning to square brackets.
 - Make each collection literal a hole-expression boundary: materialize its collection-constructor
   function before passing it to a surrounding call, while retaining nested collection structure in
   the outer constructor descriptor. This lets ordinary `template [..]` application receive the
@@ -281,14 +286,13 @@ symbol identities rather than source-span equality.
 
 ### Fields and dictionary-like collections
 
-- Implement `^name = expression` fields and `field name value` dynamic construction as first-class
-  collection elements. Dictionary-like values are collections of fields, with no separate aggregate kind.
-- Require every non-empty collection to be entirely positional or entirely named; diagnose mixed
-  Field and unnamed elements. Keep `[]` shape-neutral and valid under zero-compatible contracts.
+- Complete `^name = expression` fields as first-class values and add `field name value` dynamic
+  construction. Dictionary-like values become collections of fields with no separate aggregate kind.
+- Preserve the implemented positional/named shape diagnostic. Make `[]` shape-neutral and valid
+  under every zero-compatible collection contract.
 - Support static and dynamic access, optional lookup, and exact missing/null/present-`~` behavior.
 - Validate statically known collections against structural contracts and retain dynamic checks when
-  needed. Lower exported blocks directly to observationally equivalent named Collections, excluding
-  private lexical bindings and introducing no intermediate Scope value.
+  needed. Preserve the implemented direct lowering of exported blocks, excluding private bindings.
 - Add packed collections only after representation analysis can require uniform layouts. Integrate
   later with SIMD and formats without changing observable contract membership.
 

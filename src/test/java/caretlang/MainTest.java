@@ -86,7 +86,7 @@ final class MainTest {
                 10
                 ~
                 10
-                ^{kind = Scope, size = 2, names = name,count}
+                [^kind = Collection, ^shape = named, ^size = 2, ^names = name,count]
                 """, invocation.output());
         assertEquals("", invocation.error());
     }

@@ -46,7 +46,7 @@ A
 ?
 ~
 10
-Scope
+Collection
 name,count
 1
 EXPECTED
@@ -159,7 +159,7 @@ right
 Number
 Function
 1
-Scope
+Collection
 2
 answer,nothing
 EXPECTED
@@ -171,7 +171,8 @@ grep -F 'Note: Line 1, column 1: First definition of value' \
 expect_failure examples/errors/reserved_binding.caret 'Line 1, column 1: Reserved spelling cannot be used as a binding name: true'
 expect_failure examples/errors/read_before_initialization.caret 'Line 1, column 9: Binding read before initialization: second'
 expect_failure examples/errors/unknown_name.caret 'Line 1, column 7: Unknown name: absent'
-expect_failure examples/errors/required_missing_field.caret 'Line 5, column 7: Scope has no exported binding: absent'
+expect_failure examples/errors/required_missing_field.caret 'Line 5, column 7: Collection has no field: absent'
+expect_failure examples/errors/mixed_collection_shape.caret 'Line 1, column 12: A collection cannot mix named and positional elements'
 expect_failure examples/errors/invalid_dynamic_key.caret 'Line 5, column 7: Dynamic field name must be a string'
 expect_failure examples/errors/division_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/remainder_by_zero.caret 'Line 1, column 11: Division by zero'

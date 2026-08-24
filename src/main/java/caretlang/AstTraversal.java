@@ -28,7 +28,8 @@ final class AstTraversal {
             case Reflect reflect -> List.of(reflect.target());
             case ContractModifier modifier -> List.of(modifier.target());
             case Group group -> List.of(group.expression());
-            case CollectionLiteral collection -> collection.elements();
+            case CollectionLiteral collection -> collection.elements().stream()
+                    .map(CollectionElement::value).toList();
             case ArrowContract arrow -> java.util.stream.Stream.concat(
                     arrow.parameters().stream().flatMap(List::stream), java.util.stream.Stream.of(arrow.result())).toList();
         };
@@ -65,7 +66,17 @@ final class AstTraversal {
             case ContractModifier modifier -> new ContractModifier(children.getFirst(), modifier.nullable(),
                     modifier.optional(), modifier.span());
             case Group group -> new Group(children.getFirst(), group.span());
-            case CollectionLiteral collection -> new CollectionLiteral(children, collection.span());
+            case CollectionLiteral collection -> {
+                java.util.ArrayList<CollectionElement> elements = new java.util.ArrayList<>();
+                for (int index = 0; index < children.size(); index++) {
+                    CollectionElement original = collection.elements().get(index);
+                    Expr child = children.get(index);
+                    elements.add(original instanceof NamedElement named
+                            ? new NamedElement(named.name(), child, named.span())
+                            : new PositionalElement(child, original.span()));
+                }
+                yield new CollectionLiteral(elements, collection.span());
+            }
             case ArrowContract arrow -> {
                 int offset = 0;
                 java.util.ArrayList<List<Expr>> parameters = new java.util.ArrayList<>();

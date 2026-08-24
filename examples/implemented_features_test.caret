@@ -80,30 +80,31 @@ assert "ordinary partial application" (inside 7)
 assertEqual "numbered holes reorder arguments" (reordered 1 3) 321
 assertEqual "numbered holes reuse arguments" (duplicated "x") "xx"
 
-// Exported scopes, privacy, optional access, dynamic lookup, and structural equality.
+// Named Collections, privacy, optional access, dynamic lookup, and structural equality.
 makePerson name age =
   privateAge = age + 1
   ^name = name
   ^age = age
 
 person = makePerson "Ada" 36
-samePerson = makePerson "Ada" 36
+samePerson = [^name = "Ada" ^age = 36]
 fieldName = "name"
 
 assertEqual "required exported field" person.name "Ada"
 assertEqual "second exported field" person.age 36
 assertEqual "private binding is hidden" person.privateAge~ ~
 assertEqual "optional absent field" person.phone~ ~
-assert "exported scopes compare structurally" (person == samePerson)
+assert "export shorthand equals a named literal" (person == samePerson)
 assertEqual "dynamic field lookup" person[fieldName]~ "Ada"
 assertEqual "dynamic string lookup" person["age"]~ 36
 assertEqual "required dynamic lookup" person["age"] 36
 assertEqual "optional dynamic lookup" person["phone"]~ ~
 
 // Reflection exposes only public metadata and does not invoke functions.
-assertEqual "scope reflection kind" (@person).kind "Scope"
-assertEqual "scope reflection size" (@person).size 2
-assertEqual "scope reflection names" (@person).names "name,age"
+assertEqual "collection reflection kind" (@person).kind "Collection"
+assertEqual "collection reflection shape" (@person).shape "named"
+assertEqual "collection reflection size" (@person).size 2
+assertEqual "collection reflection names" (@person).names "name,age"
 assertEqual "function reflection kind" (@factorial).kind "Function"
 assertEqual "function reflection remaining arity" (@factorial).remaining 1
 factorialReference = @factorial

@@ -1,5 +1,6 @@
 package caretlang;
 
+// Language diagnostics are process-local and are never Java-serialized.
 public final class LangException extends RuntimeException {
     private final Diagnostic diagnostic;
     private final DiagnosticCatalog catalogEntry;

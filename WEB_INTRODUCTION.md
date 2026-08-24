@@ -127,8 +127,7 @@ print ada.name
 print ada.age
 ```
 
-The current prototype represents this result with its legacy immutable `Scope` kind. In the planned
-language, the result is the named `Collection` containing those exported fields and is equivalent
+The current prototype returns the named `Collection` containing those exported fields, equivalent
 to writing an explicit `[...]` named collection. The same recursive equality rules apply when
 values are nested, while callable values are deliberately not comparable. Lexical scopes remain
 private name-resolution environments rather than first-class values.
@@ -190,10 +189,11 @@ print seqGet items 0
 print dictGet settings "theme"
 ```
 
-The planned language generalizes these primitives into a single collection model. One `[...]`
-literal can describe a list, set, dictionary, packed buffer, or heterogeneous structure; surrounding
-contracts select its behavior and representation. Named fields are ordinary first-class collection
-elements rather than a separate object or JSON notation.
+The prototype now has a general `Collection` contract, positional and static named `[...]` literals,
+and named Collections returned directly by exported blocks. The planned contextual model will let
+the same literal describe a list, set, dictionary, packed buffer, or heterogeneous structure while
+surrounding contracts select behavior and representation. Dynamic fields will become ordinary
+first-class collection elements rather than a separate object or JSON notation.
 
 Caret likewise plans to use contracts as one common model for types, interfaces, refinements, and
 capabilities. Contracts form derivation graphs and work as predicates. Behavior remains in ordinary
@@ -358,13 +358,13 @@ environment and is not implemented by the current interpreter.
 ## An evolving language experiment
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
-supports lexical closures, direct and mutual recursion, partial application, legacy exported scopes,
+supports lexical closures, direct and mutual recursion, partial application, named Collections,
 left-to-right function composition, language-owned reflection, persistent collections,
 source-located diagnostics, a REPL, and native test assertions.
 
 General parameterized contracts, declaration-wide-variable arrow contracts,
-structural templates, universal
-collection literals, modules, root reification, sandboxing, compile-time execution, separate compilation roots,
+structural templates, contextual collection representations, modules, root reification, sandboxing,
+compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 

@@ -41,13 +41,21 @@ final class ParserTest {
     void parsesEagerCollectionLiteralsAsElementBoundaries() {
         CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class, expression("[A B]"));
         assertEquals(List.of("A", "B"), literal.elements().stream()
-                .map(Name.class::cast).map(Name::name).toList());
+                .map(CollectionElement::value).map(Name.class::cast).map(Name::name).toList());
         assertTrue(assertInstanceOf(CollectionLiteral.class, expression("[]")).elements().isEmpty());
         CollectionLiteral arithmetic = assertInstanceOf(CollectionLiteral.class, expression("[1 + 2]"));
-        assertInstanceOf(Binary.class, arithmetic.elements().getFirst());
+        assertInstanceOf(Binary.class, arithmetic.elements().getFirst().value());
         CollectionLiteral nested = assertInstanceOf(CollectionLiteral.class, expression("[[A B] C]"));
-        assertInstanceOf(CollectionLiteral.class, nested.elements().getFirst());
+        assertInstanceOf(CollectionLiteral.class, nested.elements().getFirst().value());
         assertEquals(2, nested.elements().size());
+    }
+
+    @Test
+    void parsesNamedCollectionElements() {
+        CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class,
+                expression("[^name = \"Ada\" ^age = 42]"));
+        assertEquals(List.of("name", "age"), literal.elements().stream()
+                .map(NamedElement.class::cast).map(NamedElement::name).toList());
     }
 
     @Test

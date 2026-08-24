@@ -55,7 +55,7 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-DIVISION-BY-ZERO | public | DIVISION_BY_ZERO | `examples/errors/division_by_zero.caret` |
 | RUNTIME-NONFINITE-RESULT | public | NON_FINITE_RESULT | `examples/errors/non_finite_result.caret` |
 | RUNTIME-INVALID-FIELD-TARGET | public | INVALID_FIELD_TARGET | `examples/errors/invalid_field_target.caret` |
-| RUNTIME-MISSING-SCOPE-FIELD | public | MISSING_FIELD | `examples/errors/required_missing_field.caret` |
+| RUNTIME-MISSING-COLLECTION-FIELD | public | MISSING_FIELD | `examples/errors/required_missing_field.caret` |
 | RUNTIME-MISSING-REFLECTED-FIELD | public | MISSING_FIELD | `examples/errors/missing_reflected_field.caret` |
 | RUNTIME-INVALID-DYNAMIC-FIELD | public | INVALID_DYNAMIC_FIELD_NAME | `examples/errors/invalid_dynamic_key.caret` |
 | RUNTIME-CALLABLE-EQUALITY | public | CALLABLE_EQUALITY | `examples/errors/callable_equality.caret` |
@@ -67,6 +67,7 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-INCOMPATIBLE-CONTRACTS | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_inferred_contracts.caret` |
 | SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
+| SEMANTIC-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `examples/errors/mixed_collection_shape.caret` |
 | SEMANTIC-INVALID-REFINEMENT | public | INVALID_REFINEMENT | `ContractInferenceTest#validatesOnlyProvenPureUnaryBooleanRefinements`; `InterpreterTest#invalidRefinementsAreRejectedBeforeProgramEffects`; `examples/errors/invalid_refinement.caret` |
 | SEMANTIC-INVALID-CONTRACT-VARIABLE | public | INVALID_CONTRACT_VARIABLE | `InterpreterTest#arrowContractVariablesAreContiguousAndRequireGenericRelationships` |
 | SEMANTIC-AMBIGUOUS-CLAUSE-NAME | public | AMBIGUOUS_CLAUSE_NAME | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |

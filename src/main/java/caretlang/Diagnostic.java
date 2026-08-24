@@ -60,6 +60,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String INVALID_FIELD_TARGET = "INVALID_FIELD_TARGET";
         static final String MISSING_FIELD = "MISSING_FIELD";
         static final String INVALID_DYNAMIC_FIELD_NAME = "INVALID_DYNAMIC_FIELD_NAME";
+        static final String MIXED_COLLECTION_SHAPE = "MIXED_COLLECTION_SHAPE";
         static final String CALLABLE_EQUALITY = "CALLABLE_EQUALITY";
         static final String MIXED_HOLE_STYLES = "MIXED_HOLE_STYLES";
         static final String INVALID_ASSERTION = "INVALID_ASSERTION";

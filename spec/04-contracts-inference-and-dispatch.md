@@ -7,7 +7,7 @@
 ## Contract foundation currently implemented
 
 The prototype provides first-class unary contracts matching its existing runtime kinds: `Any`,
-`Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Scope`, `Sequence`, and `Dictionary`.
+`Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`, and `Dictionary`.
 Calling a contract tests membership and returns a Boolean:
 
 ```caret
@@ -40,9 +40,10 @@ The semantic analyzer also computes an initial effect summary for named function
 known effects through direct named calls, includes effects from the fixed subexpressions captured
 eagerly while constructing partials, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
-prove that a prospective refinement is unary, Boolean-returning, and pure. Effect declarations,
-ordinary-function enforcement, and effect reflection/tooling remain planned; the internal output
-marker for `print` is not public syntax. Proven predicates are implemented as first-class refinement
+prove that a prospective refinement is unary, Boolean-returning, and pure. Environment-relative
+effect identities, declaration allowances, callable constraints, and effectful arrow contracts are
+implemented. Complete higher-order propagation and broader effect tooling remain planned. Proven
+predicates are implemented as first-class refinement
 requirements in `contract` construction and direct clauses, including through ordinary aliases.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
 evaluation of `contract` creates an unequal descriptor even when its requirements are identical.
@@ -89,18 +90,17 @@ A modifier target known not to be a contract is rejected during semantic analysi
 When the target's contract status depends on runtime evaluation, failure is instead a located runtime
 `NOT_A_CONTRACT` diagnostic. It never reports Java AST or implementation details.
 
-The initial `Sequence T` parameterized-contract form is implemented as described in the collection
-section below. General parameterization, overload dispatch, complete static inference/proof, the
-public effect system, and the full universal-collection model remain planned.
+The general unary `Collection` contract and the initial `Sequence T` parameterized-contract form are
+implemented as described in the collection section below. General parameterization, complete static
+inference/proof, and contextual collection representation selection remain planned.
 
 In the current prototype, physical indentation directly defines a multiline function body. The
 planned [layout modifiers](01-source-layout-and-diagnostics.md#planned-layout-baseline-modifiers)
 will first translate physical indentation into effective
 logical indentation; the ordinary block rules will then consume that logical indentation. If a
-body contains exported bindings (`^`), calling the function returns an immutable scope containing
-those exports. This `Scope` value and its built-in contract are legacy prototype behavior. In the
-planned language, the same source form produces the named `Collection` specified in the
-[collections document](06-collections-fields-and-templates.md#collections-and-lexical-scopes). Otherwise
+body contains exported bindings (`^`), calling the function returns the immutable named `Collection`
+specified in the [collections document](06-collections-fields-and-templates.md#collections-and-lexical-scopes).
+It is observationally equivalent to the explicit named literal containing those exports. Otherwise
 the prototype returns the final expression or assigned value.
 
 A zero-argument function is evaluated when its name is read. Use reflection syntax to refer to the
@@ -110,7 +110,7 @@ function itself without invoking it:
 factory =
   ^value = 42
 
-factory          // calls factory and produces its legacy exported scope
+factory          // calls factory and produces its named Collection
 @factory         // reflects the factory function itself without calling it
 ```
 

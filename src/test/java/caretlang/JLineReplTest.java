@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -118,7 +119,7 @@ final class JLineReplTest {
             return errorBytes.toString(StandardCharsets.UTF_8);
         }
 
-        @Override public void close() throws Exception {
+        @Override public void close() throws IOException {
             terminal.close();
         }
     }

@@ -3,13 +3,11 @@ package caretlang;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
-interface DiagnosticCategory {
-    String PUBLIC = "public";
-    String INTERNAL = "internal";
-}
+import static caretlang.DiagnosticCategory.INTERNAL;
+import static caretlang.DiagnosticCategory.PUBLIC;
 
 /** Stable inventory of the distinct diagnostic messages emitted by the prototype. */
-enum DiagnosticCatalog implements DiagnosticCategory {
+enum DiagnosticCatalog {
     LEX_INCOMPLETE_ESCAPE("LEX-INCOMPLETE-ESCAPE", Diagnostic.Phase.LEXER, Diagnostic.Codes.LEX_INVALID_ESCAPE, "Incomplete string escape", PUBLIC),
     LEX_UNKNOWN_ESCAPE("LEX-UNKNOWN-ESCAPE", Diagnostic.Phase.LEXER, Diagnostic.Codes.LEX_INVALID_ESCAPE, "Unknown string escape: .*", PUBLIC),
     LEX_UNTERMINATED_STRING("LEX-UNTERMINATED-STRING", Diagnostic.Phase.LEXER, Diagnostic.Codes.LEX_UNTERMINATED_STRING, "Unterminated string", PUBLIC),
@@ -59,6 +57,9 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     SEMANTIC_UNKNOWN_CALL_EFFECTS("SEMANTIC-UNKNOWN-CALL-EFFECTS", Diagnostic.Phase.SEMANTIC,
             Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, "Callable invocation has no known effect upper bound", PUBLIC),
     INCONSISTENT_OVERLOAD_ARITY("SEMANTIC-INCONSISTENT-OVERLOAD-ARITY", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INCONSISTENT_OVERLOAD_ARITY, "Overload variants must have the same arity: .*", PUBLIC),
+    MIXED_COLLECTION_SHAPE("SEMANTIC-MIXED-COLLECTION-SHAPE", Diagnostic.Phase.SEMANTIC,
+            Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+            "A collection cannot mix named and positional elements", PUBLIC),
 
     RUNTIME_DUPLICATE_DEFINITION("RUNTIME-DUPLICATE-DEFINITION", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DUPLICATE_DEFINITION, "Duplicate definition: .*", INTERNAL),
     RUNTIME_PREMATURE_READ("RUNTIME-PREMATURE-READ", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.READ_BEFORE_INITIALIZATION, "Binding read before initialization.*", INTERNAL),
@@ -81,8 +82,8 @@ enum DiagnosticCatalog implements DiagnosticCategory {
     INVALID_DICTIONARY_KEY("RUNTIME-INVALID-DICTIONARY-KEY", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_DICTIONARY_KEY, "Dictionary key must be a string, got: .*", PUBLIC),
     DIVISION_BY_ZERO("RUNTIME-DIVISION-BY-ZERO", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero", PUBLIC),
     NONFINITE_RESULT("RUNTIME-NONFINITE-RESULT", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NON_FINITE_RESULT, "Numeric result is not finite", PUBLIC),
-    INVALID_FIELD_TARGET("RUNTIME-INVALID-FIELD-TARGET", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_FIELD_TARGET, "Field access requires a scope, got: .*", PUBLIC),
-    MISSING_SCOPE_FIELD("RUNTIME-MISSING-SCOPE-FIELD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MISSING_FIELD, "Scope has no exported binding: .*", PUBLIC),
+    INVALID_FIELD_TARGET("RUNTIME-INVALID-FIELD-TARGET", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_FIELD_TARGET, "Field access requires a named collection or reflective value, got: .*", PUBLIC),
+    MISSING_COLLECTION_FIELD("RUNTIME-MISSING-COLLECTION-FIELD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MISSING_FIELD, "Collection has no field: .*", PUBLIC),
     MISSING_REFLECTED_FIELD("RUNTIME-MISSING-REFLECTED-FIELD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: .*", PUBLIC),
     INVALID_DYNAMIC_FIELD("RUNTIME-INVALID-DYNAMIC-FIELD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME, "Dynamic field name must be a string, got: .*", PUBLIC),
     CALLABLE_EQUALITY("RUNTIME-CALLABLE-EQUALITY", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY, "Callable values cannot be compared for equality", PUBLIC),

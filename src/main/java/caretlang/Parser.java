@@ -669,12 +669,27 @@ final class Parser {
             if (match("~")) return new Literal(Value.Missing.INSTANCE, previous().span());
             if (match("[")) {
                 Token open = previous();
-                ArrayList<Expr> elements = new ArrayList<>();
+                ArrayList<CollectionElement> elements = new ArrayList<>();
                 while (!peek().text().equals("]")) {
                     if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
+                    if (match("^")) {
+                        Token marker = previous();
+                        if (peek().kind() != Kind.IDENT) {
+                            throw error(Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                                    "Named collection element requires a field name");
+                        }
+                        Token name = tokens.get(current++);
+                        consume("=", "Expected '=' after named collection field");
+                        Expr value = lowPrecedenceApplication();
+                        SourceSpan span = SourceSpan.cover(marker.span(), value.span());
+                        elements.add(new NamedElement(name.text(), value, span));
+                        continue;
+                    }
                     // A top-level operator makes the remainder one unambiguous expression. Plain
                     // adjacent atoms remain separate elements; calls can be grouped explicitly.
-                    elements.add(hasTopLevelOperatorBeforeCollectionEnd() ? lowPrecedenceApplication() : postfix());
+                    Expr value = hasTopLevelOperatorBeforeCollectionEnd()
+                            ? lowPrecedenceApplication() : postfix();
+                    elements.add(new PositionalElement(value, value.span()));
                 }
                 consume("]", "Expected ']'");
                 return new CollectionLiteral(List.copyOf(elements),

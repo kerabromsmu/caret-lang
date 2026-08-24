@@ -11,16 +11,25 @@ enum BuiltinContract implements ContractDescriptor {
     NULL("Null") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.NULL); } },
     MISSING("Missing") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.MISSING); } },
     FUNCTION("Function") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.FUNCTION); } },
-    SCOPE("Scope") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.SCOPE); } },
+    COLLECTION("Collection") {
+        @Override public boolean accepts(Value value) {
+            value = ValueSemantics.underlying(value);
+            return value instanceof Value.NamedCollection || value instanceof Value.Seq || value instanceof Value.Dict;
+        }
+    },
     SEQUENCE("Sequence") {
         @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.SEQUENCE); }
+        @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
         @Override public int parameterArity() { return 1; }
         @Override public ContractDescriptor parameterize(java.util.List<ContractDescriptor> arguments) {
             if (arguments.size() != 1) throw new IllegalArgumentException("Sequence requires one contract argument");
             return new ParameterizedContract(this, arguments);
         }
     },
-    DICTIONARY("Dictionary") { @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.DICTIONARY); } };
+    DICTIONARY("Dictionary") {
+        @Override public boolean accepts(Value value) { return kind(value, ValueSemantics.Descriptor.DICTIONARY); }
+        @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
+    };
 
     private final String publicName;
     BuiltinContract(String publicName) { this.publicName = publicName; }

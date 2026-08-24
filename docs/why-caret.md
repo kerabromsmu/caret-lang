@@ -20,8 +20,8 @@ be narrower: for certain rule-driven, structured, reflective, or controlled syst
 might resemble the thing its author is reasoning about.
 
 That is the larger design. The implementation today is much smaller: a Java 21 tree-walking
-interpreter with concise functions, lexical closures, partial application, legacy immutable exported
-scopes, persistent sequence and dictionary primitives, basic reflection, a REPL, and source-located
+interpreter with concise functions, lexical closures, partial application, immutable named
+Collections, persistent sequence and dictionary primitives, basic reflection, a REPL, and source-located
 diagnostics. Most of the ideas discussed below are specified future work, not production-ready
 features. That gap is important because it also identifies the kinds of early users who could most
 usefully influence what Caret becomes.
@@ -61,8 +61,7 @@ makeCounter initial =
   ^description = "counter"
 ```
 
-Everything not exported remains private. The prototype currently represents this result with a
-legacy `Scope` value; the planned language treats the block as shorthand for the equivalent named
+Everything not exported remains private. The block is shorthand for the equivalent named
 Collection. Lexical scope remains an execution-time name-resolution mechanism. The same export
 convention carries into modules and rulesets, giving Caret one small vocabulary for constructing
 public interfaces rather than a separate visibility system for every abstraction.

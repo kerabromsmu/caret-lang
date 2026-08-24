@@ -1314,11 +1314,12 @@ Their later implementation must not weaken root substitution or permit authority
 ## Not implemented
 
 - trailing lambdas
-- general parameterized contracts beyond the implemented `Sequence T` foundation, overload dispatch, complete static type proof,
-  public effect declarations/enforcement/reflection, and ownership analysis; initial named-function
-  contract inference, result clauses, internal effect analysis, and predicate refinements are
-  implemented
-- universal collection literals, first-class fields, contract-selected representations, and persistent updates
+- general parameterized contracts beyond the implemented `Sequence T` foundation, complete static
+  dispatch/type proof, complete higher-order effect propagation, and ownership analysis; overload
+  dispatch, initial public effect declarations/enforcement/reflection, named-function inference,
+  result clauses, and predicate refinements are implemented
+- first-class dynamic fields, context-selected collection representations, and persistent updates;
+  positional/static-named literals and exported named Collections are implemented
 - mutability containers, container reads/writes, and field reification
 - `with`, resolver-only `outer` paths, and scoped member lookup
 - `\\` and `\*` physical-to-logical layout baseline modifiers

@@ -96,7 +96,7 @@ final class Interpreter {
             }
         }
 
-        return exports.isEmpty() ? last : new Value.Scope(exports);
+        return exports.isEmpty() ? last : new Value.NamedCollection(exports);
     }
 
     private IdentityHashMap<FunctionDef, Value.Callable> prepareDeclarations(List<Stmt> statements,
@@ -738,10 +738,20 @@ final class Interpreter {
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
             return evalInner(expression, env, resolution);
         }
-        if (expr instanceof CollectionLiteral(List<Expr> elements, SourceSpan ignored)) {
-            ArrayList<Value> values = new ArrayList<>(elements.size());
-            for (Expr element : elements) values.add(evalInner(element, env, resolution));
-            return new Value.Seq(values);
+        if (expr instanceof CollectionLiteral(List<CollectionElement> elements, SourceSpan ignored)) {
+            if (elements.isEmpty() || elements.getFirst() instanceof PositionalElement) {
+                ArrayList<Value> values = new ArrayList<>(elements.size());
+                for (CollectionElement element : elements) {
+                    values.add(evalInner(element.value(), env, resolution));
+                }
+                return new Value.Seq(values);
+            }
+            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+            for (CollectionElement element : elements) {
+                NamedElement named = (NamedElement) element;
+                fields.put(named.name(), evalInner(named.value(), env, resolution));
+            }
+            return new Value.NamedCollection(fields);
         }
         if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                                           boolean explicitPure, SourceSpan ignored)) {
@@ -1120,13 +1130,13 @@ final class Interpreter {
         target = underlying(target);
         if (!(target instanceof Value.Reflective reflective)) {
             throw runtime(Diagnostic.Codes.INVALID_FIELD_TARGET,
-                    "Field access requires a scope, got: " + target);
+                    "Field access requires a named collection or reflective value, got: " + target);
         }
         Optional<Value> value = reflective.find(name);
         if (value.isPresent()) return value.get();
         if (optional) return Value.Missing.INSTANCE;
-        if (target instanceof Value.Scope) {
-            throw runtime(Diagnostic.Codes.MISSING_FIELD, "Scope has no exported binding: " + name);
+        if (target instanceof Value.NamedCollection) {
+            throw runtime(Diagnostic.Codes.MISSING_FIELD, "Collection has no field: " + name);
         }
         throw runtime(Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: " + name);
     }
@@ -1136,7 +1146,7 @@ final class Interpreter {
         if (value instanceof Value.FunctionReference reference) return reference;
         if (value instanceof Value.ContractValue contract) return contract;
         if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
-        return new Value.Scope(ValueSemantics.reflectionFields(value));
+        return new Value.NamedCollection(ValueSemantics.reflectionFields(value));
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {

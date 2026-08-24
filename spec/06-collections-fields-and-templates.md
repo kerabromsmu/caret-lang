@@ -6,7 +6,8 @@
 <a id="immutable-collections"></a>
 ## Immutable collections
 
-The prototype provides immutable sequences and insertion-ordered dictionaries through:
+The prototype provides named Collections through exported blocks and explicit named literals. It
+also provides immutable sequences and insertion-ordered dictionaries through:
 
 ```text
 seqEmpty
@@ -24,7 +25,8 @@ dictKeys dictionary
 Dictionary keys are strings, and key iteration preserves insertion order. `dictHas` distinguishes
 an absent key from a present key whose value is
 `~`.
-Collection literal syntax is not required for the initial self-interpreter.
+Positional and static named Collection literal syntax is implemented. Context-selected
+representations and dynamic first-class Field construction remain planned.
 
 <a id="collections-and-lexical-scopes"></a>
 ## Collections and lexical scopes
@@ -81,8 +83,9 @@ shape. Explicit structural contracts that require actual positions or fields rem
 
 `Collection` is the fundamental contract for values containing zero or more elements.
 
-It is the planned language's ordinary first-class aggregate model for both positional collections
-and named structured values. There is no additional `Scope` value category for named exports.
+It is the ordinary first-class aggregate model for both positional collections and named structured
+values. The prototype implements the general unary contract across named Collections, Sequences,
+and Dictionaries. There is no additional `Scope` value category for named exports.
 
 More specific collection contracts derive from it.
 

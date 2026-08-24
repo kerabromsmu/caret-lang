@@ -12,7 +12,7 @@ import java.util.Optional;
 final class ValueSemantics {
     enum Descriptor {
         NUMBER("Number"), STRING("String"), BOOLEAN("Boolean"), NULL("Null"), MISSING("Missing"),
-        SCOPE("Scope"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), FUNCTION("Function"),
+        COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), FUNCTION("Function"),
         CONTRACT("Contract"), REFLECTIVE("Reflective");
 
         private final String publicName;
@@ -36,7 +36,7 @@ final class ValueSemantics {
             case Value.Bool ignored -> Descriptor.BOOLEAN;
             case Value.Null ignored -> Descriptor.NULL;
             case Value.Missing ignored -> Descriptor.MISSING;
-            case Value.Scope ignored -> Descriptor.SCOPE;
+            case Value.NamedCollection ignored -> Descriptor.COLLECTION;
             case Value.Seq ignored -> Descriptor.SEQUENCE;
             case Value.Dict ignored -> Descriptor.DICTIONARY;
             case Value.FunctionReference ignored -> Descriptor.FUNCTION;
@@ -53,9 +53,10 @@ final class ValueSemantics {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("kind", new Value.Str(kind(value)));
         switch (value) {
-            case Value.Scope scope -> {
-                fields.put("size", new Value.Num(scope.fields().size()));
-                fields.put("names", new Value.Str(String.join(",", scope.fields().keySet())));
+            case Value.NamedCollection collection -> {
+                fields.put("shape", new Value.Str("named"));
+                fields.put("size", new Value.Num(collection.fields().size()));
+                fields.put("names", new Value.Str(String.join(",", collection.fields().keySet())));
             }
             case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
             case Value.Dict dictionary -> {
@@ -92,7 +93,7 @@ final class ValueSemantics {
             }
             if (a instanceof Value.Num(double x) && b instanceof Value.Num(double y)) {
                 if (x != y) return false;
-            } else if (a instanceof Value.Scope x && b instanceof Value.Scope y) {
+            } else if (a instanceof Value.NamedCollection x && b instanceof Value.NamedCollection y) {
                 if (!enqueueFields(x.fields(), y.fields(), pending)) return false;
             } else if (a instanceof Value.Seq x && b instanceof Value.Seq y) {
                 if (x.size() != y.size()) return false;
@@ -121,7 +122,7 @@ final class ValueSemantics {
             Object item = pending.pop();
             switch (item) {
                 case String text -> output.append(text);
-                case Value.Scope scope -> pushMap(scope.fields(), "^{", "}", "", pending);
+                case Value.NamedCollection collection -> pushMap(collection.fields(), "[", "]", "^", pending);
                 case Value.Dict dictionary -> {
                     pending.push("]");
                     pending.push(new EntriesFrame(dictionary.orderedEntries().iterator(), "#", true));

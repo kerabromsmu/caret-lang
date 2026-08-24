@@ -93,7 +93,7 @@ makePerson name age =
 
 Only bindings marked with `^` belong to the returned named Collection and its reflective interface.
 The block form is shorthand for an explicit named `[...]` Collection; other bindings remain lexical
-locals. The current prototype's separate `Scope` runtime kind is legacy implementation behavior.
+locals. The prototype returns named Collections directly and has no first-class `Scope` runtime kind.
 
 ### Null and missing
 

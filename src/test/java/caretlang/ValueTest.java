@@ -11,14 +11,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ValueTest {
     @Test
-    void scopesAndDictionariesRejectNullRuntimeValues() {
+    void namedCollectionsAndDictionariesRejectNullRuntimeValues() {
         LinkedHashMap<String, Value> invalid = new LinkedHashMap<>();
         invalid.put("bad", null);
-        assertThrows(NullPointerException.class, () -> new Value.Scope(invalid));
+        assertThrows(NullPointerException.class, () -> new Value.NamedCollection(invalid));
         assertThrows(NullPointerException.class, () -> new Value.Dict(invalid));
         LinkedHashMap<String, Value> nullKey = new LinkedHashMap<>();
         nullKey.put(null, new Value.Num(1));
-        assertThrows(NullPointerException.class, () -> new Value.Scope(nullKey));
+        assertThrows(NullPointerException.class, () -> new Value.NamedCollection(nullKey));
         assertThrows(NullPointerException.class, () -> new Value.Dict(nullKey));
     }
 
@@ -79,9 +79,9 @@ final class ValueTest {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("items", new Value.Seq(List.of(new Value.Num(1))));
         fields.put("lookup", new Value.Dict(Map.of("answer", new Value.Num(42))));
-        Value value = new Value.Scope(fields);
+        Value value = new Value.NamedCollection(fields);
 
-        assertEquals("^{items = [1], lookup = #[#answer = 42]}", value.toString());
+        assertEquals("[^items = [1], ^lookup = #[#answer = 42]]", value.toString());
     }
 
     @Test

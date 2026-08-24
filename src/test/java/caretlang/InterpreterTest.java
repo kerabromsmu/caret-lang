@@ -339,7 +339,7 @@ final class InterpreterTest {
                 print Missing ~
                 print Function identity
                 print Function (@identity)
-                print Scope make
+                print Collection make
                 print Sequence seqEmpty
                 print Dictionary dictEmpty
                 print Any Number
@@ -897,7 +897,7 @@ final class InterpreterTest {
                 print value.absent~
                 """));
 
-        assertDiagnostic("print (1).absent~", "Field access requires a scope", 1, 7);
+        assertDiagnostic("print (1).absent~", "Field access requires a named collection", 1, 7);
         assertDiagnostic("print 1 + true", "Expected number", 1, 11);
         assertDiagnostic("print 1 2", "Value is not callable", 1, 7);
         assertDiagnostic("print 1 & true ! false", "Condition must be Boolean", 1, 7);
@@ -934,7 +934,7 @@ final class InterpreterTest {
                 """));
         assertEquals(4, error.span().start().line());
         assertEquals(7, error.span().start().column());
-        assertTrue(error.getMessage().contains("Scope has no exported binding: absent"));
+        assertTrue(error.getMessage().contains("Collection has no field: absent"));
     }
 
     @Test
@@ -973,12 +973,55 @@ final class InterpreterTest {
     }
 
     @Test
-    void comparesExportedScopesStructurally() {
+    void comparesNamedCollectionsStructurally() {
         assertEquals("true\n", execute("""
                 make value =
                   ^value = value
                 print make 1 == make 1
                 """));
+    }
+
+    @Test
+    void exportedBlocksAndNamedLiteralsAreEquivalentCollections() {
+        assertEquals("true\nCollection\nnamed\n2\nname,age\nAda\n~\n", execute("""
+                exported =
+                  ^name = "Ada"
+                  ^age = 42
+                literal = [^name = "Ada" ^age = 42]
+                print exported == literal
+                print (@literal).kind
+                print (@literal).shape
+                print (@literal).size
+                print (@literal).names
+                print literal.name
+                print literal.absent~
+                """));
+    }
+
+    @Test
+    void collectionContractIncludesCurrentRepresentationsAndScopeIsRemoved() {
+        assertEquals("true\ntrue\ntrue\ntrue\n", execute("""
+                named = [^value = 1]
+                (Collection) positional = [1 2]
+                print Collection named
+                print Collection positional
+                print Collection dictEmpty
+                print Sequence positional
+                """));
+        assertDiagnostic("print Scope", "Unknown name: Scope", 1, 7);
+    }
+
+    @Test
+    void rejectsMixedAndDuplicateNamedCollectionElements() {
+        LangException mixed = assertThrows(LangException.class,
+                () -> execute("value = [1 ^name = 2]"));
+        assertEquals(Diagnostic.Codes.MIXED_COLLECTION_SHAPE, mixed.diagnostic().code());
+        assertEquals(Diagnostic.Phase.SEMANTIC, mixed.diagnostic().phase());
+
+        LangException duplicate = assertThrows(LangException.class,
+                () -> execute("value = [^name = 1 ^name = 2]"));
+        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, duplicate.diagnostic().code());
+        assertEquals(1, duplicate.diagnostic().related().size());
     }
 
     @Test

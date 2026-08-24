@@ -9,7 +9,7 @@ interpreter. The current prototype supports:
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
-- legacy exported immutable scopes, required/optional field access, and dynamic lookup;
+- exported immutable named Collections, required/optional field access, and dynamic lookup;
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
@@ -43,12 +43,12 @@ article covers both implemented foundations and explicitly labeled planned featu
 
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
 Contracts form derivation graphs and act as predicates, while the prototype now provides initial
-contract-based multiple dispatch for ordinary functions. Collections likewise have one universal `[...]` literal:
-surrounding contracts determine whether a value is a list, set, dictionary, packed buffer, or another
-representation. Named fields are first-class collection elements. These facilities are design
-targets, not features of the current prototype. In the planned language, exported blocks are
-shorthand for named Collections; lexical scopes remain non-value name-resolution environments and
-the prototype's `Scope` kind is legacy behavior. A non-empty Collection is entirely positional or
+contract-based multiple dispatch for ordinary functions. Collections use one universal `[...]`
+literal. The prototype implements positional and static named forms, and exported blocks are
+shorthand for equivalent named Collections. Lexical scopes remain non-value name-resolution
+environments. The planned contextual contract model will determine whether a positional value is a
+list, set, dictionary, packed buffer, or another representation; first-class dynamic fields also
+remain planned. A non-empty Collection is entirely positional or
 entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes will be an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
 or a concrete fixed collection, to the planned `template` function creates an exact structural
@@ -241,13 +241,13 @@ shadows this builtin-only grouping and follows ordinary application rules.
   dynamically. Initial named-function constraint inference and the internal purity analysis needed
   to validate refinement predicates are implemented;
   nullable/optional contract unions and the initial `Sequence T` parameterized contract are
-  implemented, while general parameterized contracts, complete static dispatch proof, and the
-  public effect system are not implemented.
-- Universal collection literals, contract-selected representations, first-class fields, formats,
+  implemented, while general parameterized contracts, complete static dispatch proof, and complete
+  higher-order effect propagation are not implemented.
+- Contract-selected collection representations, first-class dynamic fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- Arrow contracts support explicit visible effect allowances. Declaration-wide contract variables,
-  declaration-wide contract variables, and complete overload-domain proofs remain planned.
+- Arrow contracts support explicit visible effect allowances. Declaration-wide contract variables
+  and complete overload-domain proofs remain planned.
 - Physical-to-logical layout baseline modifiers (`\\` and `\*`) are specified but not implemented.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
@@ -281,7 +281,7 @@ separate name-literal syntax.
 The ordinary runtime provides:
 
 - `print value` and `type value`;
-- `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Scope`, `Sequence`, and
+- `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`, and
   `Dictionary` as first-class unary contracts;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
 - `seqEmpty`, `seqAdd`, `seqGet`, and `seqSize`; and
@@ -300,8 +300,9 @@ print (@source).kind
 print (@source).names
 ```
 
-The legacy prototype's `@scope`, plus `@sequence` and `@dictionary`, expose basic metadata such as `kind`, `size`, and, where
-applicable, `names`. `@function` returns a non-callable function reference exposing `kind`, visible
+Named Collection reflection exposes `kind`, `shape`, `size`, and ordered `names`; sequence and
+dictionary reflection expose their applicable collection metadata. `@function` returns a
+non-callable function reference exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
 the known invocation-effect bound. Prefix partials specialize their remaining parameters, while
