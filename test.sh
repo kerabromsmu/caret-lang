@@ -35,6 +35,20 @@ expect_test_failure() {
     exit 1
   fi
 }
+
+run_test_file() {
+  local source_file=$1
+  local output_file=$2
+  if "$CARET_LAUNCHER" test "$source_file" > "$output_file" 2>&1; then
+    return 0
+  else
+    local status=$?
+    printf 'Caret test file failed: %s\n' "$source_file" >&2
+    cat "$output_file" >&2
+    return "$status"
+  fi
+}
+
 "$CARET_LAUNCHER" examples/demo.caret > "$CARET_TEST_TMP/output.txt"
 cat > "$CARET_TEST_TMP/expected.txt" <<'EXPECTED'
 true
@@ -79,7 +93,7 @@ diff -u examples/effects.expected "$CARET_TEST_TMP/effects-output.txt"
 "$CARET_LAUNCHER" examples/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
 diff -u examples/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
 
-"$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
+run_test_file examples/testing.caret "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value
 PASS: null remains distinct from missing
@@ -88,8 +102,8 @@ Summary: 3 tests, 3 passed, 0 failed
 EXPECTED
 diff -u "$CARET_TEST_TMP/testing-expected.txt" "$CARET_TEST_TMP/testing-output.txt"
 
-"$CARET_LAUNCHER" test examples/implemented_features_test.caret \
-  > "$CARET_TEST_TMP/implemented-features-test-output.txt"
+run_test_file examples/implemented_features_test.caret \
+  "$CARET_TEST_TMP/implemented-features-test-output.txt"
 
 cat > "$CARET_TEST_TMP/language.caret" <<'CARET'
 add a b = a + b

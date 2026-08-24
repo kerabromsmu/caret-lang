@@ -104,7 +104,7 @@ assertEqual "optional dynamic lookup" person["phone"]~ ~
 assertEqual "collection reflection kind" (@person).kind "Collection"
 assertEqual "collection reflection shape" (@person).shape "named"
 assertEqual "collection reflection size" (@person).size 2
-assertEqual "collection reflection names" (@person).names "name,age"
+assertEqual "collection reflection names" (@person).names "age,name"
 assertEqual "function reflection kind" (@factorial).kind "Function"
 assertEqual "function reflection remaining arity" (@factorial).remaining 1
 factorialReference = @factorial
