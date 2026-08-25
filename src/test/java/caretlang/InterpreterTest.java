@@ -983,7 +983,7 @@ final class InterpreterTest {
 
     @Test
     void exportedBlocksAndNamedLiteralsAreEquivalentCollections() {
-        assertEquals("true\nCollection\nnamed\n2\nage,name\nAda\n~\n", execute("""
+        assertEquals("true\nDictionary\nnamed\n2\nage,name\nAda\n~\n", execute("""
                 exported =
                   ^name = "Ada"
                   ^age = 42
@@ -1037,8 +1037,58 @@ final class InterpreterTest {
 
         LangException duplicate = assertThrows(LangException.class,
                 () -> execute("value = [^name = 1 ^name = 2]"));
-        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, duplicate.diagnostic().code());
+        assertEquals(Diagnostic.Codes.DUPLICATE_FIELD, duplicate.diagnostic().code());
         assertEquals(1, duplicate.diagnostic().related().size());
+    }
+
+    @Test
+    void unifiesStaticExportedDynamicAndUpdatedDictionaryFields() {
+        assertEquals("true\ntrue\ntrue\nDictionary\nAda\nAda\ntrue\n[age, name]\ntrue\ntrue\n",
+                execute("""
+                        exported =
+                          ^name = "Ada"
+                          ^age = 42
+                        literal = [^age = 42 ^name = "Ada"]
+                        fieldAlias = field
+                        fields = [
+                          fieldAlias "name" "Ada"
+                          fieldAlias "age" 42
+                        ]
+                        updated = dictPut (dictPut dictEmpty "name" "Ada") "age" 42
+                        print exported == literal
+                        print literal == fields
+                        print fields == updated
+                        print type exported
+                        print dictGet literal "name"
+                        print updated.name
+                        print dictHas exported "age"
+                        print dictKeys updated
+                        print (Dictionary String Any) exported
+                        NamedCollection = Dictionary String
+                        AnyNamedCollection = NamedCollection Any
+                        (AnyNamedCollection) accepted = fields
+                        print accepted == exported
+                        """));
+    }
+
+    @Test
+    void fieldCollectionsRejectMixedDuplicateAndNonStringKeys() {
+        LangException mixed = assertThrows(LangException.class,
+                () -> execute("makeField = field\nvalue = [(makeField \"name\" 1) 2]"));
+        assertEquals(Diagnostic.Codes.MIXED_COLLECTION_SHAPE, mixed.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, mixed.diagnostic().phase());
+
+        LangException duplicate = assertThrows(LangException.class,
+                () -> execute("value = [(field \"name\" 1) (field \"name\" 2)]"));
+        assertEquals(Diagnostic.Codes.DUPLICATE_FIELD, duplicate.diagnostic().code());
+        assertEquals(1, duplicate.diagnostic().related().size());
+
+        LangException crossFormDuplicate = assertThrows(LangException.class,
+                () -> execute("value = [(field \"name\" 2) ^name = 1]"));
+        assertEquals(Diagnostic.Codes.DUPLICATE_FIELD, crossFormDuplicate.diagnostic().code());
+        assertEquals(1, crossFormDuplicate.diagnostic().related().size());
+
+        assertDiagnostic("print field 1 2", "Dictionary key must be a string, got: 1", 1, 13);
     }
 
     @Test
@@ -1056,7 +1106,7 @@ final class InterpreterTest {
     }
 
     @Test
-    void providesPersistentSequencesAndInsertionOrderedDictionaries() {
+    void providesPersistentSequencesAndCanonicallyOrderedDictionaries() {
         assertEquals("0\n2\n1\n~\nfalse\ntrue\n~\n1\nfirst,missing\n", execute("""
                 empty = seqEmpty
                 values = seqAdd (seqAdd empty 1) ~

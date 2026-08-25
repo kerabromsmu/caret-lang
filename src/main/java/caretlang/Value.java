@@ -7,7 +7,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Reflective, Value.Seq, Value.Dict, Value.Callable, Value.Attributed {
+        Value.Field, Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
         public Attributed {
@@ -53,6 +53,14 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return "~"; }
     }
 
+    record Field(String key, Value value) implements Value {
+        public Field {
+            Objects.requireNonNull(key, "field key");
+            Objects.requireNonNull(value, "field value");
+        }
+        @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
     /** The single shape-neutral empty collection literal. */
     enum EmptyCollection implements Reflective {
         INSTANCE;
@@ -64,34 +72,6 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     non-sealed interface Reflective extends Value {
         Optional<Value> find(String name);
         Map<String, Value> fields();
-    }
-
-    final class NamedCollection implements Reflective {
-        private final LinkedHashMap<String, Value> fields;
-
-        public NamedCollection(Map<String, Value> fields) {
-            this.fields = CollectionRuntime.canonicalNamedFields(checkedMap(fields));
-        }
-
-        public Optional<Value> find(String name) {
-            return Optional.ofNullable(fields.get(name));
-        }
-
-        public Map<String, Value> fields() {
-            return Collections.unmodifiableMap(fields);
-        }
-
-        @Override public String toString() {
-            return ValueSemantics.render(this);
-        }
-
-        @Override public boolean equals(Object other) {
-            return other instanceof NamedCollection collection && fields.equals(collection.fields);
-        }
-
-        @Override public int hashCode() {
-            return fields.hashCode();
-        }
     }
 
     final class Seq implements Value, Iterable<Value> {
@@ -216,7 +196,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
-    final class Dict implements Value {
+    final class Dictionary implements Reflective {
         private sealed interface Tree permits EmptyTree, Node {}
 
         private enum EmptyTree implements Tree { INSTANCE }
@@ -230,73 +210,63 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             }
         }
 
-        private static final Map<String, Value> UNMATERIALIZED =
-                Collections.unmodifiableMap(new LinkedHashMap<>());
         private final Tree root;
-        private final Seq keys;
-        private volatile Map<String, Value> materialized = UNMATERIALIZED;
+        private final int size;
+        private volatile Map<String, Value> materialized;
 
-        public Dict(Map<String, Value> entries) {
+        public Dictionary(Map<String, Value> entries) {
             LinkedHashMap<String, Value> checked = checkedMap(entries);
             Tree builtRoot = EmptyTree.INSTANCE;
-            Seq builtKeys = new Seq(List.of());
             for (Map.Entry<String, Value> entry : checked.entrySet()) {
                 builtRoot = putNode(builtRoot, entry.getKey(), entry.getValue());
-                builtKeys = builtKeys.appended(new Str(entry.getKey()));
             }
             this.root = builtRoot;
-            this.keys = builtKeys;
-            this.materialized = Collections.unmodifiableMap(checked);
+            this.size = checked.size();
         }
 
-        private Dict(Tree root, Seq keys) {
+        private Dictionary(Tree root, int size) {
             this.root = Objects.requireNonNull(root);
-            this.keys = Objects.requireNonNull(keys);
+            this.size = size;
         }
 
         public Map<String, Value> entries() {
             Map<String, Value> result = materialized;
-            if (result != UNMATERIALIZED) return result;
+            if (result != null) return result;
 
             LinkedHashMap<String, Value> combined = new LinkedHashMap<>();
-            for (Value key : keys.values()) {
-                String name = ((Str) key).value();
-                combined.put(name, find(name).orElseThrow());
-            }
+            appendEntries(root, combined);
             result = Collections.unmodifiableMap(combined);
             materialized = result;
             return result;
         }
 
+        @Override public Map<String, Value> fields() { return entries(); }
+
         public Optional<Value> find(String key) {
             Objects.requireNonNull(key);
             for (Tree tree = root; tree instanceof Node node; ) {
-                int comparison = key.compareTo(node.key());
+                int comparison = CollectionRuntime.FIELD_ORDER.compare(key, node.key());
                 if (comparison == 0) return Optional.of(node.value());
                 tree = comparison < 0 ? node.left() : node.right();
             }
             return Optional.empty();
         }
 
-        public Dict put(String key, Value value) {
+        public Dictionary put(String key, Value value) {
             Objects.requireNonNull(key);
             Objects.requireNonNull(value);
             boolean present = containsKey(key);
-            return new Dict(putNode(root, key, value), present ? keys : keys.appended(new Str(key)));
+            return new Dictionary(putNode(root, key, value), present ? size : size + 1);
         }
 
         public boolean containsKey(String key) { return find(key).isPresent(); }
-        public int size() { return keys.size(); }
+        public int size() { return size; }
 
-        Iterable<Map.Entry<String, Value>> orderedEntries() {
-            return () -> new Iterator<>() {
-                private final Iterator<Value> names = keys.iterator();
-                @Override public boolean hasNext() { return names.hasNext(); }
-                @Override public Map.Entry<String, Value> next() {
-                    String name = ((Str) names.next()).value();
-                    return Map.entry(name, find(name).orElseThrow());
-                }
-            };
+        private static void appendEntries(Tree tree, LinkedHashMap<String, Value> output) {
+            if (!(tree instanceof Node node)) return;
+            appendEntries(node.left(), output);
+            output.put(node.key(), node.value());
+            appendEntries(node.right(), output);
         }
 
         private static Tree putNode(Tree tree, String key, Value value) {
@@ -304,7 +274,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 return new Node(key, value, EmptyTree.INSTANCE, EmptyTree.INSTANCE, 1);
             }
             Node node = (Node) tree;
-            int comparison = key.compareTo(node.key());
+            int comparison = CollectionRuntime.FIELD_ORDER.compare(key, node.key());
             if (comparison == 0) return new Node(key, value, node.left(), node.right(), node.height());
             Node updated = comparison < 0
                     ? node(node.key(), node.value(), putNode(node.left(), key, value), node.right())
@@ -353,7 +323,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public boolean equals(Object other) {
-            return other instanceof Dict dictionary && entries().equals(dictionary.entries());
+            return other instanceof Dictionary dictionary && entries().equals(dictionary.entries());
         }
 
         @Override public int hashCode() { return entries().hashCode(); }
@@ -387,7 +357,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             Value raw = ValueSemantics.underlying(argument.value());
-            if (contract.parameterArity() == 1 && raw instanceof ContractValue parameter) {
+            if (contract.parameterArity() > 0 && raw instanceof ContractValue parameter) {
                 return new ContractValue(contract.parameterize(List.of(parameter.descriptor())));
             }
             return new Bool(contract.accepts(argument.value()));
@@ -671,7 +641,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
             fields.put("kind", new Str(kind));
             fields.putAll(values);
-            return new NamedCollection(fields);
+            return new Dictionary(fields);
         }
 
         @Override public boolean equals(Object other) {

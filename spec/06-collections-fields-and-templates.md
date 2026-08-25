@@ -6,8 +6,8 @@
 <a id="immutable-collections"></a>
 ## Immutable collections
 
-The prototype provides named Collections through exported blocks and explicit named literals. It
-also provides immutable sequences and insertion-ordered dictionaries through:
+The prototype provides String-keyed Dictionaries through exported blocks, explicit named literals,
+ordinary `field key value` construction, and persistent updates. It also provides immutable sequences through:
 
 ```text
 seqEmpty
@@ -22,11 +22,12 @@ dictHas dictionary key
 dictKeys dictionary
 ```
 
-Dictionary keys are strings, and key iteration preserves insertion order. `dictHas` distinguishes
+Dictionary keys are currently strings, and key iteration uses locale-independent, case-sensitive
+Unicode code-point order. `dictHas` distinguishes
 an absent key from a present key whose value is
 `~`.
-Positional and static named Collection literal syntax is implemented. Context-selected
-representations and dynamic first-class Field construction remain planned.
+Positional and String-keyed Dictionary literal syntax is implemented, including static `^name`
+shorthand and dynamic first-class Field construction. Context-selected representations remain planned.
 
 <a id="collections-and-lexical-scopes"></a>
 ## Collections and lexical scopes
@@ -75,11 +76,11 @@ The empty Collection `[]` has no named/positional distinction. It vacuously sati
 collection contracts compatible with zero elements, without changing identity or acquiring a
 shape. Explicit structural contracts that require actual positions or fields remain unsatisfied.
 
-Named Collection values evaluate field expressions in source order, then store, traverse, render,
-and reflect fields in locale-independent, case-sensitive Unicode code-point lexicographic order.
-Declaration order therefore does not affect named-Collection equality. Reserved binding spellings
-remain valid static field names because fields are members, not lexical bindings. Dictionary key
-iteration continues to preserve insertion order.
+Dictionary values evaluate field expressions in source order, then store, traverse, render, and
+reflect fields in locale-independent, case-sensitive Unicode code-point lexicographic order.
+Declaration and update order therefore do not affect equality. `^name = value` is shorthand for the
+ordinary Field whose String key is `"name"`; reserved binding spellings remain valid static keys
+because fields are members, not lexical bindings.
 
 <a id="collections"></a>
 ### Collections
@@ -90,8 +91,8 @@ iteration continues to preserve insertion order.
 `Collection` is the fundamental contract for values containing zero or more elements.
 
 It is the ordinary first-class aggregate model for both positional collections and named structured
-values. The prototype implements the general unary contract across named Collections, Sequences,
-and Dictionaries. There is no additional `Scope` value category for named exports.
+values. The prototype implements the general unary contract across Dictionaries and Sequences.
+There is no additional `Scope` or named-Collection runtime category for exports.
 
 More specific collection contracts derive from it.
 
@@ -350,8 +351,9 @@ Multi-line literals are allowed:
 ```
 
 Parentheses remain the normal grouping mechanism where expression boundaries would otherwise be ambiguous.
-On one line, adjacent simple atoms are separate elements. An unparenthesized top-level operator
-extends an element through the closing bracket; use parentheses when another element follows it.
+Each top-level physical line in a multiline literal is one ordinary expression. On one line,
+adjacent simple atoms are separate elements. An unparenthesized top-level operator extends an
+element through the closing bracket; use parentheses when another element follows it.
 
 ---
 
@@ -420,7 +422,7 @@ diagnostic applies whether the Field was produced by `^` or by `field`.
 <a id="exported-block-shorthand"></a>
 ##### Exported-block shorthand
 
-When a function or ordinary block contains exported bindings, its result is the named Collection
+When a function or ordinary block contains exported bindings, its result is the Dictionary
 formed from those fields. These values are equivalent:
 
 ```caret
@@ -444,18 +446,18 @@ makeThing x =
   ^field2 = temporary
 ```
 
-returns the same value as the explicit named Collection containing `field1` and `field2`.
+returns the same value as the explicit Dictionary containing `field1` and `field2`.
 `temporary` remains a lexical local and is not a Collection element. A body with no exported
 bindings retains its ordinary final-expression result. No intermediate Scope object is created.
 
 Equality, reflection, contracts, and member access cannot distinguish exported-block shorthand
-from the equivalent explicit named Collection.
+from the equivalent explicit Dictionary.
 
 ```caret
 thing1 == thing2 // true
 ```
 
-Both reflect with the ordinary Collection kind, shape, field names, and field metadata. Lexical
+Both reflect with the `Dictionary` kind, named shape, field names, and field metadata. Lexical
 scopes do not appear as reflectable values merely because the source block contains declarations.
 
 ---

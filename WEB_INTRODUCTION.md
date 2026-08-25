@@ -165,8 +165,8 @@ Caret treats reflection as a normal language operation. Field names represented 
 strings, while `@` produces a reflective view:
 
 ```caret
-field = "name"
-print person[field]~
+fieldName = "name"
+print person[fieldName]~
 print (@person).kind
 print (@person).names
 ```
@@ -178,11 +178,23 @@ non-callable reference, and both `type` and its `kind` metadata identify it as `
 ## Values and collections
 
 The current prototype supports finite numbers, Unicode strings, Booleans, null, and missing. It also
-provides persistent sequences and insertion-ordered dictionaries. Collection updates
+provides persistent sequences and canonically ordered Dictionaries. Collection updates
 produce new values rather than mutating existing ones, and equality is structural for ordinary data.
 The bare `[]` value is a shape-neutral empty Collection accepted by compatible sequence and
 dictionary contracts. Named Collection fields traverse and reflect in locale-independent,
-case-sensitive Unicode code-point order, while their expressions evaluate in source order.
+case-sensitive Unicode code-point order, while their expressions evaluate in source order. Static
+`^name` fields, ordinary `field "name" value` results, and `dictPut` updates share one String-keyed
+Dictionary representation and one member protocol.
+
+```caret
+person = [
+  field "first name" "Alice"
+  field "age" 42
+]
+```
+
+Each top-level line in a multiline collection literal is an ordinary expression, so calls do not
+need parentheses merely because they produce collection elements.
 
 ```caret
 items = seqAdd (seqAdd seqEmpty "first") "second"

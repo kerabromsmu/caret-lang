@@ -11,11 +11,15 @@ enum BuiltinContract implements ContractDescriptor {
     NULL("Null") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.NULL); } },
     MISSING("Missing") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.MISSING); } },
     FUNCTION("Function") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.FUNCTION); } },
+    FIELD("Field") {
+        @Override public boolean accepts(Value value) { return kind(value, ValueKind.FIELD); }
+        @Override public int parameterArity() { return 2; }
+    },
     COLLECTION("Collection") {
         @Override public boolean accepts(Value value) {
             value = ValueSemantics.underlying(value);
-            return value instanceof Value.NamedCollection || value instanceof Value.EmptyCollection
-                    || value instanceof Value.Seq || value instanceof Value.Dict;
+            return value instanceof Value.Dictionary || value instanceof Value.EmptyCollection
+                    || value instanceof Value.Seq;
         }
     },
     SEQUENCE("Sequence") {
@@ -36,12 +40,20 @@ enum BuiltinContract implements ContractDescriptor {
             return value instanceof Value.EmptyCollection || ValueKind.of(value) == ValueKind.DICTIONARY;
         }
         @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
+        @Override public int parameterArity() { return 2; }
     };
 
     private final String publicName;
     BuiltinContract(String publicName) { this.publicName = publicName; }
     public String publicName() { return publicName; }
     public abstract boolean accepts(Value value);
+
+    @Override public ContractDescriptor parameterize(java.util.List<ContractDescriptor> arguments) {
+        if (parameterArity() == 0 || arguments.isEmpty() || arguments.size() > parameterArity()) {
+            throw new IllegalArgumentException("Incorrect contract parameter count for " + publicName);
+        }
+        return new ParameterizedContract(this, arguments);
+    }
 
     private static boolean kind(Value value, ValueKind descriptor) {
         value = ValueSemantics.underlying(value);

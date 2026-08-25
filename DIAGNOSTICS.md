@@ -68,6 +68,9 @@ from ordinary Caret source use focused Java evidence.
 | SEMANTIC-INCOMPATIBLE-CONTRACTS | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_inferred_contracts.caret` |
 | SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
 | SEMANTIC-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `examples/errors/mixed_collection_shape.caret` |
+| SEMANTIC-DUPLICATE-FIELD | public | DUPLICATE_FIELD | `InterpreterTest#rejectsMixedAndDuplicateNamedCollectionElements` |
+| RUNTIME-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `InterpreterTest#fieldCollectionsRejectMixedDuplicateAndNonStringKeys` |
+| RUNTIME-DUPLICATE-FIELD | public | DUPLICATE_FIELD | `InterpreterTest#fieldCollectionsRejectMixedDuplicateAndNonStringKeys` |
 | SEMANTIC-INVALID-REFINEMENT | public | INVALID_REFINEMENT | `ContractInferenceTest#validatesOnlyProvenPureUnaryBooleanRefinements`; `InterpreterTest#invalidRefinementsAreRejectedBeforeProgramEffects`; `examples/errors/invalid_refinement.caret` |
 | SEMANTIC-INVALID-CONTRACT-VARIABLE | public | INVALID_CONTRACT_VARIABLE | `InterpreterTest#arrowContractVariablesAreContiguousAndRequireGenericRelationships` |
 | SEMANTIC-AMBIGUOUS-CLAUSE-NAME | public | AMBIGUOUS_CLAUSE_NAME | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |

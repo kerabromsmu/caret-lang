@@ -101,7 +101,7 @@ assertEqual "required dynamic lookup" person["age"] 36
 assertEqual "optional dynamic lookup" person["phone"]~ ~
 
 // Reflection exposes only public metadata and does not invoke functions.
-assertEqual "collection reflection kind" (@person).kind "Collection"
+assertEqual "dictionary reflection kind" (@person).kind "Dictionary"
 assertEqual "collection reflection shape" (@person).shape "named"
 assertEqual "collection reflection size" (@person).size 2
 assertEqual "collection reflection names" (@person).names "age,name"
@@ -179,7 +179,7 @@ assert "nested numeric equality follows scalar equality" (seqAdd seqEmpty (-0) =
 assertEqual "sequence reflection kind" (@sequence).kind "Sequence"
 assertEqual "sequence reflection size" (@sequence).size 2
 
-// Persistent insertion-ordered dictionaries with string keys.
+// Persistent canonically ordered Dictionaries with String keys.
 emptyDictionary = dictEmpty
 oneEntry = dictPut emptyDictionary "present" 1
 dictionary = dictPut oneEntry "missingValue" ~
@@ -192,7 +192,7 @@ assert "dictionary distinguishes present missing value" (dictHas dictionary "mis
 assertEqual "dictionary lookup" (dictGet dictionary "present") 1
 assertEqual "dictionary present missing lookup" (dictGet dictionary "missingValue") ~
 assertEqual "dictionary absent lookup" (dictGet dictionary "absent") ~
-assertEqual "dictionary insertion-ordered keys" (dictKeys dictionary) (seqAdd (seqAdd seqEmpty "present") "missingValue")
+assertEqual "dictionary canonical keys" (dictKeys dictionary) (seqAdd (seqAdd seqEmpty "missingValue") "present")
 assertEqual "dictionary replacement changes the new value" (dictGet replacedDictionary "present") 2
 assertEqual "dictionary replacement preserves key order" (dictKeys replacedDictionary) (dictKeys dictionary)
 assertEqual "earlier dictionary remains unchanged" (dictGet dictionary "present") 1
@@ -200,7 +200,7 @@ assert "nested dictionary and sequence equality is structural" (dictPut dictEmpt
 assert "dictionary structural equality" (dictionary == sameDictionary)
 assertEqual "dictionary reflection kind" (@dictionary).kind "Dictionary"
 assertEqual "dictionary reflection size" (@dictionary).size 2
-assertEqual "dictionary reflection names" (@dictionary).names "present,missingValue"
+assertEqual "dictionary reflection names" (@dictionary).names "missingValue,present"
 
 // Left-to-right function composition, chaining, partials, and reflection.
 double value = value * 2

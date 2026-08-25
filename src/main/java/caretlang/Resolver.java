@@ -425,6 +425,7 @@ final class Resolver {
                 LinkedHashMap<String, SourceSpan> names = new LinkedHashMap<>();
                 for (Ast.CollectionElement element : collection.elements()) {
                     Class<?> elementShape = element instanceof Ast.NamedElement
+                            || staticallyFieldExpression(element.value())
                             ? Ast.NamedElement.class : Ast.PositionalElement.class;
                     if (shape == null) shape = elementShape;
                     else if (shape != elementShape) {
@@ -436,10 +437,10 @@ final class Resolver {
                         SourceSpan original = names.putIfAbsent(named.name(), named.span());
                         if (original != null) {
                             throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
-                                    Diagnostic.Codes.DUPLICATE_DEFINITION,
-                                    "Duplicate definition: " + named.name(), named.span(),
+                                    Diagnostic.Codes.DUPLICATE_FIELD,
+                                    "Duplicate field: " + named.name(), named.span(),
                                     List.of(new Diagnostic.Related(
-                                            "First definition of " + named.name(), original))));
+                                            "First field named " + named.name(), original))));
                         }
                     }
                     resolveExpr(element.value(), scope, functionBody, deferred);
@@ -464,6 +465,16 @@ final class Resolver {
                 }
             }
         }
+    }
+
+    private static boolean staticallyFieldExpression(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
+        int arguments = 0;
+        while (expression instanceof Apply apply) {
+            arguments++;
+            expression = apply.function();
+        }
+        return arguments == 2 && expression instanceof Name name && name.name().equals("field");
     }
 
     private Integer knownArity(Expr expression, Scope scope) {

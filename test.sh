@@ -24,7 +24,8 @@ expect_failure() {
 
 expect_test_failure() {
   local source_file=$1
-  local output_file="$CARET_TEST_TMP/$(basename "$source_file").out"
+  local output_file
+  output_file="$CARET_TEST_TMP/$(basename "$source_file").out"
   if "$CARET_LAUNCHER" test "$source_file" > "$output_file" 2>&1; then
     printf 'Expected test failure succeeded: %s\n' "$source_file" >&2
     exit 1
@@ -60,7 +61,7 @@ A
 ?
 ~
 10
-Collection
+Dictionary
 count,name
 1
 EXPECTED
@@ -142,8 +143,8 @@ made = factory
 print made.answer
 print made.nothing
 print made.absent~
-field = "answer"
-print made[field]
+fieldName = "answer"
+print made[fieldName]
 print made["absent"]~
 
 print (@42).kind
@@ -176,7 +177,7 @@ right
 Number
 Function
 1
-Collection
+Dictionary
 2
 answer,nothing
 EXPECTED
