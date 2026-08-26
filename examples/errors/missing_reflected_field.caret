@@ -1,2 +1,1 @@
-identity value = value
-print (@identity).absent
+print Number.absent

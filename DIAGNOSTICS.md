@@ -37,6 +37,7 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-PREMATURE-READ | internal | READ_BEFORE_INITIALIZATION | `InterpreterTest#reportsReadsBeforeSequentialDeclarations` |
 | RUNTIME-UNKNOWN-NAME | public | UNKNOWN_NAME | `examples/errors/unknown_name.caret` |
 | RUNTIME-NOT-CALLABLE | public | NOT_CALLABLE | `examples/errors/not_callable.caret` |
+| RUNTIME-NOT-DEREFERENCEABLE | public | NOT_DEREFERENCEABLE | `InterpreterTest#dereferencesReflectionDictionariesForFunctionsValuesAndMembers` |
 | RUNTIME-INFIX-NOT-CALLABLE | public | NOT_CALLABLE | `examples/errors/non_callable_infix.caret` |
 | RUNTIME-INVALID-INFIX-ARITY | public | INVALID_INFIX_ARITY | `examples/errors/invalid_infix_arity.caret` |
 | RUNTIME-INVALID-COMPOSITION-LEFT | public | INVALID_COMPOSITION_LEFT | `examples/errors/non_callable_composition.caret` |

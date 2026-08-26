@@ -385,8 +385,8 @@ being equal, while aliases preserve identity.
 <a id="callable-reflection-schema"></a>
 ### Callable reflection schema
 
-Reflecting a callable produces an immutable, non-callable `Function` reference with a fixed public
-shape:
+Reflecting a callable produces an immutable, non-callable metadata Dictionary with a fixed public
+shape and an opaque dereference target:
 
 ```text
 kind        "Function"
@@ -454,11 +454,11 @@ than treating those alternatives as a conjunction. Common result guarantees and 
 bound remain available. When narrowing leaves one variant, the summary is that specialized exact
 signature, while `variants` continues to identify the surviving overload variant.
 
-Function references compare by target callable identity as already specified. Signature,
+Function metadata dictionaries compare structurally like other dictionaries. Signature,
 parameter, result, effect-summary, and variable metadata compare structurally after canonical
 variable numbering. `ContractRef` and `Effect` values compare by their underlying descriptor
-identity. Reflecting the same reference again returns the same view; a newly narrowed partial is a
-new callable identity with a new immutable view.
+identity. Dereferencing returns the original callable; reflecting the metadata itself describes
+that Dictionary. A newly narrowed partial has a new callable identity and immutable metadata view.
 
 Callable reflection never exposes capture names or values, bound partial values, implementation
 kind, source spans, native origin, Java objects, or capability handles. Authorized semantic-code

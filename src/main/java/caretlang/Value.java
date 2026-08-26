@@ -58,7 +58,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Objects.requireNonNull(key, "field key");
             Objects.requireNonNull(value, "field value");
         }
-        @Override public String toString() { return ValueSemantics.render(this); }
+        @Override public @NotNull String toString() { return ValueSemantics.render(this); }
     }
 
     /** The single shape-neutral empty collection literal. */
@@ -212,6 +212,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         private final Tree root;
         private final int size;
+        private final Value reflectedTarget;
         private volatile Map<String, Value> materialized;
 
         public Dictionary(Map<String, Value> entries) {
@@ -222,12 +223,25 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             }
             this.root = builtRoot;
             this.size = checked.size();
+            this.reflectedTarget = null;
         }
 
         private Dictionary(Tree root, int size) {
+            this(root, size, null);
+        }
+
+        private Dictionary(Tree root, int size, Value reflectedTarget) {
             this.root = Objects.requireNonNull(root);
             this.size = size;
+            this.reflectedTarget = reflectedTarget;
         }
+
+        static Dictionary reflection(Map<String, Value> entries, Value target) {
+            Dictionary dictionary = new Dictionary(entries);
+            return new Dictionary(dictionary.root, dictionary.size, Objects.requireNonNull(target));
+        }
+
+        Optional<Value> reflectedTarget() { return Optional.ofNullable(reflectedTarget); }
 
         public Map<String, Value> entries() {
             Map<String, Value> result = materialized;
@@ -569,18 +583,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
-    final class FunctionReference implements Reflective {
-        private final Callable target;
+    final class CallableMetadata {
+        private CallableMetadata() {}
 
-        FunctionReference(Callable target) {
-            this.target = Objects.requireNonNull(target);
-        }
-
-        @Override public Optional<Value> find(String name) {
-            return Optional.ofNullable(fields().get(name));
-        }
-
-        @Override public Map<String, Value> fields() {
+        static Map<String, Value> fields(Callable target) {
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
             fields.put("kind", new Str("Function"));
             fields.put("name", target.publicName().equals("<anonymous>")
@@ -588,7 +594,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             fields.put("remaining", new Num(target.remainingArity()));
             fields.put("signature", signatureValue(target.signature()));
             fields.put("variants", new Seq(target.variantSignatures().stream()
-                    .map(FunctionReference::signatureValue).toList()));
+                    .map(CallableMetadata::signatureValue).toList()));
             return Collections.unmodifiableMap(fields);
         }
 
@@ -598,7 +604,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                             .mapToObj(index -> parameterValue(signature.parameters().get(index), index)).toList()),
                     "result", resultValue(signature.result()),
                     "effects", effectsValue(signature.effects()),
-                    "variables", new Seq(signature.variables().stream().map(FunctionReference::variableValue).toList())));
+                    "variables", new Seq(signature.variables().stream().map(CallableMetadata::variableValue).toList())));
         }
 
         private static Value parameterValue(CallableSignature.Parameter parameter, int position) {
@@ -643,14 +649,6 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             fields.putAll(values);
             return new Dictionary(fields);
         }
-
-        @Override public boolean equals(Object other) {
-            return other instanceof FunctionReference reference && target == reference.target;
-        }
-
-        @Override public int hashCode() { return System.identityHashCode(target); }
-
-        @Override public String toString() { return "<function-reference " + target + ">"; }
     }
 
     final class HoleFunction implements Callable {

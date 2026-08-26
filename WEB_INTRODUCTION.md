@@ -173,7 +173,8 @@ print (@person).names
 
 Reflection exposes only public or explicitly exported information. Expected failures, such as a
 missing dynamic field, can produce `~` instead of an exception. A reflected function is a
-non-callable reference, and both `type` and its `kind` metadata identify it as `"Function"`.
+non-callable metadata Dictionary: `type (@function)` is `"Dictionary"`, while `@function.kind` is
+`"Function"`. Adjacent postfix `:` recovers the reflected value or callable.
 
 ## Values and collections
 

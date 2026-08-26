@@ -103,6 +103,8 @@ enum DiagnosticCatalog {
             Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, "Callable effect allowance exceeded: .*", PUBLIC),
     UNKNOWN_CALL_EFFECTS("RUNTIME-UNKNOWN-CALL-EFFECTS", Diagnostic.Phase.RUNTIME,
             Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, "Callable invocation has no known effect upper bound", PUBLIC),
+    NOT_DEREFERENCEABLE("RUNTIME-NOT-DEREFERENCEABLE", Diagnostic.Phase.RUNTIME,
+            Diagnostic.Codes.NOT_DEREFERENCEABLE, "Value is not dereferenceable: .*", PUBLIC),
     NO_APPLICABLE_OVERLOAD("RUNTIME-NO-APPLICABLE-OVERLOAD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NO_APPLICABLE_OVERLOAD, "No applicable overload: .*", PUBLIC),
     AMBIGUOUS_OVERLOAD("RUNTIME-AMBIGUOUS-OVERLOAD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.AMBIGUOUS_OVERLOAD, "Ambiguous overload: .*", PUBLIC),
     UNKNOWN_UNARY_OPERATOR("INTERNAL-UNKNOWN-UNARY-OPERATOR", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown unary operator: .*", INTERNAL),

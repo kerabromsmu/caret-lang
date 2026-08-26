@@ -118,8 +118,10 @@ factorialReference = @factorial
 print type factorialReference
 print factorialReference == @factorial
 print factorialReference == @add
-print (@+).kind
-print (@+).remaining
+print (@(+)).kind
+print (@(+)).remaining
+factorialAlias = factorialReference:
+print factorialAlias 5
 print factorialReference.absent~
 print (@?).kind
 print (@~).kind

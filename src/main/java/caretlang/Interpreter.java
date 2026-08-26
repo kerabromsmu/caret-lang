@@ -722,6 +722,15 @@ final class Interpreter {
             }
             return reflect(targetValue);
         }
+        if (expr instanceof Dereference(Expr target, SourceSpan ignored)) {
+            Value reference = underlying(evalInner(target, env, resolution));
+            if (reference instanceof Value.Dictionary dictionary) {
+                Optional<Value> reflected = dictionary.reflectedTarget();
+                if (reflected.isPresent()) return reflected.get();
+            }
+            throw runtime(Diagnostic.Codes.NOT_DEREFERENCEABLE,
+                    "Value is not dereferenceable: " + reference, expr.span());
+        }
         if (expr instanceof ContractModifier(Expr target, boolean nullable, boolean optional,
                                              SourceSpan ignored)) {
             Value value = underlying(evalInner(target, env, resolution));
@@ -1149,11 +1158,13 @@ final class Interpreter {
     }
 
     private Value reflect(Value value) {
-        value = underlying(value);
-        if (value instanceof Value.FunctionReference reference) return reference;
-        if (value instanceof Value.ContractValue contract) return contract;
-        if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
-        return new Value.Dictionary(ValueSemantics.reflectionFields(value));
+        Value target = value;
+        Value reflected = underlying(value);
+        Map<String, Value> fields = reflected instanceof Value.Callable callable
+                && !(reflected instanceof Value.Reflective)
+                ? Value.CallableMetadata.fields(callable)
+                : ValueSemantics.reflectionFields(reflected);
+        return Value.Dictionary.reflection(fields, target);
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {

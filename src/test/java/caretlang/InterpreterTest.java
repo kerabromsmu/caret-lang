@@ -338,7 +338,7 @@ final class InterpreterTest {
                 print Null ?
                 print Missing ~
                 print Function identity
-                print Function (@identity)
+                print Function (@identity:)
                 print Collection make
                 print Sequence seqEmpty
                 print Dictionary dictEmpty
@@ -646,7 +646,7 @@ final class InterpreterTest {
 
     @Test
     void typeAndReflectionUseTheSameRuntimeKindNames() {
-        assertEquals("Null\nMissing\nNumber\nFunction\nFunction\n", execute("""
+        assertEquals("Null\nMissing\nNumber\nDictionary\nFunction\n", execute("""
                 identity value = value
                 reference = @identity
                 print type ?
@@ -774,14 +774,14 @@ final class InterpreterTest {
     }
 
     @Test
-    void functionReferencesAreReflectiveNonCallableAndUseTargetIdentity() {
-        assertEquals("Function\n1\ntrue\nfalse\nFunction\n2\ntrue\n~\n", execute("""
+    void functionMetadataIsStructuralAndNonCallable() {
+        assertEquals("Function\n1\ntrue\nfalse\nFunction\n2\nfalse\n~\n", execute("""
                 identity value = value
                 other value = value
                 reference = @identity
                 sameReference = @identity
                 reflectedAgain = @reference
-                operatorReference = @+
+                operatorReference = @(+)
 
                 print reference.kind
                 print reference.remaining
@@ -800,6 +800,36 @@ final class InterpreterTest {
                 """));
         assertEquals(Diagnostic.Codes.NOT_CALLABLE, error.diagnostic().code());
         assertTrue(error.getMessage().contains("Value is not callable"));
+    }
+
+    @Test
+    void dereferencesReflectionDictionariesForFunctionsValuesAndMembers() {
+        assertEquals("Dictionary\nFunction\n5\n7\nNumber\n9\n9\nSequence\n", execute("""
+                add left right = left + right
+                metadata = @add
+                alias = metadata:
+                value = 7
+                valueMetadata = @value
+                object = [^field = 9]
+                fieldName = "field"
+
+                print type metadata
+                print @add.kind
+                print alias 2 3
+                print valueMetadata:
+                print (@42).kind
+                print object.@field:
+                print @(object[fieldName]):
+                print @[1 2].kind
+                """));
+
+        LangException ordinary = assertThrows(LangException.class, () -> execute("value = 1\nprint value:\n"));
+        assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, ordinary.diagnostic().code());
+        assertEquals(7, ordinary.span().start().column());
+
+        LangException reflectedFunctionApplied = assertThrows(LangException.class,
+                () -> execute("identity value = value\nprint @identity 1\n"));
+        assertEquals(Diagnostic.Codes.NOT_CALLABLE, reflectedFunctionApplied.diagnostic().code());
     }
 
     @Test

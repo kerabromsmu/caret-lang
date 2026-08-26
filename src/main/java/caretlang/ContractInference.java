@@ -273,6 +273,7 @@ final class ContractInference {
             case Field ignored -> Shape.unknown();
             case DynamicField ignored -> Shape.unknown();
             case Reflect ignored -> Shape.unknown();
+            case Dereference ignored -> Shape.unknown();
             case ContractModifier ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
             case ContractVariable ignored -> Shape.unknown();
@@ -565,6 +566,7 @@ final class ContractInference {
                     .plus(expressionEffects(field.name(), visible));
             case Reflect reflect -> reflect.target() instanceof Name
                     ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
+            case Dereference dereference -> expressionEffects(dereference.target(), visible);
             case ContractModifier modifier -> expressionEffects(modifier.target(), visible);
             case CollectionLiteral collection -> collection.elements().stream()
                     .map(element -> expressionEffects(element.value(), visible))
@@ -747,6 +749,7 @@ final class ContractInference {
             case Field field -> containsHole(field.target());
             case DynamicField field -> containsHole(field.target()) || containsHole(field.name());
             case Reflect reflect -> containsHole(reflect.target());
+            case Dereference dereference -> containsHole(dereference.target());
             case ContractModifier modifier -> containsHole(modifier.target());
             case Group group -> containsHole(group.expression());
             case CollectionLiteral collection -> collection.elements().stream()

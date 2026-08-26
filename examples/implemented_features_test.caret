@@ -108,12 +108,14 @@ assertEqual "collection reflection names" (@person).names "age,name"
 assertEqual "function reflection kind" (@factorial).kind "Function"
 assertEqual "function reflection remaining arity" (@factorial).remaining 1
 factorialReference = @factorial
-assertEqual "function reference type matches reflected kind" (type factorialReference) factorialReference.kind
-assert "function references use target identity" (factorialReference == @factorial)
-assertEqual "different function references are unequal" (factorialReference == @add) false
-assertEqual "operator reference kind" (@+).kind "Function"
-assertEqual "operator reference remaining arity" (@+).remaining 2
-assertEqual "function reference optional metadata" factorialReference.absent~ ~
+assertEqual "function metadata type" (type factorialReference) "Dictionary"
+assert "function metadata is structural" (factorialReference == @factorial)
+assertEqual "different function metadata is unequal" (factorialReference == @add) false
+assertEqual "operator metadata kind" (@(+)).kind "Function"
+assertEqual "operator metadata remaining arity" (@(+)).remaining 2
+assertEqual "function metadata optional field" factorialReference.absent~ ~
+factorialAlias = factorialReference:
+assertEqual "function metadata dereferences" (factorialAlias 5) 120
 assertEqual "null reflection kind" (@?).kind "Null"
 assertEqual "missing reflection kind" (@~).kind "Missing"
 assertEqual "number reflection kind" (@42).kind "Number"

@@ -399,11 +399,33 @@ final class ParserTest {
 
         LangException reflection = assertThrows(LangException.class,
                 () -> new Parser("print @").parseProgram());
-        assertTrue(reflection.getMessage().contains("Expected expression"));
+        assertTrue(reflection.getMessage().contains("Expected an identifier, literal"));
 
         LangException export = assertThrows(LangException.class,
                 () -> new Parser("^ = 1").parseProgram());
         assertTrue(export.getMessage().contains("Invalid assignment or function definition"));
+    }
+
+    @Test
+    void reflectionConsumesOnePrimaryAndDereferenceIsAdjacentPostfix() {
+        Field metadataField = assertInstanceOf(Field.class, expression("@function.kind"));
+        assertInstanceOf(Reflect.class, metadataField.target());
+
+        Apply application = assertInstanceOf(Apply.class, expression("@function value"));
+        assertInstanceOf(Reflect.class, application.function());
+
+        Reflect grouped = assertInstanceOf(Reflect.class, expression("@(function value)"));
+        assertInstanceOf(Group.class, grouped.target());
+
+        Reflect member = assertInstanceOf(Reflect.class, expression("object.@field"));
+        assertInstanceOf(Field.class, member.target());
+
+        Dereference dereference = assertInstanceOf(Dereference.class, expression("@function:"));
+        assertInstanceOf(Reflect.class, dereference.target());
+
+        assertInstanceOf(Reflect.class, expression("@[1 2]"));
+        assertThrows(LangException.class, () -> expression("value :"));
+        assertThrows(LangException.class, () -> expression("@-1"));
     }
 
     @Test

@@ -25,7 +25,6 @@ enum ValueKind {
             case Value.Dictionary ignored -> DICTIONARY;
             case Value.EmptyCollection ignored -> COLLECTION;
             case Value.Seq ignored -> SEQUENCE;
-            case Value.FunctionReference ignored -> FUNCTION;
             case Value.ContractValue ignored -> CONTRACT;
             case Value.Attributed attributed -> of(attributed.value());
             case Value.Reflective ignored -> REFLECTIVE;

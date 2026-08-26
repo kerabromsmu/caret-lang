@@ -304,13 +304,14 @@ Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `names`. Fi
 ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
 or update order; their value expressions are still evaluated in source order. Identifier shorthand
 `^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
-Sequence reflection exposes its applicable collection metadata. `@function` returns a
-non-callable function reference exposing `kind`, visible
+Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
+non-callable metadata Dictionary exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
 the known invocation-effect bound. Prefix partials specialize their remaining parameters, while
-compositions union known invocation effects. Both `type (@function)` and `(@function).kind` report
-`"Function"`. References compare by target identity. Reflection exposes no captures, bound arguments,
+compositions union known invocation effects. `type (@function)` reports `"Dictionary"`, while
+`@function.kind` reports `"Function"`. Adjacent postfix `:` restores the reflected target, as in
+`alias = @function:`. Metadata compares structurally. Reflection exposes no captures, bound arguments,
 Java implementation objects, or callable capability, and does not invoke a reflected function.
 
 ## License

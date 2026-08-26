@@ -16,8 +16,8 @@ true false  Boolean
 
 Null and missing are separate runtime values.
 
-`type value` returns the public runtime kind name used by reflection, including `"Null"` for `?`,
-`"Missing"` for `~`, and `"Function"` for a non-callable function reference produced by `@`.
+`type value` returns the public runtime kind name, including `"Null"` for `?` and `"Missing"` for
+`~`. Reflection itself produces a `"Dictionary"`; its `kind` field describes the reflected target.
 
 Number literals start with a digit and may contain at most one decimal point. Malformed number
 literals are reported as language errors rather than leaking a Java numeric-conversion exception.
@@ -114,12 +114,28 @@ Current metadata:
 
 - all values: `kind`
 - named Collections: `shape = "named"`, `size`, `names`
-- function references: `kind = "Function"`, visible declaration `name` or `~`, `remaining`,
+- function metadata: `kind = "Function"`, visible declaration `name` or `~`, `remaining`,
   language-owned `signature`, and surviving overload `variants`
 
-`@function` is a reference and reflection mechanism, not an alternate call syntax. Applying the
-result is a `NOT_CALLABLE` error. Reflecting an existing function reference returns the same
-reference.
+Every reflection result is a named metadata Collection with runtime kind `Dictionary`. It retains
+an opaque reference to its target, which adjacent postfix `:` dereferences:
+
+```text
+reference = @function
+alias = reference:
+directAlias = @function:
+```
+
+The metadata dictionary is non-callable; dereferencing restores the exact original function or
+value. `:` on any value not produced directly by reflection is a located `NOT_DEREFERENCEABLE`
+error. Ordinary aliases preserve dereferenceability, while dictionary updates produce ordinary
+dictionaries. Equality and rendering observe only public metadata fields, never the opaque target.
+
+`@` consumes exactly one identifier or literal, including a Collection literal. Parentheses are
+required to reflect a larger expression: `@f x` means `(@f) x`, while `@(f x)` reflects the call
+result. Postfix lookup applies to the returned metadata, so `@function.kind` needs no grouping.
+Static member reflection is `object.@field`; dynamically named members use
+`@(object[fieldName])`.
 
 The callable schema below is implemented for the current named functions, built-ins, prefix
 partials, compositions, and closed overload sets. Its immutable descriptors separate effective,
@@ -155,9 +171,9 @@ and `0` compare equal both directly and inside a sequence. Encountering a callab
 either compared structure is a `CALLABLE_EQUALITY` error. Function references compare by the
 identity of their referenced callable.
 
-`@function` produces a non-callable reflective function reference. It suppresses normal implicit
-invocation of a nullary binding and exposes `kind` and `remaining`; bare nullary function names
-continue to invoke automatically.
+`@function` produces a non-callable metadata dictionary. It suppresses normal implicit invocation
+of a nullary binding and exposes `kind` and `remaining`; `@function:` restores the callable, while
+bare nullary function names continue to invoke automatically.
 
 Built-in symbolic binary operators are ordinary two-argument callable values. Prefix and infix
 forms share the same implementation, arity, partial application, call-depth guard, and errors:

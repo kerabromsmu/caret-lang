@@ -153,19 +153,20 @@ From lower to higher precedence:
 8. named binary infix functions
 9. addition `+ -`
 10. multiplication `* / %`
-11. unary `- not @`
+11. unary `- not`
 12. function application
-13. field and dynamic lookup
+13. reflection primary `@`
+14. field lookup and adjacent dereference `:`
 
 Lambda construction will also bind more tightly than `$` once lambdas are implemented.
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
-The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, and `#`,
+The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, `:`, and `#`,
 they are consumed by layout handling before expression parsing and have no expression precedence.
-The roles remain separate: `$` groups syntax-level application, `@` reifies a binding or program
-entity, `#` changes execution stage, and `\\`/`\*` change only the mapping from physical to logical
-indentation.
+The roles remain separate: `$` groups syntax-level application, `@` reifies one identifier, literal,
+or parenthesized expression, adjacent postfix `:` restores its opaque target, `#` changes execution
+stage, and `\\`/`\*` change only the mapping from physical to logical indentation.
 
 <a id="unified-binary-functions-and-operators"></a>
 ## Unified binary functions and operators

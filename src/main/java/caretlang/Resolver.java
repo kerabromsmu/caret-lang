@@ -10,6 +10,7 @@ import caretlang.Ast.ContractVariable;
 import caretlang.Ast.Compose;
 import caretlang.Ast.ContractModifier;
 import caretlang.Ast.DynamicField;
+import caretlang.Ast.Dereference;
 import caretlang.Ast.Expr;
 import caretlang.Ast.ExprStmt;
 import caretlang.Ast.Field;
@@ -412,6 +413,7 @@ final class Resolver {
                 resolveExpr(field.name(), scope, functionBody, deferred);
             }
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
+            case Dereference dereference -> resolveExpr(dereference.target(), scope, functionBody, deferred);
             case ContractModifier modifier -> {
                 resolveExpr(modifier.target(), scope, functionBody, deferred);
                 if (knownContractState(modifier.target(), scope) == ContractState.NON_CONTRACT) {

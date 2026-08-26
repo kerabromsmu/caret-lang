@@ -547,11 +547,6 @@ final class Parser {
                 Expr operand = unary();
                 return new Unary("-", operand, SourceSpan.cover(operator.span(), operand.span()));
             }
-            if (match("@")) {
-                Token operator = previous();
-                Expr operand = unary();
-                return new Reflect(operand, SourceSpan.cover(operator.span(), operand.span()));
-            }
             if (matchIdent("not")) {
                 Token operator = previous();
                 Expr operand = unary();
@@ -606,10 +601,23 @@ final class Parser {
             Expr expr = primary();
             while (true) {
                 if (match(".")) {
+                    if (match("@")) {
+                        Token marker = previous();
+                        Token name = consume(Kind.IDENT, "Expected field name after '.@'");
+                        Expr field = new Field(expr, name.text(), false, SourceSpan.cover(expr.span(), name.span()));
+                        expr = new Reflect(field, SourceSpan.cover(expr.span(), name.span()));
+                        continue;
+                    }
                     Token name = consume(Kind.IDENT, "Expected field name after '.'");
                     boolean optional = match("~");
                     SourceSpan end = optional ? previous().span() : name.span();
                     expr = new Field(expr, name.text(), optional, SourceSpan.cover(expr.span(), end));
+                    continue;
+                }
+                if (peek().text().equals(":")
+                        && expr.span().end().offset() == peek().span().start().offset()) {
+                    match(":");
+                    expr = new Dereference(expr, SourceSpan.cover(expr.span(), previous().span()));
                     continue;
                 }
                 if (peek().text().equals("[")
@@ -656,6 +664,11 @@ final class Parser {
         }
 
         private Expr primary() {
+            if (match("@")) {
+                Token operator = previous();
+                Expr operand = reflectionPrimary();
+                return new Reflect(operand, SourceSpan.cover(operator.span(), operand.span()));
+            }
             if (peek().kind() == Kind.SYMBOL
                     && LanguageSyntax.binaryOperatorSpellings().contains(peek().text())) {
                 Token operator = tokens.get(current++);
@@ -720,6 +733,20 @@ final class Parser {
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }
             throw error("Expected expression, found '" + peek().text() + "'");
+        }
+
+        private Expr reflectionPrimary() {
+            Token token = peek();
+            boolean allowed = token.kind() == Kind.IDENT || token.kind() == Kind.NUMBER
+                    || token.kind() == Kind.STRING || token.text().equals("true")
+                    || token.text().equals("false") || token.text().equals("?")
+                    || token.text().equals("~") || token.text().equals("(")
+                    || token.text().equals("[");
+            if (!allowed) {
+                throw error(Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                        "Expected an identifier, literal, or parenthesized expression after '@'");
+            }
+            return primary();
         }
 
         private int collectionCloseLine() {
