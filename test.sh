@@ -24,7 +24,8 @@ expect_failure() {
 
 expect_test_failure() {
   local source_file=$1
-  local output_file="$CARET_TEST_TMP/$(basename "$source_file").out"
+  local output_file
+  output_file="$CARET_TEST_TMP/$(basename "$source_file").out"
   if "$CARET_LAUNCHER" test "$source_file" > "$output_file" 2>&1; then
     printf 'Expected test failure succeeded: %s\n' "$source_file" >&2
     exit 1
@@ -35,6 +36,20 @@ expect_test_failure() {
     exit 1
   fi
 }
+
+run_test_file() {
+  local source_file=$1
+  local output_file=$2
+  if "$CARET_LAUNCHER" test "$source_file" > "$output_file" 2>&1; then
+    return 0
+  else
+    local status=$?
+    printf 'Caret test file failed: %s\n' "$source_file" >&2
+    cat "$output_file" >&2
+    return "$status"
+  fi
+}
+
 "$CARET_LAUNCHER" examples/demo.caret > "$CARET_TEST_TMP/output.txt"
 cat > "$CARET_TEST_TMP/expected.txt" <<'EXPECTED'
 true
@@ -46,8 +61,8 @@ A
 ?
 ~
 10
-Collection
-name,count
+Dictionary
+count,name
 1
 EXPECTED
 diff -u "$CARET_TEST_TMP/expected.txt" "$CARET_TEST_TMP/output.txt"
@@ -76,7 +91,10 @@ diff -u examples/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contracts-outpu
 "$CARET_LAUNCHER" examples/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
 diff -u examples/effects.expected "$CARET_TEST_TMP/effects-output.txt"
 
-"$CARET_LAUNCHER" test examples/testing.caret > "$CARET_TEST_TMP/testing-output.txt"
+"$CARET_LAUNCHER" examples/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
+diff -u examples/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
+
+run_test_file examples/testing.caret "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value
 PASS: null remains distinct from missing
@@ -85,8 +103,8 @@ Summary: 3 tests, 3 passed, 0 failed
 EXPECTED
 diff -u "$CARET_TEST_TMP/testing-expected.txt" "$CARET_TEST_TMP/testing-output.txt"
 
-"$CARET_LAUNCHER" test examples/implemented_features_test.caret \
-  > "$CARET_TEST_TMP/implemented-features-test-output.txt"
+run_test_file examples/implemented_features_test.caret \
+  "$CARET_TEST_TMP/implemented-features-test-output.txt"
 
 cat > "$CARET_TEST_TMP/language.caret" <<'CARET'
 add a b = a + b
@@ -125,8 +143,8 @@ made = factory
 print made.answer
 print made.nothing
 print made.absent~
-field = "answer"
-print made[field]
+fieldName = "answer"
+print made[fieldName]
 print made["absent"]~
 
 print (@42).kind
@@ -159,7 +177,7 @@ right
 Number
 Function
 1
-Collection
+Dictionary
 2
 answer,nothing
 EXPECTED

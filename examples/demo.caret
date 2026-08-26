@@ -29,8 +29,8 @@ missing = ~
 print nullable
 print missing
 
-field = "count"
-print source[field]~
+fieldName = "count"
+print source[fieldName]~
 print (@source).kind
 print (@source).names
 print (@inside).remaining

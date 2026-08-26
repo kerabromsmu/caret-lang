@@ -82,7 +82,7 @@ final class Parser {
                 && tokens.getFirst().text().equals("print") && !tokens.get(1).text().equals("$")) {
             Expr expression = parseExpression(tokens.subList(1, tokens.size() - 1),
                     tokens.getLast().span().end(), indent);
-            Expr print = new Name("print", tokens.getFirst().span());
+            Name print = new Name("print", tokens.getFirst().span());
             Expr call = new Apply(print, expression, SourceSpan.cover(print.span(), expression.span()));
             Expr ordinary;
             try {
@@ -94,7 +94,7 @@ final class Parser {
                 // call in the current grammar, so retain the builtin-shaped fallback.
                 ordinary = call;
             }
-            return new PrintLine((Name) print, expression, ordinary, call.span());
+            return new PrintLine(print, expression, ordinary, call.span());
         }
 
         Expr expression = parseExpression(tokens.subList(0, tokens.size() - 1),
@@ -669,6 +669,7 @@ final class Parser {
             if (match("~")) return new Literal(Value.Missing.INSTANCE, previous().span());
             if (match("[")) {
                 Token open = previous();
+                boolean multiline = collectionCloseLine() > open.span().start().line();
                 ArrayList<CollectionElement> elements = new ArrayList<>();
                 while (!peek().text().equals("]")) {
                     if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ']'");
@@ -680,14 +681,15 @@ final class Parser {
                         }
                         Token name = tokens.get(current++);
                         consume("=", "Expected '=' after named collection field");
-                        Expr value = lowPrecedenceApplication();
+                        Expr value = multiline ? collectionLineExpression() : lowPrecedenceApplication();
                         SourceSpan span = SourceSpan.cover(marker.span(), value.span());
                         elements.add(new NamedElement(name.text(), value, span));
                         continue;
                     }
-                    // A top-level operator makes the remainder one unambiguous expression. Plain
-                    // adjacent atoms remain separate elements; calls can be grouped explicitly.
-                    Expr value = hasTopLevelOperatorBeforeCollectionEnd()
+                    // In a multiline literal, each top-level physical line is one ordinary
+                    // expression. Same-line literals retain eager atom boundaries.
+                    Expr value = multiline ? collectionLineExpression()
+                            : hasTopLevelOperatorBeforeCollectionEnd()
                             ? lowPrecedenceApplication() : postfix();
                     elements.add(new PositionalElement(value, value.span()));
                 }
@@ -718,6 +720,45 @@ final class Parser {
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }
             throw error("Expected expression, found '" + peek().text() + "'");
+        }
+
+        private int collectionCloseLine() {
+            int depth = 0;
+            for (int index = current; index < tokens.size(); index++) {
+                String text = tokens.get(index).text();
+                if (text.equals("[") || text.equals("(")) depth++;
+                else if (text.equals("]") || text.equals(")")) {
+                    if (depth == 0 && text.equals("]")) return tokens.get(index).span().start().line();
+                    depth--;
+                }
+            }
+            return openEndedLine();
+        }
+
+        private Expr collectionLineExpression() {
+            int start = current;
+            int depth = 0;
+            int end = start;
+            for (; end < tokens.size(); end++) {
+                Token token = tokens.get(end);
+                String text = token.text();
+                if (depth == 0) {
+                    if (text.equals("]")) break;
+                    if (end > start
+                            && token.span().start().line() > tokens.get(end - 1).span().end().line()) break;
+                }
+                if (text.equals("[") || text.equals("(")) depth++;
+                else if (text.equals("]") || text.equals(")")) depth--;
+            }
+            if (end == start) throw error("Expected collection element expression");
+            SourcePosition expressionEnd = tokens.get(end - 1).span().end();
+            Expr expression = new ExprParser(tokens.subList(start, end), expressionEnd).parse();
+            current = end;
+            return expression;
+        }
+
+        private int openEndedLine() {
+            return tokens.getLast().span().end().line();
         }
 
         private boolean hasTopLevelOperatorBeforeCollectionEnd() {

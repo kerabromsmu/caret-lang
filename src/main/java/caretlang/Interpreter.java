@@ -6,12 +6,9 @@ import java.io.PrintStream;
 import java.util.*;
 
 final class Interpreter {
-    // Keep the language-owned guard below typical JVM stack limits so diagnostics do not depend on
-    // host stack size or whether a StackOverflowError happens first.
-    private static final int MAX_CALL_DEPTH = 256;
     private final Environment globals = new Environment(null);
     private final PrintStream output;
-    private int callDepth;
+    private final CallableDispatcher calls = new CallableDispatcher();
     private ContractInference inference;
     private final EffectCatalog effectCatalog;
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
@@ -96,7 +93,7 @@ final class Interpreter {
             }
         }
 
-        return exports.isEmpty() ? last : new Value.NamedCollection(exports);
+        return exports.isEmpty() ? last : new Value.Dictionary(exports);
     }
 
     private IdentityHashMap<FunctionDef, Value.Callable> prepareDeclarations(List<Stmt> statements,
@@ -739,19 +736,40 @@ final class Interpreter {
             return evalInner(expression, env, resolution);
         }
         if (expr instanceof CollectionLiteral(List<CollectionElement> elements, SourceSpan ignored)) {
-            if (elements.isEmpty() || elements.getFirst() instanceof PositionalElement) {
-                ArrayList<Value> values = new ArrayList<>(elements.size());
-                for (CollectionElement element : elements) {
-                    values.add(evalInner(element.value(), env, resolution));
-                }
-                return new Value.Seq(values);
-            }
-            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+            if (elements.isEmpty()) return Value.EmptyCollection.INSTANCE;
+            ArrayList<Value> values = new ArrayList<>(elements.size());
             for (CollectionElement element : elements) {
-                NamedElement named = (NamedElement) element;
-                fields.put(named.name(), evalInner(named.value(), env, resolution));
+                Value value = evalInner(element.value(), env, resolution);
+                values.add(element instanceof NamedElement named
+                        ? new Value.Field(named.name(), value) : value);
             }
-            return new Value.NamedCollection(fields);
+            boolean fields = values.stream().allMatch(Value.Field.class::isInstance);
+            boolean ordinary = values.stream().noneMatch(Value.Field.class::isInstance);
+            if (!fields && !ordinary) {
+                int mixed = 0;
+                boolean firstIsField = values.getFirst() instanceof Value.Field;
+                while ((values.get(mixed) instanceof Value.Field) == firstIsField) mixed++;
+                throw new LangException(Diagnostic.Phase.RUNTIME,
+                        Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+                        "A collection cannot mix Field values and positional elements",
+                        elements.get(mixed).span());
+            }
+            if (ordinary) return new Value.Seq(values);
+            LinkedHashMap<String, Value> dictionary = new LinkedHashMap<>();
+            LinkedHashMap<String, SourceSpan> locations = new LinkedHashMap<>();
+            for (int i = 0; i < values.size(); i++) {
+                Value.Field field = (Value.Field) values.get(i);
+                SourceSpan first = locations.putIfAbsent(field.key(), elements.get(i).span());
+                if (first != null) {
+                    throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                            Diagnostic.Codes.DUPLICATE_FIELD,
+                            "Duplicate field: " + field.key(), elements.get(i).span(),
+                            List.of(new Diagnostic.Related(
+                                    "First field named " + field.key(), first))));
+                }
+                dictionary.put(field.key(), field.value());
+            }
+            return new Value.Dictionary(dictionary);
         }
         if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                                           boolean explicitPure, SourceSpan ignored)) {
@@ -824,27 +842,11 @@ final class Interpreter {
     }
 
     private Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan span) {
-        return withinCallDepth(span, () -> callable.apply(argument, span));
+        return calls.invoke(callable, argument, span);
     }
 
     private Value invokeZero(Value.Callable callable, SourceSpan span) {
-        return withinCallDepth(span, () -> callable.invokeZero(span));
-    }
-
-    private Value withinCallDepth(SourceSpan span, java.util.function.Supplier<Value> invocation) {
-        if (callDepth >= MAX_CALL_DEPTH) {
-            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
-                    "Maximum Caret call depth exceeded", span);
-        }
-        callDepth++;
-        try {
-            return invocation.get();
-        } catch (StackOverflowError exhaustedStack) {
-            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
-                    "Maximum Caret call depth exceeded", span);
-        } finally {
-            callDepth--;
-        }
+        return calls.invokeZero(callable, span);
     }
 
     private Value applyBinaryOperator(String operator, Value left, SourceSpan leftSpan,
@@ -1021,6 +1023,9 @@ final class Interpreter {
         globals.define("numberText", locatedFunction("numberText", List.of("number"), (args, ignored) ->
                 new Value.Str(new Value.Num(number(args.getFirst())).toString())));
 
+        globals.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
+                new Value.Field(requiredDictionaryKey(args.getFirst()), args.get(1).value())));
+
         globals.define("seqEmpty", function("seqEmpty", List.of(), args -> new Value.Seq(List.of())));
         globals.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) ->
                 sequence(args.getFirst()).appended(args.get(1).value())));
@@ -1033,7 +1038,7 @@ final class Interpreter {
         globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
 
-        globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dict(Map.of())));
+        globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dictionary(Map.of())));
         globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
                 dictionary(args.getFirst()).put(requiredDictionaryKey(args.get(1)), args.get(2).value())));
         globals.define("dictGet", locatedFunction("dictGet", List.of("dictionary", "key"), (args, ignored) -> {
@@ -1092,14 +1097,16 @@ final class Interpreter {
 
     private Value.Seq sequence(Value.Argument argument) {
         Value raw = underlying(argument.value());
+        if (raw instanceof Value.EmptyCollection) return new Value.Seq(List.of());
         if (raw instanceof Value.Seq sequence) return sequence;
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
     }
 
-    private Value.Dict dictionary(Value.Argument argument) {
+    private Value.Dictionary dictionary(Value.Argument argument) {
         Value raw = underlying(argument.value());
-        if (raw instanceof Value.Dict dictionary) return dictionary;
+        if (raw instanceof Value.EmptyCollection) return new Value.Dictionary(Map.of());
+        if (raw instanceof Value.Dictionary dictionary) return dictionary;
         throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
                 "Expected dictionary, got: " + argument.value(), argument.span());
     }
@@ -1135,7 +1142,7 @@ final class Interpreter {
         Optional<Value> value = reflective.find(name);
         if (value.isPresent()) return value.get();
         if (optional) return Value.Missing.INSTANCE;
-        if (target instanceof Value.NamedCollection) {
+        if (target instanceof Value.Dictionary || target instanceof Value.EmptyCollection) {
             throw runtime(Diagnostic.Codes.MISSING_FIELD, "Collection has no field: " + name);
         }
         throw runtime(Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: " + name);
@@ -1146,7 +1153,7 @@ final class Interpreter {
         if (value instanceof Value.FunctionReference reference) return reference;
         if (value instanceof Value.ContractValue contract) return contract;
         if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
-        return new Value.NamedCollection(ValueSemantics.reflectionFields(value));
+        return new Value.Dictionary(ValueSemantics.reflectionFields(value));
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {

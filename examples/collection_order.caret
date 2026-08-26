@@ -1,0 +1,22 @@
+// Empty collections are shape-neutral; all Dictionary fields share canonical code-point order.
+empty = []
+named = [^with = 1 ^z = 2 ^a = 3]
+fromFields = [
+  field "z" 2
+  field "a" 3
+  field "with" 1
+]
+fromUpdates = dictPut (dictPut (dictPut dictEmpty "with" 1) "z" 2) "a" 3
+NamedCollection = Dictionary String
+AnyNamedCollection = NamedCollection Any
+(AnyNamedCollection) checked = fromFields
+
+print (@empty).kind
+print (@empty).shape
+print Sequence empty
+print Dictionary empty
+print (@named).names
+print named.with
+print named == fromFields
+print fromFields == fromUpdates
+print type checked

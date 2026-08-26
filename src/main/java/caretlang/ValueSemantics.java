@@ -1,25 +1,13 @@
 package caretlang;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 /** Language-owned policies for public kinds, reflection, equality, and value rendering. */
 final class ValueSemantics {
-    enum Descriptor {
-        NUMBER("Number"), STRING("String"), BOOLEAN("Boolean"), NULL("Null"), MISSING("Missing"),
-        COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), FUNCTION("Function"),
-        CONTRACT("Contract"), REFLECTIVE("Reflective");
-
-        private final String publicName;
-        Descriptor(String publicName) { this.publicName = publicName; }
-        String publicName() { return publicName; }
-    }
-
     private ValueSemantics() {}
 
     static Value underlying(Value value) {
@@ -27,42 +15,22 @@ final class ValueSemantics {
         return value;
     }
 
-    static Descriptor descriptor(Value value) {
-        Objects.requireNonNull(value);
-        value = underlying(value);
-        return switch (value) {
-            case Value.Num ignored -> Descriptor.NUMBER;
-            case Value.Str ignored -> Descriptor.STRING;
-            case Value.Bool ignored -> Descriptor.BOOLEAN;
-            case Value.Null ignored -> Descriptor.NULL;
-            case Value.Missing ignored -> Descriptor.MISSING;
-            case Value.NamedCollection ignored -> Descriptor.COLLECTION;
-            case Value.Seq ignored -> Descriptor.SEQUENCE;
-            case Value.Dict ignored -> Descriptor.DICTIONARY;
-            case Value.FunctionReference ignored -> Descriptor.FUNCTION;
-            case Value.ContractValue ignored -> Descriptor.CONTRACT;
-            case Value.Attributed attributed -> descriptor(attributed.value());
-            case Value.Reflective ignored -> Descriptor.REFLECTIVE;
-            case Value.Callable ignored -> Descriptor.FUNCTION;
-        };
-    }
-
-    static String kind(Value value) { return descriptor(value).publicName(); }
+    static String kind(Value value) { return ValueKind.of(value).publicName(); }
 
     static Map<String, Value> reflectionFields(Value value) {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("kind", new Value.Str(kind(value)));
         switch (value) {
-            case Value.NamedCollection collection -> {
-                fields.put("shape", new Value.Str("named"));
-                fields.put("size", new Value.Num(collection.fields().size()));
-                fields.put("names", new Value.Str(String.join(",", collection.fields().keySet())));
+            case Value.EmptyCollection ignored -> {
+                fields.put("shape", new Value.Str("empty"));
+                fields.put("size", new Value.Num(0));
             }
-            case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
-            case Value.Dict dictionary -> {
+            case Value.Dictionary dictionary -> {
+                fields.put("shape", new Value.Str("named"));
                 fields.put("size", new Value.Num(dictionary.size()));
                 fields.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
             }
+            case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
             case Value.Reflective reflective -> fields.putAll(reflective.fields());
             default -> { }
         }
@@ -71,8 +39,6 @@ final class ValueSemantics {
 
     private record Pair(Value left, Value right) {}
     private record SequenceFrame(java.util.Iterator<Value> values, boolean first) {}
-    private record EntriesFrame(java.util.Iterator<Map.Entry<String, Value>> entries,
-                                String keyPrefix, boolean first) {}
 
     static boolean equal(Value left, Value right) {
         ArrayDeque<Pair> pending = new ArrayDeque<>();
@@ -87,26 +53,27 @@ final class ValueSemantics {
                 if (x.descriptor() != y.descriptor()) return false;
                 continue;
             }
+            if (a instanceof Value.Field(String key, Value value) && b instanceof Value.Field(
+                    String key1, Value value1
+            )) {
+                if (!key.equals(key1)) return false;
+                pending.push(new Pair(value, value1));
+                continue;
+            }
+            if (isEmptyCollection(a) && isEmptyCollection(b)) continue;
             if (a instanceof Value.Callable || b instanceof Value.Callable) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY,
                         "Callable values cannot be compared for equality", null);
             }
             if (a instanceof Value.Num(double x) && b instanceof Value.Num(double y)) {
                 if (x != y) return false;
-            } else if (a instanceof Value.NamedCollection x && b instanceof Value.NamedCollection y) {
-                if (!enqueueFields(x.fields(), y.fields(), pending)) return false;
+            } else if (a instanceof Value.Dictionary x && b instanceof Value.Dictionary y) {
+                if (!enqueueFields(x.entries(), y.entries(), pending)) return false;
             } else if (a instanceof Value.Seq x && b instanceof Value.Seq y) {
                 if (x.size() != y.size()) return false;
                 var xs = x.iterator();
                 var ys = y.iterator();
                 while (xs.hasNext()) pending.push(new Pair(xs.next(), ys.next()));
-            } else if (a instanceof Value.Dict x && b instanceof Value.Dict y) {
-                if (x.size() != y.size()) return false;
-                for (Map.Entry<String, Value> entry : x.orderedEntries()) {
-                    Optional<Value> other = y.find(entry.getKey());
-                    if (other.isEmpty()) return false;
-                    pending.push(new Pair(entry.getValue(), other.get()));
-                }
             } else if (!Objects.equals(a, b)) {
                 return false;
             }
@@ -122,11 +89,20 @@ final class ValueSemantics {
             Object item = pending.pop();
             switch (item) {
                 case String text -> output.append(text);
-                case Value.NamedCollection collection -> pushMap(collection.fields(), "[", "]", "^", pending);
-                case Value.Dict dictionary -> {
+                case Value.EmptyCollection ignored -> output.append("[]");
+                case Value.Dictionary dictionary -> {
+                    List<Value> fields = dictionary.entries().entrySet().stream()
+                            .map(entry -> (Value) new Value.Field(entry.getKey(), entry.getValue())).toList();
                     pending.push("]");
-                    pending.push(new EntriesFrame(dictionary.orderedEntries().iterator(), "#", true));
-                    pending.push("#[");
+                    pending.push(new SequenceFrame(fields.iterator(), true));
+                    pending.push("[");
+                }
+                case Value.Field field -> {
+                    pending.push(")");
+                    pending.push(field.value());
+                    pending.push(" ");
+                    pending.push(quoted(field.key()));
+                    pending.push("(field ");
                 }
                 case Value.Seq sequence -> {
                     pending.push("]");
@@ -141,17 +117,6 @@ final class ValueSemantics {
                         if (!frame.first()) pending.push(", ");
                     }
                 }
-                case EntriesFrame frame -> {
-                    if (frame.entries().hasNext()) {
-                        Map.Entry<String, Value> entry = frame.entries().next();
-                        pending.push(new EntriesFrame(frame.entries(), frame.keyPrefix(), false));
-                        pending.push(entry.getValue());
-                        pending.push(" = ");
-                        pending.push(entry.getKey());
-                        pending.push(frame.keyPrefix());
-                        if (!frame.first()) pending.push(", ");
-                    }
-                }
                 case Value.Attributed attributed -> pending.push(attributed.value());
                 default -> output.append(item);
             }
@@ -159,25 +124,25 @@ final class ValueSemantics {
         return output.toString();
     }
 
-    private static void pushMap(Map<String, Value> values, String open, String close,
-                                String keyPrefix, ArrayDeque<Object> pending) {
-        pushEntries(values.entrySet(), open, close, keyPrefix, pending);
+    private static String quoted(String value) {
+        StringBuilder result = new StringBuilder(value.length() + 2).append('"');
+        value.codePoints().forEach(codePoint -> {
+            switch (codePoint) {
+                case '"' -> result.append("\\\"");
+                case '\\' -> result.append("\\\\");
+                case '\n' -> result.append("\\n");
+                case '\r' -> result.append("\\r");
+                case '\t' -> result.append("\\t");
+                default -> result.appendCodePoint(codePoint);
+            }
+        });
+        return result.append('"').toString();
     }
 
-    private static void pushEntries(Iterable<Map.Entry<String, Value>> values, String open, String close,
-                                    String keyPrefix, ArrayDeque<Object> pending) {
-        List<Map.Entry<String, Value>> entries = new ArrayList<>();
-        values.forEach(entries::add);
-        pending.push(close);
-        for (int i = entries.size() - 1; i >= 0; i--) {
-            Map.Entry<String, Value> entry = entries.get(i);
-            pending.push(entry.getValue());
-            pending.push(" = ");
-            pending.push(entry.getKey());
-            pending.push(keyPrefix);
-            if (i > 0) pending.push(", ");
-        }
-        pending.push(open);
+    private static boolean isEmptyCollection(Value value) {
+        return value instanceof Value.EmptyCollection
+                || value instanceof Value.Seq sequence && sequence.size() == 0
+                || value instanceof Value.Dictionary dictionary && dictionary.size() == 0;
     }
 
     private static boolean enqueueFields(Map<String, Value> left, Map<String, Value> right,

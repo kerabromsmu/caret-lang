@@ -70,8 +70,8 @@ final class MainTest {
                 print source.count~
                 print source.enabled~
 
-                field = "count"
-                print source[field]~
+                fieldName = "count"
+                print source[fieldName]~
                 print @source
                 """);
 
@@ -86,8 +86,17 @@ final class MainTest {
                 10
                 ~
                 10
-                [^kind = Collection, ^shape = named, ^size = 2, ^names = name,count]
+                [(field "kind" Dictionary), (field "names" count,name), (field "shape" named), (field "size" 2)]
                 """, invocation.output());
+        assertEquals("", invocation.error());
+    }
+
+    @Test
+    void collectionOrderingExampleRunsEndToEnd() {
+        Invocation invocation = run(Path.of("examples/collection_order.caret"));
+        assertEquals(0, invocation.exitCode());
+        assertEquals("Collection\nempty\ntrue\ntrue\na,with,z\n1\ntrue\ntrue\nDictionary\n",
+                invocation.output());
         assertEquals("", invocation.error());
     }
 

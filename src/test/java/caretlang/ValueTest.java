@@ -14,12 +14,10 @@ final class ValueTest {
     void namedCollectionsAndDictionariesRejectNullRuntimeValues() {
         LinkedHashMap<String, Value> invalid = new LinkedHashMap<>();
         invalid.put("bad", null);
-        assertThrows(NullPointerException.class, () -> new Value.NamedCollection(invalid));
-        assertThrows(NullPointerException.class, () -> new Value.Dict(invalid));
+        assertThrows(NullPointerException.class, () -> new Value.Dictionary(invalid));
         LinkedHashMap<String, Value> nullKey = new LinkedHashMap<>();
         nullKey.put(null, new Value.Num(1));
-        assertThrows(NullPointerException.class, () -> new Value.NamedCollection(nullKey));
-        assertThrows(NullPointerException.class, () -> new Value.Dict(nullKey));
+        assertThrows(NullPointerException.class, () -> new Value.Dictionary(nullKey));
     }
 
     @Test
@@ -78,16 +76,17 @@ final class ValueTest {
     void iterativeRenderingPreservesCollectionSyntax() {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("items", new Value.Seq(List.of(new Value.Num(1))));
-        fields.put("lookup", new Value.Dict(Map.of("answer", new Value.Num(42))));
-        Value value = new Value.NamedCollection(fields);
+        fields.put("lookup", new Value.Dictionary(Map.of("answer", new Value.Num(42))));
+        Value value = new Value.Dictionary(fields);
 
-        assertEquals("[^items = [1], ^lookup = #[#answer = 42]]", value.toString());
+        assertEquals("[(field \"items\" [1]), (field \"lookup\" [(field \"answer\" 42)])]",
+                value.toString());
     }
 
     @Test
     void persistentCollectionsHandleLongUpdateHistoriesWithoutChangingValues() {
         Value.Seq sequence = new Value.Seq(List.of());
-        Value.Dict dictionary = new Value.Dict(new LinkedHashMap<>());
+        Value.Dictionary dictionary = new Value.Dictionary(new LinkedHashMap<>());
         for (int i = 0; i < 10_000; i++) {
             sequence = sequence.appended(new Value.Num(i));
             dictionary = dictionary.put("key" + i, new Value.Num(i));

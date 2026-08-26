@@ -9,11 +9,11 @@ interpreter. The current prototype supports:
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
-- exported immutable named Collections, required/optional field access, and dynamic lookup;
+- exported immutable Dictionaries, required/optional field access, and dynamic lookup;
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
-- persistent sequences and insertion-ordered dictionaries with structural equality; and
+- persistent sequences and canonically ordered Dictionaries with structural equality; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
 - proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
@@ -44,8 +44,8 @@ article covers both implemented foundations and explicitly labeled planned featu
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
 Contracts form derivation graphs and act as predicates, while the prototype now provides initial
 contract-based multiple dispatch for ordinary functions. Collections use one universal `[...]`
-literal. The prototype implements positional and static named forms, and exported blocks are
-shorthand for equivalent named Collections. Lexical scopes remain non-value name-resolution
+literal. The prototype implements positional and String-keyed Dictionary forms, and exported blocks are
+shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-resolution
 environments. The planned contextual contract model will determine whether a positional value is a
 list, set, dictionary, packed buffer, or another representation; first-class dynamic fields also
 remain planned. A non-empty Collection is entirely positional or
@@ -281,8 +281,8 @@ separate name-literal syntax.
 The ordinary runtime provides:
 
 - `print value` and `type value`;
-- `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`, and
-  `Dictionary` as first-class unary contracts;
+- `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`,
+  `Field`, and `Dictionary` as first-class contracts; `Field K V` and `Dictionary K V` are curried;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
 - `seqEmpty`, `seqAdd`, `seqGet`, and `seqSize`; and
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
@@ -294,14 +294,17 @@ value is `~`.
 ## Reflection currently implemented
 
 ```text
-field = "count"
-print source[field]~
+fieldName = "count"
+print source[fieldName]~
 print (@source).kind
 print (@source).names
 ```
 
-Named Collection reflection exposes `kind`, `shape`, `size`, and ordered `names`; sequence and
-dictionary reflection expose their applicable collection metadata. `@function` returns a
+Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `names`. Field keys are
+ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
+or update order; their value expressions are still evaluated in source order. Identifier shorthand
+`^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
+Sequence reflection exposes its applicable collection metadata. `@function` returns a
 non-callable function reference exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports

@@ -9,6 +9,29 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ContractInferenceTest {
     @Test
+    void distinguishesNeutralEmptySequenceAndUnifiedDictionaryLiterals() {
+        List<Ast.Stmt> program = new Parser("""
+                empty =
+                  []
+                sequence =
+                  [1]
+                staticDictionary =
+                  [^name = "Ada"]
+                fieldDictionary =
+                  [(field "name" "Ada")]
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+        assertEquals(Set.of(BuiltinContract.SEQUENCE),
+                inference.contract((Ast.FunctionDef) program.get(0)).resultGuarantees());
+        assertEquals(Set.of(BuiltinContract.SEQUENCE),
+                inference.contract((Ast.FunctionDef) program.get(1)).resultGuarantees());
+        assertEquals(Set.of(BuiltinContract.DICTIONARY),
+                inference.contract((Ast.FunctionDef) program.get(2)).resultGuarantees());
+        assertEquals(Set.of(BuiltinContract.DICTIONARY),
+                inference.contract((Ast.FunctionDef) program.get(3)).resultGuarantees());
+    }
+
+    @Test
     void preservesGenericParameterResultFlowAndInfersNumericConstraints() {
         List<Ast.Stmt> program = new Parser("""
                 identity value =

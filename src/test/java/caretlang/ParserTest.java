@@ -51,6 +51,34 @@ final class ParserTest {
     }
 
     @Test
+    void parsesEachTopLevelLineOfMultilineCollectionsAsAnExpression() {
+        CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class, expression("""
+                [
+                  field "first name" "Alice"
+                  field "age" 42
+                ]
+                """));
+        assertEquals(2, literal.elements().size());
+        assertEquals(List.of(2, 3), literal.elements().stream()
+                .map(element -> element.span().start().line()).toList());
+        for (CollectionElement element : literal.elements()) {
+            Apply outer = assertInstanceOf(Apply.class, element.value());
+            assertInstanceOf(Apply.class, outer.function());
+        }
+
+        CollectionLiteral nested = assertInstanceOf(CollectionLiteral.class, expression("""
+                [
+                  identity [
+                    1 2
+                  ]
+                  3
+                ]
+                """));
+        assertEquals(2, nested.elements().size());
+        assertInstanceOf(Apply.class, nested.elements().getFirst().value());
+    }
+
+    @Test
     void parsesNamedCollectionElements() {
         CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class,
                 expression("[^name = \"Ada\" ^age = 42]"));

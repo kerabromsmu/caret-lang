@@ -276,12 +276,25 @@ final class ContractInference {
             case ContractModifier ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
             case ContractVariable ignored -> Shape.unknown();
-            case CollectionLiteral collection -> collection.elements().stream()
-                    .anyMatch(NamedElement.class::isInstance)
-                    ? Shape.concrete(BuiltinContract.COLLECTION)
+            case CollectionLiteral collection -> collection.elements().isEmpty()
+                    ? Shape.concrete(BuiltinContract.SEQUENCE)
+                    : collection.elements().stream().allMatch(ContractInference::staticallyFieldElement)
+                    ? Shape.concrete(BuiltinContract.DICTIONARY)
                     : Shape.concrete(BuiltinContract.SEQUENCE);
             case ArrowContract ignored -> Shape.unknown();
         };
+    }
+
+    private static boolean staticallyFieldElement(CollectionElement element) {
+        if (element instanceof NamedElement) return true;
+        Expr expression = element.value();
+        while (expression instanceof Group group) expression = group.expression();
+        int arguments = 0;
+        while (expression instanceof Apply apply) {
+            arguments++;
+            expression = apply.function();
+        }
+        return arguments == 2 && expression instanceof Name name && name.name().equals("field");
     }
 
     private Shape binary(Binary binary, Map<String, Integer> parameters, Map<String, Shape> locals,
@@ -369,7 +382,7 @@ final class ContractInference {
     }
 
     private static Shape literal(Value value) {
-        return switch (ValueSemantics.descriptor(value)) {
+        return switch (ValueKind.of(value)) {
             case NUMBER -> Shape.concrete(BuiltinContract.NUMBER);
             case STRING -> Shape.concrete(BuiltinContract.STRING);
             case BOOLEAN -> Shape.concrete(BuiltinContract.BOOLEAN);
@@ -379,6 +392,7 @@ final class ContractInference {
             case COLLECTION -> Shape.concrete(BuiltinContract.COLLECTION);
             case SEQUENCE -> Shape.concrete(BuiltinContract.SEQUENCE);
             case DICTIONARY -> Shape.concrete(BuiltinContract.DICTIONARY);
+            case FIELD -> Shape.concrete(BuiltinContract.FIELD);
             default -> Shape.unknown();
         };
     }
@@ -480,6 +494,7 @@ final class ContractInference {
         result.put("dictGet", builtin(2, EffectSummary.PURE));
         result.put("dictHas", builtin(2, EffectSummary.PURE));
         result.put("dictKeys", builtin(1, EffectSummary.PURE));
+        result.put("field", builtin(2, EffectSummary.PURE));
         result.put("assert", builtin(2, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         result.put("assertEqual", builtin(3, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         return Map.copyOf(result);

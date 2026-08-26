@@ -266,15 +266,15 @@ symbol identities rather than source-span equality.
 
 ## Phase 4 — Universal collections, fields, and mutability containers
 
-Current foundation: `Collection` is implemented as the general contract for named Collections,
-Sequences, and Dictionaries. Positional and static named `[...]` literals are implemented, exported
-blocks lower directly to equivalent named Collections, and mixed shapes are diagnosed. The steps
-below describe the remaining contextual, first-class Field, template, and representation work.
+Current foundation: `Collection` is implemented as the general contract for Sequences and
+Dictionaries. Static `^name`, ordinary `field "name" value`, exported blocks, and `dictPut` share
+one String-keyed `Dictionary K V` representation; mixed shapes and duplicate keys are diagnosed.
+The steps below describe the remaining contextual, template, and representation work.
 
 ### Collection protocol and literals
 
 - Generalize existing sequences/dictionaries behind `Collection` and capability contracts while
-  keeping persistent semantics and insertion-ordered dictionary fields.
+  keeping persistent semantics and canonical Dictionary field order.
 - Complete contextual behavior for `[...]`, including shape-neutral empty values and inferred
   content contracts, without assigning a fixed container meaning to square brackets.
 - Make each collection literal a hole-expression boundary: materialize its collection-constructor
@@ -286,8 +286,8 @@ below describe the remaining contextual, first-class Field, template, and repres
 
 ### Fields and dictionary-like collections
 
-- Complete `^name = expression` fields as first-class values and add `field name value` dynamic
-  construction. Dictionary-like values become collections of fields with no separate aggregate kind.
+- Preserve the implemented first-class `Field K V`, ordinary `field name value` construction, and
+  unified `Dictionary K V` representation shared by exports, static fields, and persistent updates.
 - Preserve the implemented positional/named shape diagnostic. Make `[]` shape-neutral and valid
   under every zero-compatible collection contract.
 - Support static and dynamic access, optional lookup, and exact missing/null/present-`~` behavior.
