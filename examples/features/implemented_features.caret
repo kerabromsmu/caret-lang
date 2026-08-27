@@ -24,6 +24,12 @@ scale value =
 print add 2 3
 print scale base
 
+makeAdder amount =
+  addAmount value = amount + value
+  addAmount
+addThree = makeAdder 3
+print addThree 4
+
 // Symbolic binary operators are the same callable values in prefix and infix form.
 increment = + _ 1
 print + 2 3

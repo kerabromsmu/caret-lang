@@ -150,8 +150,12 @@ final class Interpreter {
     private Value.FunctionValue rawFunction(FunctionDef function, Environment env, Resolution resolution) {
         List<String> parameterNames = function.params().stream().map(Parameter::name).toList();
         boolean refinementEligible = inference != null && inference.isRefinementEligible(function);
+        LinkedHashMap<Integer, Environment.BindingReference> captures = new LinkedHashMap<>();
+        for (Resolution.Upvalue upvalue : resolution.upvalues(function)) {
+            captures.put(upvalue.symbolId(), env.referenceAt(upvalue.lexicalDepth(), upvalue.slot()));
+        }
         return new Value.FunctionValue(function.name(), parameterNames, (arguments, ignoredCallSpan) -> {
-            Environment parameters = new Environment(env);
+            Environment parameters = new Environment(env, captures);
             for (int i = 0; i < function.params().size(); i++) {
                 parameters.define(function.params().get(i).name(), arguments.get(i).value());
             }
@@ -292,7 +296,7 @@ final class Interpreter {
                                       Resolution resolution) {
         Value resolved = binding.inline() == null
                 ? underlying(binding.binding() == null ? globals.get(binding.name())
-                : env.getAt(binding.binding().lexicalDepth(), binding.binding().slot()))
+                : env.getResolved(binding.binding()))
                 : evalInner(binding.inline(), env, resolution);
         if (resolved instanceof Value.ContractValue contract) {
             ContractDescriptor descriptor = contract.descriptor();
@@ -369,7 +373,7 @@ final class Interpreter {
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
             Value resolved = reference.inline() == null
                     ? underlying(reference.binding() == null ? globals.get(reference.name())
-                    : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()))
+                    : contractEnvironment.getResolved(reference.binding()))
                     : evalInner(reference.inline(), contractEnvironment, resolution);
             if (!reference.arguments().isEmpty()) {
                 if (!(resolved instanceof Value.ContractValue constructor)) {
@@ -471,7 +475,7 @@ final class Interpreter {
                                                          Resolution resolution) {
         Value resolved = reference.inline() == null
                 ? underlying(reference.binding() == null ? globals.get(reference.name())
-                : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()))
+                : contractEnvironment.getResolved(reference.binding()))
                 : evalInner(reference.inline(), contractEnvironment, resolution);
         if (!(resolved instanceof Value.ContractValue contract)) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
@@ -617,8 +621,7 @@ final class Interpreter {
         if (expr instanceof Literal(Value value1, SourceSpan ignored)) return value1;
         if (expr instanceof Name nameExpression) {
             Resolution.Binding binding = resolution.binding(nameExpression);
-            Value value = binding == null ? env.get(nameExpression.name())
-                    : env.getAt(binding.lexicalDepth(), binding.slot());
+            Value value = binding == null ? env.get(nameExpression.name()) : env.getResolved(binding);
             Value callableValue = underlying(value);
             if (callableValue instanceof Value.Callable callable && callable.remainingArity() == 0) {
                 return invokeZero(callable, expr.span());
@@ -738,8 +741,7 @@ final class Interpreter {
             Value targetValue;
             if (target instanceof Name nameExpression) {
                 Resolution.Binding binding = resolution.binding(nameExpression);
-                targetValue = binding == null ? env.get(nameExpression.name())
-                        : env.getAt(binding.lexicalDepth(), binding.slot());
+                targetValue = binding == null ? env.get(nameExpression.name()) : env.getResolved(binding);
             } else {
                 targetValue = evalInner(target, env, resolution);
             }
@@ -869,8 +871,7 @@ final class Interpreter {
 
     private Value bindingValue(Name expression, Environment env, Resolution resolution) {
         Resolution.Binding binding = resolution.binding(expression);
-        return binding == null ? env.get(expression.name())
-                : env.getAt(binding.lexicalDepth(), binding.slot());
+        return binding == null ? env.get(expression.name()) : env.getResolved(binding);
     }
 
     private Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan span) {

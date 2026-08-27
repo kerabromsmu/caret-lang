@@ -4,7 +4,8 @@ Caret is an experimental concise programming language implemented as a Java 21 t
 interpreter. The current prototype supports:
 
 - finite numbers, strings, Booleans, null (`?`), and missing (`~`);
-- indentation-delimited functions, lexical closures, direct and mutual recursion;
+- indentation-delimited functions, lexical closures with resolver-owned upvalue metadata, and
+  direct and mutual recursion;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;

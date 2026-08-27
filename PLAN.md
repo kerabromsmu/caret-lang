@@ -93,8 +93,8 @@ substitution remain unfinished.
 - Preserve the resolver's implemented block-wide function predeclaration, source-ordered
   non-function initialization, duplicate diagnostics, lexical depths/slots, closure capture, and
   established `^name = name` export pattern as later declaration forms are added.
-- Extend resolver-owned lexical slots into explicit upvalue/lowering metadata for the compiler and
-  verify eager partial capture against mutation introduced later.
+- Preserve the implemented resolver-owned upvalue/lowering metadata and eager partial-value capture
+  as mutation and compiler lowering are introduced later.
 - Preserve implemented structural equality for scalars, named Collections, and positional collections and the located
   rejection of callable equality as new value kinds arrive.
 

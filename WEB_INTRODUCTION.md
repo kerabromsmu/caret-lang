@@ -388,6 +388,9 @@ left-to-right function composition, language-owned reflection, persistent collec
 source-located diagnostics, a REPL, and native test assertions. Execution remains fail-fast, while
 compiler-oriented parsing can recover at declaration boundaries and collect independent failures
 without losing physical spans from valid later declarations.
+Closure analysis records deterministic, source-spanned upvalues by stable binding identity; runtime
+closures use those same internal descriptors without exposing captures or lexical environments
+through reflection.
 
 General parameterized contracts, declaration-wide-variable arrow contracts,
 structural templates, contextual collection representations, modules, root reification, sandboxing,

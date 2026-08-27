@@ -14,13 +14,34 @@ final class Environment {
         private boolean initialized;
     }
 
+    static final class BindingReference {
+        private final Binding binding;
+
+        private BindingReference(Binding binding) { this.binding = binding; }
+
+        private Value read() {
+            if (!binding.initialized) {
+                throw new LangException(Diagnostic.Phase.RUNTIME,
+                        Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
+                        "Binding read before initialization", null);
+            }
+            return binding.value;
+        }
+    }
+
     private final Environment parent;
     private final Map<String, Binding> values = new LinkedHashMap<>();
     private final List<Binding> slots = new ArrayList<>();
     private final List<String> slotNames = new ArrayList<>();
+    private final Map<Integer, BindingReference> captures;
 
     Environment(Environment parent) {
+        this(parent, Map.of());
+    }
+
+    Environment(Environment parent, Map<Integer, BindingReference> captures) {
         this.parent = parent;
+        this.captures = Map.copyOf(captures);
     }
 
     void define(String name, Value value) {
@@ -87,6 +108,27 @@ final class Environment {
                     "Binding read before initialization", null);
         }
         return binding.value;
+    }
+
+    BindingReference referenceAt(int lexicalDepth, int slot) {
+        Environment environment = this;
+        for (int i = 0; i < lexicalDepth; i++) {
+            if (environment.parent == null) throw new IllegalStateException("Invalid capture depth");
+            environment = environment.parent;
+        }
+        if (slot < 0 || slot >= environment.slots.size()) {
+            throw new IllegalStateException("Invalid capture slot");
+        }
+        return new BindingReference(environment.slots.get(slot));
+    }
+
+    Value getResolved(Resolution.Binding binding) {
+        if (!binding.captured()) return getAt(binding.lexicalDepth(), binding.slot());
+        for (Environment environment = this; environment != null; environment = environment.parent) {
+            BindingReference reference = environment.captures.get(binding.symbolId());
+            if (reference != null) return reference.read();
+        }
+        throw new IllegalStateException("Missing captured binding metadata for symbol " + binding.symbolId());
     }
 
     List<LocalBinding> localBindings() {

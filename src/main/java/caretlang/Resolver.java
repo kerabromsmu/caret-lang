@@ -24,6 +24,7 @@ import caretlang.Ast.Reflect;
 import caretlang.Ast.Stmt;
 import caretlang.Ast.Unary;
 
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -56,6 +57,9 @@ final class Resolver {
     private final EffectCatalog effectCatalog;
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines = new IdentityHashMap<>();
+    private final IdentityHashMap<FunctionDef, LinkedHashMap<Integer, Resolution.Upvalue>> upvalues =
+            new IdentityHashMap<>();
+    private final ArrayDeque<FunctionDef> functions = new ArrayDeque<>();
     private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
     private final java.util.Map<Integer, Integer> directAliases = new java.util.HashMap<>();
     private int nextSymbolId;
@@ -79,7 +83,7 @@ final class Resolver {
         }
         resolver.resolveBlock(program, root, false);
         return new Resolution(resolver.names, resolver.contracts, resolver.clauses, resolver.calls,
-                resolver.builtinPrintLines, resolver.declarations);
+                resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.declarations);
     }
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
@@ -227,20 +231,26 @@ final class Resolver {
     }
 
     private void resolveFunction(FunctionDef function, Scope enclosing) {
-        resolverContracts(function.resultContracts(), enclosing);
-        Scope parameters = new Scope(enclosing);
-        HashSet<String> seen = new HashSet<>();
-        for (Ast.Parameter parameter : function.params()) {
-            resolverContracts(parameter.contracts(), enclosing);
-            if (!seen.add(parameter.name())) {
-                throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER,
-                        "Duplicate parameter: " + parameter.name(), function.span());
+        functions.push(function);
+        upvalues.put(function, new LinkedHashMap<>());
+        try {
+            resolverContracts(function.resultContracts(), enclosing);
+            Scope parameters = new Scope(enclosing);
+            HashSet<String> seen = new HashSet<>();
+            for (Ast.Parameter parameter : function.params()) {
+                resolverContracts(parameter.contracts(), enclosing);
+                if (!seen.add(parameter.name())) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER,
+                            "Duplicate parameter: " + parameter.name(), function.span());
+                }
+                parameters.symbols.put(parameter.name(),
+                        new Symbol(parameters.nextSlot++, nextSymbolId++, parameter.span(), true, null,
+                                ContractState.UNKNOWN, null, null, false));
             }
-            parameters.symbols.put(parameter.name(),
-                    new Symbol(parameters.nextSlot++, nextSymbolId++, parameter.span(), true, null,
-                            ContractState.UNKNOWN, null, null, false));
+            resolveBlock(function.body(), new Scope(parameters), true);
+        } finally {
+            functions.pop();
         }
-        resolveBlock(function.body(), new Scope(parameters), true);
     }
 
     private void resolverContracts(Ast.ContractClause clause, Scope scope) {
@@ -551,7 +561,9 @@ final class Resolver {
                 premature = true;
                 continue;
             }
-            names.put(name, binding(symbol, depth, functionBody && depth >= 2));
+            boolean captured = functionBody && depth >= 2;
+            names.put(name, binding(symbol, depth, captured));
+            if (captured) recordUpvalue(symbol, depth - 2, name.span());
             return;
         }
         if (premature) {
@@ -566,6 +578,20 @@ final class Resolver {
     private static Resolution.Binding binding(Symbol symbol, int depth, boolean captured) {
         return new Resolution.Binding(depth, symbol.slot(), symbol.id(), symbol.declaration(), captured,
                 symbol.refinementEligible());
+    }
+
+    private void recordUpvalue(Symbol symbol, int lexicalDepth, SourceSpan firstUseSpan) {
+        FunctionDef function = functions.peek();
+        if (function == null) throw new IllegalStateException("Captured binding outside a function");
+        LinkedHashMap<Integer, Resolution.Upvalue> captures = upvalues.get(function);
+        captures.computeIfAbsent(symbol.id(), ignored -> new Resolution.Upvalue(captures.size(), symbol.id(),
+                lexicalDepth, symbol.slot(), symbol.declaration(), firstUseSpan));
+    }
+
+    private IdentityHashMap<FunctionDef, List<Resolution.Upvalue>> resolvedUpvalues() {
+        IdentityHashMap<FunctionDef, List<Resolution.Upvalue>> result = new IdentityHashMap<>();
+        upvalues.forEach((function, captures) -> result.put(function, List.copyOf(captures.values())));
+        return result;
     }
 
     private void duplicate(String name, SourceSpan span, Symbol original) {

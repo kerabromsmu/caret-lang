@@ -100,6 +100,68 @@ final class ResolverTest {
     }
 
     @Test
+    void recordsDeterministicDeduplicatedUpvaluesByStableSymbolIdentity() {
+        List<Stmt> program = new Parser("""
+                enclosing left =
+                  local = 10
+                  first right = left + local + right + left
+                  second left = first left
+                  first
+                """).parseProgram();
+        Resolution resolution = Resolver.resolve(program, new Environment(null));
+        FunctionDef enclosing = assertInstanceOf(FunctionDef.class, program.getFirst());
+        FunctionDef first = assertInstanceOf(FunctionDef.class, enclosing.body().get(1));
+        FunctionDef second = assertInstanceOf(FunctionDef.class, enclosing.body().get(2));
+
+        List<Resolution.Upvalue> firstCaptures = resolution.upvalues(first);
+        assertEquals(2, firstCaptures.size());
+        assertEquals(List.of(0, 1), firstCaptures.stream().map(Resolution.Upvalue::index).toList());
+        assertEquals(List.of(1, 0), firstCaptures.stream().map(Resolution.Upvalue::lexicalDepth).toList());
+        assertEquals(List.of(0, 0), firstCaptures.stream().map(Resolution.Upvalue::slot).toList());
+        assertEquals(List.of(1, 2), firstCaptures.stream()
+                .map(capture -> capture.declarationSpan().start().line()).toList());
+        assertEquals(List.of(3, 3), firstCaptures.stream()
+                .map(capture -> capture.firstUseSpan().start().line()).toList());
+        assertNotEquals(firstCaptures.get(0).symbolId(), firstCaptures.get(1).symbolId());
+
+        List<Resolution.Upvalue> secondCaptures = resolution.upvalues(second);
+        assertEquals(1, secondCaptures.size());
+        assertEquals(resolution.symbolId(first.span()), secondCaptures.getFirst().symbolId());
+        assertEquals(0, secondCaptures.getFirst().lexicalDepth());
+        assertEquals(1, secondCaptures.getFirst().slot());
+    }
+
+    @Test
+    void recordsRecursiveAndDeepCapturesWithoutPromotingScopesToValues() {
+        List<Stmt> program = new Parser("""
+                top captured =
+                  recursive n = n == 0 & captured ! recursive (n - 1)
+                  middle =
+                    inner =
+                      captured
+                    inner
+                  recursive
+                """).parseProgram();
+        Resolution resolution = Resolver.resolve(program, new Environment(null));
+        FunctionDef top = assertInstanceOf(FunctionDef.class, program.getFirst());
+        FunctionDef recursive = assertInstanceOf(FunctionDef.class, top.body().getFirst());
+        FunctionDef middle = assertInstanceOf(FunctionDef.class, top.body().get(1));
+        FunctionDef inner = assertInstanceOf(FunctionDef.class, middle.body().getFirst());
+
+        List<Resolution.Upvalue> recursiveCaptures = resolution.upvalues(recursive);
+        assertEquals(2, recursiveCaptures.size());
+        assertEquals(1, recursiveCaptures.getFirst().lexicalDepth());
+        assertEquals(0, recursiveCaptures.getFirst().slot());
+        assertEquals(resolution.symbolId(recursive.span()), recursiveCaptures.get(1).symbolId());
+        assertEquals(0, recursiveCaptures.get(1).lexicalDepth());
+
+        Resolution.Upvalue deep = assertDoesNotThrow(() -> resolution.upvalues(inner).getFirst());
+        assertEquals(3, deep.lexicalDepth());
+        assertEquals(recursiveCaptures.getFirst().symbolId(), deep.symbolId());
+        assertTrue(resolution.upvalues(top).isEmpty());
+    }
+
+    @Test
     void rejectsPrematureReadsButLeavesUnknownNamesForLazyRuntimeEvaluation() {
         LangException premature = assertThrows(LangException.class, () -> Resolver.resolve(
                 new Parser("first = second\nsecond = 2").parseProgram(), new Environment(null)));

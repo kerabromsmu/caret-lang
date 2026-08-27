@@ -20,6 +20,13 @@ The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the planned
 `with`, `outer`, `root`, and `module`, `_`, and numbered holes such as `_1` are reserved and cannot
 be used as binding or parameter names.
 
+Nested functions capture referenced enclosing bindings by resolver-owned symbol identity. The
+analyzed function representation records each distinct upvalue once, in first semantic source-use
+order, together with its source lexical depth, slot, declaration span, and first-use span. Runtime
+closures consume the same metadata and retain binding references, which preserves forward
+initialization and recursion without making a lexical scope a first-class value. Capture metadata is
+an internal lowering fact and is not exposed by ordinary callable reflection.
+
 <a id="function-application"></a>
 ## Function application
 
@@ -113,7 +120,9 @@ inside 7
 Every `_` introduces a future argument, ordered left to right.
 
 Non-hole parts of a partial expression are evaluated and captured when the partial function is
-created.
+created. Unlike lexical closure upvalues, these fixed operands are captured as the evaluated values;
+later mutation facilities cannot cause the fixed expression to be evaluated again or substitute a
+different value.
 
 Numbered holes reorder and reuse future arguments:
 
