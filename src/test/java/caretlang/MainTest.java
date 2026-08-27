@@ -98,7 +98,7 @@ final class MainTest {
 
     @Test
     void collectionOrderingExampleRunsEndToEnd() {
-        Invocation invocation = run(Path.of("examples/collection_order.caret"));
+        Invocation invocation = run(Path.of("examples/features/collection_order.caret"));
         assertEquals(0, invocation.exitCode());
         assertEquals("Collection\nempty\ntrue\ntrue\na,with,z\n1\ntrue\ntrue\nDictionary\n",
                 invocation.output());

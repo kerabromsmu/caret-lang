@@ -1,0 +1,9 @@
+double value = value * 2
+add left right = left + right
+identity value = value
+
+print map double []
+print map double [1 2 3]
+print map (add 10) [1 2]
+print map (double >> double) [1 2]
+print map identity [? ~ [1 2]]

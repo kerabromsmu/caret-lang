@@ -14,6 +14,7 @@ interpreter. The current prototype supports:
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
 - persistent sequences and canonically ordered Dictionaries with structural equality;
+- higher-order Sequence mapping through `map transform values` for current callable forms;
 - polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
@@ -109,10 +110,15 @@ feature documents as a searchable MkDocs Material learning site with a left-hand
 The same release-hardening work will produce a runnable, implemented-only
 “Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
 
-See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
+See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
-[`examples/contracts.caret`](examples/contracts.caret) demonstrates built-in and user-defined
+[`examples/features/contracts.caret`](examples/features/contracts.caret) demonstrates built-in and user-defined
 contracts and derivation.
+
+Focused positive demonstrations live in [`examples/features/`](examples/features/). Every `.caret`
+program there has checked golden output and is exercised by `test.sh`. The general smoke demo and
+Caret-native test programs remain directly under `examples/`; located failure fixtures remain under
+`examples/errors/`.
 
 ## Requirements
 
@@ -126,7 +132,7 @@ The Gradle wrapper downloads the required Gradle distribution and dependencies o
 The project launcher builds the distribution and runs a Caret source file:
 
 ```bash
-./run.sh examples/implemented_features.caret
+./run.sh examples/features/implemented_features.caret
 ```
 
 With no arguments, it runs `examples/demo.caret`:
@@ -253,6 +259,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
   and complete overload-domain proofs remain planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
+- `map` supports current unary callable values at runtime, but generalized element/result variables,
+  lambdas, and precise higher-order effect propagation remain planned.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
@@ -288,7 +296,7 @@ The ordinary runtime provides:
 - `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`,
   `Field`, and `Dictionary` as first-class contracts; `Field K V` and `Dictionary K V` are curried;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
-- `seqEmpty`, `seqAdd`, `seqGet`, and `seqSize`; and
+- `seqEmpty`, `seqAdd`, `seqGet`, `seqSize`, and callable-first `map`; and
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
 
 Invalid text indexes, sequence indexes, slices, and numeric text conversions return `~`. Dictionary

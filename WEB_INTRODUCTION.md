@@ -275,6 +275,10 @@ The complete planned form also permits explicit effect allowances and declaratio
   ...
 ```
 
+The prototype implements the runtime `map transform values` operation for Sequences and current
+named, partial, and composed callable values. Its generalized variable signature, lambdas, and
+precise transform-effect propagation remain planned.
+
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
 must remain within the stated allowance. This arrow form is a first-class contract, distinct from a
@@ -391,4 +395,4 @@ make the language's ideas executable and testable while its larger design evolve
 
 To explore the implementation, syntax reference, and runnable examples, see the project
 [README](README.md), [language specification](LANGUAGE.md), and
-[implemented feature tour](examples/implemented_features.caret).
+[implemented feature tour](examples/features/implemented_features.caret).

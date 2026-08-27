@@ -185,7 +185,7 @@ Ordinary collection operations may be auto-vectorized by the compiler whenever s
 For example:
 
 ```caret
-values map transform
+map transform values
 ```
 
 may use SIMD without any special source syntax.
@@ -308,4 +308,3 @@ Simd 8 Float32
 ```
 
 requests that logical lane width specifically. The compiler may use one or more hardware vector operations to implement it where necessary, or reject it when the target cannot support the required semantics.
-

@@ -1533,6 +1533,51 @@ final class InterpreterTest {
         assertEquals("3\n", execute("main = \\\\\nfirst = 1\n^result = first + 2\n\\*\nprint main.result\n"));
     }
 
+    @Test
+    void mapTransformsSequencesInOrderThroughOrdinaryCallableForms() {
+        assertEquals("[]\n[ 2 ]\n[ 2 4 6 ]\n[ 4 6 ]\n[ 4 8 ]\n[ ? ~ 3 ]\n", execute("""
+                double value = value * 2
+                add left right = left + right
+                stringify value = numberText value
+                print map double []
+                print map double [1]
+                print map double [1 2 3]
+                print map (add 3) [1 3]
+                print map (double >> double) [1 2]
+                identity value = value
+                print map identity [? ~ 3]
+                """));
+    }
+
+    @Test
+    void mapHandlesLargeAndNestedSequencesWithoutMutation() {
+        String values = java.util.stream.IntStream.range(0, 10_000)
+                .mapToObj(Integer::toString).collect(java.util.stream.Collectors.joining(" "));
+        assertEquals("10000\n[\n  1\n  [ 2 ]\n]\n[\n  1\n  [ 2 ]\n]\n", execute("""
+                identity value = value
+                source = [%s]
+                mapped = map identity source
+                print seqSize mapped
+                nested = [1 [2]]
+                print nested
+                print map identity nested
+                """.formatted(values)));
+    }
+
+    @Test
+    void mapRejectsInvalidInputsAndRetainsLocatedElementFailures() {
+        LangException transform = expectDiagnostic("map 1 [2]", "exactly one argument", 1, 5);
+        assertEquals(Diagnostic.Codes.INVALID_MAP_TRANSFORM, transform.diagnostic().code());
+        assertDiagnostic("add left right = left\nmap add [1]", "exactly one argument", 2, 5);
+        assertDiagnostic("map numberText [^value = 1]", "Expected sequence", 1, 16);
+
+        LangException element = expectDiagnostic("map numberText [1 \"bad\"]", "Expected number", 1, 16);
+        assertEquals(Diagnostic.Codes.EXPECTED_NUMBER, element.diagnostic().code());
+
+        LangException effects = expectDiagnostic("(pure) mapper = map", "known effect upper bound", 1, 17);
+        assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, effects.diagnostic().code());
+    }
+
     private String execute(String source) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));

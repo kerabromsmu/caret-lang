@@ -1087,6 +1087,16 @@ final class Interpreter {
         }));
         globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
+        List<String> mapParameters = List.of("transform", "values");
+        globals.define("map", new Value.FunctionValue("map", mapParameters, (args, span) -> {
+            Value.Callable transform = unaryMapTransform(args.getFirst());
+            Value.Seq values = sequence(args.get(1));
+            ArrayList<Value> mapped = new ArrayList<>(values.size());
+            for (Value value : values) {
+                mapped.add(invoke(transform, new Value.Argument(value, args.get(1).span()), span));
+            }
+            return new Value.Seq(mapped);
+        }, false, CallableSignature.unknown(mapParameters)));
 
         globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dictionary(Map.of())));
         globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
@@ -1151,6 +1161,13 @@ final class Interpreter {
         if (raw instanceof Value.Seq sequence) return sequence;
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
+    }
+
+    private Value.Callable unaryMapTransform(Value.Argument argument) {
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Callable callable && callable.remainingArity() == 1) return callable;
+        throw runtime(Diagnostic.Codes.INVALID_MAP_TRANSFORM,
+                "map transform must be a callable requiring exactly one argument", argument.span());
     }
 
     private Value.Dictionary dictionary(Value.Argument argument) {

@@ -43,6 +43,7 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-INVALID-INFIX-ARITY | public | INVALID_INFIX_ARITY | `examples/errors/invalid_infix_arity.caret` |
 | RUNTIME-INVALID-COMPOSITION-LEFT | public | INVALID_COMPOSITION_LEFT | `examples/errors/non_callable_composition.caret` |
 | RUNTIME-INVALID-COMPOSITION-RIGHT | public | INVALID_COMPOSITION_RIGHT | `examples/errors/invalid_composition_arity.caret` |
+| RUNTIME-INVALID-MAP-TRANSFORM | public | INVALID_MAP_TRANSFORM | `InterpreterTest#mapRejectsInvalidInputsAndRetainsLocatedElementFailures` |
 | RUNTIME-AMBIGUOUS-CALL-ARITY | public | TOO_MANY_ARGUMENTS | `examples/errors/ambiguous_call_arity.caret` |
 | INTERNAL-TOO-MANY-FUNCTION-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
 | INTERNAL-TOO-MANY-PARTIAL-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |

@@ -792,7 +792,7 @@ Lambdas may be used directly with collection functions.
 Examples:
 
 ```caret
-numbers map (x -> x * 2)
+map (x -> x * 2) numbers
 ```
 
 ```caret
@@ -800,7 +800,7 @@ numbers filter (x -> x > 0)
 ```
 
 ```caret
-people map (person -> person.name)
+map (person -> person.name) people
 ```
 
 Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.

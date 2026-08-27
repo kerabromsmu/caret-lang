@@ -15,7 +15,8 @@ import static org.junit.jupiter.api.Assertions.*;
 final class ConformanceMatrixTest {
     private static final Set<String> STATUSES = Set.of("implemented", "planned", "deferred", "unresolved");
     private static final Pattern TEST_REFERENCE = Pattern.compile("([A-Za-z][A-Za-z0-9]*Test)#([A-Za-z][A-Za-z0-9]*)");
-    private static final Pattern EXAMPLE_REFERENCE = Pattern.compile("examples/[A-Za-z0-9_.-]+\\.caret");
+    private static final Pattern EXAMPLE_REFERENCE = Pattern.compile(
+            "examples/(?:features/)?[A-Za-z0-9_.-]+\\.caret");
 
     @Test
     void requirementIdsStatusesAndImplementedEvidenceAreValid() throws IOException {
@@ -45,6 +46,19 @@ final class ConformanceMatrixTest {
         }
 
         assertTrue(requirements >= 70, "The conformance inventory is unexpectedly incomplete");
+    }
+
+    @Test
+    void everyFeatureExampleHasGoldenOutputAndIntegrationCoverage() throws IOException {
+        String integrationScript = Files.readString(Path.of("test.sh"));
+        try (var files = Files.list(Path.of("examples/features"))) {
+            for (Path source : files.filter(path -> path.toString().endsWith(".caret")).toList()) {
+                Path expected = Path.of(source.toString().replaceFirst("\\.caret$", ".expected"));
+                assertTrue(Files.isRegularFile(expected), "Feature example lacks expected output: " + source);
+                assertTrue(integrationScript.contains(source.toString()),
+                        "Feature example is not exercised by test.sh: " + source);
+            }
+        }
     }
 
     private void validateTestReferences(String id, String evidence) {

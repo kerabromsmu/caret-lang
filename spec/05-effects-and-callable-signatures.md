@@ -337,6 +337,12 @@ For example:
   ...
 ```
 
+The prototype currently implements the runtime `map transform values` callable for Sequences.
+Until declaration-wide variables and higher-order effect substitution are implemented, its public
+callable metadata deliberately reports an unknown effect upper bound rather than incorrectly
+claiming purity or a fixed effect set. Runtime application still uses the ordinary guarded callable
+path and preserves element order.
+
 generalizes one input-element contract and one output-element contract, then instantiates both
 freshly at every use of `map`. Variables may appear as ordinary constructor arguments and within
 conjunctions such as `(_1 Number)`. All indices from `_1` through the highest used index must occur;
