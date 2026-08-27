@@ -385,7 +385,9 @@ environment and is not implemented by the current interpreter.
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
 supports lexical closures, direct and mutual recursion, partial application, named Collections,
 left-to-right function composition, language-owned reflection, persistent collections,
-source-located diagnostics, a REPL, and native test assertions.
+source-located diagnostics, a REPL, and native test assertions. Execution remains fail-fast, while
+compiler-oriented parsing can recover at declaration boundaries and collect independent failures
+without losing physical spans from valid later declarations.
 
 General parameterized contracts, declaration-wide-variable arrow contracts,
 structural templates, contextual collection representations, modules, root reification, sandboxing,

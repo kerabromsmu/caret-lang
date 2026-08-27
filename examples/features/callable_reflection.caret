@@ -3,12 +3,12 @@
 
 addOne = add 1
 addAlias = @add:
-signature = (@add).signature
+signature = @add.signature
 first = seqGet signature.parameters 0
 
-print (@add).remaining
+print @add.remaining
 print (seqGet first.requirements 0).name
-print (@addOne).remaining
-print (seqGet (@addOne).signature.parameters 0).name
+print @addOne.remaining
+print (seqGet @addOne.signature.parameters 0).name
 print seqSize signature.effects.upperBound
 print addAlias 2 3

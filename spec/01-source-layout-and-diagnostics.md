@@ -32,6 +32,18 @@ for a duplicate definition.
 Error: Line 1, column 7: Unknown name: absent
 ```
 
+The execution parser is fail-fast: the REPL, file runner, and test runner stop at the first lexical
+or parse failure. Compiler-oriented analysis may instead request parser recovery. Recovery reports
+parser diagnostics in source order, omits the malformed declaration, and resumes at the next
+sibling declaration boundary. A failure inside an indentation-defined body discards only the
+unreliable declaration and its more-indented continuation or nested region, allowing later siblings
+and enclosing declarations to remain available. One malformed construct must not generate cascaded
+parser diagnostics. Lexical failures remain fail-fast until lexical recovery is specified.
+
+Every parsed AST node retains its complete physical source span. Logical indentation mapping,
+multiline grouping, implicit nodes, desugaring, and AST rebuilding must not replace those coordinates
+with logical positions or truncate an enclosing node to one of its children.
+
 <a id="test-files"></a>
 ## Test files
 
@@ -383,4 +395,3 @@ preserving logical nesting, and `\*` restores the previous baseline. The adjuste
 until explicitly restored or EOF; ordinary physical dedentation cannot end it because physical
 indentation is what the modifier changes. After effective logical indentation is calculated, all
 normal Caret parsing and semantic rules apply unchanged.
-
