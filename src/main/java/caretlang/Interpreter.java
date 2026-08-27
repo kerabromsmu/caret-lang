@@ -26,7 +26,7 @@ final class Interpreter {
     }
 
     void execute(List<Stmt> program) {
-        int checkpoint = globals.checkpoint();
+        Environment.Checkpoint checkpoint = globals.checkpoint();
         try {
             Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
             inference = ContractInference.analyze(program, resolution);
@@ -105,12 +105,18 @@ final class Interpreter {
             if (statement instanceof Assign assign) declare(env, assign.name(), assign.span());
             else if (statement instanceof FunctionDef function) {
                 List<FunctionDef> group = groups.computeIfAbsent(function.name(), ignored -> new ArrayList<>());
-                if (group.isEmpty()) declare(env, function.name(), function.span());
+                if (group.isEmpty() && !(env.localValue(function.name()) instanceof Value.Callable)) {
+                    declare(env, function.name(), function.span());
+                }
                 group.add(function);
             }
         }
         for (var entry : groups.entrySet()) {
             ArrayList<OverloadVariant> variants = new ArrayList<>();
+            Value existing = env.localValue(entry.getKey());
+            if (existing instanceof Value.Callable callable && !(existing instanceof Value.ContractValue)) {
+                variants.add(new OverloadVariant(null, callable));
+            }
             for (FunctionDef function : entry.getValue()) {
                 Value.FunctionValue raw = rawFunction(function, env, resolution);
                 variants.add(new OverloadVariant(function, raw));
@@ -125,13 +131,17 @@ final class Interpreter {
                                     parameter.contracts(), resolution, env, "parameter " + parameter.name());
                             return new Value.Argument(checked, argument.span());
                         });
-                env.initialize(entry.getKey(), value);
+                if (existing == null) env.initialize(entry.getKey(), value);
+                else env.replace(entry.getKey(), value);
                 functions.put(function, value);
             } else {
                 Value.Callable overload = new OverloadCallable(entry.getKey(), List.copyOf(variants),
                         List.copyOf(variants), Map.of(), Map.of(), env, resolution);
-                env.initialize(entry.getKey(), overload);
-                for (OverloadVariant variant : variants) functions.put(variant.definition(), overload);
+                if (existing == null) env.initialize(entry.getKey(), overload);
+                else env.replace(entry.getKey(), overload);
+                for (OverloadVariant variant : variants) {
+                    if (variant.definition() != null) functions.put(variant.definition(), overload);
+                }
             }
         }
         return functions;
@@ -151,7 +161,7 @@ final class Interpreter {
         }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
     }
 
-    private record OverloadVariant(FunctionDef definition, Value.FunctionValue function) {}
+    private record OverloadVariant(FunctionDef definition, Value.Callable function) {}
     private record ApplicabilityKey(Object requirement, int position) {}
     private record RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) {}
 
@@ -183,7 +193,7 @@ final class Interpreter {
         }
 
         private Value bind(int position, Value.Argument argument, SourceSpan callSpan) {
-            if (position < 0 || position >= all.getFirst().definition().params().size()
+            if (position < 0 || position >= variantArity(all.getFirst())
                     || arguments.containsKey(position)) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                         "Invalid overload argument position", argument.span());
@@ -191,12 +201,12 @@ final class Interpreter {
             LinkedHashMap<ApplicabilityKey, Boolean> nextCache = new LinkedHashMap<>(cache);
             ArrayList<OverloadVariant> survivors = new ArrayList<>();
             for (OverloadVariant variant : viable) {
-                if (matches(variant.definition().params().get(position).contracts(), argument, position,
+                if (matches(variantClause(variant, position), argument, position,
                         nextCache, contractEnvironment, resolution)) survivors.add(variant);
             }
             LinkedHashMap<Integer, Value.Argument> nextArguments = new LinkedHashMap<>(arguments);
             nextArguments.put(position, argument);
-            boolean complete = nextArguments.size() == all.getFirst().definition().params().size();
+            boolean complete = nextArguments.size() == variantArity(all.getFirst());
             if (survivors.isEmpty()) {
                 throw overloadFailure(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD,
                         "No applicable overload: " + name, complete ? callSpan : argument.span(), all);
@@ -214,11 +224,15 @@ final class Interpreter {
             for (int index = 0; index < nextArguments.size(); index++) {
                 result = invoke((Value.Callable) result, nextArguments.get(index), callSpan);
             }
+            if (name.equals("toString") && !(underlying(result) instanceof Value.Str)) {
+                throw runtime(Diagnostic.Codes.EXPECTED_STRING,
+                        "toString specialization must return a String", callSpan);
+            }
             return result;
         }
 
         @Override public int remainingArity() {
-            return all.getFirst().definition().params().size() - arguments.size();
+            return variantArity(all.getFirst()) - arguments.size();
         }
 
         @Override public CallableSignature signature() {
@@ -239,6 +253,14 @@ final class Interpreter {
 
         @Override public String publicName() { return name; }
         @Override public String toString() { return "<overload " + name + "/" + remainingArity() + ">"; }
+    }
+
+    private int variantArity(OverloadVariant variant) {
+        return variant.definition() == null ? variant.function().remainingArity() : variant.definition().params().size();
+    }
+
+    private ContractClause variantClause(OverloadVariant variant, int position) {
+        return variant.definition() == null ? null : variant.definition().params().get(position).contracts();
     }
 
     private boolean matches(ContractClause clause, Value.Argument argument, int position,
@@ -296,9 +318,9 @@ final class Interpreter {
     private boolean moreSpecific(OverloadVariant left, OverloadVariant right, Environment env,
                                  Resolution resolution) {
         boolean strict = false;
-        for (int position = 0; position < left.definition().params().size(); position++) {
-            ContractClause l = left.definition().params().get(position).contracts();
-            ContractClause r = right.definition().params().get(position).contracts();
+        for (int position = 0; position < variantArity(left); position++) {
+            ContractClause l = variantClause(left, position);
+            ContractClause r = variantClause(right, position);
             boolean lr = clauseImplies(l, r, env, resolution);
             if (!lr) return false;
             strict |= !clauseImplies(r, l, env, resolution);
@@ -329,8 +351,9 @@ final class Interpreter {
 
     private LangException overloadFailure(String code, String message, SourceSpan span,
                                           List<OverloadVariant> variants) {
-        List<Diagnostic.Related> related = variants.stream().map(variant -> new Diagnostic.Related(
-                "Overload variant declared here", variant.definition().span())).toList();
+        List<Diagnostic.Related> related = variants.stream().filter(variant -> variant.definition() != null)
+                .map(variant -> new Diagnostic.Related(
+                        "Overload variant declared here", variant.definition().span())).toList();
         return new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME, code, message, span, related));
     }
 
@@ -998,6 +1021,24 @@ final class Interpreter {
         globals.define("type", new Value.FunctionValue("type", List.of("value"),
                 args -> new Value.Str(ValueSemantics.kind(args.getFirst()))));
 
+        globals.define("toString", locatedFunction("toString", List.of("value"), (args, span) -> {
+            Value value = underlying(args.getFirst().value());
+            if (value instanceof Value.Callable) {
+                throw runtime(Diagnostic.Codes.CALLABLE_RENDERING,
+                        "Callable values do not have a standard textual representation", span);
+            }
+            return new Value.Str(ValueSemantics.render(value, nested -> {
+                Value callable = globals.get("toString");
+                Value rendered = underlying(invoke((Value.Callable) callable,
+                        new Value.Argument(nested, span), span));
+                if (!(rendered instanceof Value.Str(String value1))) {
+                    throw runtime(Diagnostic.Codes.EXPECTED_STRING,
+                            "toString specialization must return a String", span);
+                }
+                return value1;
+            }));
+        }));
+
         globals.define("textSize", locatedFunction("textSize", List.of("text"), (args, ignored) -> {
             String value = text(args.getFirst());
             return new Value.Num(value.codePointCount(0, value.length()));
@@ -1158,13 +1199,12 @@ final class Interpreter {
     }
 
     private Value reflect(Value value) {
-        Value target = value;
         Value reflected = underlying(value);
         Map<String, Value> fields = reflected instanceof Value.Callable callable
                 && !(reflected instanceof Value.Reflective)
                 ? Value.CallableMetadata.fields(callable)
                 : ValueSemantics.reflectionFields(reflected);
-        return Value.Dictionary.reflection(fields, target);
+        return Value.Dictionary.reflection(fields, value);
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {

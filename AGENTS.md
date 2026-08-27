@@ -224,3 +224,11 @@ Before substantial implementation:
 4. Propose a concrete implementation plan.
 5. Implement in small testable stages.
 6. Report tests run and remaining limitations.
+
+## Testing
+
+Run the baseline tests with:
+```bash
+GRADLE_USER_HOME="$PWD/.gradle-codex" ./gradlew test
+GRADLE_USER_HOME="$PWD/.gradle-codex" ./test.sh
+```

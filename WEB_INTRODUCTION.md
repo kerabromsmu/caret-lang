@@ -69,10 +69,10 @@ totalWithTax subtotal rate =
 
 This keeps the common case compact while preserving an obvious visual structure.
 
-For deeply embedded source, planned `\\` and `\*` layout markers will temporarily remap physical
+For deeply embedded source, `\\` and `\*` layout markers temporarily remap physical
 indentation to the same effective logical nesting. They change only layout processing: they do not
-create scopes, close blocks, or perform control flow. The mappings can stack and are not implemented
-by the current prototype.
+create scopes, close blocks, or perform control flow. The mappings stack and are implemented for
+the prototype's currently supported indentation-opening headers.
 
 ## Lazy decisions
 
@@ -186,6 +186,11 @@ dictionary contracts. Named Collection fields traverse and reflect in locale-ind
 case-sensitive Unicode code-point order, while their expressions evaluate in source order. Static
 `^name` fields, ordinary `field "name" value` results, and `dictPut` updates share one String-keyed
 Dictionary representation and one member protocol.
+
+`toString` is an extensible ordinary overload set. Its standard fallback renders top-level Strings
+as raw text, flat positional collections as `[ 1 2 ]`, and named or structurally nested collections
+on indented lines. Named keys and nested Strings are quoted and escaped. Contract-specific
+specializations participate recursively when a collection is converted.
 
 ```caret
 person = [

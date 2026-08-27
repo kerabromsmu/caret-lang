@@ -106,9 +106,9 @@ indented trailing lambda will be the final call argument; its body will be delim
 effective logical indentation in the ordinary way.
 
 <a id="planned-layout-baseline-modifiers"></a>
-## Planned layout baseline modifiers
+## Layout baseline modifiers
 
-Caret normally derives logical block structure from physical indentation. The planned layout tokens
+Caret normally derives logical block structure from physical indentation. The layout tokens
 `\\` and `\*` allow a region to occupy fewer physical source columns without changing its logical
 nesting. They are layout syntax only: neither token is an expression, operator, function, value,
 scope, binding, effect, or runtime operation.
@@ -383,5 +383,4 @@ preserving logical nesting, and `\*` restores the previous baseline. The adjuste
 until explicitly restored or EOF; ordinary physical dedentation cannot end it because physical
 indentation is what the modifier changes. After effective logical indentation is calculated, all
 normal Caret parsing and semantic rules apply unchanged.
-
 

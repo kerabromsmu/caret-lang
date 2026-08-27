@@ -1,0 +1,6 @@
+main = \\
+value = 40
+^result = value + 2
+\*
+
+print main.result

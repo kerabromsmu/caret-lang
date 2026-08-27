@@ -118,7 +118,7 @@ final class InterpreterTest {
 
     @Test
     void constructsUnaryBaseAndMultiplyDerivedContracts() {
-        assertEquals("false\nfalse\nAB\n[Tag, Numeric]\n[1, two, true]\n", execute("""
+        assertEquals("false\nfalse\nAB\n[ \"Tag\" \"Numeric\" ]\n[ 1 \"two\" true ]\n", execute("""
                 Tag = contract ~
                 Numeric = contract Number
                 AB = contract [Tag Numeric]
@@ -132,7 +132,7 @@ final class InterpreterTest {
 
     @Test
     void constructsAndEnforcesParameterizedSequenceContracts() {
-        assertEquals("true\nfalse\ntrue\ntrue\nSequence Number\n[Sequence]\n[Number]\n", execute("""
+        assertEquals("true\nfalse\ntrue\ntrue\nSequence Number\n[ \"Sequence\" ]\n[ \"Number\" ]\n", execute("""
                 Numbers = Sequence Number
                 Alias = Numbers
                 SequenceConstructor = Sequence
@@ -305,7 +305,7 @@ final class InterpreterTest {
 
     @Test
     void evaluatesUnambiguousExpressionsInsideCollectionLiterals() {
-        assertEquals("[7, 5, yes, [a, b]]\n", execute("""
+        assertEquals("[\n  7\n  5\n  \"yes\"\n  [ \"a\" \"b\" ]\n]\n", execute("""
                 add left right = left + right
                 print [(1 + 2 * 3) (add 2 3) (true & "yes" ! "no") ["a" "b"]]
                 """));
@@ -371,7 +371,7 @@ final class InterpreterTest {
 
     @Test
     void nullableAndOptionalContractsPreserveNullAndMissingAsDistinctStates() {
-        assertEquals("true\ntrue\ntrue\nfalse\nfalse\nNumber?~\n[Number]\n", execute("""
+        assertEquals("true\ntrue\ntrue\nfalse\nfalse\nNumber?~\n[ \"Number\" ]\n", execute("""
                 (Number?) nullable = ?
                 (Number~) optional = ~
                 (Number?~) either = ~
@@ -397,7 +397,7 @@ final class InterpreterTest {
 
     @Test
     void modifiedContractsAreFirstClassNormalizedAndIdentityStable() {
-        assertEquals("true\ntrue\ntrue\nfalse\ntrue\n[Number]\n", execute("""
+        assertEquals("true\ntrue\ntrue\nfalse\ntrue\n[ \"Number\" ]\n", execute("""
                 First = contract Number
                 Second = contract Number
                 FirstNullable = First?
@@ -1073,7 +1073,7 @@ final class InterpreterTest {
 
     @Test
     void unifiesStaticExportedDynamicAndUpdatedDictionaryFields() {
-        assertEquals("true\ntrue\ntrue\nDictionary\nAda\nAda\ntrue\n[age, name]\ntrue\ntrue\n",
+        assertEquals("true\ntrue\ntrue\nDictionary\nAda\nAda\ntrue\n[ \"age\" \"name\" ]\ntrue\ntrue\n",
                 execute("""
                         exported =
                           ^name = "Ada"
@@ -1158,7 +1158,7 @@ final class InterpreterTest {
 
     @Test
     void persistentCollectionsKeepOlderValuesAndDictionaryReplacementOrder() {
-        assertEquals("[1]\n[1, 2]\n[first, second]\n22\n", execute("""
+        assertEquals("[ 1 ]\n[ 1 2 ]\n[ \"first\" \"second\" ]\n22\n", execute("""
                 first = seqAdd seqEmpty 1
                 second = seqAdd first 2
                 print first
@@ -1317,7 +1317,7 @@ final class InterpreterTest {
 
     @Test
     void contractReflectionIncludesLanguageOwnedRequirementNames() {
-        assertEquals("[positive]\n", execute("""
+        assertEquals("[ \"positive\" ]\n", execute("""
                 positive value = value > 0
                 Positive = contract positive
                 print (@Positive).requirements
@@ -1493,6 +1493,44 @@ final class InterpreterTest {
                 action (NestedAlias) value = value
                 """, "Duplicate definition: action", 5, 1);
         assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, aliasDuplicate.diagnostic().code());
+    }
+
+    @Test
+    void standardToStringIsExtensibleAndDispatchesRecursivelyInsideCollections() {
+        assertEquals("plain\nnumber:7\n[ number:1 number:2 ]\n[\n  special\n]\n", execute("""
+                (String) toString (Number) value = "number:" + numberText value
+                Special = contract Dictionary
+                (Special) special = [^value = 1]
+                (String) toString (Special) value = "special"
+
+                print toString "plain"
+                print toString 7
+                print toString [1 2]
+                print toString [special]
+                """));
+    }
+
+    @Test
+    void standardLibraryCallablesCanBeExtendedByContractSpecificVariants() {
+        assertEquals("custom\n", execute("""
+                (String) numberText (String) value = "custom"
+                print numberText "anything"
+                """));
+    }
+
+    @Test
+    void toStringRejectsUnsupportedCallablesAndNonStringSpecializationResults() {
+        assertDiagnostic("print toString print", "Callable values do not have", 1, 7);
+        LangException result = expectDiagnostic("""
+                (String) toString (Number) value = 1
+                print toString 2
+                """, "String", 1, 1);
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, result.diagnostic().code());
+    }
+
+    @Test
+    void logicalIndentationMappingsExecuteLikeOrdinaryIndentedBlocks() {
+        assertEquals("3\n", execute("main = \\\\\nfirst = 1\n^result = first + 2\n\\*\nprint main.result\n"));
     }
 
     private String execute(String source) {

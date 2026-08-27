@@ -13,7 +13,9 @@ interpreter. The current prototype supports:
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
-- persistent sequences and canonically ordered Dictionaries with structural equality; and
+- persistent sequences and canonically ordered Dictionaries with structural equality;
+- polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
+- stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
 - proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
@@ -73,11 +75,12 @@ members available for lexical lookup without copying them, while resolver-only p
 `outer.name` recover shadowed enclosing names without exposing lexical environments as values.
 `with` and `outer` are specified but not implemented by the current prototype.
 
-Planned layout markers `\\` and `\*` remap physical indentation to effective logical indentation
+Layout markers `\\` and `\*` remap physical indentation to effective logical indentation
 before ordinary layout parsing. `\\` establishes an adjusted baseline for a following
 indentation-defined region and `\*` restores the previous mapping; neither marker is an expression,
 scope, or control-flow operation. The mappings stack, an unmatched restoration is a no-op, and an
-active mapping may remain through end of file. These markers are specified but not implemented.
+active mapping may remain through end of file. The prototype implements these mappings for its
+currently supported indentation-opening headers.
 
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code
@@ -248,7 +251,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
   rulesets, and rule cycles are not implemented.
 - Arrow contracts support explicit visible effect allowances. Declaration-wide contract variables
   and complete overload-domain proofs remain planned.
-- Physical-to-logical layout baseline modifiers (`\\` and `\*`) are specified but not implemented.
+- Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
+  planned headers become eligible as their syntax is implemented.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract

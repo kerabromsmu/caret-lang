@@ -124,6 +124,19 @@ final class Resolver {
             boolean function = statement instanceof FunctionDef;
             Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
             if (original != null) {
+                if (function && original.declaration() == null && original.callableArity() != null
+                        && original.contractState() != ContractState.CONTRACT) {
+                    if (!java.util.Objects.equals(original.callableArity(), arity)) {
+                        throw new LangException(Diagnostic.Phase.SEMANTIC,
+                                Diagnostic.Codes.INCONSISTENT_OVERLOAD_ARITY,
+                                "Overload variants must have the same arity: " + name, statement.span());
+                    }
+                    scope.symbols.put(name, new Symbol(original.slot(), original.id(), null, true, arity,
+                            original.contractState(), original.contractParameterArity(),
+                            original.refinementEligible(), true));
+                    declarations.put(statement.span(), original.id());
+                    continue;
+                }
                 if (function && original.functionGroup()) {
                     if (!java.util.Objects.equals(original.callableArity(), arity)) {
                         throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,

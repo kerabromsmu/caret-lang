@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 final class Environment {
+    record Checkpoint(int size, List<Value> values, List<Boolean> initialized) {}
     record LocalBinding(String name, int slot, Integer callableArity, Integer contractParameterArity,
                         Boolean refinementEligible) {}
     private static final class Binding {
@@ -62,6 +63,17 @@ final class Environment {
                 "Unknown name: " + name, null);
     }
 
+    Value localValue(String name) {
+        Binding binding = values.get(name);
+        return binding == null || !binding.initialized ? null : binding.value;
+    }
+
+    void replace(String name, Value value) {
+        Binding binding = values.get(name);
+        if (binding == null || !binding.initialized) throw new IllegalStateException("Binding is not initialized: " + name);
+        binding.value = value;
+    }
+
     Value getAt(int lexicalDepth, int slot) {
         Environment environment = this;
         for (int i = 0; i < lexicalDepth; i++) {
@@ -92,17 +104,23 @@ final class Environment {
         return List.copyOf(bindings);
     }
 
-    int checkpoint() {
-        return slots.size();
+    Checkpoint checkpoint() {
+        return new Checkpoint(slots.size(), slots.stream().map(binding -> binding.value).toList(),
+                slots.stream().map(binding -> binding.initialized).toList());
     }
 
-    void rollbackTo(int checkpoint) {
-        if (checkpoint < 0 || checkpoint > slots.size()) {
+    void rollbackTo(Checkpoint checkpoint) {
+        if (checkpoint.size() < 0 || checkpoint.size() > slots.size()) {
             throw new IllegalArgumentException("Invalid environment checkpoint");
         }
-        while (slots.size() > checkpoint) {
+        while (slots.size() > checkpoint.size()) {
             slots.removeLast();
             values.remove(slotNames.removeLast());
+        }
+        for (int index = 0; index < checkpoint.size(); index++) {
+            Binding binding = slots.get(index);
+            binding.value = checkpoint.values().get(index);
+            binding.initialized = checkpoint.initialized().get(index);
         }
     }
 }

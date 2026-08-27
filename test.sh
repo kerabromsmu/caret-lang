@@ -94,6 +94,12 @@ diff -u examples/effects.expected "$CARET_TEST_TMP/effects-output.txt"
 "$CARET_LAUNCHER" examples/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
 diff -u examples/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
 
+"$CARET_LAUNCHER" examples/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
+diff -u examples/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
+
+"$CARET_LAUNCHER" examples/layout_mapping.caret > "$CARET_TEST_TMP/layout-mapping-output.txt"
+diff -u examples/layout_mapping.expected "$CARET_TEST_TMP/layout-mapping-output.txt"
+
 run_test_file examples/testing.caret "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value

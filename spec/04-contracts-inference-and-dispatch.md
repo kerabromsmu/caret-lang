@@ -317,6 +317,12 @@ named functions until the standard environment explicitly introduces additional 
 operator variants. Merely satisfying a user-defined contract named `Comparable` does not inject an
 implementation into `<`.
 
+Standard callable bindings are extensible overload sets unless a future declaration mechanism
+seals them. Same-name Caret definitions add contract-specific variants, and ordinary most-specific dispatch selects them
+both for direct conversion and recursive collection conversion. Every specialization must return a
+String when extending `toString`. Module callables use the same binding model once imports are
+implemented; no sealing syntax is implemented yet.
+
 <a id="structural-equality-capability"></a>
 ##### Structural equality capability
 

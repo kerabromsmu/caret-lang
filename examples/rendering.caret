@@ -1,0 +1,7 @@
+(String) toString (Number) value = "number:" + numberText value
+(String) toString (String) value = value
+
+print toString "plain"
+print toString 7
+print toString [1 2]
+print [^name = "Caret" ^values = [1 2]]

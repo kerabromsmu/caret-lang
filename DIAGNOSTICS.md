@@ -14,6 +14,7 @@ from ordinary Caret source use focused Java evidence.
 | LEX-UNICODE-FORM | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_form.caret` |
 | LEX-INVALID-UNICODE | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_escape.caret` |
 | LEX-INVALID-CODE-POINT | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_code_point.caret` |
+| LEX-INVALID-LAYOUT-MARKER | public | LEX_INVALID_LAYOUT_MARKER | `LexerTest#layoutMarkersIgnoreCommentsAndStringsAndRejectInvalidPlacement` |
 | PARSE-NESTING-DEPTH | public | PARSE_INVALID_EXPRESSION | `examples/errors/expression_nesting_depth.caret` |
 | PARSE-UNEXPECTED-INDENT | public | PARSE_UNEXPECTED_INDENT | `examples/errors/unexpected_indent.caret` |
 | PARSE-INCONSISTENT-INDENT | public | PARSE_UNEXPECTED_INDENT | `examples/errors/inconsistent_continuation_indent.caret` |
@@ -60,6 +61,7 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-MISSING-REFLECTED-FIELD | public | MISSING_FIELD | `examples/errors/missing_reflected_field.caret` |
 | RUNTIME-INVALID-DYNAMIC-FIELD | public | INVALID_DYNAMIC_FIELD_NAME | `examples/errors/invalid_dynamic_key.caret` |
 | RUNTIME-CALLABLE-EQUALITY | public | CALLABLE_EQUALITY | `examples/errors/callable_equality.caret` |
+| RUNTIME-CALLABLE-RENDERING | public | CALLABLE_RENDERING | `InterpreterTest#toStringRejectsUnsupportedCallablesAndNonStringSpecializationResults` |
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
 | RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret` |

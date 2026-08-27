@@ -79,10 +79,9 @@ substitution remain unfinished.
 - Extend the structured logical-line engine already used by grouped expressions, dynamic lookups,
   ungrouped multiline argument lists, and indented bodies to lambdas, collection literals, `format`, `cycle`,
   rules, and trailing blocks as those constructs are implemented.
-- Add a pre-parse layout-mapping stack for planned terminal `\\` baseline adjustments and standalone
-  `\*` restoration lines. Compute effective logical indentation before ordinary layout handling;
-  preserve physical coordinates, stacking, valid EOF, unmatched-restoration no-op behavior, and
-  formatter-visible marker placement exactly as specified.
+- Preserve the implemented pre-parse layout-mapping stack for terminal `\\` baseline adjustments
+  and standalone `\*` restoration lines as later indentation-opening forms are added. Effective
+  indentation is computed before parsing while diagnostics retain physical coordinates.
 - Preserve raw source columns and complete spans through desugaring. Add recovery boundaries so one
   malformed declaration does not erase useful later diagnostics in compiler mode.
 - Keep function application tighter than infix operators and make conditional branches lazy.

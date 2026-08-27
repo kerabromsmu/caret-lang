@@ -86,7 +86,12 @@ final class MainTest {
                 10
                 ~
                 10
-                [(field "kind" Dictionary), (field "names" count,name), (field "shape" named), (field "size" 2)]
+                [
+                  "kind" = "Dictionary"
+                  "names" = "count,name"
+                  "shape" = "named"
+                  "size" = 2
+                ]
                 """, invocation.output());
         assertEquals("", invocation.error());
     }

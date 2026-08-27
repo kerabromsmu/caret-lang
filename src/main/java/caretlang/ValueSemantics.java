@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 /** Language-owned policies for public kinds, reflection, equality, and value rendering. */
 final class ValueSemantics {
@@ -38,7 +39,8 @@ final class ValueSemantics {
     }
 
     private record Pair(Value left, Value right) {}
-    private record SequenceFrame(java.util.Iterator<Value> values, boolean first) {}
+    private record RenderValue(Value value, int indent, boolean quoteStrings) {}
+    private record RenderNested(Value value, int indent, Function<Value, String> renderer) {}
 
     static boolean equal(Value left, Value right) {
         ArrayDeque<Pair> pending = new ArrayDeque<>();
@@ -82,46 +84,94 @@ final class ValueSemantics {
     }
 
     static String render(Value root) {
+        return render(root, null);
+    }
+
+    static String render(Value root, Function<Value, String> nestedRenderer) {
         StringBuilder output = new StringBuilder();
         ArrayDeque<Object> pending = new ArrayDeque<>();
-        pending.push(root);
+        pending.push(new RenderValue(root, 0, false));
         while (!pending.isEmpty()) {
             Object item = pending.pop();
             switch (item) {
                 case String text -> output.append(text);
-                case Value.EmptyCollection ignored -> output.append("[]");
-                case Value.Dictionary dictionary -> {
-                    List<Value> fields = dictionary.entries().entrySet().stream()
-                            .map(entry -> (Value) new Value.Field(entry.getKey(), entry.getValue())).toList();
-                    pending.push("]");
-                    pending.push(new SequenceFrame(fields.iterator(), true));
-                    pending.push("[");
+                case RenderNested(Value value, int indent, Function<Value, String> renderer) -> {
+                    Value raw = underlying(value);
+                    String rendered = raw instanceof Value.Str(String value1) ? quoted(value1) : renderer.apply(value);
+                    output.append(indentFollowingLines(rendered, indent));
                 }
-                case Value.Field field -> {
-                    pending.push(")");
-                    pending.push(field.value());
-                    pending.push(" ");
-                    pending.push(quoted(field.key()));
-                    pending.push("(field ");
-                }
-                case Value.Seq sequence -> {
-                    pending.push("]");
-                    pending.push(new SequenceFrame(sequence.iterator(), true));
-                    pending.push("[");
-                }
-                case SequenceFrame frame -> {
-                    if (frame.values().hasNext()) {
-                        Value value = frame.values().next();
-                        pending.push(new SequenceFrame(frame.values(), false));
-                        pending.push(value);
-                        if (!frame.first()) pending.push(", ");
+                case RenderValue(Value.Attributed attributed, int indent, boolean quoteStrings) ->
+                        pending.push(new RenderValue(attributed.value(), indent, quoteStrings));
+                case RenderValue(Value.EmptyCollection ignored, int ignoredIndent, boolean ignoredQuote) ->
+                        output.append("[]");
+                case RenderValue(Value.Str string, int ignoredIndent, boolean quoteStrings) ->
+                        output.append(quoteStrings ? quoted(string.value()) : string.value());
+                case RenderValue(Value.Dictionary dictionary, int indent, boolean ignoredQuote) -> {
+                    if (dictionary.size() == 0) {
+                        output.append("[]");
+                        continue;
                     }
+                    List<Map.Entry<String, Value>> entries = List.copyOf(dictionary.entries().entrySet());
+                    pending.push("\n" + spaces(indent) + "]");
+                    for (int index = entries.size() - 1; index >= 0; index--) {
+                        Map.Entry<String, Value> entry = entries.get(index);
+                        if (index + 1 < entries.size()) pending.push("\n");
+                        pending.push(nestedRenderer == null
+                                ? new RenderValue(entry.getValue(), indent + 2, true)
+                                : new RenderNested(entry.getValue(), indent + 2, nestedRenderer));
+                        pending.push(quoted(entry.getKey()) + " = ");
+                        pending.push(spaces(indent + 2));
+                    }
+                    pending.push("[\n");
                 }
-                case Value.Attributed attributed -> pending.push(attributed.value());
-                default -> output.append(item);
+                case RenderValue(Value.Seq sequence, int indent, boolean ignoredQuote) -> {
+                    if (sequence.size() == 0) {
+                        output.append("[]");
+                        continue;
+                    }
+                    List<Value> values = sequence.values();
+                    boolean multiline = values.stream().anyMatch(ValueSemantics::isCollection);
+                    if (!multiline) {
+                        pending.push(" ]");
+                        for (int index = values.size() - 1; index >= 0; index--) {
+                            pending.push(nestedRenderer == null
+                                    ? new RenderValue(values.get(index), indent, true)
+                                    : new RenderNested(values.get(index), indent, nestedRenderer));
+                            if (index > 0) pending.push(" ");
+                        }
+                        pending.push("[ ");
+                        continue;
+                    }
+                    pending.push("\n" + spaces(indent) + "]");
+                    for (int index = values.size() - 1; index >= 0; index--) {
+                        if (index + 1 < values.size()) pending.push("\n");
+                        pending.push(nestedRenderer == null
+                                ? new RenderValue(values.get(index), indent + 2, true)
+                                : new RenderNested(values.get(index), indent + 2, nestedRenderer));
+                        pending.push(spaces(indent + 2));
+                    }
+                    pending.push("[\n");
+                }
+                case RenderValue(Value.Field field, int indent, boolean ignoredQuote) -> {
+                    pending.push(new RenderValue(field.value(), indent, true));
+                    pending.push(quoted(field.key()) + " = ");
+                }
+                case RenderValue(Value value, int ignoredIndent, boolean ignoredQuote) -> output.append(value);
+                default -> throw new IllegalStateException("Unknown render task: " + item);
             }
         }
         return output.toString();
+    }
+
+    private static boolean isCollection(Value value) {
+        value = underlying(value);
+        return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary || value instanceof Value.Seq;
+    }
+
+    private static String spaces(int count) { return " ".repeat(count); }
+
+    private static String indentFollowingLines(String text, int indent) {
+        return text.replace("\n", "\n" + spaces(indent));
     }
 
     private static String quoted(String value) {
