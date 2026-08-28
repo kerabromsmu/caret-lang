@@ -1,0 +1,202 @@
+name: Test and release Caret
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Validate release version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          current=$(tr -d '[:space:]' < VERSION)
+          if [[ $EVENT_NAME == pull_request ]]; then
+            previous=$(git show "origin/$BASE_REF:VERSION" 2>/dev/null || printf '0.0.0')
+            scripts/validate-version.sh "$previous" "$current"
+          elif [[ $EVENT_NAME == push ]]; then
+            if [[ $PUSH_BEFORE == 0000000000000000000000000000000000000000 ]]; then
+              previous=0.0.0
+            else
+              previous=$(git show "$PUSH_BEFORE:VERSION" 2>/dev/null || printf '0.0.0')
+            fi
+            scripts/validate-version.sh "$previous" "$current"
+          elif git rev-parse --verify --quiet "refs/tags/v$current" >/dev/null; then
+            tagged_commit=$(git rev-list -n 1 "v$current")
+            if [[ $tagged_commit != "$GITHUB_SHA" ]]; then
+              printf 'Version v%s already belongs to %s, not %s.\n' \
+                "$current" "$tagged_commit" "$GITHUB_SHA" >&2
+              exit 1
+            fi
+            printf 'Recovering existing release v%s for %s.\n' "$current" "$GITHUB_SHA"
+          else
+            latest_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)
+            previous=${latest_tag#v}
+            scripts/validate-version.sh "${previous:-0.0.0}" "$current"
+          fi
+          printf 'version=%s\n' "$current" >> "$GITHUB_OUTPUT"
+      - name: Run tests
+        run: |
+          ./gradlew test --console=plain
+          ./test.sh
+      - name: Build distributions
+        run: ./gradlew installDist distZip distTar --console=plain
+      - name: Smoke-test ZIP distribution
+        run: scripts/smoke-distribution.sh "build/distributions/caret-${{ steps.version.outputs.version }}.zip"
+      - name: Smoke-test tar distribution
+        run: scripts/smoke-distribution.sh "build/distributions/caret-${{ steps.version.outputs.version }}.tar"
+      - name: Upload release assets for cross-platform verification
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: caret-${{ steps.version.outputs.version }}
+          path: |
+            build/distributions/caret-${{ steps.version.outputs.version }}.zip
+            build/distributions/caret-${{ steps.version.outputs.version }}.tar
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-smoke:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/download-artifact@v4
+        with:
+          name: caret-${{ needs.build.outputs.version }}
+          path: distribution
+      - name: Smoke-test Windows launcher
+        shell: pwsh
+        run: |
+          $version = '${{ needs.build.outputs.version }}'
+          Expand-Archive "distribution/caret-$version.zip" -DestinationPath unpacked
+          $root = Join-Path $PWD "unpacked/caret-$version"
+          $launcher = Join-Path $root "bin/caret.bat"
+          & $launcher (Join-Path $root "examples/features/implemented_features.caret")
+          if ($LASTEXITCODE -ne 0) { throw "Program execution failed with exit code $LASTEXITCODE" }
+          & $launcher test (Join-Path $root "examples/testing.caret")
+          if ($LASTEXITCODE -ne 0) { throw "Caret-native tests failed with exit code $LASTEXITCODE" }
+          "exit" | & $launcher
+          if ($LASTEXITCODE -ne 0) { throw "REPL smoke test failed with exit code $LASTEXITCODE" }
+
+  publish:
+    if: github.event_name != 'pull_request'
+    needs: [build, windows-smoke]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: caret-release-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: caret-${{ needs.build.outputs.version }}
+          path: distribution
+      - name: Prepare release notes
+        run: |
+          set -euo pipefail
+          built_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          cat > release-notes.md <<EOF
+          Caret $VERSION
+
+          Built from commit \`$GITHUB_SHA\` at $built_at.
+
+          Requires Java 21. Download and extract either archive, then run:
+
+          \`bin/caret program.caret\` — run a Caret program
+          \`bin/caret\` — start the interactive REPL
+          \`bin/caret test tests.caret\` — run a Caret-native test file
+
+          On Windows, use \`bin\\caret.bat\` instead. README, LICENSE, NOTICE, and runnable examples are included in the archive.
+          EOF
+      - name: Publish immutable version and update snapshot alias
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          zip="distribution/caret-$VERSION.zip"
+          tar="distribution/caret-$VERSION.tar"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            tagged_commit=$(git rev-list -n 1 "$tag")
+            if [[ $tagged_commit != "$GITHUB_SHA" ]]; then
+              printf 'Existing release %s points to %s, not %s.\n' \
+                "$tag" "$tagged_commit" "$GITHUB_SHA" >&2
+              exit 1
+            fi
+            for asset in "$zip" "$tar"; do
+              name=$(basename "$asset")
+              if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fx "$name" >/dev/null; then
+                gh release upload "$tag" "$asset"
+              fi
+            done
+          else
+            gh release create "$tag" "$zip" "$tar" \
+              --target "$GITHUB_SHA" \
+              --title "Caret $VERSION" \
+              --notes-file release-notes.md
+          fi
+
+          git fetch --force --tags origin
+          main_head=$(gh api "repos/$REPOSITORY/branches/main" --jq '.commit.sha')
+          highest_tag=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -n 1)
+          if [[ $main_head != "$GITHUB_SHA" || $highest_tag != "$tag" ]]; then
+            printf 'Published immutable %s; a newer main release owns the snapshot alias.\n' "$tag"
+            exit 0
+          fi
+
+          if gh release view main-snapshot >/dev/null 2>&1; then
+            gh release upload main-snapshot "$zip" "$tar" --clobber
+            gh api --method PATCH "repos/$REPOSITORY/git/refs/tags/main-snapshot" \
+              -f sha="$GITHUB_SHA" -F force=true >/dev/null
+            gh release edit main-snapshot \
+              --title "Caret main snapshot ($VERSION)" \
+              --notes-file release-notes.md \
+              --prerelease
+          else
+            gh release create main-snapshot "$zip" "$tar" \
+              --target "$GITHUB_SHA" \
+              --title "Caret main snapshot ($VERSION)" \
+              --notes-file release-notes.md \
+              --prerelease
+          fi
+
+          while IFS=$'\t' read -r asset_id asset_name; do
+            if [[ $asset_name != "$(basename "$zip")" && $asset_name != "$(basename "$tar")" ]]; then
+              gh api --method DELETE "repos/$REPOSITORY/releases/assets/$asset_id"
+            fi
+          done < <(gh api "repos/$REPOSITORY/releases/tags/main-snapshot" \
+            --jq '.assets[] | [.id, .name] | @tsv')

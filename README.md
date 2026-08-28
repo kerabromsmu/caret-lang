@@ -121,10 +121,52 @@ program there has checked golden output and is exercised by `test.sh`. The gener
 Caret-native test programs remain directly under `examples/`; located failure fixtures remain under
 `examples/errors/`.
 
+## Download a release
+
+Every successful merge to `main` publishes an immutable versioned release on the
+[GitHub Releases page](https://github.com/kerabromsmu/caret-lang/releases). The rolling
+[`main-snapshot`](https://github.com/kerabromsmu/caret-lang/releases/tag/main-snapshot) prerelease
+points to the newest successfully tested version. Java 21 is the only runtime prerequisite; a
+downloaded release does not require Gradle or a repository checkout.
+
+Download either `caret-<version>.zip` or `caret-<version>.tar` and extract it. On Linux and macOS,
+make the launcher executable if the archive tool did not preserve its mode:
+
+```bash
+chmod +x caret-<version>/bin/caret
+```
+
+Run a program, start the REPL, or run a Caret-native test file:
+
+```bash
+caret-<version>/bin/caret program.caret
+caret-<version>/bin/caret
+caret-<version>/bin/caret test tests.caret
+```
+
+On Windows, use `caret-<version>\bin\caret.bat` with the same arguments. Each archive also contains
+this README, `LICENSE`, `NOTICE`, and the runnable `examples/` tree.
+
+### Release versions
+
+The tracked [`VERSION`](VERSION) file is the source of the release version in
+`MAJOR.MINOR.UPDATE` form. The project starts at `0.1.0`, with `0.1.x` representing the Phase 1
+development line from [`PLAN.md`](PLAN.md).
+
+- Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
+- Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
+- Increment `MAJOR` by exactly one and reset both lower components only when the project owner
+  explicitly authorizes a major release.
+
+Every release-producing change must update `VERSION`. Pull-request and release automation reject
+unchanged, malformed, decreasing, skipped, or mixed-component transitions. Immutable releases use
+the tag `v<version>`; `main-snapshot` is only a moving download alias and does not create another
+version number.
+
 ## Requirements
 
 - Java 21
-- A POSIX-compatible shell for the provided launchers
+- A POSIX-compatible shell for the source-checkout launchers (`run.sh`, `repl.sh`, and `test.sh`)
 
 The Gradle wrapper downloads the required Gradle distribution and dependencies on first use.
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+scripts/test-version-policy.sh
 CARET_TEST_TMP=$(mktemp -d /tmp/caret-tests.XXXXXX)
 trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
 ./gradlew --quiet installDist
-CARET_LAUNCHER=build/install/caret-lang-prototype/bin/caret-lang-prototype
+CARET_LAUNCHER=build/install/caret/bin/caret
 
 expect_failure() {
   local source_file=$1

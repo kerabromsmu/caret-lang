@@ -2,6 +2,8 @@ plugins {
     application
 }
 
+version = providers.fileContents(layout.projectDirectory.file("VERSION")).asText.get().trim()
+
 repositories {
     mavenCentral()
 }
@@ -14,6 +16,24 @@ java {
 
 application {
     mainClass.set("caretlang.Main")
+    applicationName = "caret"
+}
+
+tasks.named<CreateStartScripts>("startScripts") {
+    outputDir = layout.buildDirectory.dir("caret-start-scripts").get().asFile
+}
+
+distributions {
+    main {
+        contents {
+            from("README.md")
+            from("LICENSE")
+            from("NOTICE")
+            from("examples") {
+                into("examples")
+            }
+        }
+    }
 }
 
 dependencies {
