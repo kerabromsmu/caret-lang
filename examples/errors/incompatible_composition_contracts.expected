@@ -1,0 +1,3 @@
+Error: Line 3, column 12: Composition result cannot satisfy the right callable parameter
+  Note: Line 3, column 12: Left composition operand
+  Note: Line 3, column 22: Right composition operand

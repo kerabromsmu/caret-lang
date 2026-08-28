@@ -5,13 +5,17 @@ import caretlang.Ast.ContractName;
 import caretlang.Ast.FunctionDef;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Language-owned callable metadata. Runtime callables expose only immutable projections of this model. */
 public record CallableSignature(List<Parameter> parameters, Result result, Effects effects,
                                 List<Variable> variables) {
+    enum Compatibility { COMPATIBLE, INCOMPATIBLE, UNKNOWN }
+    record Composition(CallableSignature signature, Compatibility compatibility) {}
     public sealed interface ContractTerm permits NamedRef, VariableRef, AppliedRef, ModifiedRef, ArrowRef {
         String render();
     }
@@ -146,12 +150,38 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     }
 
     CallableSignature withParameters(List<Parameter> newParameters) {
-        return new CallableSignature(newParameters, result, effects, variables);
+        return new CallableSignature(newParameters, result, effects, retainedVariables(newParameters, result, variables));
     }
 
-    static CallableSignature compose(CallableSignature left, CallableSignature right) {
-        return new CallableSignature(left.parameters, right.result,
-                unionEffects(left.effects, right.effects), List.of());
+    CallableSignature projectParameters(List<List<Integer>> sourcePositions) {
+        ArrayList<Parameter> projected = new ArrayList<>();
+        for (List<Integer> positions : sourcePositions) {
+            List<Parameter> sources = positions.stream().filter(index -> index >= 0 && index < parameters.size())
+                    .map(parameters::get).toList();
+            projected.add(mergeParameters(sources));
+        }
+        return withParameters(projected);
+    }
+
+    static Composition compose(CallableSignature left, CallableSignature right) {
+        if (right.parameters.isEmpty()) {
+            return new Composition(new CallableSignature(left.parameters, right.result,
+                    unionEffects(left.effects, right.effects), retainedVariables(
+                    left.parameters, right.result, left.variables)), Compatibility.UNKNOWN);
+        }
+
+        int rightOffset = left.variables.stream().mapToInt(Variable::index).max().orElse(-1) + 1;
+        CallableSignature shiftedRight = rightOffset == 0 ? right : right.remapVariables(rightOffset);
+        LinkedHashMap<Integer, ContractTerm> substitutions = new LinkedHashMap<>();
+        Compatibility compatibility = bridge(left.result.guarantees,
+                shiftedRight.parameters.getFirst().requirements, substitutions);
+        CallableSignature specializedLeft = substitutions.isEmpty() ? left : left.substitute(substitutions);
+        CallableSignature specializedRight = substitutions.isEmpty() ? shiftedRight : shiftedRight.substitute(substitutions);
+        List<Variable> combinedVariables = union(specializedLeft.variables, specializedRight.variables);
+        CallableSignature signature = new CallableSignature(specializedLeft.parameters, specializedRight.result,
+                unionEffects(specializedLeft.effects, specializedRight.effects), retainedVariables(
+                specializedLeft.parameters, specializedRight.result, combinedVariables));
+        return new Composition(signature, compatibility);
     }
 
     static CallableSignature summarize(List<CallableSignature> variants) {
@@ -176,6 +206,134 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         List<String> inferred = left.inferred == null || right.inferred == null
                 ? null : union(left.inferred, right.inferred);
         return new Effects(upper, null, inferred);
+    }
+
+    private static Parameter mergeParameters(List<Parameter> sources) {
+        if (sources.isEmpty()) return new Parameter(null, List.of(), null, null);
+        String name = sources.size() == 1 ? sources.getFirst().name : null;
+        List<ContractTerm> requirements = List.of();
+        List<ContractTerm> declared = null;
+        List<ContractTerm> inferred = null;
+        for (Parameter source : sources) {
+            requirements = union(requirements, source.requirements);
+            declared = unionNullable(declared, source.declared);
+            inferred = unionNullable(inferred, source.inferred);
+        }
+        return new Parameter(name, requirements, declared, inferred);
+    }
+
+    private static <T> List<T> unionNullable(List<T> left, List<T> right) {
+        if (left == null) return right == null ? null : List.copyOf(right);
+        if (right == null) return left;
+        return union(left, right);
+    }
+
+    private CallableSignature remapVariables(int offset) {
+        LinkedHashMap<Integer, ContractTerm> replacements = new LinkedHashMap<>();
+        variables.forEach(variable -> replacements.put(variable.index, new VariableRef(variable.index + offset)));
+        if (replacements.isEmpty()) return this;
+        List<Parameter> remappedParameters = parameters.stream().map(parameter -> new Parameter(parameter.name,
+                substitute(parameter.requirements, replacements), substituteNullable(parameter.declared, replacements),
+                substituteNullable(parameter.inferred, replacements))).toList();
+        Result remappedResult = new Result(substitute(result.guarantees, replacements),
+                substituteNullable(result.declared, replacements), substituteNullable(result.inferred, replacements));
+        List<Variable> remappedVariables = variables.stream().map(variable -> new Variable(variable.index + offset,
+                substitute(variable.requirements, replacements))).toList();
+        return new CallableSignature(remappedParameters, remappedResult, effects, remappedVariables);
+    }
+
+    private static Compatibility bridge(List<ContractTerm> guarantees, List<ContractTerm> requirements,
+                                        Map<Integer, ContractTerm> substitutions) {
+        if (guarantees.isEmpty() || requirements.isEmpty()) return Compatibility.UNKNOWN;
+        boolean unknown = false;
+        for (ContractTerm requirement : requirements) {
+            Compatibility best = Compatibility.INCOMPATIBLE;
+            List<ContractTerm> concrete = guarantees.stream()
+                    .filter(guarantee -> !(guarantee instanceof VariableRef)).toList();
+            List<ContractTerm> candidates = concrete.isEmpty() ? guarantees : concrete;
+            for (ContractTerm guarantee : candidates) {
+                LinkedHashMap<Integer, ContractTerm> candidate = new LinkedHashMap<>(substitutions);
+                Compatibility relation = unifyBridge(guarantee, requirement, candidate);
+                if (relation == Compatibility.COMPATIBLE) {
+                    substitutions.clear();
+                    substitutions.putAll(candidate);
+                    best = relation;
+                    break;
+                }
+                if (relation == Compatibility.UNKNOWN) best = relation;
+            }
+            if (best == Compatibility.INCOMPATIBLE) return best;
+            if (best == Compatibility.COMPATIBLE) {
+                guarantees.stream().filter(VariableRef.class::isInstance).map(VariableRef.class::cast)
+                        .forEach(variable -> substitutions.putIfAbsent(variable.index, requirement));
+            }
+            unknown |= best == Compatibility.UNKNOWN;
+        }
+        return unknown ? Compatibility.UNKNOWN : Compatibility.COMPATIBLE;
+    }
+
+    private static Compatibility unifyBridge(ContractTerm supplied, ContractTerm required,
+                                              Map<Integer, ContractTerm> substitutions) {
+        ContractTerm substitutedSupplied = substitute(supplied, substitutions);
+        ContractTerm substitutedRequired = substitute(required, substitutions);
+        if (substitutedRequired instanceof VariableRef(int index1)) {
+            substitutions.put(index1, substitutedSupplied);
+            return Compatibility.COMPATIBLE;
+        }
+        if (substitutedSupplied instanceof VariableRef(int index1)) {
+            substitutions.put(index1, substitutedRequired);
+            return Compatibility.COMPATIBLE;
+        }
+        if (substitutedSupplied.equals(substitutedRequired)
+                || substitutedRequired instanceof NamedRef(String name) && name.equals("Any")) {
+            return Compatibility.COMPATIBLE;
+        }
+        switch (substitutedSupplied) {
+            case AppliedRef(
+                    ContractTerm leftConstructor, List<ContractTerm> leftArguments
+            ) when substitutedRequired instanceof AppliedRef(
+                    ContractTerm rightConstructor, List<ContractTerm> rightArguments
+            ) -> {
+                if (!leftConstructor.render().equals(rightConstructor.render())
+                        || leftArguments.size() != rightArguments.size()) return Compatibility.INCOMPATIBLE;
+                boolean unknown = false;
+                for (int index = 0; index < leftArguments.size(); index++) {
+                    Compatibility relation = unifyBridge(leftArguments.get(index), rightArguments.get(index), substitutions);
+                    if (relation == Compatibility.INCOMPATIBLE) return relation;
+                    unknown |= relation == Compatibility.UNKNOWN;
+                }
+                return unknown ? Compatibility.UNKNOWN : Compatibility.COMPATIBLE;
+            }
+            case ModifiedRef left when substitutedRequired instanceof ModifiedRef(
+                    ContractTerm base, boolean nullable, boolean optional
+            ) -> {
+                if (left.nullable && !nullable || left.optional && !optional) {
+                    return Compatibility.INCOMPATIBLE;
+                }
+                return unifyBridge(left.base, base, substitutions);
+            }
+            case NamedRef(String left) when substitutedRequired instanceof NamedRef(String right) -> {
+                if (knownDisjoint(left, right)) return Compatibility.INCOMPATIBLE;
+                return Compatibility.UNKNOWN;
+            }
+            default -> {
+            }
+        }
+        return Compatibility.UNKNOWN;
+    }
+
+    private static boolean knownDisjoint(String left, String right) {
+        Set<String> closed = Set.of("Number", "String", "Boolean", "Null", "Missing", "Function",
+                "Sequence", "Dictionary", "Field");
+        return closed.contains(left) && closed.contains(right) && !left.equals(right);
+    }
+
+    private static List<Variable> retainedVariables(List<Parameter> parameters, Result result,
+                                                    List<Variable> candidates) {
+        java.util.Set<Integer> used = new java.util.LinkedHashSet<>();
+        parameters.forEach(parameter -> collectVariables(parameter.requirements, used));
+        collectVariables(result.guarantees, used);
+        return candidates.stream().filter(variable -> used.contains(variable.index)).toList();
     }
 
     private static List<ContractTerm> terms(ContractClause clause) {

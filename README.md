@@ -158,10 +158,11 @@ development line from [`PLAN.md`](PLAN.md).
 - Increment `MAJOR` by exactly one and reset both lower components only when the project owner
   explicitly authorizes a major release.
 
-Every release-producing change must update `VERSION`. Pull-request and release automation reject
-unchanged, malformed, decreasing, skipped, or mixed-component transitions. Immutable releases use
-the tag `v<version>`; `main-snapshot` is only a moving download alias and does not create another
-version number.
+Ordinary feature commits do not update `VERSION`. Select and increment it only while preparing a
+pull request whose target is `main`; pull-request and release automation reject unchanged,
+malformed, decreasing, skipped, or mixed-component transitions for that handoff. Immutable releases use the tag
+`v<version>`; `main-snapshot` is only a moving download alias and does not create another version
+number.
 
 ## Requirements
 
@@ -363,8 +364,10 @@ Sequence reflection exposes its applicable collection metadata. `@function` retu
 non-callable metadata Dictionary exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
-the known invocation-effect bound. Prefix partials specialize their remaining parameters, while
-compositions union known invocation effects. `type (@function)` reports `"Dictionary"`, while
+the known invocation-effect bound. Prefix and hole partials specialize variables and project their
+remaining parameters; repeated holes conjoin requirements. Compositions specialize compatible
+parameter/result relationships and union known invocation effects. Narrowed overloads preserve
+every survivor signature plus a conservative summary. `type (@function)` reports `"Dictionary"`, while
 `@function.kind` reports `"Function"`. Adjacent postfix `:` restores the reflected target, as in
 `alias = @function:`. Metadata compares structurally. Reflection exposes no captures, bound arguments,
 Java implementation objects, or callable capability, and does not invoke a reflected function.

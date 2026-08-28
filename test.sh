@@ -250,6 +250,7 @@ expect_failure examples/errors/not_a_contract.caret unused
 expect_failure examples/errors/dynamic_not_a_contract.caret unused
 expect_failure examples/errors/contract_violation.caret unused
 expect_failure examples/errors/incompatible_inferred_contracts.caret unused
+expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
 expect_failure examples/errors/invalid_refinement.caret unused
 expect_failure examples/errors/inconsistent_overload_arity.caret unused

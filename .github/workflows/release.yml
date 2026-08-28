@@ -32,9 +32,11 @@ jobs:
         run: |
           set -euo pipefail
           current=$(tr -d '[:space:]' < VERSION)
-          if [[ $EVENT_NAME == pull_request ]]; then
+          if [[ $EVENT_NAME == pull_request && $BASE_REF == main ]]; then
             previous=$(git show "origin/$BASE_REF:VERSION" 2>/dev/null || printf '0.0.0')
             scripts/validate-version.sh "$previous" "$current"
+          elif [[ $EVENT_NAME == pull_request ]]; then
+            printf 'Version transition is deferred until a pull request targets main.\n'
           elif [[ $EVENT_NAME == push ]]; then
             if [[ $PUSH_BEFORE == 0000000000000000000000000000000000000000 ]]; then
               previous=0.0.0

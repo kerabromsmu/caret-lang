@@ -6,9 +6,22 @@ addAlias = @add:
 signature = @add.signature
 first = seqGet signature.parameters 0
 
+(Number) combine (Number) left (String) right = 0
+repeated = combine _1 _1
+reordered = combine _2 _1
+
+identity value = value
+(String) text (String) value = value
+pipeline = identity >> text
+
 print @add.remaining
 print (seqGet first.requirements 0).name
 print @addOne.remaining
 print (seqGet @addOne.signature.parameters 0).name
 print seqSize signature.effects.upperBound
 print addAlias 2 3
+print seqSize (seqGet @repeated.signature.parameters 0).requirements
+print (seqGet @reordered.signature.parameters 0).name
+print (seqGet @reordered.signature.parameters 1).name
+print (seqGet (seqGet @pipeline.signature.parameters 0).requirements 0).name
+print (seqGet @pipeline.signature.result.guarantees 0).name

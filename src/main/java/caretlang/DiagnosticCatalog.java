@@ -41,6 +41,7 @@ enum DiagnosticCatalog {
     NOT_A_CONTRACT("SEMANTIC-NOT-A-CONTRACT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.NOT_A_CONTRACT, "Binding is not a contract: .*", PUBLIC),
     RUNTIME_NOT_A_CONTRACT("RUNTIME-NOT-A-CONTRACT", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT, "Binding is not a contract: .*", PUBLIC),
     INCOMPATIBLE_CONTRACTS("SEMANTIC-INCOMPATIBLE-CONTRACTS", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, "Incompatible inferred contracts: .*", PUBLIC),
+    INCOMPATIBLE_COMPOSITION("SEMANTIC-INCOMPATIBLE-COMPOSITION", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, "Composition result cannot satisfy the right callable parameter", PUBLIC),
     AMBIGUOUS_CONTRACT("SEMANTIC-AMBIGUOUS-CONTRACT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.AMBIGUOUS_CONTRACT, "Ambiguous contract at use: .*", PUBLIC),
     INVALID_REFINEMENT("SEMANTIC-INVALID-REFINEMENT", Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT, "Invalid refinement predicate: .*", PUBLIC),
     INVALID_CONTRACT_VARIABLE("SEMANTIC-INVALID-CONTRACT-VARIABLE", Diagnostic.Phase.SEMANTIC,

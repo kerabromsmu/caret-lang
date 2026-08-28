@@ -31,6 +31,7 @@ final class Interpreter {
             Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
             inference = ContractInference.analyze(program, resolution);
             validateEffectAllowances(program, resolution);
+            validateCompositionCompatibility(program, resolution);
             executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
             globals.rollbackTo(checkpoint);
@@ -63,6 +64,76 @@ final class Interpreter {
             }
             validateEffectAllowances(function.body(), resolution);
         }
+    }
+
+    private void validateCompositionCompatibility(List<Stmt> statements, Resolution resolution) {
+        HashMap<Integer, List<CallableSignature>> variants = new HashMap<>();
+        collectFunctionSignatures(statements, resolution, variants);
+        HashMap<Integer, CallableSignature> signatures = new HashMap<>();
+        variants.forEach((symbol, values) -> signatures.put(symbol, CallableSignature.summarize(values)));
+        validateCompositionCompatibility(statements, resolution, signatures);
+    }
+
+    private void collectFunctionSignatures(List<Stmt> statements, Resolution resolution,
+                                           Map<Integer, List<CallableSignature>> signatures) {
+        for (Stmt statement : statements) {
+            if (!(statement instanceof FunctionDef function)) continue;
+            Integer symbol = resolution.symbolId(function.span());
+            if (symbol != null) signatures.computeIfAbsent(symbol, ignored -> new ArrayList<>())
+                    .add(CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
+            collectFunctionSignatures(function.body(), resolution, signatures);
+        }
+    }
+
+    private void validateCompositionCompatibility(List<Stmt> statements, Resolution resolution,
+                                                  Map<Integer, CallableSignature> signatures) {
+        for (Stmt statement : statements) {
+            switch (statement) {
+                case Assign assign -> validateCompositionCompatibility(assign.value(), resolution, signatures);
+                case ExprStmt expression -> validateCompositionCompatibility(expression.expression(), resolution, signatures);
+                case PrintLine line -> validateCompositionCompatibility(line.ordinaryCall(), resolution, signatures);
+                case FunctionDef function -> validateCompositionCompatibility(function.body(), resolution, signatures);
+            }
+        }
+    }
+
+    private void validateCompositionCompatibility(Expr expression, Resolution resolution,
+                                                  Map<Integer, CallableSignature> signatures) {
+        for (Expr child : AstTraversal.children(expression)) {
+            validateCompositionCompatibility(child, resolution, signatures);
+        }
+        if (!(expression instanceof Compose compose)) return;
+        CallableSignature left = knownSignature(compose.left(), resolution, signatures);
+        CallableSignature right = knownSignature(compose.right(), resolution, signatures);
+        if (left == null || right == null || right.parameters().size() != 1) return;
+        CallableSignature.Composition composition = CallableSignature.compose(left, right);
+        if (composition.compatibility() == CallableSignature.Compatibility.INCOMPATIBLE) {
+            throw incompatibleComposition(compose.span(), compose.left().span(), compose.right().span());
+        }
+    }
+
+    private CallableSignature knownSignature(Expr expression, Resolution resolution,
+                                             Map<Integer, CallableSignature> signatures) {
+        if (expression instanceof Group group) return knownSignature(group.expression(), resolution, signatures);
+        if (expression instanceof Name name) {
+            Resolution.Binding binding = resolution.binding(name);
+            return binding == null ? null : signatures.get(binding.symbolId());
+        }
+        if (expression instanceof Compose compose) {
+            CallableSignature left = knownSignature(compose.left(), resolution, signatures);
+            CallableSignature right = knownSignature(compose.right(), resolution, signatures);
+            return left == null || right == null ? null : CallableSignature.compose(left, right).signature();
+        }
+        return null;
+    }
+
+    private static LangException incompatibleComposition(SourceSpan span, SourceSpan left, SourceSpan right) {
+        return new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.INCOMPATIBLE_CONTRACTS,
+                "Composition result cannot satisfy the right callable parameter",
+                span, List.of(
+                new Diagnostic.Related("Left composition operand", left),
+                new Diagnostic.Related("Right composition operand", right))));
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
@@ -244,15 +315,25 @@ final class Interpreter {
         }
 
         @Override public List<CallableSignature> variantSignatures() {
-            return viable.stream().map(variant -> specialize(variant.function().signature())).toList();
+            return fullVariantSignatures().stream().map(this::removeBoundParameters).toList();
         }
 
-        private CallableSignature specialize(CallableSignature signature) {
-            ArrayList<CallableSignature.Parameter> parameters = new ArrayList<>();
+        private List<CallableSignature> fullVariantSignatures() {
+            return viable.stream().map(variant -> {
+                CallableSignature signature = variant.function().signature();
+                for (Map.Entry<Integer, Value.Argument> argument : arguments.entrySet()) {
+                    signature = signature.specializeParameter(argument.getKey(), argument.getValue().value());
+                }
+                return signature;
+            }).toList();
+        }
+
+        private CallableSignature removeBoundParameters(CallableSignature signature) {
+            ArrayList<List<Integer>> positions = new ArrayList<>();
             for (int index = 0; index < signature.parameters().size(); index++) {
-                if (!arguments.containsKey(index)) parameters.add(signature.parameters().get(index));
+                if (!arguments.containsKey(index)) positions.add(List.of(index));
             }
-            return signature.withParameters(parameters);
+            return signature.projectParameters(positions);
         }
 
         @Override public String publicName() { return name; }
@@ -613,9 +694,12 @@ final class Interpreter {
 
         @Override public int remainingArity() { return arity - arguments.size(); }
         @Override public CallableSignature signature() {
-            return CallableSignature.unknown(Collections.nCopies(remainingArity(), null));
+            return CallableSignature.summarize(variantSignatures());
         }
-        @Override public List<CallableSignature> variantSignatures() { return overload.variantSignatures(); }
+        @Override public List<CallableSignature> variantSignatures() {
+            return overload.fullVariantSignatures().stream().map(signature ->
+                    projectHoleSignature(signature, pending, arity, arguments.size())).toList();
+        }
         @Override public String toString() { return "<overload-partial " + display + "/" + remainingArity() + ">"; }
     }
 
@@ -672,6 +756,11 @@ final class Interpreter {
                         Diagnostic.Codes.INVALID_COMPOSITION_RIGHT,
                         "Composition right operand must be a callable requiring exactly one argument",
                         rightExpression.span());
+            }
+            CallableSignature.Composition composition = CallableSignature.compose(
+                    leftCallable.signature(), rightCallable.signature());
+            if (composition.compatibility() == CallableSignature.Compatibility.INCOMPATIBLE) {
+                throw incompatibleComposition(expr.span(), leftExpression.span(), rightExpression.span());
             }
             return new Value.ComposedFunction(leftCallable, rightCallable, this::invoke);
         }
@@ -1308,26 +1397,44 @@ final class Interpreter {
                 specialized = specialized.specializeParameter(index, fixed.value());
             }
         }
-        ArrayList<CallableSignature.Parameter> projected = new ArrayList<>(Collections.nCopies(arity, null));
+        ArrayList<List<Integer>> projected = emptyPositionProjection(arity);
         int ordinaryIndex = 0;
         for (int argumentIndex = 0; argumentIndex < arguments.size(); argumentIndex++) {
             Expr argument = arguments.get(argumentIndex);
             if (argumentIndex >= specialized.parameters().size()) break;
             if (argument instanceof Hole hole) {
                 int index = hole.index() == 0 ? ordinaryIndex++ : hole.index() - 1;
-                if (projected.get(index) == null) projected.set(index, specialized.parameters().get(argumentIndex));
+                ArrayList<Integer> positions = new ArrayList<>(projected.get(index));
+                positions.add(argumentIndex);
+                projected.set(index, List.copyOf(positions));
             } else {
                 if (!(argument instanceof Literal)) {
                     return CallableSignature.unknown(Collections.nCopies(arity, null));
                 }
             }
         }
-        for (int index = 0; index < projected.size(); index++) {
-            if (projected.get(index) == null) {
-                projected.set(index, new CallableSignature.Parameter(null, List.of(), null, null));
-            }
+        return specialized.projectParameters(projected);
+    }
+
+    private CallableSignature projectHoleSignature(CallableSignature signature,
+                                                    List<PendingOverloadArgument> pending,
+                                                    int totalArity, int supplied) {
+        ArrayList<List<Integer>> projected = emptyPositionProjection(totalArity - supplied);
+        for (PendingOverloadArgument argument : pending) {
+            if (!(argument.expression() instanceof Hole hole) || hole.index() == 0) continue;
+            int publicIndex = hole.index() - 1 - supplied;
+            if (publicIndex < 0 || publicIndex >= projected.size()) continue;
+            ArrayList<Integer> positions = new ArrayList<>(projected.get(publicIndex));
+            positions.add(argument.position());
+            projected.set(publicIndex, List.copyOf(positions));
         }
-        return specialized.withParameters(projected);
+        return signature.projectParameters(projected);
+    }
+
+    private static ArrayList<List<Integer>> emptyPositionProjection(int arity) {
+        ArrayList<List<Integer>> result = new ArrayList<>();
+        for (int index = 0; index < arity; index++) result.add(List.of());
+        return result;
     }
 
     private static final class HoleBinder {

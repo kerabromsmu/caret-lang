@@ -234,8 +234,10 @@ nesting, and null/missing modifiers, and exposes its base and requirement throug
 General parameterized contracts and complete static proof remain
 planned. Callable reflection now exposes immutable language-owned signature metadata for remaining
 parameters, result facts, known invocation effects, and surviving overload variants without exposing
-captures, partial values, implementation objects, or authority. Closed same-name overload sets are
-implemented: applicability observes existing contract
+captures, partial values, implementation objects, or authority. Derived metadata specializes
+generic prefix and hole partials, conjoins repeated-hole requirements, projects reordered holes,
+and carries compatible substitutions and effect unions through composition. Closed same-name
+overload sets are implemented: applicability observes existing contract
 membership without acquiring it, and the unique most-specific applicable variant wins.
 
 ```caret

@@ -470,11 +470,13 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Callable left;
         private final Callable right;
         private final CallInvoker invoker;
+        private final CallableSignature signature;
 
         ComposedFunction(Callable left, Callable right, CallInvoker invoker) {
             this.left = Objects.requireNonNull(left);
             this.right = Objects.requireNonNull(right);
             this.invoker = Objects.requireNonNull(invoker);
+            this.signature = CallableSignature.compose(left.signature(), right.signature()).signature();
         }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
@@ -495,7 +497,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public CallableSignature signature() {
-            return CallableSignature.compose(left.signature(), right.signature());
+            return signature;
         }
 
         @Override public String toString() {

@@ -278,7 +278,10 @@ Implementation status: the prototype implements right-associative, exact-arity a
 inline or named clause use, structural predicate checking, contravariant parameters,
 covariant results, explicit visible effect allowances, and contiguous numbered variables shared
 across complete declaration headers. Prefix and hole partials retain substitutions in their derived
-signatures. The full conservative overlap proof for overloads remains planned.
+signatures. Derived signatures project repeated and reordered holes, composition specializes
+compatible parameter/result variables and unions invocation effects, and overload partials retain
+projected survivor signatures with conservative summaries. The full conservative overlap proof for
+arrow-contract satisfaction across overload domains remains planned.
 
 A callable signature is an ordinary first-class structural contract written with a bracketed
 parameter-requirement list and a right-associative arrow:
@@ -476,6 +479,10 @@ authority visibility.
 
 <a id="partial-and-composed-signatures"></a>
 ### Partial and composed signatures
+
+Implementation status: implemented for named functions, built-ins, prefix and hole partials,
+compositions, and narrowed closed overload sets. Proven bridge conflicts use the semantic
+`INCOMPATIBLE_CONTRACTS` diagnostic; relationships that cannot be proved remain runtime-checked.
 
 Supplying an ordinary prefix argument validates that parameter, specializes the current signature
 variables, removes the filled parameter, and preserves the specialized result and invocation-effect

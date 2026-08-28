@@ -808,6 +808,80 @@ final class InterpreterTest {
     }
 
     @Test
+    void derivedSignaturesProjectRepeatedAndReorderedHoles() {
+        assertEquals("2\nNumber\nString\nright\nleft\n1\n0\n", execute("""
+                (Number) combine (Number) left (String) right = 0
+                repeated = combine _1 _1
+                reordered = combine _2 _1
+
+                repeatedParameter = seqGet (@repeated).signature.parameters 0
+                print seqSize repeatedParameter.requirements
+                print (seqGet repeatedParameter.requirements 0).name
+                print (seqGet repeatedParameter.requirements 1).name
+                print (seqGet (@reordered).signature.parameters 0).name
+                print (seqGet (@reordered).signature.parameters 1).name
+                print seqSize (@repeated).signature.parameters
+                print seqSize (@repeated).signature.variables
+                """));
+    }
+
+    @Test
+    void compositionsSpecializeBridgeVariablesAndRejectOnlyProvenConflicts() {
+        assertEquals("String\nString\n0\n5\n", execute("""
+                identity value = value
+                (String) text (String) value = value
+                pipeline = identity >> text
+                print (seqGet (seqGet (@pipeline).signature.parameters 0).requirements 0).name
+                print (seqGet (@pipeline).signature.result.guarantees 0).name
+                print seqSize (@pipeline).signature.variables
+
+                dynamic dictionary key = dictionary[key]~
+                unknownPipeline = dynamic _ "value" >> text
+                print (unknownPipeline (dictPut dictEmpty "value" "5"))
+                """));
+
+        LangException incompatible = assertThrows(LangException.class, () -> execute("""
+                (Number) number (Number) value = value
+                (String) text (String) value = value
+                pipeline = number >> text
+                """));
+        assertEquals(Diagnostic.Phase.SEMANTIC, incompatible.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, incompatible.diagnostic().code());
+        assertEquals(3, incompatible.span().start().line());
+        assertEquals(2, incompatible.diagnostic().related().size());
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(output, true, StandardCharsets.UTF_8));
+        assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                print "must not run"
+                (Number) number (Number) value = value
+                (String) text (String) value = value
+                pipeline = number >> text
+                """).parseProgram()));
+        assertEquals("", output.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void overloadHolePartialsExposeProjectedSurvivorSignatures() {
+        assertEquals("2\n1\n2\n2\nNumber\nString\n1\nString\n", execute("""
+                route (Number) left (String) right = "number-text"
+                route (String) left (Number) right = "text-number"
+                repeated = route _1 _1
+                numberFirst = route 1
+                metadata = @repeated
+                firstVariant = seqGet metadata.variants 0
+                print seqSize metadata.variants
+                print seqSize metadata.signature.parameters
+                print seqSize (seqGet firstVariant.parameters 0).requirements
+                print seqSize (seqGet (seqGet metadata.variants 1).parameters 0).requirements
+                print (seqGet (seqGet firstVariant.parameters 0).requirements 0).name
+                print (seqGet (seqGet firstVariant.parameters 0).requirements 1).name
+                print seqSize (@numberFirst).variants
+                print (seqGet (seqGet (seqGet (@numberFirst).variants 0).parameters 0).requirements 0).name
+                """));
+    }
+
+    @Test
     void callableReflectionPreservesGeneralizedParameterResultRelationships() {
         assertEquals("VariableRef\n0\nVariableRef\n0\n1\n", execute("""
                 identity value = value
@@ -918,10 +992,11 @@ final class InterpreterTest {
 
     @Test
     void partialApplicationCapturesFixedOperandsEagerly() {
-        assertEquals("captured\ncaptured\n", execute("""
+        assertEquals("captured\n0\ncaptured\n", execute("""
                 (Output) announce value = print value
                 first left right = left
                 partial = first (announce "captured") _
+                print seqSize (@partial).signature.effects.upperBound
                 print partial "ignored"
                 """));
     }

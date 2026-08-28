@@ -73,6 +73,9 @@ projection are implemented for named functions, built-ins, prefix partials, comp
 closed overload sets. Exact-arity arrow contracts now work as named or inline structural
 predicates with explicit visible effect allowances. Declaration-wide variables and substitution
 through prefix and hole partials are implemented; complete overload-domain proofs remain unfinished.
+Derived callable signatures now project repeated and reordered holes, specialize composition
+bridges, separate construction effects from invocation bounds, and preserve projected overload
+survivor signatures with conservative summaries.
 
 ### Layout and expressions
 
