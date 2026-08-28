@@ -29,7 +29,7 @@ interpreter. The current prototype supports:
 - closed same-name function overload sets with contract-based most-specific dispatch, generic
   fallbacks, prefix/infix calls, and persistent hole partials.
 - first-class pure callable arrow contracts such as `[Number] -> Number`, including exact arity,
-  structural predicate checks, inline higher-order clauses, and standalone numbered variables.
+  structural predicate checks, inline higher-order clauses, and declaration-wide numbered variables.
 - environment-relative effect identities and mixed declaration clauses, including explicit function
   allowances, callable-value constraints, and effectful arrow contracts.
 
@@ -256,8 +256,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Contract-selected collection representations, first-class dynamic fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- Arrow contracts support explicit visible effect allowances. Declaration-wide contract variables
-  and complete overload-domain proofs remain planned.
+- Arrow contracts support explicit visible effect allowances and declaration-wide contract variables.
+  Complete overload-domain proofs remain planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
 - `map` supports current unary callable values at runtime, but generalized element/result variables,

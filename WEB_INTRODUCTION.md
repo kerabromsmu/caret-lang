@@ -265,26 +265,26 @@ list followed by `->` describes exact arity, result guarantees, and an optional 
   transform value
 ```
 
-The complete planned form also permits explicit effect allowances and declaration-wide variables:
+Explicit effect allowances and declaration-wide variables are also supported:
 
-<!-- caret-example: planned -->
 ```caret
-[Int Text] -> (fs Boolean)
+[Number String] -> (Output Boolean)
 
-(Sequence _2) map ([_1] -> _2) transform (Sequence _1) values =
-  ...
+(_2) applyGeneric ([_1] -> _2) transform (_1) value =
+  transform value
 ```
 
 The prototype implements the runtime `map transform values` operation for Sequences and current
-named, partial, and composed callable values. Its generalized variable signature, lambdas, and
-precise transform-effect propagation remain planned.
+named, partial, and composed callable values. Declaration-wide variable schemes retain their
+substitutions through prefix and hole partials; lambdas and precise transform-effect propagation
+remain planned.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
 must remain within the stated allowance. This arrow form is a first-class contract, distinct from a
 lambda because its left side is a bracketed requirement list. Exact arity, pure effect bounds,
 contravariant parameters, covariant results, inline clauses, and standalone variables are
-implemented; explicit allowances and variables shared across a complete declaration header remain planned.
+implemented, including explicit allowances and variables shared across a complete declaration header.
 
 The planned static operator model preserves the prototype's compact behavior without adding hidden
 numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
@@ -392,8 +392,8 @@ Closure analysis records deterministic, source-spanned upvalues by stable bindin
 closures use those same internal descriptors without exposing captures or lexical environments
 through reflection.
 
-General parameterized contracts, declaration-wide-variable arrow contracts,
-structural templates, contextual collection representations, modules, root reification, sandboxing,
+General parameterized contracts, structural templates, contextual collection representations,
+modules, root reification, sandboxing,
 compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.

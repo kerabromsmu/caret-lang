@@ -117,6 +117,55 @@ final class InterpreterTest {
     }
 
     @Test
+    void declarationHeaderVariablesShareSchemesAndSpecializeFreshPrefixPartials() {
+        assertEquals("1\n0\n0\nNumber\nString\nNumber\n0\n0\n1\ntrue\ntrue\n", execute("""
+                (_1) choose (_1) left (_1) right = left
+                alias = choose
+                numberChoice = choose 1
+                textChoice = choose "left"
+                holeChoice = choose _ 2
+
+                scheme = (@choose).signature
+                parameterVariable = seqGet (seqGet scheme.parameters 0).requirements 0
+                resultVariable = seqGet scheme.result.guarantees 0
+                print seqSize scheme.variables
+                print parameterVariable.index
+                print resultVariable.index
+                print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).name
+                print (seqGet (seqGet (@textChoice).signature.parameters 0).requirements 0).name
+                print (seqGet (seqGet (@holeChoice).signature.parameters 0).requirements 0).name
+                print seqSize (@numberChoice).signature.variables
+                print seqSize (@holeChoice).signature.variables
+                print seqSize (@alias).signature.variables
+                print numberChoice 2 == 1
+                print holeChoice 1 == 1
+                """));
+    }
+
+    @Test
+    void declarationVariablesIncludeNestedArrowsAndRejectUnrelatedOccurrences() {
+        assertEquals("5\n", execute("""
+                identity value = value
+                (_1) applyGeneric ([_1] -> _1) transform (_1) value = transform value
+                print applyGeneric identity 5
+                """));
+
+        LangException single = assertThrows(LangException.class,
+                () -> execute("(_1) consume value = value"));
+        assertEquals(Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, single.diagnostic().code());
+        assertEquals(2, single.span().start().column());
+
+        LangException standalone = assertThrows(LangException.class,
+                () -> execute("GenericConsumer = [_1] -> Boolean"));
+        assertEquals(Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, standalone.diagnostic().code());
+
+        LangException incompatible = assertThrows(LangException.class,
+                () -> execute("(_1) choose (Number _1) left (String _1) right = left"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, incompatible.diagnostic().code());
+        assertEquals(1, incompatible.diagnostic().related().size());
+    }
+
+    @Test
     void constructsUnaryBaseAndMultiplyDerivedContracts() {
         assertEquals("false\nfalse\nAB\n[ \"Tag\" \"Numeric\" ]\n[ 1 \"two\" true ]\n", execute("""
                 Tag = contract ~

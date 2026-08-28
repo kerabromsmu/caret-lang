@@ -276,9 +276,9 @@ instance retains its substitutions and is not generalized again.
 
 Implementation status: the prototype implements right-associative, exact-arity arrow contracts,
 inline or named clause use, structural predicate checking, contravariant parameters,
-covariant results, explicit visible effect allowances, and standalone contiguous numbered variables.
-Variables shared across an enclosing declaration header, complete substitution through derived
-callables, and the full conservative overlap proof for overloads remain planned.
+covariant results, explicit visible effect allowances, and contiguous numbered variables shared
+across complete declaration headers. Prefix and hole partials retain substitutions in their derived
+signatures. The full conservative overlap proof for overloads remains planned.
 
 A callable signature is an ordinary first-class structural contract written with a bracketed
 parameter-requirement list and a right-associative arrow:
@@ -338,16 +338,19 @@ For example:
 ```
 
 The prototype currently implements the runtime `map transform values` callable for Sequences.
-Until declaration-wide variables and higher-order effect substitution are implemented, its public
-callable metadata deliberately reports an unknown effect upper bound rather than incorrectly
+Until higher-order effect substitution is implemented, its public callable metadata deliberately
+reports an unknown effect upper bound rather than incorrectly
 claiming purity or a fixed effect set. Runtime application still uses the ordinary guarded callable
 path and preserves element order.
 
-generalizes one input-element contract and one output-element contract, then instantiates both
+This declaration generalizes one input-element contract and one output-element contract, then instantiates both
 freshly at every use of `map`. Variables may appear as ordinary constructor arguments and within
 conjunctions such as `(_1 Number)`. All indices from `_1` through the highest used index must occur;
 their first occurrence order need not match numeric order. An unnumbered `_` is invalid in contract-
 variable context, and ordinary expression holes retain their existing partial-application meaning.
+Each variable must occur at least twice, because a single occurrence expresses no relationship.
+Incompatible concrete bounds on repeated occurrences produce `INCOMPATIBLE_CONTRACTS` at the later
+bound with the earlier bound attached as related source information.
 
 A standalone generic arrow contract quantifies its own variables. A candidate then satisfies it
 only when the candidate scheme is at least as general; a monomorphic `Int -> Int` callable does not

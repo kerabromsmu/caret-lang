@@ -371,6 +371,7 @@ final class Interpreter {
                                    boolean constrainCallableEffects) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
         for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+            if (isContractVariable(reference.name())) continue;
             Value resolved = reference.inline() == null
                     ? underlying(reference.binding() == null ? globals.get(reference.name())
                     : contractEnvironment.getResolved(reference.binding()))
@@ -473,6 +474,7 @@ final class Interpreter {
     private ContractDescriptor resolveContractDescriptor(Resolution.ContractBinding reference,
                                                          Environment contractEnvironment,
                                                          Resolution resolution) {
+        if (isContractVariable(reference.name())) return BuiltinContract.ANY;
         Value resolved = reference.inline() == null
                 ? underlying(reference.binding() == null ? globals.get(reference.name())
                 : contractEnvironment.getResolved(reference.binding()))
@@ -512,7 +514,7 @@ final class Interpreter {
                     Value overloadPartial = overloadHolePartial(captured, arity, env, resolution);
                     if (overloadPartial != null) return overloadPartial;
                     return new Value.HoleFunction(expr.toString(), arity,
-                            supplied -> eval(captured, env, supplied, resolution));
+                            supplied -> eval(captured, env, supplied, resolution), holeSignature(captured, arity));
                 }
             }
             Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
@@ -1290,6 +1292,44 @@ final class Interpreter {
                 : Optional.empty());
     }
 
+    private CallableSignature holeSignature(Expr expression, int arity) {
+        ArrayList<Expr> arguments = new ArrayList<>();
+        Expr target = expression;
+        while (target instanceof Apply apply) {
+            arguments.addFirst(apply.argument());
+            target = apply.function();
+        }
+        if (!(target instanceof Literal literal) || !(underlying(literal.value()) instanceof Value.Callable callable)) {
+            return CallableSignature.unknown(Collections.nCopies(arity, null));
+        }
+        CallableSignature specialized = callable.signature();
+        for (int index = 0; index < arguments.size() && index < specialized.parameters().size(); index++) {
+            if (arguments.get(index) instanceof Literal fixed) {
+                specialized = specialized.specializeParameter(index, fixed.value());
+            }
+        }
+        ArrayList<CallableSignature.Parameter> projected = new ArrayList<>(Collections.nCopies(arity, null));
+        int ordinaryIndex = 0;
+        for (int argumentIndex = 0; argumentIndex < arguments.size(); argumentIndex++) {
+            Expr argument = arguments.get(argumentIndex);
+            if (argumentIndex >= specialized.parameters().size()) break;
+            if (argument instanceof Hole hole) {
+                int index = hole.index() == 0 ? ordinaryIndex++ : hole.index() - 1;
+                if (projected.get(index) == null) projected.set(index, specialized.parameters().get(argumentIndex));
+            } else {
+                if (!(argument instanceof Literal)) {
+                    return CallableSignature.unknown(Collections.nCopies(arity, null));
+                }
+            }
+        }
+        for (int index = 0; index < projected.size(); index++) {
+            if (projected.get(index) == null) {
+                projected.set(index, new CallableSignature.Parameter(null, List.of(), null, null));
+            }
+        }
+        return specialized.withParameters(projected);
+    }
+
     private static final class HoleBinder {
         private final List<Value.Argument> values;
         private int index;
@@ -1321,4 +1361,6 @@ final class Interpreter {
     private static LangException runtime(String code, String message, SourceSpan span) {
         return new LangException(Diagnostic.Phase.RUNTIME, code, message, span);
     }
+
+    private static boolean isContractVariable(String name) { return name.matches("_[1-9][0-9]*"); }
 }

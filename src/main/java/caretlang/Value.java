@@ -556,6 +556,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             BoundArguments next = bound.appended(argument);
+            CallableSignature specialized = signature.specializeFirst(argument.value());
             if (next.size() == params.size()) {
                 return implementation.apply(next.values(), callSpan);
             }
@@ -563,7 +564,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                         "Too many arguments for " + name, callSpan);
             }
-            return new FunctionValue(name, params, next, implementation, refinementEligible, signature.dropFirst());
+            return new FunctionValue(name, params, next, implementation, refinementEligible, specialized);
         }
 
         @Override public int remainingArity() {
@@ -632,16 +633,34 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                     "requirements", refs(variable.requirements())));
         }
 
-        private static Value refs(List<String> names) { return nullableNames(names, "ContractRef"); }
-        private static Value nullableRefs(List<String> names) {
+        private static Value refs(List<CallableSignature.ContractTerm> terms) {
+            return new Seq(terms.stream().map(CallableMetadata::termValue).toList());
+        }
+        private static Value nullableRefs(List<CallableSignature.ContractTerm> names) {
             return names == null ? Missing.INSTANCE : refs(names);
+        }
+        private static Value termValue(CallableSignature.ContractTerm term) {
+            return switch (term) {
+                case CallableSignature.VariableRef variable -> metadata("VariableRef",
+                        Map.of("index", new Num(variable.index())));
+                case CallableSignature.NamedRef named -> metadata("ContractRef",
+                        Map.of("name", new Str(named.name())));
+                case CallableSignature.AppliedRef applied -> metadata("ContractApplication", Map.of(
+                        "constructor", termValue(applied.constructor()),
+                        "arguments", new Seq(applied.arguments().stream()
+                                .map(CallableMetadata::termValue).toList())));
+                case CallableSignature.ModifiedRef modified -> metadata("ModifiedContractRef", Map.of(
+                        "base", termValue(modified.base()), "nullable", new Bool(modified.nullable()),
+                        "optional", new Bool(modified.optional())));
+                case CallableSignature.ArrowRef arrow -> metadata("ArrowContractRef", Map.of(
+                        "parameters", new Seq(arrow.parameters().stream().map(requirements ->
+                                (Value) new Seq(requirements.stream().map(CallableMetadata::termValue).toList())).toList()),
+                        "result", termValue(arrow.result())));
+            };
         }
         private static Value nullableNames(List<String> names, String kind) {
             return names == null ? Missing.INSTANCE : new Seq(names.stream()
-                    .map(name -> name.startsWith("_")
-                            ? metadata("VariableRef", Map.of("index", new Num(
-                                    Integer.parseInt(name.substring(1)) - 1)))
-                            : metadata(kind, Map.of("name", new Str(name)))).toList());
+                    .map(name -> metadata(kind, Map.of("name", new Str(name)))).toList());
         }
         private static Value metadata(String kind, Map<String, Value> values) {
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
@@ -656,18 +675,26 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final int arity;
         private final BoundArguments bound;
         private final Function<List<Argument>, Value> implementation;
+        private final CallableSignature signature;
 
         public HoleFunction(String display, int arity, Function<List<Argument>, Value> implementation) {
-            this(display, arity, BoundArguments.empty(), implementation);
+            this(display, arity, implementation,
+                    CallableSignature.unknown(java.util.Collections.nCopies(arity, null)));
+        }
+
+        HoleFunction(String display, int arity, Function<List<Argument>, Value> implementation,
+                     CallableSignature signature) {
+            this(display, arity, BoundArguments.empty(), implementation, signature);
         }
 
         private HoleFunction(String display, int arity, BoundArguments bound,
-                             Function<List<Argument>, Value> implementation) {
+                             Function<List<Argument>, Value> implementation, CallableSignature signature) {
             this.display = Objects.requireNonNull(display, "partial display");
             if (arity < 1) throw new IllegalArgumentException("Partial arity must be positive");
             this.arity = arity;
             this.bound = Objects.requireNonNull(bound);
             this.implementation = Objects.requireNonNull(implementation, "partial implementation");
+            this.signature = Objects.requireNonNull(signature, "partial signature");
         }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
@@ -677,12 +704,15 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                         "Too many arguments for partial expression", callSpan);
             }
-            return new HoleFunction(display, arity, next, implementation);
+            return new HoleFunction(display, arity, next, implementation,
+                    signature.specializeFirst(argument.value()));
         }
 
         @Override public int remainingArity() {
             return arity - bound.size();
         }
+
+        @Override public CallableSignature signature() { return signature; }
 
         @Override public String toString() {
             return "<partial " + display + "/" + remainingArity() + ">";

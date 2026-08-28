@@ -59,6 +59,8 @@ final class Resolver {
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines = new IdentityHashMap<>();
     private final IdentityHashMap<FunctionDef, LinkedHashMap<Integer, Resolution.Upvalue>> upvalues =
             new IdentityHashMap<>();
+    private final java.util.Set<ArrowContract> headerArrows =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
     private final ArrayDeque<FunctionDef> functions = new ArrayDeque<>();
     private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
     private final java.util.Map<Integer, Integer> directAliases = new java.util.HashMap<>();
@@ -234,6 +236,7 @@ final class Resolver {
         functions.push(function);
         upvalues.put(function, new LinkedHashMap<>());
         try {
+            validateHeaderVariables(function);
             resolverContracts(function.resultContracts(), enclosing);
             Scope parameters = new Scope(enclosing);
             HashSet<String> seen = new HashSet<>();
@@ -333,6 +336,10 @@ final class Resolver {
     }
 
     private Resolution.ContractBinding resolveContract(Ast.ContractName name, Scope scope) {
+            if (isContractVariable(name.name())) {
+                return new Resolution.ContractBinding(name.name(), null, resolveContractArguments(name, scope),
+                        name.nullable(), name.optional(), name.span());
+            }
             int depth = 0;
             for (Scope current = scope; current != null; current = current.parent, depth++) {
                 Symbol symbol = current.symbols.get(name.name());
@@ -472,7 +479,7 @@ final class Resolver {
                 }
             }
             case ArrowContract arrow -> {
-                validateContractVariables(arrow);
+                if (!headerArrows.contains(arrow)) validateContractVariables(arrow);
                 arrow.parameters().forEach(parameter -> parameter.forEach(
                         requirement -> resolveExpr(requirement, scope, functionBody, deferred)));
                 resolveExpr(arrow.result(), scope, functionBody, deferred);
@@ -529,20 +536,122 @@ final class Resolver {
     }
 
     private void validateContractVariables(ArrowContract arrow) {
-        java.util.TreeSet<Integer> indexes = new java.util.TreeSet<>();
+        java.util.TreeMap<Integer, List<SourceSpan>> occurrences = new java.util.TreeMap<>();
         AstTraversal.walkPreOrder(arrow, expression -> {
-            if (expression instanceof ContractVariable variable) indexes.add(variable.index());
+            if (expression instanceof ContractVariable variable) {
+                occurrences.computeIfAbsent(variable.index(), ignored -> new ArrayList<>()).add(variable.span());
+            }
         });
-        if (indexes.isEmpty()) return;
+        if (occurrences.isEmpty()) return;
         int expected = 1;
-        for (int index : indexes) {
-            if (index != expected) {
-                throw new LangException(Diagnostic.Phase.SEMANTIC,
-                        Diagnostic.Codes.INVALID_CONTRACT_VARIABLE,
-                        "Contract variable indices must be contiguous from _1", arrow.span());
+        for (var entry : occurrences.entrySet()) {
+            if (entry.getKey() != expected) {
+                throw invalidContractVariable("Contract variable indices must be contiguous from _1",
+                        entry.getValue().getFirst(), List.of());
+            }
+            if (entry.getValue().size() < 2) {
+                throw invalidContractVariable("Contract variable must relate at least two arrow positions: _"
+                        + entry.getKey(), entry.getValue().getFirst(), List.of());
             }
             expected++;
         }
+    }
+
+    private void validateHeaderVariables(FunctionDef function) {
+        java.util.TreeMap<Integer, List<SourceSpan>> occurrences = new java.util.TreeMap<>();
+        collectHeaderVariables(function.resultContracts(), occurrences);
+        function.params().forEach(parameter -> collectHeaderVariables(parameter.contracts(), occurrences));
+        if (occurrences.isEmpty()) return;
+        int expected = 1;
+        for (var entry : occurrences.entrySet()) {
+            if (entry.getKey() != expected) {
+                throw invalidContractVariable("Contract variable indices must be contiguous from _1",
+                        entry.getValue().getFirst(), List.of());
+            }
+            if (entry.getValue().size() < 2) {
+                throw invalidContractVariable("Contract variable must relate at least two header positions: _"
+                        + entry.getKey(), entry.getValue().getFirst(), List.of());
+            }
+            expected++;
+        }
+        validateHeaderVariableBounds(function);
+    }
+
+    private record HeaderVariableBound(BuiltinContract contract, SourceSpan span) {}
+
+    private void validateHeaderVariableBounds(FunctionDef function) {
+        java.util.Map<Integer, List<HeaderVariableBound>> bounds = new java.util.TreeMap<>();
+        collectHeaderVariableBounds(function.resultContracts(), bounds);
+        function.params().forEach(parameter -> collectHeaderVariableBounds(parameter.contracts(), bounds));
+        for (var entry : bounds.entrySet()) {
+            List<HeaderVariableBound> values = entry.getValue();
+            for (int right = 0; right < values.size(); right++) {
+                for (int left = 0; left < right; left++) {
+                    HeaderVariableBound earlier = values.get(left);
+                    HeaderVariableBound later = values.get(right);
+                    if (!ContractRelations.implies(earlier.contract(), later.contract())
+                            && !ContractRelations.implies(later.contract(), earlier.contract())) {
+                        throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                                Diagnostic.Codes.INCOMPATIBLE_CONTRACTS,
+                                "Incompatible inferred contracts: " + earlier.contract().publicName()
+                                        + " and " + later.contract().publicName(), later.span(),
+                                List.of(new Diagnostic.Related("Earlier bound for _" + entry.getKey(),
+                                        earlier.span()))));
+                    }
+                }
+            }
+        }
+    }
+
+    private void collectHeaderVariableBounds(Ast.ContractClause clause,
+            java.util.Map<Integer, List<HeaderVariableBound>> bounds) {
+        if (clause == null) return;
+        List<Integer> variables = clause.names().stream().filter(name -> isContractVariable(name.name()))
+                .map(name -> Integer.parseInt(name.name().substring(1))).toList();
+        if (variables.isEmpty()) return;
+        for (Ast.ContractName name : clause.names()) {
+            BuiltinContract.named(name.name()).ifPresent(contract -> variables.forEach(variable -> bounds
+                    .computeIfAbsent(variable, ignored -> new ArrayList<>())
+                    .add(new HeaderVariableBound(contract, name.span()))));
+        }
+    }
+
+    private void collectHeaderVariables(Ast.ContractClause clause,
+                                        java.util.Map<Integer, List<SourceSpan>> occurrences) {
+        if (clause == null) return;
+        clause.names().forEach(name -> collectHeaderVariables(name, occurrences));
+    }
+
+    private void collectHeaderVariables(Ast.ContractName name,
+                                        java.util.Map<Integer, List<SourceSpan>> occurrences) {
+        if (isContractVariable(name.name())) addOccurrence(name.name(), name.span(), occurrences);
+        name.arguments().forEach(argument -> collectHeaderVariables(argument, occurrences));
+        if (name.inline() instanceof ArrowContract arrow) {
+            headerArrows.add(arrow);
+            AstTraversal.walkPreOrder(arrow, expression -> {
+                if (expression instanceof ContractVariable variable) {
+                    occurrences.computeIfAbsent(variable.index(), ignored -> new ArrayList<>()).add(variable.span());
+                }
+            });
+        }
+    }
+
+    private static void addOccurrence(String spelling, SourceSpan span,
+                                      java.util.Map<Integer, List<SourceSpan>> occurrences) {
+        try {
+            int index = Integer.parseInt(spelling.substring(1));
+            occurrences.computeIfAbsent(index, ignored -> new ArrayList<>()).add(span);
+        } catch (NumberFormatException tooLarge) {
+            throw invalidContractVariable("Contract variable index is too large", span, List.of());
+        }
+    }
+
+    private static boolean isContractVariable(String name) { return name.matches("_[1-9][0-9]*"); }
+
+    private static LangException invalidContractVariable(String message, SourceSpan span,
+                                                          List<Diagnostic.Related> related) {
+        return new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, message, span, related));
     }
 
     private void resolveName(Name name, Scope scope, boolean functionBody, boolean deferred) {

@@ -11,3 +11,12 @@ print NumberTransform double
 print BroadTransform double
 print LooseResult double
 print apply double 21
+
+(_1) choose (_1) left (_1) right = left
+numberChoice = choose 1
+holeChoice = choose _ 2
+
+print numberChoice 2
+print holeChoice 1
+print (seqGet (seqGet (@choose).signature.parameters 0).requirements 0).index
+print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).name
