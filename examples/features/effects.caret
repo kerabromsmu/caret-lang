@@ -10,3 +10,9 @@ print (@EffectfulNumber).name
 print EffectfulNumber noisy
 print noisy 3
 print copy 2
+
+noisySignature = (@noisy).signature
+print seqSize noisySignature.result.declared
+print (seqGet noisySignature.result.declared 0).name
+print seqSize noisySignature.effects.declared
+print (seqGet noisySignature.effects.declared 0).name

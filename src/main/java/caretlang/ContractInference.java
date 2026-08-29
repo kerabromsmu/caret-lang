@@ -400,8 +400,9 @@ final class ContractInference {
 
     private EnumSet<BuiltinContract> clause(ContractClause clause) {
         EnumSet<BuiltinContract> result = EnumSet.noneOf(BuiltinContract.class);
-        if (clause != null) {
-            for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        if (analyzed != null) {
+            for (Resolution.ContractBinding reference : analyzed.valueRequirements()) {
                 BuiltinContract builtin = BuiltinContract.named(reference.name()).orElse(null);
                 if (builtin == null || builtin == BuiltinContract.ANY) continue;
                 result.add(builtin);
@@ -684,7 +685,9 @@ final class ContractInference {
 
     private void validateClause(ContractClause clause, Map<Integer, FunctionDef> functions,
                                 Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
-        for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        if (analyzed == null) return;
+        for (Resolution.ContractBinding reference : analyzed.valueRequirements()) {
             Resolution.Binding binding = reference.binding();
             if (binding == null) continue;
             if (binding.refinementEligible() != null) {

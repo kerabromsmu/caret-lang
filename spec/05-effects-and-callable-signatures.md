@@ -242,6 +242,11 @@ it must not encode a silent contract-first or effect-first precedence. Callable 
 metadata is independent: an assignment such as `(pure Int) callback = value` constrains `callback`
 itself to satisfy `Int`, not the result of calling it.
 
+Implementation status: the prototype classifies every declaration clause once into this analyzed
+form. Contract inference, overload dispatch, runtime boundary validation, effect constraints, and
+callable-signature metadata consume that shared result; raw effect terms never appear as reflected
+parameter or result requirements.
+
 <a id="callable-signature-metadata"></a>
 ## Callable signature metadata
 

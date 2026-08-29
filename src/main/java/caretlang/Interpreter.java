@@ -350,7 +350,7 @@ final class Interpreter {
 
     private boolean matches(ContractClause clause, Value.Argument argument, int position,
                             Map<ApplicabilityKey, Boolean> cache, Environment env, Resolution resolution) {
-        for (Resolution.ContractBinding binding : resolution.contracts(clause)) {
+        for (Resolution.ContractBinding binding : valueRequirements(resolution.clause(clause))) {
             Object requirement = resolveRequirement(binding, env, resolution);
             ApplicabilityKey key = new ApplicabilityKey(requirement, position);
             Boolean accepted = cache.get(key);
@@ -415,8 +415,10 @@ final class Interpreter {
 
     private boolean clauseImplies(ContractClause left, ContractClause right, Environment env,
                                   Resolution resolution) {
-        List<Object> l = resolution.contracts(left).stream().map(binding -> resolveRequirement(binding, env, resolution)).toList();
-        List<Object> r = resolution.contracts(right).stream().map(binding -> resolveRequirement(binding, env, resolution)).toList();
+        List<Object> l = valueRequirements(resolution.clause(left)).stream()
+                .map(binding -> resolveRequirement(binding, env, resolution)).toList();
+        List<Object> r = valueRequirements(resolution.clause(right)).stream()
+                .map(binding -> resolveRequirement(binding, env, resolution)).toList();
         if (r.isEmpty()) return true;
         if (l.isEmpty()) return false;
         return r.stream().allMatch(required -> l.stream().anyMatch(candidate -> requirementImplies(candidate, required)));
@@ -451,7 +453,8 @@ final class Interpreter {
                                    Resolution resolution, Environment contractEnvironment, String subject,
                                    boolean constrainCallableEffects) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
-        for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        for (Resolution.ContractBinding reference : valueRequirements(analyzed)) {
             if (isContractVariable(reference.name())) continue;
             Value resolved = reference.inline() == null
                     ? underlying(reference.binding() == null ? globals.get(reference.name())
@@ -506,8 +509,8 @@ final class Interpreter {
                 continue;
             }
             if (contract.accepts(value)) continue;
-            List<Diagnostic.Related> related = clause == null ? List.of()
-                    : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), clause.span()));
+            List<Diagnostic.Related> related = analyzed == null ? List.of()
+                    : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), analyzed.span()));
             throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
                     Diagnostic.Codes.CONTRACT_VIOLATION,
                     "Contract violation for " + subject + ": expected " + contract.publicName()
@@ -550,6 +553,10 @@ final class Interpreter {
                     "Callable effect allowance exceeded: " + String.join(", ", unexpected), valueSpan,
                     List.of(new Diagnostic.Related("Effect constraint declared here", analyzed.span()))));
         }
+    }
+
+    private static List<Resolution.ContractBinding> valueRequirements(Resolution.AnalyzedClause clause) {
+        return clause == null ? List.of() : clause.valueRequirements();
     }
 
     private ContractDescriptor resolveContractDescriptor(Resolution.ContractBinding reference,

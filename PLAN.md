@@ -119,8 +119,8 @@ survivor signatures with conservative summaries.
   callable contracts without changing collection or lambda parsing. Support exact nullary and
   multi-parameter arity, conjunctive parameter positions, mixed result/effect clauses, nesting, and
   declaration-wide numbered contract variables with source spans.
-- Replace contract-only semantic handling of declaration clauses with an analyzed split between
-  conjunctive value requirements and an optional effect allowance, preserving source spans and the
+- Preserve the implemented single analyzed representation of declaration clauses, split between
+  conjunctive value requirements and an optional effect allowance with source spans and
   position-specific function, parameter, and assignment meanings.
 - Preserve implemented prefix symbolic calls (`+ 2 3`), prefix named calls, and fixed-precedence
   infix binary calls (`2 add 3`), including the expression-start classification rule.

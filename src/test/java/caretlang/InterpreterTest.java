@@ -102,6 +102,26 @@ final class InterpreterTest {
     }
 
     @Test
+    void callableMetadataUsesAnalyzedValueRequirementsInsteadOfRawEffectTerms() {
+        assertEquals("1\nNumber\n1\nOutput\n1\nNumber\n0\n", execute("""
+                (Output Number) noisy (Number) value =
+                  print value
+                  value
+                (Number pure) quiet (Number) value = value
+
+                noisySignature = (@noisy).signature
+                quietSignature = (@quiet).signature
+                print seqSize noisySignature.result.declared
+                print (seqGet noisySignature.result.declared 0).name
+                print seqSize noisySignature.effects.declared
+                print (seqGet noisySignature.effects.declared 0).name
+                print seqSize quietSignature.result.declared
+                print (seqGet quietSignature.result.declared 0).name
+                print seqSize quietSignature.effects.declared
+                """));
+    }
+
+    @Test
     void arrowContractVariablesAreContiguousAndRequireGenericRelationships() {
         assertEquals("true\nfalse\n", execute("""
                 identity value = value

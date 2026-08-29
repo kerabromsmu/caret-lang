@@ -30,7 +30,6 @@ final class Resolution {
     }
 
     private final IdentityHashMap<Name, Binding> names;
-    private final IdentityHashMap<ContractClause, java.util.List<ContractBinding>> contracts;
     private final IdentityHashMap<ContractClause, AnalyzedClause> clauses;
     private final IdentityHashMap<AmbiguousCall, CallMode> calls;
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines;
@@ -38,14 +37,12 @@ final class Resolution {
     private final java.util.Map<SourceSpan, Integer> declarations;
 
     Resolution(IdentityHashMap<Name, Binding> names,
-               IdentityHashMap<ContractClause, java.util.List<ContractBinding>> contracts,
                IdentityHashMap<ContractClause, AnalyzedClause> clauses,
                IdentityHashMap<AmbiguousCall, CallMode> calls,
                IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines,
                IdentityHashMap<FunctionDef, List<Upvalue>> upvalues,
                java.util.Map<SourceSpan, Integer> declarations) {
         this.names = new IdentityHashMap<>(names);
-        this.contracts = new IdentityHashMap<>(contracts);
         this.clauses = new IdentityHashMap<>(clauses);
         this.calls = new IdentityHashMap<>(calls);
         this.builtinPrintLines = new IdentityHashMap<>(builtinPrintLines);
@@ -56,10 +53,6 @@ final class Resolution {
 
     Binding binding(Name name) {
         return names.get(name);
-    }
-
-    java.util.List<ContractBinding> contracts(ContractClause clause) {
-        return clause == null ? java.util.List.of() : contracts.getOrDefault(clause, java.util.List.of());
     }
 
     AnalyzedClause clause(ContractClause clause) {

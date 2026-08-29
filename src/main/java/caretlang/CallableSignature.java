@@ -1,7 +1,5 @@
 package caretlang;
 
-import caretlang.Ast.ContractClause;
-import caretlang.Ast.ContractName;
 import caretlang.Ast.FunctionDef;
 
 import java.util.ArrayList;
@@ -98,12 +96,12 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         ContractInference.EffectSummary effectFacts = inference.effects(function);
         ArrayList<Parameter> parameters = new ArrayList<>();
         for (int index = 0; index < function.params().size(); index++) {
-            List<ContractTerm> declared = terms(function.params().get(index).contracts());
+            List<ContractTerm> declared = terms(resolution.clause(function.params().get(index).contracts()));
             List<ContractTerm> inferred = facts == null ? List.of() : sorted(facts.parameterRequirements().get(index));
             parameters.add(new Parameter(function.params().get(index).name(), union(declared, inferred),
                     function.params().get(index).contracts() == null ? null : declared, inferred));
         }
-        List<ContractTerm> declaredResult = terms(function.resultContracts());
+        List<ContractTerm> declaredResult = terms(resolution.clause(function.resultContracts()));
         List<ContractTerm> inferredResult = facts == null ? List.of() : sorted(facts.resultGuarantees());
         ArrayList<Variable> variables = new ArrayList<>();
         if (facts != null && facts.resultParameter() != null) {
@@ -115,7 +113,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                     union(parameter.inferred(), List.of(new VariableRef(0)))));
             variables.add(new Variable(0, parameter.requirements()));
         }
-        for (int variable : headerVariables(function)) {
+        for (int variable : headerVariables(function, resolution)) {
             if (variables.stream().noneMatch(existing -> existing.index() == variable)) {
                 variables.add(new Variable(variable, variableRequirements(variable, parameters, declaredResult)));
             }
@@ -336,11 +334,12 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         return candidates.stream().filter(variable -> used.contains(variable.index)).toList();
     }
 
-    private static List<ContractTerm> terms(ContractClause clause) {
-        return clause == null ? List.of() : clause.names().stream().map(CallableSignature::term).toList();
+    private static List<ContractTerm> terms(Resolution.AnalyzedClause clause) {
+        return clause == null ? List.of()
+                : clause.valueRequirements().stream().map(CallableSignature::term).toList();
     }
 
-    private static ContractTerm term(ContractName contract) {
+    private static ContractTerm term(Resolution.ContractBinding contract) {
         ContractTerm base;
         if (contract.inline() instanceof Ast.ArrowContract arrow) base = arrowTerm(arrow);
         else if (contract.name().matches("_[1-9][0-9]*")) {
@@ -403,10 +402,11 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     private static <T> List<T> copy(List<T> values) { return List.copyOf(values); }
     private static <T> List<T> nullableCopy(List<T> values) { return values == null ? null : List.copyOf(values); }
 
-    private static List<Integer> headerVariables(FunctionDef function) {
+    private static List<Integer> headerVariables(FunctionDef function, Resolution resolution) {
         java.util.TreeSet<Integer> variables = new java.util.TreeSet<>();
-        collectVariables(terms(function.resultContracts()), variables);
-        function.params().forEach(parameter -> collectVariables(terms(parameter.contracts()), variables));
+        collectVariables(terms(resolution.clause(function.resultContracts())), variables);
+        function.params().forEach(parameter ->
+                collectVariables(terms(resolution.clause(parameter.contracts())), variables));
         return List.copyOf(variables);
     }
 

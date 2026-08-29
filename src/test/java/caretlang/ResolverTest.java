@@ -13,7 +13,7 @@ final class ResolverTest {
         List<Stmt> program = new Parser("identity (Any) value = value").parseProgram();
         FunctionDef function = assertInstanceOf(FunctionDef.class, program.getFirst());
         Resolution resolution = Resolver.resolve(program, new Environment(null));
-        assertEquals(List.of("Any"), resolution.contracts(function.params().getFirst().contracts())
+        assertEquals(List.of("Any"), resolution.clause(function.params().getFirst().contracts()).valueRequirements()
                 .stream().map(Resolution.ContractBinding::name).toList());
 
         LangException unknown = assertThrows(LangException.class, () -> Resolver.resolve(
@@ -21,6 +21,25 @@ final class ResolverTest {
         assertEquals(Diagnostic.Phase.SEMANTIC, unknown.diagnostic().phase());
         assertEquals(Diagnostic.Codes.UNKNOWN_CONTRACT, unknown.diagnostic().code());
         assertEquals(11, unknown.span().start().column());
+    }
+
+    @Test
+    void recordsOneNormalizedAnalyzedRepresentationForMixedClauses() {
+        List<Stmt> program = new Parser("(Output Number Output) noisy (pure) callback = callback").parseProgram();
+        FunctionDef function = assertInstanceOf(FunctionDef.class, program.getFirst());
+        Resolution resolution = Resolver.resolve(program, new Environment(null));
+
+        Resolution.AnalyzedClause result = resolution.clause(function.resultContracts());
+        assertEquals(List.of("Number"), result.valueRequirements().stream()
+                .map(Resolution.ContractBinding::name).toList());
+        assertEquals(List.of("Output"), result.effectAllowance().stream()
+                .map(EffectDescriptor::canonicalName).toList());
+        assertEquals(function.resultContracts().span(), result.span());
+
+        Resolution.AnalyzedClause parameter = resolution.clause(function.params().getFirst().contracts());
+        assertTrue(parameter.valueRequirements().isEmpty());
+        assertEquals(List.of(), parameter.effectAllowance());
+        assertEquals(function.params().getFirst().contracts().span(), parameter.span());
     }
 
     @Test

@@ -276,6 +276,11 @@ Explicit effect allowances and declaration-wide variables are also supported:
   transform value
 ```
 
+Named declarations use the same mixed-clause model. In `(Output Number) noisy ...`, `Number`
+constrains the result while `Output` is the callable's effect allowance. The analyzer classifies the
+clause once, so callable reflection reports `Number` only as a result requirement and `Output` only
+as an effect; source order does not change that meaning.
+
 The prototype implements the runtime `map transform values` operation for Sequences and current
 named, partial, and composed callable values. Declaration-wide variable schemes retain their
 substitutions through prefix and hole partials; lambdas and precise transform-effect propagation

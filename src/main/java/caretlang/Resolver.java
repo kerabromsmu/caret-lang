@@ -52,7 +52,6 @@ final class Resolver {
     }
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
-    private final IdentityHashMap<Ast.ContractClause, List<Resolution.ContractBinding>> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.ContractClause, Resolution.AnalyzedClause> clauses = new IdentityHashMap<>();
     private final EffectCatalog effectCatalog;
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
@@ -84,7 +83,7 @@ final class Resolver {
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names, resolver.contracts, resolver.clauses, resolver.calls,
+        return new Resolution(resolver.names, resolver.clauses, resolver.calls,
                 resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.declarations);
     }
 
@@ -192,7 +191,9 @@ final class Resolver {
 
     private String domainKey(Ast.ContractClause clause) {
         if (clause == null) return "Any";
-        List<String> keys = contracts.getOrDefault(clause, List.of()).stream()
+        Resolution.AnalyzedClause analyzed = clauses.get(clause);
+        List<String> keys = (analyzed == null ? List.<Resolution.ContractBinding>of()
+                : analyzed.valueRequirements()).stream()
                 .filter(binding -> !isAny(binding)).map(this::contractKey)
                 .distinct().sorted(Comparator.naturalOrder()).toList();
         return keys.isEmpty() ? "Any" : String.join("&", keys);
@@ -304,7 +305,6 @@ final class Resolver {
             }
             resolved.add(binding);
         }
-        contracts.put(clause, List.copyOf(resolved));
         clauses.put(clause, new Resolution.AnalyzedClause(List.copyOf(resolved),
                 pure != null || !effects.isEmpty() ? List.copyOf(effects) : null, clause.span()));
     }
@@ -538,8 +538,8 @@ final class Resolver {
     private void validateContractVariables(ArrowContract arrow) {
         java.util.TreeMap<Integer, List<SourceSpan>> occurrences = new java.util.TreeMap<>();
         AstTraversal.walkPreOrder(arrow, expression -> {
-            if (expression instanceof ContractVariable variable) {
-                occurrences.computeIfAbsent(variable.index(), ignored -> new ArrayList<>()).add(variable.span());
+            if (expression instanceof ContractVariable(int index, SourceSpan span)) {
+                occurrences.computeIfAbsent(index, ignored -> new ArrayList<>()).add(span);
             }
         });
         if (occurrences.isEmpty()) return;
@@ -629,8 +629,8 @@ final class Resolver {
         if (name.inline() instanceof ArrowContract arrow) {
             headerArrows.add(arrow);
             AstTraversal.walkPreOrder(arrow, expression -> {
-                if (expression instanceof ContractVariable variable) {
-                    occurrences.computeIfAbsent(variable.index(), ignored -> new ArrayList<>()).add(variable.span());
+                if (expression instanceof ContractVariable(int index, SourceSpan span)) {
+                    occurrences.computeIfAbsent(index, ignored -> new ArrayList<>()).add(span);
                 }
             });
         }
