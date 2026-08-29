@@ -465,14 +465,22 @@ declaration is the public interface. When an inferred component is itself the un
 interface, that component remains visible. The effective requirement, guarantee, and upper-bound
 fields always contain exactly the facts on which code in the current environment may rely.
 
+Callable metadata Collections are projected lazily when their fields are observed. Projection uses
+the intersection of the visibility captured when reflection occurred and the current observer's
+environment, so moving metadata can preserve or reduce visibility but can never amplify it. This
+rule applies recursively to nested signature and descriptor Collections, enumeration, rendering,
+equality, and dereference. The observation context and projection mechanism are interpreter/compiler
+state and are not Caret values or reflective fields.
+
 An overload's top-level `signature` is its conservative summary. Its parameter requirements are
 `~` while several alternative domains survive; applicability consumers inspect `variants` rather
 than treating those alternatives as a conjunction. Common result guarantees and the unioned effect
 bound remain available. When narrowing leaves one variant, the summary is that specialized exact
 signature, while `variants` continues to identify the surviving overload variant.
 
-Function metadata dictionaries compare structurally like other dictionaries. Signature,
-parameter, result, effect-summary, and variable metadata compare structurally after canonical
+Function metadata references compare by their underlying callable target, so aliases of one target
+remain equal while distinct callables do not collapse after names are hidden. Signature, parameter,
+result, effect-summary, and variable metadata compare structurally after canonical
 variable numbering. `ContractRef` and `Effect` values compare by their underlying descriptor
 identity. Dereferencing returns the original callable; reflecting the metadata itself describes
 that Dictionary. A newly narrowed partial has a new callable identity and immutable metadata view.
@@ -481,6 +489,11 @@ Callable reflection never exposes capture names or values, bound partial values,
 kind, source spans, native origin, Java objects, or capability handles. Authorized semantic-code
 reflection is the separate mechanism for inspecting code and still obeys module, sandbox, and
 authority visibility.
+
+Implementation status: lazy non-amplifying projection, descriptor identity, aliases, derived
+callables, overload survivors, and opaque authorized dereference are implemented through an
+internal observation-context seam. The later module and sandbox runtimes will supply their concrete
+contexts to this seam; no module or sandbox handle is exposed to Caret.
 
 <a id="partial-and-composed-signatures"></a>
 ### Partial and composed signatures

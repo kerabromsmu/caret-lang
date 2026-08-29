@@ -74,7 +74,8 @@ final class ArrowContractDescriptor implements ContractDescriptor {
         if (signature.effects().upperBound() == null) return false;
         Set<String> allowance = effects.stream().map(EffectDescriptor::canonicalName)
                 .collect(java.util.stream.Collectors.toSet());
-        if (!allowance.containsAll(signature.effects().upperBound())) return false;
+        if (!allowance.containsAll(signature.effects().upperBound().stream()
+                .map(CallableSignature.EffectRef::name).toList())) return false;
         List<CallableSignature.ContractTerm> guarantees = signature.result().guarantees();
         return guarantees.stream().anyMatch(candidate -> nameImplies(candidate.render(), result.publicName()));
     }

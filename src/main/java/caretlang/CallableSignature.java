@@ -17,8 +17,12 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     public sealed interface ContractTerm permits NamedRef, VariableRef, AppliedRef, ModifiedRef, ArrowRef {
         String render();
     }
-    public record NamedRef(String name) implements ContractTerm {
+    public record NamedRef(Object identity, String name) implements ContractTerm {
+        public NamedRef(String name) { this(BuiltinContract.named(name).<Object>map(value -> value).orElse(name), name); }
         @Override public String render() { return name; }
+    }
+    public record EffectRef(Object identity, String name) {
+        public EffectRef(String name) { this(effectIdentity(name), name); }
     }
     /** Canonical zero-based scheme-local variable reference. */
     public record VariableRef(int index) implements ContractTerm {
@@ -62,7 +66,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         }
     }
 
-    public record Effects(List<String> upperBound, List<String> declared, List<String> inferred) {
+    public record Effects(List<EffectRef> upperBound, List<EffectRef> declared, List<EffectRef> inferred) {
         public Effects {
             upperBound = nullableCopy(upperBound);
             declared = nullableCopy(declared);
@@ -88,7 +92,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     static CallableSignature builtin(List<String> names, List<String> effects) {
         return new CallableSignature(names.stream()
                 .map(name -> new Parameter(name, List.of(), null, null)).toList(),
-                new Result(List.of(), null, null), new Effects(effects, null, effects), List.of());
+                new Result(List.of(), null, null), new Effects(effectRefs(effects), null, effectRefs(effects)), List.of());
     }
 
     static CallableSignature inferred(FunctionDef function, ContractInference inference, Resolution resolution) {
@@ -96,12 +100,12 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         ContractInference.EffectSummary effectFacts = inference.effects(function);
         ArrayList<Parameter> parameters = new ArrayList<>();
         for (int index = 0; index < function.params().size(); index++) {
-            List<ContractTerm> declared = terms(resolution.clause(function.params().get(index).contracts()));
+            List<ContractTerm> declared = terms(resolution.clause(function.params().get(index).contracts()), resolution);
             List<ContractTerm> inferred = facts == null ? List.of() : sorted(facts.parameterRequirements().get(index));
             parameters.add(new Parameter(function.params().get(index).name(), union(declared, inferred),
                     function.params().get(index).contracts() == null ? null : declared, inferred));
         }
-        List<ContractTerm> declaredResult = terms(resolution.clause(function.resultContracts()));
+        List<ContractTerm> declaredResult = terms(resolution.clause(function.resultContracts()), resolution);
         List<ContractTerm> inferredResult = facts == null ? List.of() : sorted(facts.resultGuarantees());
         ArrayList<Variable> variables = new ArrayList<>();
         if (facts != null && facts.resultParameter() != null) {
@@ -118,11 +122,14 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                 variables.add(new Variable(variable, variableRequirements(variable, parameters, declaredResult)));
             }
         }
-        List<String> effects = effectFacts == null || effectFacts.unknownDynamicCall() ? null
-                : effectFacts.effects().stream().map(CallableSignature::effectName).sorted().toList();
+        List<EffectRef> effects = effectFacts == null || effectFacts.unknownDynamicCall() ? null
+                : effectFacts.effects().stream().map(CallableSignature::effect).sorted(
+                        java.util.Comparator.comparing(EffectRef::name)).toList();
         Resolution.AnalyzedClause analyzed = resolution.clause(function.resultContracts());
-        List<String> declaredEffects = analyzed == null || analyzed.effectAllowance() == null
-                ? List.of() : analyzed.effectAllowance().stream().map(EffectDescriptor::canonicalName).sorted().toList();
+        List<EffectRef> declaredEffects = analyzed == null || analyzed.effectAllowance() == null
+                ? List.of() : analyzed.effectAllowance().stream().map(descriptor ->
+                        new EffectRef(descriptor, descriptor.canonicalName())).sorted(
+                        java.util.Comparator.comparing(EffectRef::name)).toList();
         return new CallableSignature(parameters,
                 new Result(union(declaredResult, inferredResult),
                         function.resultContracts() == null ? null : declaredResult, inferredResult),
@@ -199,9 +206,9 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     }
 
     private static Effects unionEffects(Effects left, Effects right) {
-        List<String> upper = left.upperBound == null || right.upperBound == null
+        List<EffectRef> upper = left.upperBound == null || right.upperBound == null
                 ? null : union(left.upperBound, right.upperBound);
-        List<String> inferred = left.inferred == null || right.inferred == null
+        List<EffectRef> inferred = left.inferred == null || right.inferred == null
                 ? null : union(left.inferred, right.inferred);
         return new Effects(upper, null, inferred);
     }
@@ -283,7 +290,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
             return Compatibility.COMPATIBLE;
         }
         if (substitutedSupplied.equals(substitutedRequired)
-                || substitutedRequired instanceof NamedRef(String name) && name.equals("Any")) {
+                || substitutedRequired instanceof NamedRef(Object ignored, String name) && name.equals("Any")) {
             return Compatibility.COMPATIBLE;
         }
         switch (substitutedSupplied) {
@@ -310,7 +317,9 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                 }
                 return unifyBridge(left.base, base, substitutions);
             }
-            case NamedRef(String left) when substitutedRequired instanceof NamedRef(String right) -> {
+            case NamedRef(Object leftIdentity, String left) when substitutedRequired instanceof NamedRef(
+                    Object rightIdentity, String right) -> {
+                if (leftIdentity == rightIdentity) return Compatibility.COMPATIBLE;
                 if (knownDisjoint(left, right)) return Compatibility.INCOMPATIBLE;
                 return Compatibility.UNKNOWN;
             }
@@ -334,48 +343,55 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         return candidates.stream().filter(variable -> used.contains(variable.index)).toList();
     }
 
-    private static List<ContractTerm> terms(Resolution.AnalyzedClause clause) {
+    private static List<ContractTerm> terms(Resolution.AnalyzedClause clause, Resolution resolution) {
         return clause == null ? List.of()
-                : clause.valueRequirements().stream().map(CallableSignature::term).toList();
+                : clause.valueRequirements().stream().map(contract -> term(contract, resolution)).toList();
     }
 
-    private static ContractTerm term(Resolution.ContractBinding contract) {
+    private static ContractTerm term(Resolution.ContractBinding contract, Resolution resolution) {
         ContractTerm base;
-        if (contract.inline() instanceof Ast.ArrowContract arrow) base = arrowTerm(arrow);
+        if (contract.inline() instanceof Ast.ArrowContract arrow) base = arrowTerm(arrow, resolution);
         else if (contract.name().matches("_[1-9][0-9]*")) {
             base = new VariableRef(Integer.parseInt(contract.name().substring(1)) - 1);
         } else {
-            base = new NamedRef(contract.name());
+            base = new NamedRef(contractIdentity(contract), contract.name());
             if (!contract.arguments().isEmpty()) {
-                base = new AppliedRef(base, contract.arguments().stream().map(CallableSignature::term).toList());
+                base = new AppliedRef(base, contract.arguments().stream()
+                        .map(argument -> term(argument, resolution)).toList());
             }
         }
         return contract.nullable() || contract.optional()
                 ? new ModifiedRef(base, contract.nullable(), contract.optional()) : base;
     }
 
-    private static ContractTerm arrowTerm(Ast.ArrowContract arrow) {
+    private static ContractTerm arrowTerm(Ast.ArrowContract arrow, Resolution resolution) {
         return new ArrowRef(arrow.parameters().stream().map(parameter -> parameter.stream()
-                .map(CallableSignature::expressionTerm).toList()).toList(), expressionTerm(arrow.result()));
+                .map(expression -> expressionTerm(expression, resolution)).toList()).toList(),
+                expressionTerm(arrow.result(), resolution));
     }
 
-    private static ContractTerm expressionTerm(Ast.Expr expression) {
+    private static ContractTerm expressionTerm(Ast.Expr expression, Resolution resolution) {
         return switch (expression) {
             case Ast.ContractVariable variable -> new VariableRef(variable.index() - 1);
-            case Ast.Name name -> new NamedRef(name.name());
+            case Ast.Name name -> {
+                Resolution.Binding binding = resolution.binding(name);
+                Object identity = BuiltinContract.named(name.name()).<Object>map(value -> value)
+                        .orElse(binding == null ? name.name() : binding);
+                yield new NamedRef(identity, name.name());
+            }
             case Ast.Apply apply -> {
                 ArrayList<ContractTerm> arguments = new ArrayList<>();
                 Ast.Expr target = apply;
                 while (target instanceof Ast.Apply application) {
-                    arguments.addFirst(expressionTerm(application.argument()));
+                    arguments.addFirst(expressionTerm(application.argument(), resolution));
                     target = application.function();
                 }
-                yield new AppliedRef(expressionTerm(target), arguments);
+                yield new AppliedRef(expressionTerm(target, resolution), arguments);
             }
-            case Ast.ContractModifier modifier -> new ModifiedRef(expressionTerm(modifier.target()),
+            case Ast.ContractModifier modifier -> new ModifiedRef(expressionTerm(modifier.target(), resolution),
                     modifier.nullable(), modifier.optional());
-            case Ast.ArrowContract arrow -> arrowTerm(arrow);
-            case Ast.Group group -> expressionTerm(group.expression());
+            case Ast.ArrowContract arrow -> arrowTerm(arrow, resolution);
+            case Ast.Group group -> expressionTerm(group.expression(), resolution);
             default -> new NamedRef(expression.toString());
         };
     }
@@ -386,11 +402,30 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         return result.stream().sorted(java.util.Comparator.comparing(ContractTerm::render)).toList();
     }
 
-    private static String effectName(ContractInference.BuiltinEffect effect) {
+    private static EffectRef effect(ContractInference.BuiltinEffect effect) {
         return switch (effect) {
-            case OUTPUT -> "Output";
-            case TEST_REPORT -> "TestReport";
+            case OUTPUT -> new EffectRef(EffectCatalog.OUTPUT, "Output");
+            case TEST_REPORT -> new EffectRef(EffectCatalog.TEST_REPORT, "TestReport");
         };
+    }
+
+    private static Object contractIdentity(Resolution.ContractBinding contract) {
+        return BuiltinContract.named(contract.name()).<Object>map(value -> value)
+                .orElseGet(() -> contract.binding() == null ? contract.name() : contract.binding());
+    }
+
+    private static Object effectIdentity(String name) {
+        return switch (name) {
+            case "Output" -> EffectCatalog.OUTPUT;
+            case "StateRead" -> EffectCatalog.STATE_READ;
+            case "StateWrite" -> EffectCatalog.STATE_WRITE;
+            case "TestReport" -> EffectCatalog.TEST_REPORT;
+            default -> name;
+        };
+    }
+
+    private static List<EffectRef> effectRefs(List<String> names) {
+        return names.stream().map(EffectRef::new).toList();
     }
 
     private static <T> List<T> union(List<T> left, List<T> right) {
@@ -404,9 +439,9 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
 
     private static List<Integer> headerVariables(FunctionDef function, Resolution resolution) {
         java.util.TreeSet<Integer> variables = new java.util.TreeSet<>();
-        collectVariables(terms(resolution.clause(function.resultContracts())), variables);
+        collectVariables(terms(resolution.clause(function.resultContracts()), resolution), variables);
         function.params().forEach(parameter ->
-                collectVariables(terms(resolution.clause(parameter.contracts())), variables));
+                collectVariables(terms(resolution.clause(parameter.contracts()), resolution), variables));
         return List.copyOf(variables);
     }
 

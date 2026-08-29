@@ -364,12 +364,15 @@ Sequence reflection exposes its applicable collection metadata. `@function` retu
 non-callable metadata Dictionary exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
-the known invocation-effect bound. Prefix and hole partials specialize variables and project their
+the known invocation-effect bound. Metadata fields are lazily filtered for the observing execution
+environment, retain descriptor identity behind hidden names, and cannot gain visibility when moved
+between environments. The internal observation policy is not a Caret value. Prefix and hole partials specialize variables and project their
 remaining parameters; repeated holes conjoin requirements. Compositions specialize compatible
 parameter/result relationships and union known invocation effects. Narrowed overloads preserve
 every survivor signature plus a conservative summary. `type (@function)` reports `"Dictionary"`, while
 `@function.kind` reports `"Function"`. Adjacent postfix `:` restores the reflected target, as in
-`alias = @function:`. Metadata compares structurally. Reflection exposes no captures, bound arguments,
+`alias = @function:` when dereference remains authorized. Metadata preserves callable/descriptor
+identity and otherwise compares structurally. Reflection exposes no captures, bound arguments,
 Java implementation objects, or callable capability, and does not invoke a reflected function.
 
 ## License

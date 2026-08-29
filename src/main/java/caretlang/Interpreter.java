@@ -11,6 +11,7 @@ final class Interpreter {
     private final CallableDispatcher calls = new CallableDispatcher();
     private ContractInference inference;
     private final EffectCatalog effectCatalog;
+    private ReflectionContext reflectionContext = ReflectionContext.defining();
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
 
@@ -23,6 +24,10 @@ final class Interpreter {
         this.effectCatalog = EffectCatalog.standard(testReporter != null);
         installBuiltins();
         if (testReporter != null) installTestBuiltins(testReporter);
+    }
+
+    void reflectionContext(ReflectionContext context) {
+        this.reflectionContext = Objects.requireNonNull(context);
     }
 
     void execute(List<Stmt> program) {
@@ -102,13 +107,13 @@ final class Interpreter {
         for (Expr child : AstTraversal.children(expression)) {
             validateCompositionCompatibility(child, resolution, signatures);
         }
-        if (!(expression instanceof Compose compose)) return;
-        CallableSignature left = knownSignature(compose.left(), resolution, signatures);
-        CallableSignature right = knownSignature(compose.right(), resolution, signatures);
+        if (!(expression instanceof Compose(Expr left1, Expr right1, SourceSpan span))) return;
+        CallableSignature left = knownSignature(left1, resolution, signatures);
+        CallableSignature right = knownSignature(right1, resolution, signatures);
         if (left == null || right == null || right.parameters().size() != 1) return;
         CallableSignature.Composition composition = CallableSignature.compose(left, right);
         if (composition.compatibility() == CallableSignature.Compatibility.INCOMPATIBLE) {
-            throw incompatibleComposition(compose.span(), compose.left().span(), compose.right().span());
+            throw incompatibleComposition(span, left1.span(), right1.span());
         }
     }
 
@@ -536,7 +541,9 @@ final class Interpreter {
                     "Effect constraint requires a callable value", valueSpan,
                     List.of(new Diagnostic.Related("Effect constraint declared here", analyzed.span()))));
         }
-        List<String> upper = callable.signature().effects().upperBound();
+        List<String> upper = callable.signature().effects().upperBound() == null ? null
+                : callable.signature().effects().upperBound().stream()
+                .map(CallableSignature.EffectRef::name).toList();
         if (upper == null) {
             throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
                     Diagnostic.Codes.UNKNOWN_CALL_EFFECTS,
@@ -847,6 +854,10 @@ final class Interpreter {
         }
         if (expr instanceof Dereference(Expr target, SourceSpan ignored)) {
             Value reference = underlying(evalInner(target, env, resolution));
+            if (reference instanceof Value.ProjectedDictionary dictionary) {
+                Optional<Value> reflected = dictionary.reflectedTarget(reflectionContext);
+                if (reflected.isPresent()) return reflected.get();
+            }
             if (reference instanceof Value.Dictionary dictionary) {
                 Optional<Value> reflected = dictionary.reflectedTarget();
                 if (reflected.isPresent()) return reflected.get();
@@ -1029,8 +1040,8 @@ final class Interpreter {
             case ">=" -> new Value.Bool(number(leftArgument) >= number(rightArgument));
             case "<" -> new Value.Bool(number(leftArgument) < number(rightArgument));
             case "<=" -> new Value.Bool(number(leftArgument) <= number(rightArgument));
-            case "==" -> new Value.Bool(ValueSemantics.equal(left, right));
-            case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right));
+            case "==" -> new Value.Bool(ValueSemantics.equal(left, right, reflectionContext));
+            case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right, reflectionContext));
             default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
         };
     }
@@ -1113,7 +1124,7 @@ final class Interpreter {
         }
 
         globals.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {
-            output.println(args.getFirst().value());
+            output.println(ValueSemantics.render(args.getFirst().value(), null, reflectionContext));
             return args.getFirst().value();
         }, false, CallableSignature.builtin(List.of("value"), List.of("Output"))));
 
@@ -1135,7 +1146,7 @@ final class Interpreter {
                             "toString specialization must return a String", span);
                 }
                 return value1;
-            }));
+            }, reflectionContext));
         }));
 
         globals.define("textSize", locatedFunction("textSize", List.of("text"), (args, ignored) -> {
@@ -1231,7 +1242,8 @@ final class Interpreter {
                     String name = text(args.get(0));
                     Value actual = args.get(1).value();
                     Value expected = args.get(2).value();
-                    reporter.record(name, actual, expected, ValueSemantics.equal(actual, expected), span);
+                    reporter.record(name, actual, expected,
+                            ValueSemantics.equal(actual, expected, reflectionContext), span);
                     return Value.Missing.INSTANCE;
                 }, false, CallableSignature.builtin(
                         List.of("name", "actual", "expected"), List.of("TestReport"))));
@@ -1273,6 +1285,9 @@ final class Interpreter {
         Value raw = underlying(argument.value());
         if (raw instanceof Value.EmptyCollection) return new Value.Dictionary(Map.of());
         if (raw instanceof Value.Dictionary dictionary) return dictionary;
+        if (raw instanceof Value.ProjectedDictionary dictionary) {
+            return new Value.Dictionary(dictionary.fields(reflectionContext));
+        }
         throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
                 "Expected dictionary, got: " + argument.value(), argument.span());
     }
@@ -1305,10 +1320,12 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.INVALID_FIELD_TARGET,
                     "Field access requires a named collection or reflective value, got: " + target);
         }
-        Optional<Value> value = reflective.find(name);
+        Optional<Value> value = reflective instanceof Value.ProjectedDictionary projected
+                ? projected.find(name, reflectionContext) : reflective.find(name);
         if (value.isPresent()) return value.get();
         if (optional) return Value.Missing.INSTANCE;
-        if (target instanceof Value.Dictionary || target instanceof Value.EmptyCollection) {
+        if (target instanceof Value.Dictionary || target instanceof Value.ProjectedDictionary
+                || target instanceof Value.EmptyCollection) {
             throw runtime(Diagnostic.Codes.MISSING_FIELD, "Collection has no field: " + name);
         }
         throw runtime(Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: " + name);
@@ -1316,10 +1333,10 @@ final class Interpreter {
 
     private Value reflect(Value value) {
         Value reflected = underlying(value);
-        Map<String, Value> fields = reflected instanceof Value.Callable callable
-                && !(reflected instanceof Value.Reflective)
-                ? Value.CallableMetadata.fields(callable)
-                : ValueSemantics.reflectionFields(reflected);
+        if (reflected instanceof Value.Callable callable && !(reflected instanceof Value.Reflective)) {
+            return Value.CallableMetadata.reflection(callable, reflectionContext);
+        }
+        Map<String, Value> fields = ValueSemantics.reflectionFields(reflected, reflectionContext);
         return Value.Dictionary.reflection(fields, value);
     }
 

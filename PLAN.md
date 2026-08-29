@@ -132,9 +132,10 @@ survivor signatures with conservative summaries.
   use the shared callable path.
 - Expand function reflection over the settled nested `Function`/`Signature` schema, including
   remaining parameter, result, effect, generalized-variable, and surviving-overload descriptors.
-  Apply environment-relative inferred-fact and descriptor-name filtering, preserve target-identity
-  reference equality, and expose no captures, bound values, provenance, implementation objects, or
-  authority. Keep `@function` itself non-callable.
+  Preserve environment-relative lazy inferred-fact and descriptor-name filtering through the
+  internal non-amplifying observation-context seam, target/descriptor identity, and the prohibition
+  on exposing captures, bound values, provenance, implementation objects, or authority. Keep
+  `@function` itself non-callable.
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 

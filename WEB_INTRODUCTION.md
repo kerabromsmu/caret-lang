@@ -174,7 +174,9 @@ print (@person).names
 Reflection exposes only public or explicitly exported information. Expected failures, such as a
 missing dynamic field, can produce `~` instead of an exception. A reflected function is a
 non-callable metadata Dictionary: `type (@function)` is `"Dictionary"`, while `@function.kind` is
-`"Function"`. Adjacent postfix `:` recovers the reflected value or callable.
+`"Function"`. Its fields are computed lazily for the observing environment: hidden facts and names
+become `~`, known-empty facts remain `[]`, and moving metadata cannot increase visibility. Adjacent
+postfix `:` recovers the reflected value or callable only when that observer retains access.
 
 ## Values and collections
 
@@ -236,8 +238,10 @@ planned. Callable reflection now exposes immutable language-owned signature meta
 parameters, result facts, known invocation effects, and surviving overload variants without exposing
 captures, partial values, implementation objects, or authority. Derived metadata specializes
 generic prefix and hole partials, conjoins repeated-hole requirements, projects reordered holes,
-and carries compatible substitutions and effect unions through composition. Closed same-name
-overload sets are implemented: applicability observes existing contract
+and carries compatible substitutions and effect unions through composition. The metadata is lazily
+filtered through interpreter-owned environment state that is never exposed as a Caret value.
+Contract and effect references preserve identity even when their visible name is `~`. Closed
+same-name overload sets are implemented: applicability observes existing contract
 membership without acquiring it, and the unique most-specific applicable variant wins.
 
 ```caret

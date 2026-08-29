@@ -25,3 +25,6 @@ print (seqGet @reordered.signature.parameters 0).name
 print (seqGet @reordered.signature.parameters 1).name
 print (seqGet (seqGet @pipeline.signature.parameters 0).requirements 0).name
 print (seqGet @pipeline.signature.result.guarantees 0).name
+savedMetadata = @add
+print savedMetadata == @add
+print savedMetadata: 3 4

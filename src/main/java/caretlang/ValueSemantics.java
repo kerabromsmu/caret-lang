@@ -19,6 +19,10 @@ final class ValueSemantics {
     static String kind(Value value) { return ValueKind.of(value).publicName(); }
 
     static Map<String, Value> reflectionFields(Value value) {
+        return reflectionFields(value, ReflectionContext.defining());
+    }
+
+    static Map<String, Value> reflectionFields(Value value, ReflectionContext context) {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("kind", new Value.Str(kind(value)));
         switch (value) {
@@ -31,8 +35,15 @@ final class ValueSemantics {
                 fields.put("size", new Value.Num(dictionary.size()));
                 fields.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
             }
+            case Value.ProjectedDictionary dictionary -> {
+                Map<String, Value> projected = dictionary.fields(context);
+                fields.put("shape", new Value.Str("named"));
+                fields.put("size", new Value.Num(projected.size()));
+                fields.put("names", new Value.Str(String.join(",", projected.keySet())));
+            }
             case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
-            case Value.Reflective reflective -> fields.putAll(reflective.fields());
+            case Value.Reflective reflective -> fields.putAll(reflective instanceof Value.ProjectedDictionary projected
+                    ? projected.fields(context) : reflective.fields());
             default -> { }
         }
         return fields;
@@ -43,6 +54,10 @@ final class ValueSemantics {
     private record RenderNested(Value value, int indent, Function<Value, String> renderer) {}
 
     static boolean equal(Value left, Value right) {
+        return equal(left, right, ReflectionContext.defining());
+    }
+
+    static boolean equal(Value left, Value right, ReflectionContext context) {
         ArrayDeque<Pair> pending = new ArrayDeque<>();
         pending.push(new Pair(left, right));
         while (!pending.isEmpty()) {
@@ -53,6 +68,13 @@ final class ValueSemantics {
             if (b instanceof Value.Attributed attributed) b = attributed.value();
             if (a instanceof Value.ContractValue x && b instanceof Value.ContractValue y) {
                 if (x.descriptor() != y.descriptor()) return false;
+                continue;
+            }
+            if (a instanceof Value.ProjectedDictionary x && x.semanticIdentity() != null
+                    || b instanceof Value.ProjectedDictionary y && y.semanticIdentity() != null) {
+                if (!(a instanceof Value.ProjectedDictionary x)
+                        || !(b instanceof Value.ProjectedDictionary y)
+                        || x.semanticIdentity() != y.semanticIdentity()) return false;
                 continue;
             }
             if (a instanceof Value.Field(String key, Value value) && b instanceof Value.Field(
@@ -69,6 +91,12 @@ final class ValueSemantics {
             }
             if (a instanceof Value.Num(double x) && b instanceof Value.Num(double y)) {
                 if (x != y) return false;
+            } else if (a instanceof Value.ProjectedDictionary x && b instanceof Value.ProjectedDictionary y) {
+                if (!enqueueFields(x.fields(context), y.fields(context), pending)) return false;
+            } else if (a instanceof Value.ProjectedDictionary x && b instanceof Value.Dictionary y) {
+                if (!enqueueFields(x.fields(context), y.entries(), pending)) return false;
+            } else if (a instanceof Value.Dictionary x && b instanceof Value.ProjectedDictionary y) {
+                if (!enqueueFields(x.entries(), y.fields(context), pending)) return false;
             } else if (a instanceof Value.Dictionary x && b instanceof Value.Dictionary y) {
                 if (!enqueueFields(x.entries(), y.entries(), pending)) return false;
             } else if (a instanceof Value.Seq x && b instanceof Value.Seq y) {
@@ -84,10 +112,14 @@ final class ValueSemantics {
     }
 
     static String render(Value root) {
-        return render(root, null);
+        return render(root, null, ReflectionContext.defining());
     }
 
     static String render(Value root, Function<Value, String> nestedRenderer) {
+        return render(root, nestedRenderer, ReflectionContext.defining());
+    }
+
+    static String render(Value root, Function<Value, String> nestedRenderer, ReflectionContext context) {
         StringBuilder output = new StringBuilder();
         ArrayDeque<Object> pending = new ArrayDeque<>();
         pending.push(new RenderValue(root, 0, false));
@@ -112,6 +144,20 @@ final class ValueSemantics {
                         continue;
                     }
                     List<Map.Entry<String, Value>> entries = List.copyOf(dictionary.entries().entrySet());
+                    pending.push("\n" + spaces(indent) + "]");
+                    for (int index = entries.size() - 1; index >= 0; index--) {
+                        Map.Entry<String, Value> entry = entries.get(index);
+                        if (index + 1 < entries.size()) pending.push("\n");
+                        pending.push(nestedRenderer == null
+                                ? new RenderValue(entry.getValue(), indent + 2, true)
+                                : new RenderNested(entry.getValue(), indent + 2, nestedRenderer));
+                        pending.push(quoted(entry.getKey()) + " = ");
+                        pending.push(spaces(indent + 2));
+                    }
+                    pending.push("[\n");
+                }
+                case RenderValue(Value.ProjectedDictionary dictionary, int indent, boolean ignoredQuote) -> {
+                    List<Map.Entry<String, Value>> entries = List.copyOf(dictionary.fields(context).entrySet());
                     pending.push("\n" + spaces(indent) + "]");
                     for (int index = entries.size() - 1; index >= 0; index--) {
                         Map.Entry<String, Value> entry = entries.get(index);

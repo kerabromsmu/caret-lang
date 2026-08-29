@@ -23,6 +23,7 @@ enum ValueKind {
             case Value.Missing ignored -> MISSING;
             case Value.Field ignored -> FIELD;
             case Value.Dictionary ignored -> DICTIONARY;
+            case Value.ProjectedDictionary ignored -> DICTIONARY;
             case Value.EmptyCollection ignored -> COLLECTION;
             case Value.Seq ignored -> SEQUENCE;
             case Value.ContractValue ignored -> CONTRACT;

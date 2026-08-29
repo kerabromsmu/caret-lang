@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -804,6 +805,92 @@ final class InterpreterTest {
                 print (seqGet (@addOne).signature.parameters 0).name
                 print seqSize (@addOne).variants
                 """));
+    }
+
+    @Test
+    void callableReflectionProjectsLazilyWithoutAmplifyingVisibilityOrAuthority() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("""
+                (Number) transform (Number) value = value + 1
+                metadata = @transform
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
+        interpreter.execute(new Parser("""
+                parameter = seqGet metadata.signature.parameters 0
+                print metadata.name
+                print (seqGet parameter.requirements 0).name
+                print parameter.inferred
+                print (seqGet metadata.signature.result.guarantees 0).name
+                print metadata.signature.result.inferred
+                print seqSize metadata.signature.effects.upperBound
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.sandbox(false, false, Set.of()));
+        interpreter.execute(new Parser("sandboxMetadata = @transform").parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.defining());
+        interpreter.execute(new Parser("""
+                definingParameter = seqGet metadata.signature.parameters 0
+                print metadata.name
+                print (seqGet definingParameter.inferred 0).name
+                print parameter.inferred
+                print sandboxMetadata.name
+                print (seqGet sandboxMetadata.signature.parameters 0).inferred
+                """).parseProgram());
+
+        assertEquals("~\n~\n~\n~\n~\n0\ntransform\nNumber\n~\n~\n~\n",
+                bytes.toString(StandardCharsets.UTF_8));
+
+        LangException denied = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                callable = sandboxMetadata:
+                """).parseProgram()));
+        assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, denied.diagnostic().code());
+    }
+
+    @Test
+    void hiddenCallableAndDescriptorMetadataRetainLanguageOwnedIdentity() {
+        Object firstIdentity = new Object();
+        Object secondIdentity = new Object();
+        CallableSignature firstSignature = signatureWithRequirement(firstIdentity, "Private");
+        CallableSignature secondSignature = signatureWithRequirement(secondIdentity, "Private");
+        Value.Callable first = new Value.FunctionValue("first", List.of("value"),
+                (values, span) -> values.getFirst().value(),
+                false, firstSignature);
+        Value.Callable alias = first;
+        Value.Callable second = new Value.FunctionValue("second", List.of("value"),
+                (values, span) -> values.getFirst().value(),
+                false, secondSignature);
+        ReflectionContext hidden = ReflectionContext.restricted(false, false, false, Set.of());
+
+        Value firstMetadata = Value.CallableMetadata.reflection(first, hidden);
+        Value aliasMetadata = Value.CallableMetadata.reflection(alias, hidden);
+        Value secondMetadata = Value.CallableMetadata.reflection(second, hidden);
+        assertTrue(ValueSemantics.equal(firstMetadata, aliasMetadata, ReflectionContext.defining()));
+        assertFalse(ValueSemantics.equal(firstMetadata, secondMetadata, ReflectionContext.defining()));
+
+        Value firstRef = reflectedRequirement(firstMetadata, ReflectionContext.defining());
+        Value secondRef = reflectedRequirement(secondMetadata, ReflectionContext.defining());
+        assertEquals(Value.Missing.INSTANCE, ((Value.ProjectedDictionary) firstRef)
+                .find("name", ReflectionContext.defining()).orElseThrow());
+        assertFalse(ValueSemantics.equal(firstRef, secondRef, ReflectionContext.defining()));
+    }
+
+    private static CallableSignature signatureWithRequirement(Object identity, String name) {
+        CallableSignature.ContractTerm requirement = new CallableSignature.NamedRef(identity, name);
+        return new CallableSignature(List.of(new CallableSignature.Parameter("value", List.of(requirement),
+                List.of(requirement), List.of(requirement))),
+                new CallableSignature.Result(List.of(requirement), List.of(requirement), List.of(requirement)),
+                new CallableSignature.Effects(List.of(), List.of(), List.of()), List.of());
+    }
+
+    private static Value reflectedRequirement(Value metadata, ReflectionContext context) {
+        Value signature = ((Value.ProjectedDictionary) metadata).find("signature", context).orElseThrow();
+        Value parameters = ((Value.ProjectedDictionary) signature).find("parameters", context).orElseThrow();
+        Value parameter = ((Value.Seq) parameters).values().getFirst();
+        Value requirements = ((Value.ProjectedDictionary) parameter).find("requirements", context).orElseThrow();
+        return ((Value.Seq) requirements).values().getFirst();
     }
 
     @Test
