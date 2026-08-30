@@ -20,7 +20,7 @@ final class JLineRepl {
     private JLineRepl() {}
 
     static int run(Interpreter interpreter, PrintStream output, PrintStream error, Path historyFile) {
-        try (Terminal terminal = TerminalBuilder.builder().system(true).dumb(false).build()) {
+        try (Terminal terminal = TerminalBuilder.builder().system(true).dumb(true).build()) {
             return run(terminal, interpreter, output, error, historyFile);
         } catch (IOException terminalError) {
             error.println(HostMessageCatalog.REPL_TERMINAL_REQUIRED.format());
