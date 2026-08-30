@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 scripts/test-version-policy.sh
+bash scripts/check-example-coverage.sh
 CARET_TEST_TMP=$(mktemp -d /tmp/caret-tests.XXXXXX)
 trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
 ./gradlew --quiet installDist

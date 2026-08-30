@@ -247,4 +247,141 @@ assert "modified contract identity is stable" (Number? == Number?)
 assert "modified nominal clause acquires base membership" (Positive positiveValue)
 assert "grouped modifiers flatten to canonical identity" ((Number?)~ == Number?~)
 
+// Low-precedence application is right-associative and remains below ordinary expressions.
+coverageLowIdentity value = value
+assertEqual "low application associates right" (add 1 $ 2 * 3) 7
+assertEqual "low application accepts a conditional remainder" (coverageLowIdentity $ false & "unused" ! "selected") "selected"
+
+// Explicit layout mapping produces the same exported named Collection as ordinary indentation.
+coverageLayout = \\
+value = 40
+^result = value + 2
+\*
+assertEqual "layout mapping exports its result" coverageLayout.result 42
+
+// Collection construction order and canonical field order remain separate guarantees.
+coverageNamed = [^with = 1 ^z = 2 ^a = 3]
+coverageFields = [(field "z" 2) (field "a" 3) (field "with" 1)]
+coverageUpdates = dictPut (dictPut (dictPut dictEmpty "with" 1) "z" 2) "a" 3
+assertEqual "reserved words may be collection fields" coverageNamed.with 1
+assertEqual "field construction matches literal construction" coverageNamed coverageFields
+assertEqual "dictionary updates retain canonical identity-independent order" coverageFields coverageUpdates
+assertEqual "canonical reflected field names" (@coverageNamed).names "a,with,z"
+
+// map accepts current callable kinds and preserves null, missing, and nested values.
+coverageMapAdd left right = left + right
+assertEqual "map handles an empty sequence" (map double []) []
+assertEqual "map invokes a named callable" (map double [1 2 3]) [2 4 6]
+assertEqual "map invokes a prefix partial" (map (coverageMapAdd 10) [1 2]) [11 12]
+assertEqual "map invokes a composition" (map (double >> double) [1 2]) [4 8]
+assertEqual "map identity preserves absence and nesting" (map coverageLowIdentity [? ~ [1 2]]) [? ~ [1 2]]
+
+// Inference retains generic flow, numeric and string constraints, truth, and conditional joins.
+coverageInferIdentity value = value
+coverageIncrement value = coverageInferIdentity value * 1 + 1
+coverageSuffix value = value + "!"
+coverageNegate value = not value
+coverageChooseNumber condition = condition & coverageIncrement 4 ! coverageIncrement 8
+assertEqual "inferred generic identity accepts text" (coverageInferIdentity "generic") "generic"
+assertEqual "inferred generic identity accepts numbers" (coverageInferIdentity 42) 42
+assertEqual "inferred numeric result survives a conditional" (coverageChooseNumber true) 5
+assertEqual "inferred truth accepts null" (coverageChooseNumber ?) 9
+assertEqual "inferred string plus" (coverageSuffix "works") "works!"
+assert "inferred Boolean negation" (coverageNegate false)
+
+// Pure predicates are first-class refinements and retain eligibility through aliases.
+coveragePositive value = value > 0
+coveragePredicate = coveragePositive
+CoveragePositiveNumber = contract [Number coveragePredicate]
+(CoveragePositiveNumber) coverageCount = 3
+(Number coveragePositive) coverageKeep (Number coveragePositive) value = value
+assertEqual "refinement clause accepts a proven value" (coverageKeep coverageCount) 3
+assert "derived refinement contract accepts its member" (CoveragePositiveNumber coverageCount)
+
+// Parameterized contracts validate nested Sequences and expose constructor metadata.
+CoverageNumbers = Sequence Number
+(Sequence Number) coverageNumbers = [1 2 3]
+CoverageNestedNumbers = Sequence (Sequence Number)
+(CoverageNestedNumbers) coverageNestedNumbers = [[1 2] [] [3]]
+assert "parameterized Sequence accepts matching elements" (CoverageNumbers coverageNumbers)
+assert "nested parameterized Sequence accepts matching elements" (CoverageNestedNumbers coverageNestedNumbers)
+assertEqual "parameterized contract reflection retains its name" (@CoverageNumbers).name "Sequence Number"
+assertEqual "parameterized contract reflection retains its argument" (@CoverageNumbers).requirements ["Number"]
+
+// Closed overloads select the unique most-specific variant and specialize partials.
+coverageDescribe (Any) value = "fallback"
+coverageDescribe (Number) value = "number"
+coverageDescribe (String) value = "text"
+coverageCombine (Any) left (Any) right = "fallback"
+coverageCombine (Number) left (Number) right = "numbers"
+coverageNumberPair = coverageCombine _ 2
+assertEqual "overload selects Number" (coverageDescribe 42) "number"
+assertEqual "overload selects String" (coverageDescribe "hello") "text"
+assertEqual "overload retains generic fallback" (coverageDescribe true) "fallback"
+assertEqual "overload partial narrows survivors" (coverageNumberPair 1) "numbers"
+assertEqual "overload reflection exposes exact variants" (seqSize (@coverageDescribe).variants) 3
+
+// Arrow contracts inspect signatures without invocation and preserve generalized relationships.
+(Number) coverageArrowDouble (Number) value = value + value
+(Number) coverageApply ([Number] -> Number) transform (Number) value = transform value
+CoverageNumberTransform = [Number] -> Number
+CoverageBroadTransform = [Any] -> Number
+CoverageLooseResult = [Number] -> Any
+assert "exact arrow contract accepts a matching callable" (CoverageNumberTransform coverageArrowDouble)
+assertEqual "arrow parameter rejects a callable with a narrower domain" (CoverageBroadTransform coverageArrowDouble) false
+assert "covariant arrow result accepts a stronger guarantee" (CoverageLooseResult coverageArrowDouble)
+assertEqual "arrow-constrained higher-order call" (coverageApply coverageArrowDouble 21) 42
+
+(_1) coverageChoose (_1) left (_1) right = left
+coverageNumberChoice = coverageChoose 1
+coverageHoleChoice = coverageChoose _ 2
+assertEqual "generalized prefix partial specializes" (coverageNumberChoice 2) 1
+assertEqual "generalized hole partial specializes" (coverageHoleChoice 1) 1
+assertEqual "signature variables use canonical indices" (seqGet (seqGet (@coverageChoose).signature.parameters 0).requirements 0).index 0
+assertEqual "specialized variable becomes a concrete descriptor" (seqGet (seqGet (@coverageNumberChoice).signature.parameters 0).requirements 0).name "Number"
+
+// Callable reflection exposes current partial, hole, composition, overload, and identity views.
+(Number) coverageSignatureAdd (Number) left (Number) right = left + right
+coverageSignatureAddOne = coverageSignatureAdd 1
+coverageSignatureAlias = @coverageSignatureAdd:
+coverageSignature = (@coverageSignatureAdd).signature
+coverageFirstParameter = seqGet coverageSignature.parameters 0
+(Number) coverageSignatureCombine (Number) left (String) right = 0
+coverageRepeated = coverageSignatureCombine _1 _1
+coverageReordered = coverageSignatureCombine _2 _1
+(String) coverageText (String) value = value
+coveragePipeline = coverageInferIdentity >> coverageText
+assertEqual "callable reflection retains arity" (@coverageSignatureAdd).remaining 2
+assertEqual "callable reflection exposes declared requirements" (seqGet coverageFirstParameter.requirements 0).name "Number"
+assertEqual "prefix partial reflection drops a parameter" (@coverageSignatureAddOne).remaining 1
+assertEqual "prefix partial reflection retains the next name" (seqGet (@coverageSignatureAddOne).signature.parameters 0).name "right"
+assertEqual "pure signature exposes a known-empty bound" (seqSize coverageSignature.effects.upperBound) 0
+assertEqual "reflected callable dereference preserves its target" (coverageSignatureAlias 2 3) 5
+assertEqual "repeated holes conjoin requirements" (seqSize (seqGet (@coverageRepeated).signature.parameters 0).requirements) 2
+assertEqual "reordered holes expose application order" (seqGet (@coverageReordered).signature.parameters 0).name "right"
+assertEqual "reordered holes retain the second source name" (seqGet (@coverageReordered).signature.parameters 1).name "left"
+assertEqual "composition specializes its public parameter" (seqGet (seqGet (@coveragePipeline).signature.parameters 0).requirements 0).name "String"
+assertEqual "composition exposes its final guarantee" (seqGet (@coveragePipeline).signature.result.guarantees 0).name "String"
+coverageSavedMetadata = @coverageSignatureAdd
+assert "repeated reflection preserves callable identity" (coverageSavedMetadata == @coverageSignatureAdd)
+assertEqual "saved metadata remains dereferenceable" (coverageSavedMetadata: 3 4) 7
+
+// Mixed clauses separate value requirements, effect allowances, and pure callable constraints.
+(Output Number) coverageNoisy (Number) value = value
+(pure) coveragePureCopy = coverageInferIdentity
+CoverageEffectfulNumber = [Number] -> (Output Number)
+assert "effectful arrow accepts a declared allowance" (CoverageEffectfulNumber coverageNoisy)
+assertEqual "pure callable constraint preserves behavior" (coveragePureCopy 2) 2
+coverageNoisySignature = (@coverageNoisy).signature
+assertEqual "mixed result clause contains only its value requirement" (seqGet coverageNoisySignature.result.declared 0).name "Number"
+assertEqual "mixed result clause exposes its effect separately" (seqGet coverageNoisySignature.effects.declared 0).name "Output"
+
+// Rendering overloads are tested last so they cannot alter earlier test diagnostics.
+(String) toString (Number) value = "number:" + numberText value
+(String) toString (String) value = value
+assertEqual "rendering overload handles String" (toString "plain") "plain"
+assertEqual "rendering overload handles Number" (toString 7) "number:7"
+assertEqual "custom rendering applies inside Sequences" (toString [1 2]) "[ number:1 number:2 ]"
+assertEqual "custom rendering applies recursively in named Collections" (toString [^name = "Caret" ^values = [1 2]]) "[\n  \"name\" = \"Caret\"\n  \"values\" = [ number:1 number:2 ]\n]"
+
 // Expected failures are isolated in examples/errors/ and exercised by test.sh.
