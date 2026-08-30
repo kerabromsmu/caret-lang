@@ -58,7 +58,7 @@ baseline.
 
 ## Phase 1 — Front end, binding semantics, and unified callables
 
-Current status: Phase 1 is in progress. Logical-line construction has moved out of the parser,
+Current status: Phase 1 is complete. Logical-line construction has moved out of the parser,
 definition-header parsing has been consolidated, and the semantic resolver now predeclares block
 bindings and records lexical depth/slot metadata consumed by the interpreter. Duplicate and
 premature-read diagnostics run in the semantic phase, callable invocation has a common depth guard,
@@ -139,9 +139,10 @@ survivor signatures with conservative summaries.
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 
-Current status: unary user-defined base and derived contracts are implemented alongside runtime-kind
-contracts. Multiple bases are passed as one ordinary `[A B]` collection. Binding, parameter, and
-result clauses acquire or validate membership at runtime. Initial constraint inference and
+Current status: Phase 2 is in progress. Unary user-defined base and derived contracts are
+implemented alongside runtime-kind contracts. Multiple bases are passed as one ordinary `[A B]`
+collection. Binding, parameter, and result clauses acquire or validate membership at runtime.
+Initial constraint inference and
 generalized contract variables for named functions are implemented. A minimum effect analysis now
 propagates known named-call effects, preserves unknown dynamic calls, and proves refinement
 eligibility without exposing effect syntax. Proven unary Boolean callables now participate as

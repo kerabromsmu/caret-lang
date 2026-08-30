@@ -150,8 +150,8 @@ this README, `LICENSE`, `NOTICE`, and the runnable `examples/` tree.
 ### Release versions
 
 The tracked [`VERSION`](VERSION) file is the source of the release version in
-`MAJOR.MINOR.UPDATE` form. The project starts at `0.1.0`, with `0.1.x` representing the Phase 1
-development line from [`PLAN.md`](PLAN.md).
+`MAJOR.MINOR.UPDATE` form. The completed `0.1.x` line represents Phase 1, and `0.2.x` represents the
+current Phase 2 development line from [`PLAN.md`](PLAN.md).
 
 - Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
 - Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
