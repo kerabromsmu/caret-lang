@@ -246,6 +246,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Tree root;
         private final int size;
         private final Value reflectedTarget;
+        private final ReflectionContext reflectionContext;
         private volatile Map<String, Value> materialized;
 
         public Dictionary(Map<String, Value> entries) {
@@ -257,24 +258,30 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.root = builtRoot;
             this.size = checked.size();
             this.reflectedTarget = null;
+            this.reflectionContext = null;
         }
 
         private Dictionary(Tree root, int size) {
-            this(root, size, null);
+            this(root, size, null, null);
         }
 
-        private Dictionary(Tree root, int size, Value reflectedTarget) {
+        private Dictionary(Tree root, int size, Value reflectedTarget, ReflectionContext reflectionContext) {
             this.root = Objects.requireNonNull(root);
             this.size = size;
             this.reflectedTarget = reflectedTarget;
+            this.reflectionContext = reflectionContext;
         }
 
-        static Dictionary reflection(Map<String, Value> entries, Value target) {
+        static Dictionary reflection(Map<String, Value> entries, Value target, ReflectionContext context) {
             Dictionary dictionary = new Dictionary(entries);
-            return new Dictionary(dictionary.root, dictionary.size, Objects.requireNonNull(target));
+            return new Dictionary(dictionary.root, dictionary.size, Objects.requireNonNull(target),
+                    Objects.requireNonNull(context));
         }
 
-        Optional<Value> reflectedTarget() { return Optional.ofNullable(reflectedTarget); }
+        Optional<Value> reflectedTarget(ReflectionContext observer) {
+            return reflectedTarget != null && reflectionContext.intersect(Objects.requireNonNull(observer)).dereference()
+                    ? Optional.of(reflectedTarget) : Optional.empty();
+        }
 
         public Map<String, Value> entries() {
             Map<String, Value> result = materialized;

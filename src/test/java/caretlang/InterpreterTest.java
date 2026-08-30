@@ -850,6 +850,57 @@ final class InterpreterTest {
     }
 
     @Test
+    void ordinaryReflectionTargetsCannotAmplifyDereferenceAuthorityAcrossContexts() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+
+        interpreter.reflectionContext(ReflectionContext.sandbox(false, false, Set.of()));
+        interpreter.execute(new Parser("""
+                primitiveMetadata = @42
+                sequenceMetadata = @[1 2]
+                dictionaryMetadata = @[^answer = 42]
+                (Number) typed = 42
+                attributedMetadata = @typed
+                retainedSequence = seqAdd seqEmpty primitiveMetadata
+                retainedDictionary = dictPut dictEmpty "metadata" primitiveMetadata
+                reflectedMetadata = @primitiveMetadata
+                updatedMetadata = dictPut primitiveMetadata "extra" 1
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
+        interpreter.execute(new Parser("externalMetadata = @42").parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.defining());
+        assertDereferenceDenied(interpreter, "leaked = primitiveMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = sequenceMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = dictionaryMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = attributedMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = (seqGet retainedSequence 0):");
+        assertDereferenceDenied(interpreter, "leaked = retainedDictionary.metadata:");
+        assertDereferenceDenied(interpreter, "leaked = reflectedMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = updatedMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = externalMetadata:");
+
+        interpreter.execute(new Parser("definingMetadata = @typed").parseProgram());
+        interpreter.reflectionContext(ReflectionContext.sandbox(false, false, Set.of()));
+        assertDereferenceDenied(interpreter, "leaked = definingMetadata:");
+
+        interpreter.reflectionContext(ReflectionContext.defining());
+        interpreter.execute(new Parser("""
+                restored = definingMetadata:
+                print restored
+                print restored == typed
+                """).parseProgram());
+        assertEquals("42\ntrue\n", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    private static void assertDereferenceDenied(Interpreter interpreter, String source) {
+        LangException denied = assertThrows(LangException.class,
+                () -> interpreter.execute(new Parser(source).parseProgram()));
+        assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, denied.diagnostic().code());
+    }
+
+    @Test
     void hiddenCallableAndDescriptorMetadataRetainLanguageOwnedIdentity() {
         Object firstIdentity = new Object();
         Object secondIdentity = new Object();

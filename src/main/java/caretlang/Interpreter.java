@@ -859,7 +859,7 @@ final class Interpreter {
                 if (reflected.isPresent()) return reflected.get();
             }
             if (reference instanceof Value.Dictionary dictionary) {
-                Optional<Value> reflected = dictionary.reflectedTarget();
+                Optional<Value> reflected = dictionary.reflectedTarget(reflectionContext);
                 if (reflected.isPresent()) return reflected.get();
             }
             throw runtime(Diagnostic.Codes.NOT_DEREFERENCEABLE,
@@ -1337,7 +1337,7 @@ final class Interpreter {
             return Value.CallableMetadata.reflection(callable, reflectionContext);
         }
         Map<String, Value> fields = ValueSemantics.reflectionFields(reflected, reflectionContext);
-        return Value.Dictionary.reflection(fields, value);
+        return Value.Dictionary.reflection(fields, value, reflectionContext);
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {

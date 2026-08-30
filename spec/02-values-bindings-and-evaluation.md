@@ -130,6 +130,10 @@ The metadata dictionary is non-callable; dereferencing restores the exact origin
 value. `:` on any value not produced directly by reflection is a located `NOT_DEREFERENCEABLE`
 error. Ordinary aliases preserve dereferenceability, while dictionary updates produce ordinary
 dictionaries. Equality and rendering observe only public metadata fields, never the opaque target.
+Every reflection result captures its creation environment's dereference authority. Dereference uses
+the intersection of that captured authority and the current observer's authority, so retaining,
+nesting, aliasing, or re-reflecting metadata can preserve or reduce access but can never amplify it.
+This interpreter/compiler context is not exposed as a Caret value.
 
 `@` consumes exactly one identifier or literal, including a Collection literal. Parentheses are
 required to reflect a larger expression: `@f x` means `(@f) x`, while `@(f x)` reflects the call
