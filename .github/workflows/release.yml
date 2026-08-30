@@ -70,7 +70,7 @@ jobs:
         run: scripts/smoke-distribution.sh "build/distributions/caret-${{ steps.version.outputs.version }}.tar"
       - name: Upload release assets for cross-platform verification
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: caret-${{ steps.version.outputs.version }}
           path: |
@@ -88,7 +88,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: caret-${{ needs.build.outputs.version }}
           path: distribution
@@ -122,7 +122,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: caret-${{ needs.build.outputs.version }}
           path: distribution
