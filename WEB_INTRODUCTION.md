@@ -69,10 +69,10 @@ totalWithTax subtotal rate =
 
 This keeps the common case compact while preserving an obvious visual structure.
 
-For deeply embedded source, planned `\\` and `\*` layout markers will temporarily remap physical
+For deeply embedded source, `\\` and `\*` layout markers temporarily remap physical
 indentation to the same effective logical nesting. They change only layout processing: they do not
-create scopes, close blocks, or perform control flow. The mappings can stack and are not implemented
-by the current prototype.
+create scopes, close blocks, or perform control flow. The mappings stack and are implemented for
+the prototype's currently supported indentation-opening headers.
 
 ## Lazy decisions
 
@@ -173,7 +173,10 @@ print (@person).names
 
 Reflection exposes only public or explicitly exported information. Expected failures, such as a
 missing dynamic field, can produce `~` instead of an exception. A reflected function is a
-non-callable reference, and both `type` and its `kind` metadata identify it as `"Function"`.
+non-callable metadata Dictionary: `type (@function)` is `"Dictionary"`, while `@function.kind` is
+`"Function"`. Its fields are computed lazily for the observing environment: hidden facts and names
+become `~`, known-empty facts remain `[]`, and moving metadata cannot increase visibility. Adjacent
+postfix `:` recovers the reflected value or callable only when that observer retains access.
 
 ## Values and collections
 
@@ -185,6 +188,11 @@ dictionary contracts. Named Collection fields traverse and reflect in locale-ind
 case-sensitive Unicode code-point order, while their expressions evaluate in source order. Static
 `^name` fields, ordinary `field "name" value` results, and `dictPut` updates share one String-keyed
 Dictionary representation and one member protocol.
+
+`toString` is an extensible ordinary overload set. Its standard fallback renders top-level Strings
+as raw text, flat positional collections as `[ 1 2 ]`, and named or structurally nested collections
+on indented lines. Named keys and nested Strings are quoted and escaped. Contract-specific
+specializations participate recursively when a collection is converted.
 
 ```caret
 person = [
@@ -228,8 +236,12 @@ nesting, and null/missing modifiers, and exposes its base and requirement throug
 General parameterized contracts and complete static proof remain
 planned. Callable reflection now exposes immutable language-owned signature metadata for remaining
 parameters, result facts, known invocation effects, and surviving overload variants without exposing
-captures, partial values, implementation objects, or authority. Closed same-name overload sets are
-implemented: applicability observes existing contract
+captures, partial values, implementation objects, or authority. Derived metadata specializes
+generic prefix and hole partials, conjoins repeated-hole requirements, projects reordered holes,
+and carries compatible substitutions and effect unions through composition. The metadata is lazily
+filtered through interpreter-owned environment state that is never exposed as a Caret value.
+Contract and effect references preserve identity even when their visible name is `~`. Closed
+same-name overload sets are implemented: applicability observes existing contract
 membership without acquiring it, and the unique most-specific applicable variant wins.
 
 ```caret
@@ -259,22 +271,31 @@ list followed by `->` describes exact arity, result guarantees, and an optional 
   transform value
 ```
 
-The complete planned form also permits explicit effect allowances and declaration-wide variables:
+Explicit effect allowances and declaration-wide variables are also supported:
 
-<!-- caret-example: planned -->
 ```caret
-[Int Text] -> (fs Boolean)
+[Number String] -> (Output Boolean)
 
-(Sequence _2) map ([_1] -> _2) transform (Sequence _1) values =
-  ...
+(_2) applyGeneric ([_1] -> _2) transform (_1) value =
+  transform value
 ```
+
+Named declarations use the same mixed-clause model. In `(Output Number) noisy ...`, `Number`
+constrains the result while `Output` is the callable's effect allowance. The analyzer classifies the
+clause once, so callable reflection reports `Number` only as a result requirement and `Output` only
+as an effect; source order does not change that meaning.
+
+The prototype implements the runtime `map transform values` operation for Sequences and current
+named, partial, and composed callable values. Declaration-wide variable schemes retain their
+substitutions through prefix and hole partials; lambdas and precise transform-effect propagation
+remain planned.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
 must remain within the stated allowance. This arrow form is a first-class contract, distinct from a
 lambda because its left side is a bracketed requirement list. Exact arity, pure effect bounds,
 contravariant parameters, covariant results, inline clauses, and standalone variables are
-implemented; explicit allowances and variables shared across a complete declaration header remain planned.
+implemented, including explicit allowances and variables shared across a complete declaration header.
 
 The planned static operator model preserves the prototype's compact behavior without adding hidden
 numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
@@ -375,14 +396,19 @@ environment and is not implemented by the current interpreter.
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
 supports lexical closures, direct and mutual recursion, partial application, named Collections,
 left-to-right function composition, language-owned reflection, persistent collections,
-source-located diagnostics, a REPL, and native test assertions.
+source-located diagnostics, a REPL, and native test assertions. Execution remains fail-fast, while
+compiler-oriented parsing can recover at declaration boundaries and collect independent failures
+without losing physical spans from valid later declarations.
+Closure analysis records deterministic, source-spanned upvalues by stable binding identity; runtime
+closures use those same internal descriptors without exposing captures or lexical environments
+through reflection.
 
-General parameterized contracts, declaration-wide-variable arrow contracts,
-structural templates, contextual collection representations, modules, root reification, sandboxing,
+General parameterized contracts, structural templates, contextual collection representations,
+modules, root reification, sandboxing,
 compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 
 To explore the implementation, syntax reference, and runnable examples, see the project
 [README](README.md), [language specification](LANGUAGE.md), and
-[implemented feature tour](examples/implemented_features.caret).
+[implemented feature tour](examples/features/implemented_features.caret).

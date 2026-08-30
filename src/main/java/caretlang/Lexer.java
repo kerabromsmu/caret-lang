@@ -1,12 +1,24 @@
 package caretlang;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
 
 final class Lexer {
     enum Kind { NUMBER, STRING, IDENT, SYMBOL, EOF }
     record Token(Kind kind, String text, SourceSpan span) {}
     record LogicalLine(int indent, String text, int number, int offset, int column, SourceSpan span) {}
+    private static final class LayoutMapping {
+        private final int logicalBaseline;
+        private Integer physicalBaseline;
+
+        private LayoutMapping(int logicalBaseline) { this.logicalBaseline = logicalBaseline; }
+
+        private int effective(int physicalIndent) {
+            if (physicalBaseline == null) physicalBaseline = physicalIndent;
+            return logicalBaseline + physicalIndent - physicalBaseline;
+        }
+    }
     private record PhysicalLine(int start, int end, int number) {}
 
     static List<Token> lex(String source) {
@@ -124,6 +136,7 @@ final class Lexer {
     static List<LogicalLine> logicalLines(String source) {
         List<PhysicalLine> physicalLines = physicalLines(source);
         ArrayList<LogicalLine> result = new ArrayList<>();
+        ArrayDeque<LayoutMapping> mappings = new ArrayDeque<>();
         for (int physicalIndex = 0; physicalIndex < physicalLines.size(); physicalIndex++) {
             PhysicalLine first = physicalLines.get(physicalIndex);
             String line = source.substring(first.start(), first.end()).stripTrailing();
@@ -131,9 +144,28 @@ final class Lexer {
             int leadingCharacters = line.length() - trimmed.length();
             if (trimmed.isEmpty() || trimmed.startsWith("//")) continue;
 
-            int indent = 0;
-            for (int i = 0; i < leadingCharacters; i++) indent += line.charAt(i) == '\t' ? 2 : 1;
+            if (trimmed.equals("\\*")) {
+                if (!mappings.isEmpty()) mappings.pop();
+                continue;
+            }
+
+            int physicalIndent = 0;
+            for (int i = 0; i < leadingCharacters; i++) physicalIndent += line.charAt(i) == '\t' ? 2 : 1;
+            int indent = mappings.isEmpty() ? physicalIndent : mappings.peek().effective(physicalIndent);
             int contentOffset = first.start() + leadingCharacters;
+            String layoutCode = withoutTrailingComment(trimmed).stripTrailing();
+            boolean adjustsBaseline = layoutCode.endsWith("\\\\");
+            if (adjustsBaseline) {
+                String header = layoutCode.substring(0, layoutCode.length() - 2).stripTrailing();
+                if (!header.endsWith("=")) {
+                    int markerOffset = first.start() + line.lastIndexOf("\\\\");
+                    throw new LangException(Diagnostic.Phase.LEXER, Diagnostic.Codes.LEX_INVALID_LAYOUT_MARKER,
+                            "Layout baseline marker must follow an indentation-opening header",
+                            new SourceSpan(new SourcePosition(markerOffset, first.number(), markerOffset - first.start() + 1),
+                                    new SourcePosition(markerOffset + 2, first.number(), markerOffset - first.start() + 3)));
+                }
+                trimmed = header;
+            }
             int depth = continuationDelimiterDelta(trimmed);
             PhysicalLine last = first;
             while (depth > 0 && physicalIndex + 1 < physicalLines.size()) {
@@ -145,8 +177,10 @@ final class Lexer {
             int logicalEnd = last.start() + lastText.length();
             SourcePosition start = new SourcePosition(contentOffset, first.number(), leadingCharacters + 1);
             SourcePosition end = new SourcePosition(logicalEnd, last.number(), lastText.length() + 1);
-            result.add(new LogicalLine(indent, source.substring(contentOffset, logicalEnd), first.number(),
+            String logicalText = adjustsBaseline ? trimmed : source.substring(contentOffset, logicalEnd);
+            result.add(new LogicalLine(indent, logicalText, first.number(),
                     contentOffset, leadingCharacters + 1, new SourceSpan(start, end)));
+            if (adjustsBaseline) mappings.push(new LayoutMapping(indent + 1));
         }
         return result;
     }
@@ -166,6 +200,21 @@ final class Lexer {
             start = next;
         }
         return lines;
+    }
+
+    private static String withoutTrailingComment(String text) {
+        boolean quoted = false;
+        boolean escaped = false;
+        for (int index = 0; index + 1 < text.length(); index++) {
+            char current = text.charAt(index);
+            if (quoted) {
+                if (escaped) escaped = false;
+                else if (current == '\\') escaped = true;
+                else if (current == '"') quoted = false;
+            } else if (current == '"') quoted = true;
+            else if (current == '/' && text.charAt(index + 1) == '/') return text.substring(0, index);
+        }
+        return text;
     }
 
     private static Token token(Kind kind, String text, PositionTable positions, int start, int end) {

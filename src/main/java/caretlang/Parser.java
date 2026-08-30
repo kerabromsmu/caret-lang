@@ -8,6 +8,14 @@ import caretlang.Lexer.Token;
 import java.util.*;
 
 final class Parser {
+    /** Analysis-facing parse output. Invalid declarations are omitted from the recovered program. */
+    record ParseResult(List<Stmt> statements, List<Diagnostic> diagnostics) {
+        ParseResult {
+            statements = List.copyOf(statements);
+            diagnostics = List.copyOf(diagnostics);
+        }
+    }
+
     private record DefinitionHeader(String name, ContractClause contracts,
                                     List<Parameter> parameters, boolean exported) {}
     private final List<LogicalLine> lines;
@@ -29,6 +37,25 @@ final class Parser {
         }
     }
 
+    /**
+     * Parses as many independent declarations as possible. The interpreter intentionally continues
+     * to use {@link #parseProgram()}, which reports the first failure.
+     */
+    ParseResult parseProgramRecovering() {
+        ArrayList<Diagnostic> diagnostics = new ArrayList<>();
+        try {
+            return new ParseResult(parseBlockRecovering(0, diagnostics), diagnostics);
+        } catch (StackOverflowError exhaustedStack) {
+            SourceSpan span = lines.isEmpty()
+                    ? SourceSpan.point(new SourcePosition(0, 1, 1))
+                    : lines.get(Math.min(lineIndex, lines.size() - 1)).span();
+            diagnostics.add(new Diagnostic(Diagnostic.Phase.PARSER,
+                    Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                    "Maximum expression nesting depth exceeded", span));
+            return new ParseResult(List.of(), diagnostics);
+        }
+    }
+
     private List<Stmt> parseBlock(int indent) {
         ArrayList<Stmt> result = new ArrayList<>();
         while (lineIndex < lines.size()) {
@@ -42,7 +69,28 @@ final class Parser {
         return result;
     }
 
-    private Stmt parseLine(LogicalLine line, int indent) {
+    private List<Stmt> parseBlockRecovering(int indent, List<Diagnostic> diagnostics) {
+        ArrayList<Stmt> result = new ArrayList<>();
+        while (lineIndex < lines.size()) {
+            LogicalLine line = lines.get(lineIndex);
+            if (line.indent() < indent) break;
+
+            int declarationStart = lineIndex;
+            try {
+                if (line.indent() > indent) {
+                    throw error(line, Diagnostic.Codes.PARSE_UNEXPECTED_INDENT, "Unexpected indentation");
+                }
+                result.add(parseLine(line, indent, diagnostics));
+            } catch (LangException failure) {
+                if (failure.diagnostic().phase() != Diagnostic.Phase.PARSER) throw failure;
+                diagnostics.add(failure.diagnostic());
+                synchronizeDeclaration(declarationStart, indent);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private Stmt parseLine(LogicalLine line, int indent, List<Diagnostic> diagnostics) {
         lineIndex++;
         List<Token> tokens = Lexer.lex(line.text(), line.offset(), line.number(), line.column());
 
@@ -59,22 +107,37 @@ final class Parser {
                 }
                 if (!header.exported()) {
                     ExprStmt expressionStatement = new ExprStmt(expression, expression.span());
-                    return new FunctionDef(header.name(), header.contracts(), header.parameters(), List.of(expressionStatement),
-                            SourceSpan.cover(left.getFirst().span(), expression.span()));
+                    return new FunctionDef(header.name(), header.contracts(), header.parameters(),
+                            List.of(expressionStatement), SourceSpan.cover(left.getFirst().span(), expression.span()));
                 }
             }
             if (header != null && right.isEmpty() && !header.exported()) {
                 if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= indent) {
                     throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Function body must be indented");
                 }
-                List<Stmt> body = parseBlock(lines.get(lineIndex).indent());
-                return new FunctionDef(header.name(), header.contracts(), header.parameters(), body, functionSpan(left, body));
+                List<Stmt> body = diagnostics == null
+                        ? parseBlock(lines.get(lineIndex).indent())
+                        : parseBlockRecovering(lines.get(lineIndex).indent(), diagnostics);
+                return new FunctionDef(header.name(), header.contracts(), header.parameters(), body,
+                        functionSpan(left, body, line.span()));
             }
-
             throw error(line, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
                     "Invalid assignment or function definition");
         }
 
+        return parseNonDefinition(line, indent, tokens);
+    }
+
+    private void synchronizeDeclaration(int declarationStart, int indent) {
+        lineIndex = Math.max(lineIndex, declarationStart + 1);
+        while (lineIndex < lines.size() && lines.get(lineIndex).indent() > indent) lineIndex++;
+    }
+
+    private Stmt parseLine(LogicalLine line, int indent) {
+        return parseLine(line, indent, null);
+    }
+
+    private Stmt parseNonDefinition(LogicalLine line, int indent, List<Token> tokens) {
         // Output is intentionally a statement form only when the line is not a definition.
         // This preserves the concise `print add 2 3` spelling without preventing `print`
         // from being shadowed as an ordinary binding or function name.
@@ -253,8 +316,12 @@ final class Parser {
     }
 
     private SourceSpan functionSpan(List<Token> header, List<Stmt> body) {
-        SourceSpan start = header.getFirst().span();
-        return SourceSpan.cover(start, body.getLast().span());
+        return functionSpan(header, body, header.getLast().span());
+    }
+
+    private SourceSpan functionSpan(List<Token> header, List<Stmt> body, SourceSpan emptyBodyEnd) {
+        SourceSpan end = body.isEmpty() ? emptyBodyEnd : body.getLast().span();
+        return SourceSpan.cover(header.getFirst().span(), end);
     }
 
     private void requireBindable(List<Token> names) {
@@ -547,11 +614,6 @@ final class Parser {
                 Expr operand = unary();
                 return new Unary("-", operand, SourceSpan.cover(operator.span(), operand.span()));
             }
-            if (match("@")) {
-                Token operator = previous();
-                Expr operand = unary();
-                return new Reflect(operand, SourceSpan.cover(operator.span(), operand.span()));
-            }
             if (matchIdent("not")) {
                 Token operator = previous();
                 Expr operand = unary();
@@ -606,10 +668,23 @@ final class Parser {
             Expr expr = primary();
             while (true) {
                 if (match(".")) {
+                    if (match("@")) {
+                        Token marker = previous();
+                        Token name = consume(Kind.IDENT, "Expected field name after '.@'");
+                        Expr field = new Field(expr, name.text(), false, SourceSpan.cover(expr.span(), name.span()));
+                        expr = new Reflect(field, SourceSpan.cover(expr.span(), name.span()));
+                        continue;
+                    }
                     Token name = consume(Kind.IDENT, "Expected field name after '.'");
                     boolean optional = match("~");
                     SourceSpan end = optional ? previous().span() : name.span();
                     expr = new Field(expr, name.text(), optional, SourceSpan.cover(expr.span(), end));
+                    continue;
+                }
+                if (peek().text().equals(":")
+                        && expr.span().end().offset() == peek().span().start().offset()) {
+                    match(":");
+                    expr = new Dereference(expr, SourceSpan.cover(expr.span(), previous().span()));
                     continue;
                 }
                 if (peek().text().equals("[")
@@ -656,6 +731,11 @@ final class Parser {
         }
 
         private Expr primary() {
+            if (match("@")) {
+                Token operator = previous();
+                Expr operand = reflectionPrimary();
+                return new Reflect(operand, SourceSpan.cover(operator.span(), operand.span()));
+            }
             if (peek().kind() == Kind.SYMBOL
                     && LanguageSyntax.binaryOperatorSpellings().contains(peek().text())) {
                 Token operator = tokens.get(current++);
@@ -720,6 +800,20 @@ final class Parser {
                 return new Group(expr, SourceSpan.cover(open.span(), previous().span()));
             }
             throw error("Expected expression, found '" + peek().text() + "'");
+        }
+
+        private Expr reflectionPrimary() {
+            Token token = peek();
+            boolean allowed = token.kind() == Kind.IDENT || token.kind() == Kind.NUMBER
+                    || token.kind() == Kind.STRING || token.text().equals("true")
+                    || token.text().equals("false") || token.text().equals("?")
+                    || token.text().equals("~") || token.text().equals("(")
+                    || token.text().equals("[");
+            if (!allowed) {
+                throw error(Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                        "Expected an identifier, literal, or parenthesized expression after '@'");
+            }
+            return primary();
         }
 
         private int collectionCloseLine() {
@@ -796,7 +890,7 @@ final class Parser {
             if (token.kind() == Kind.IDENT) {
                 return LanguageSyntax.canStartApplicationArgument(token.text());
             }
-            return Set.of("(", "[", "?", "~").contains(token.text());
+            return Set.of("(", "[", "?", "~", "@").contains(token.text());
         }
 
         private boolean prefixOrReferenceMinus() {

@@ -4,19 +4,19 @@ false
 Contract
 Number
 Both
-[Tag, Numeric]
+[ "Tag" "Numeric" ]
 one
 keeps its ordinary behavior
-[7, 5]
+[ 7 5 ]
 true
 true
 true
 false
 Number?~
-[Number]
+[ "Number" ]
 true
 true
 true
 true
 Sequence Number
-[Number]
+[ "Number" ]

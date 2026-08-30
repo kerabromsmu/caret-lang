@@ -6,6 +6,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -102,6 +103,26 @@ final class InterpreterTest {
     }
 
     @Test
+    void callableMetadataUsesAnalyzedValueRequirementsInsteadOfRawEffectTerms() {
+        assertEquals("1\nNumber\n1\nOutput\n1\nNumber\n0\n", execute("""
+                (Output Number) noisy (Number) value =
+                  print value
+                  value
+                (Number pure) quiet (Number) value = value
+
+                noisySignature = (@noisy).signature
+                quietSignature = (@quiet).signature
+                print seqSize noisySignature.result.declared
+                print (seqGet noisySignature.result.declared 0).name
+                print seqSize noisySignature.effects.declared
+                print (seqGet noisySignature.effects.declared 0).name
+                print seqSize quietSignature.result.declared
+                print (seqGet quietSignature.result.declared 0).name
+                print seqSize quietSignature.effects.declared
+                """));
+    }
+
+    @Test
     void arrowContractVariablesAreContiguousAndRequireGenericRelationships() {
         assertEquals("true\nfalse\n", execute("""
                 identity value = value
@@ -117,8 +138,57 @@ final class InterpreterTest {
     }
 
     @Test
+    void declarationHeaderVariablesShareSchemesAndSpecializeFreshPrefixPartials() {
+        assertEquals("1\n0\n0\nNumber\nString\nNumber\n0\n0\n1\ntrue\ntrue\n", execute("""
+                (_1) choose (_1) left (_1) right = left
+                alias = choose
+                numberChoice = choose 1
+                textChoice = choose "left"
+                holeChoice = choose _ 2
+
+                scheme = (@choose).signature
+                parameterVariable = seqGet (seqGet scheme.parameters 0).requirements 0
+                resultVariable = seqGet scheme.result.guarantees 0
+                print seqSize scheme.variables
+                print parameterVariable.index
+                print resultVariable.index
+                print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).name
+                print (seqGet (seqGet (@textChoice).signature.parameters 0).requirements 0).name
+                print (seqGet (seqGet (@holeChoice).signature.parameters 0).requirements 0).name
+                print seqSize (@numberChoice).signature.variables
+                print seqSize (@holeChoice).signature.variables
+                print seqSize (@alias).signature.variables
+                print numberChoice 2 == 1
+                print holeChoice 1 == 1
+                """));
+    }
+
+    @Test
+    void declarationVariablesIncludeNestedArrowsAndRejectUnrelatedOccurrences() {
+        assertEquals("5\n", execute("""
+                identity value = value
+                (_1) applyGeneric ([_1] -> _1) transform (_1) value = transform value
+                print applyGeneric identity 5
+                """));
+
+        LangException single = assertThrows(LangException.class,
+                () -> execute("(_1) consume value = value"));
+        assertEquals(Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, single.diagnostic().code());
+        assertEquals(2, single.span().start().column());
+
+        LangException standalone = assertThrows(LangException.class,
+                () -> execute("GenericConsumer = [_1] -> Boolean"));
+        assertEquals(Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, standalone.diagnostic().code());
+
+        LangException incompatible = assertThrows(LangException.class,
+                () -> execute("(_1) choose (Number _1) left (String _1) right = left"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, incompatible.diagnostic().code());
+        assertEquals(1, incompatible.diagnostic().related().size());
+    }
+
+    @Test
     void constructsUnaryBaseAndMultiplyDerivedContracts() {
-        assertEquals("false\nfalse\nAB\n[Tag, Numeric]\n[1, two, true]\n", execute("""
+        assertEquals("false\nfalse\nAB\n[ \"Tag\" \"Numeric\" ]\n[ 1 \"two\" true ]\n", execute("""
                 Tag = contract ~
                 Numeric = contract Number
                 AB = contract [Tag Numeric]
@@ -132,7 +202,7 @@ final class InterpreterTest {
 
     @Test
     void constructsAndEnforcesParameterizedSequenceContracts() {
-        assertEquals("true\nfalse\ntrue\ntrue\nSequence Number\n[Sequence]\n[Number]\n", execute("""
+        assertEquals("true\nfalse\ntrue\ntrue\nSequence Number\n[ \"Sequence\" ]\n[ \"Number\" ]\n", execute("""
                 Numbers = Sequence Number
                 Alias = Numbers
                 SequenceConstructor = Sequence
@@ -305,7 +375,7 @@ final class InterpreterTest {
 
     @Test
     void evaluatesUnambiguousExpressionsInsideCollectionLiterals() {
-        assertEquals("[7, 5, yes, [a, b]]\n", execute("""
+        assertEquals("[\n  7\n  5\n  \"yes\"\n  [ \"a\" \"b\" ]\n]\n", execute("""
                 add left right = left + right
                 print [(1 + 2 * 3) (add 2 3) (true & "yes" ! "no") ["a" "b"]]
                 """));
@@ -338,7 +408,7 @@ final class InterpreterTest {
                 print Null ?
                 print Missing ~
                 print Function identity
-                print Function (@identity)
+                print Function (@identity:)
                 print Collection make
                 print Sequence seqEmpty
                 print Dictionary dictEmpty
@@ -371,7 +441,7 @@ final class InterpreterTest {
 
     @Test
     void nullableAndOptionalContractsPreserveNullAndMissingAsDistinctStates() {
-        assertEquals("true\ntrue\ntrue\nfalse\nfalse\nNumber?~\n[Number]\n", execute("""
+        assertEquals("true\ntrue\ntrue\nfalse\nfalse\nNumber?~\n[ \"Number\" ]\n", execute("""
                 (Number?) nullable = ?
                 (Number~) optional = ~
                 (Number?~) either = ~
@@ -397,7 +467,7 @@ final class InterpreterTest {
 
     @Test
     void modifiedContractsAreFirstClassNormalizedAndIdentityStable() {
-        assertEquals("true\ntrue\ntrue\nfalse\ntrue\n[Number]\n", execute("""
+        assertEquals("true\ntrue\ntrue\nfalse\ntrue\n[ \"Number\" ]\n", execute("""
                 First = contract Number
                 Second = contract Number
                 FirstNullable = First?
@@ -646,7 +716,7 @@ final class InterpreterTest {
 
     @Test
     void typeAndReflectionUseTheSameRuntimeKindNames() {
-        assertEquals("Null\nMissing\nNumber\nFunction\nFunction\n", execute("""
+        assertEquals("Null\nMissing\nNumber\nDictionary\nFunction\n", execute("""
                 identity value = value
                 reference = @identity
                 print type ?
@@ -738,6 +808,143 @@ final class InterpreterTest {
     }
 
     @Test
+    void callableReflectionProjectsLazilyWithoutAmplifyingVisibilityOrAuthority() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("""
+                (Number) transform (Number) value = value + 1
+                metadata = @transform
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
+        interpreter.execute(new Parser("""
+                parameter = seqGet metadata.signature.parameters 0
+                print metadata.name
+                print (seqGet parameter.requirements 0).name
+                print parameter.inferred
+                print (seqGet metadata.signature.result.guarantees 0).name
+                print metadata.signature.result.inferred
+                print seqSize metadata.signature.effects.upperBound
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.sandbox(false, false, Set.of()));
+        interpreter.execute(new Parser("sandboxMetadata = @transform").parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.defining());
+        interpreter.execute(new Parser("""
+                definingParameter = seqGet metadata.signature.parameters 0
+                print metadata.name
+                print (seqGet definingParameter.inferred 0).name
+                print parameter.inferred
+                print sandboxMetadata.name
+                print (seqGet sandboxMetadata.signature.parameters 0).inferred
+                """).parseProgram());
+
+        assertEquals("~\n~\n~\n~\n~\n0\ntransform\nNumber\n~\n~\n~\n",
+                bytes.toString(StandardCharsets.UTF_8));
+
+        LangException denied = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                callable = sandboxMetadata:
+                """).parseProgram()));
+        assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, denied.diagnostic().code());
+    }
+
+    @Test
+    void ordinaryReflectionTargetsCannotAmplifyDereferenceAuthorityAcrossContexts() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+
+        interpreter.reflectionContext(ReflectionContext.sandbox(false, false, Set.of()));
+        interpreter.execute(new Parser("""
+                primitiveMetadata = @42
+                sequenceMetadata = @[1 2]
+                dictionaryMetadata = @[^answer = 42]
+                (Number) typed = 42
+                attributedMetadata = @typed
+                retainedSequence = seqAdd seqEmpty primitiveMetadata
+                retainedDictionary = dictPut dictEmpty "metadata" primitiveMetadata
+                reflectedMetadata = @primitiveMetadata
+                updatedMetadata = dictPut primitiveMetadata "extra" 1
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
+        interpreter.execute(new Parser("externalMetadata = @42").parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.defining());
+        assertDereferenceDenied(interpreter, "leaked = primitiveMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = sequenceMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = dictionaryMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = attributedMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = (seqGet retainedSequence 0):");
+        assertDereferenceDenied(interpreter, "leaked = retainedDictionary.metadata:");
+        assertDereferenceDenied(interpreter, "leaked = reflectedMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = updatedMetadata:");
+        assertDereferenceDenied(interpreter, "leaked = externalMetadata:");
+
+        interpreter.execute(new Parser("definingMetadata = @typed").parseProgram());
+        interpreter.reflectionContext(ReflectionContext.sandbox(false, false, Set.of()));
+        assertDereferenceDenied(interpreter, "leaked = definingMetadata:");
+
+        interpreter.reflectionContext(ReflectionContext.defining());
+        interpreter.execute(new Parser("""
+                restored = definingMetadata:
+                print restored
+                print restored == typed
+                """).parseProgram());
+        assertEquals("42\ntrue\n", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    private static void assertDereferenceDenied(Interpreter interpreter, String source) {
+        LangException denied = assertThrows(LangException.class,
+                () -> interpreter.execute(new Parser(source).parseProgram()));
+        assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, denied.diagnostic().code());
+    }
+
+    @Test
+    void hiddenCallableAndDescriptorMetadataRetainLanguageOwnedIdentity() {
+        Object firstIdentity = new Object();
+        Object secondIdentity = new Object();
+        CallableSignature firstSignature = signatureWithRequirement(firstIdentity, "Private");
+        CallableSignature secondSignature = signatureWithRequirement(secondIdentity, "Private");
+        Value.Callable first = new Value.FunctionValue("first", List.of("value"),
+                (values, span) -> values.getFirst().value(),
+                false, firstSignature);
+        Value.Callable alias = first;
+        Value.Callable second = new Value.FunctionValue("second", List.of("value"),
+                (values, span) -> values.getFirst().value(),
+                false, secondSignature);
+        ReflectionContext hidden = ReflectionContext.restricted(false, false, false, Set.of());
+
+        Value firstMetadata = Value.CallableMetadata.reflection(first, hidden);
+        Value aliasMetadata = Value.CallableMetadata.reflection(alias, hidden);
+        Value secondMetadata = Value.CallableMetadata.reflection(second, hidden);
+        assertTrue(ValueSemantics.equal(firstMetadata, aliasMetadata, ReflectionContext.defining()));
+        assertFalse(ValueSemantics.equal(firstMetadata, secondMetadata, ReflectionContext.defining()));
+
+        Value firstRef = reflectedRequirement(firstMetadata, ReflectionContext.defining());
+        Value secondRef = reflectedRequirement(secondMetadata, ReflectionContext.defining());
+        assertEquals(Value.Missing.INSTANCE, ((Value.ProjectedDictionary) firstRef)
+                .find("name", ReflectionContext.defining()).orElseThrow());
+        assertFalse(ValueSemantics.equal(firstRef, secondRef, ReflectionContext.defining()));
+    }
+
+    private static CallableSignature signatureWithRequirement(Object identity, String name) {
+        CallableSignature.ContractTerm requirement = new CallableSignature.NamedRef(identity, name);
+        return new CallableSignature(List.of(new CallableSignature.Parameter("value", List.of(requirement),
+                List.of(requirement), List.of(requirement))),
+                new CallableSignature.Result(List.of(requirement), List.of(requirement), List.of(requirement)),
+                new CallableSignature.Effects(List.of(), List.of(), List.of()), List.of());
+    }
+
+    private static Value reflectedRequirement(Value metadata, ReflectionContext context) {
+        Value signature = ((Value.ProjectedDictionary) metadata).find("signature", context).orElseThrow();
+        Value parameters = ((Value.ProjectedDictionary) signature).find("parameters", context).orElseThrow();
+        Value parameter = ((Value.Seq) parameters).values().getFirst();
+        Value requirements = ((Value.ProjectedDictionary) parameter).find("requirements", context).orElseThrow();
+        return ((Value.Seq) requirements).values().getFirst();
+    }
+
+    @Test
     void overloadAndCompositionReflectionUseSafeConservativeSignatureViews() {
         assertEquals("2\n2\nOutput\n1\n~\n1\n", execute("""
                 (Number) show (Number) value (Number) suffix =
@@ -759,6 +966,80 @@ final class InterpreterTest {
     }
 
     @Test
+    void derivedSignaturesProjectRepeatedAndReorderedHoles() {
+        assertEquals("2\nNumber\nString\nright\nleft\n1\n0\n", execute("""
+                (Number) combine (Number) left (String) right = 0
+                repeated = combine _1 _1
+                reordered = combine _2 _1
+
+                repeatedParameter = seqGet (@repeated).signature.parameters 0
+                print seqSize repeatedParameter.requirements
+                print (seqGet repeatedParameter.requirements 0).name
+                print (seqGet repeatedParameter.requirements 1).name
+                print (seqGet (@reordered).signature.parameters 0).name
+                print (seqGet (@reordered).signature.parameters 1).name
+                print seqSize (@repeated).signature.parameters
+                print seqSize (@repeated).signature.variables
+                """));
+    }
+
+    @Test
+    void compositionsSpecializeBridgeVariablesAndRejectOnlyProvenConflicts() {
+        assertEquals("String\nString\n0\n5\n", execute("""
+                identity value = value
+                (String) text (String) value = value
+                pipeline = identity >> text
+                print (seqGet (seqGet (@pipeline).signature.parameters 0).requirements 0).name
+                print (seqGet (@pipeline).signature.result.guarantees 0).name
+                print seqSize (@pipeline).signature.variables
+
+                dynamic dictionary key = dictionary[key]~
+                unknownPipeline = dynamic _ "value" >> text
+                print (unknownPipeline (dictPut dictEmpty "value" "5"))
+                """));
+
+        LangException incompatible = assertThrows(LangException.class, () -> execute("""
+                (Number) number (Number) value = value
+                (String) text (String) value = value
+                pipeline = number >> text
+                """));
+        assertEquals(Diagnostic.Phase.SEMANTIC, incompatible.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, incompatible.diagnostic().code());
+        assertEquals(3, incompatible.span().start().line());
+        assertEquals(2, incompatible.diagnostic().related().size());
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(output, true, StandardCharsets.UTF_8));
+        assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                print "must not run"
+                (Number) number (Number) value = value
+                (String) text (String) value = value
+                pipeline = number >> text
+                """).parseProgram()));
+        assertEquals("", output.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void overloadHolePartialsExposeProjectedSurvivorSignatures() {
+        assertEquals("2\n1\n2\n2\nNumber\nString\n1\nString\n", execute("""
+                route (Number) left (String) right = "number-text"
+                route (String) left (Number) right = "text-number"
+                repeated = route _1 _1
+                numberFirst = route 1
+                metadata = @repeated
+                firstVariant = seqGet metadata.variants 0
+                print seqSize metadata.variants
+                print seqSize metadata.signature.parameters
+                print seqSize (seqGet firstVariant.parameters 0).requirements
+                print seqSize (seqGet (seqGet metadata.variants 1).parameters 0).requirements
+                print (seqGet (seqGet firstVariant.parameters 0).requirements 0).name
+                print (seqGet (seqGet firstVariant.parameters 0).requirements 1).name
+                print seqSize (@numberFirst).variants
+                print (seqGet (seqGet (seqGet (@numberFirst).variants 0).parameters 0).requirements 0).name
+                """));
+    }
+
+    @Test
     void callableReflectionPreservesGeneralizedParameterResultRelationships() {
         assertEquals("VariableRef\n0\nVariableRef\n0\n1\n", execute("""
                 identity value = value
@@ -774,14 +1055,14 @@ final class InterpreterTest {
     }
 
     @Test
-    void functionReferencesAreReflectiveNonCallableAndUseTargetIdentity() {
-        assertEquals("Function\n1\ntrue\nfalse\nFunction\n2\ntrue\n~\n", execute("""
+    void functionMetadataIsStructuralAndNonCallable() {
+        assertEquals("Function\n1\ntrue\nfalse\nFunction\n2\nfalse\n~\n", execute("""
                 identity value = value
                 other value = value
                 reference = @identity
                 sameReference = @identity
                 reflectedAgain = @reference
-                operatorReference = @+
+                operatorReference = @(+)
 
                 print reference.kind
                 print reference.remaining
@@ -800,6 +1081,36 @@ final class InterpreterTest {
                 """));
         assertEquals(Diagnostic.Codes.NOT_CALLABLE, error.diagnostic().code());
         assertTrue(error.getMessage().contains("Value is not callable"));
+    }
+
+    @Test
+    void dereferencesReflectionDictionariesForFunctionsValuesAndMembers() {
+        assertEquals("Dictionary\nFunction\n5\n7\nNumber\n9\n9\nSequence\n", execute("""
+                add left right = left + right
+                metadata = @add
+                alias = metadata:
+                value = 7
+                valueMetadata = @value
+                object = [^field = 9]
+                fieldName = "field"
+
+                print type metadata
+                print @add.kind
+                print alias 2 3
+                print valueMetadata:
+                print (@42).kind
+                print object.@field:
+                print @(object[fieldName]):
+                print @[1 2].kind
+                """));
+
+        LangException ordinary = assertThrows(LangException.class, () -> execute("value = 1\nprint value:\n"));
+        assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, ordinary.diagnostic().code());
+        assertEquals(7, ordinary.span().start().column());
+
+        LangException reflectedFunctionApplied = assertThrows(LangException.class,
+                () -> execute("identity value = value\nprint @identity 1\n"));
+        assertEquals(Diagnostic.Codes.NOT_CALLABLE, reflectedFunctionApplied.diagnostic().code());
     }
 
     @Test
@@ -839,10 +1150,11 @@ final class InterpreterTest {
 
     @Test
     void partialApplicationCapturesFixedOperandsEagerly() {
-        assertEquals("captured\ncaptured\n", execute("""
+        assertEquals("captured\n0\ncaptured\n", execute("""
                 (Output) announce value = print value
                 first left right = left
                 partial = first (announce "captured") _
+                print seqSize (@partial).signature.effects.upperBound
                 print partial "ignored"
                 """));
     }
@@ -1043,7 +1355,7 @@ final class InterpreterTest {
 
     @Test
     void unifiesStaticExportedDynamicAndUpdatedDictionaryFields() {
-        assertEquals("true\ntrue\ntrue\nDictionary\nAda\nAda\ntrue\n[age, name]\ntrue\ntrue\n",
+        assertEquals("true\ntrue\ntrue\nDictionary\nAda\nAda\ntrue\n[ \"age\" \"name\" ]\ntrue\ntrue\n",
                 execute("""
                         exported =
                           ^name = "Ada"
@@ -1128,7 +1440,7 @@ final class InterpreterTest {
 
     @Test
     void persistentCollectionsKeepOlderValuesAndDictionaryReplacementOrder() {
-        assertEquals("[1]\n[1, 2]\n[first, second]\n22\n", execute("""
+        assertEquals("[ 1 ]\n[ 1 2 ]\n[ \"first\" \"second\" ]\n22\n", execute("""
                 first = seqAdd seqEmpty 1
                 second = seqAdd first 2
                 print first
@@ -1287,7 +1599,7 @@ final class InterpreterTest {
 
     @Test
     void contractReflectionIncludesLanguageOwnedRequirementNames() {
-        assertEquals("[positive]\n", execute("""
+        assertEquals("[ \"positive\" ]\n", execute("""
                 positive value = value > 0
                 Positive = contract positive
                 print (@Positive).requirements
@@ -1463,6 +1775,89 @@ final class InterpreterTest {
                 action (NestedAlias) value = value
                 """, "Duplicate definition: action", 5, 1);
         assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, aliasDuplicate.diagnostic().code());
+    }
+
+    @Test
+    void standardToStringIsExtensibleAndDispatchesRecursivelyInsideCollections() {
+        assertEquals("plain\nnumber:7\n[ number:1 number:2 ]\n[\n  special\n]\n", execute("""
+                (String) toString (Number) value = "number:" + numberText value
+                Special = contract Dictionary
+                (Special) special = [^value = 1]
+                (String) toString (Special) value = "special"
+
+                print toString "plain"
+                print toString 7
+                print toString [1 2]
+                print toString [special]
+                """));
+    }
+
+    @Test
+    void standardLibraryCallablesCanBeExtendedByContractSpecificVariants() {
+        assertEquals("custom\n", execute("""
+                (String) numberText (String) value = "custom"
+                print numberText "anything"
+                """));
+    }
+
+    @Test
+    void toStringRejectsUnsupportedCallablesAndNonStringSpecializationResults() {
+        assertDiagnostic("print toString print", "Callable values do not have", 1, 7);
+        LangException result = expectDiagnostic("""
+                (String) toString (Number) value = 1
+                print toString 2
+                """, "String", 1, 1);
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, result.diagnostic().code());
+    }
+
+    @Test
+    void logicalIndentationMappingsExecuteLikeOrdinaryIndentedBlocks() {
+        assertEquals("3\n", execute("main = \\\\\nfirst = 1\n^result = first + 2\n\\*\nprint main.result\n"));
+    }
+
+    @Test
+    void mapTransformsSequencesInOrderThroughOrdinaryCallableForms() {
+        assertEquals("[]\n[ 2 ]\n[ 2 4 6 ]\n[ 4 6 ]\n[ 4 8 ]\n[ ? ~ 3 ]\n", execute("""
+                double value = value * 2
+                add left right = left + right
+                stringify value = numberText value
+                print map double []
+                print map double [1]
+                print map double [1 2 3]
+                print map (add 3) [1 3]
+                print map (double >> double) [1 2]
+                identity value = value
+                print map identity [? ~ 3]
+                """));
+    }
+
+    @Test
+    void mapHandlesLargeAndNestedSequencesWithoutMutation() {
+        String values = java.util.stream.IntStream.range(0, 10_000)
+                .mapToObj(Integer::toString).collect(java.util.stream.Collectors.joining(" "));
+        assertEquals("10000\n[\n  1\n  [ 2 ]\n]\n[\n  1\n  [ 2 ]\n]\n", execute("""
+                identity value = value
+                source = [%s]
+                mapped = map identity source
+                print seqSize mapped
+                nested = [1 [2]]
+                print nested
+                print map identity nested
+                """.formatted(values)));
+    }
+
+    @Test
+    void mapRejectsInvalidInputsAndRetainsLocatedElementFailures() {
+        LangException transform = expectDiagnostic("map 1 [2]", "exactly one argument", 1, 5);
+        assertEquals(Diagnostic.Codes.INVALID_MAP_TRANSFORM, transform.diagnostic().code());
+        assertDiagnostic("add left right = left\nmap add [1]", "exactly one argument", 2, 5);
+        assertDiagnostic("map numberText [^value = 1]", "Expected sequence", 1, 16);
+
+        LangException element = expectDiagnostic("map numberText [1 \"bad\"]", "Expected number", 1, 16);
+        assertEquals(Diagnostic.Codes.EXPECTED_NUMBER, element.diagnostic().code());
+
+        LangException effects = expectDiagnostic("(pure) mapper = map", "known effect upper bound", 1, 17);
+        assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, effects.diagnostic().code());
     }
 
     private String execute(String source) {

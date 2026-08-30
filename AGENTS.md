@@ -224,3 +224,97 @@ Before substantial implementation:
 4. Propose a concrete implementation plan.
 5. Implement in small testable stages.
 6. Report tests run and remaining limitations.
+
+## Testing
+
+Run the baseline tests with:
+```bash
+GRADLE_USER_HOME="$PWD/.gradle-codex" ./gradlew test
+GRADLE_USER_HOME="$PWD/.gradle-codex" ./test.sh
+```
+
+## Repeatable workflows
+
+The following case-insensitive shorthand requests invoke repository-specific workflows. Extra text
+after an alias may narrow or extend its stated scope. Each alias authorizes only the repository and
+GitHub mutations explicitly listed for that workflow; it does not authorize unrelated external
+actions. Preserve pre-existing user changes, and stop if they cannot be separated safely. Ask before
+unresolved language-design decisions, destructive operations, major-version changes, or materially
+broader scope.
+
+### `next step`
+
+* Read the Caret GitHub project and implement every card currently in `In Progress`.
+* If `In Progress` is empty, promote the first `Todo` card in project order to `In Progress` and
+  implement it.
+* Inspect the relevant implementation and canonical specifications before editing. Resolve
+  discoverable facts independently, but ask before inventing unresolved syntax or observable
+  semantics.
+* Complete the code, automated tests, runnable `.caret` examples, owning `spec/` updates, public
+  documentation, and conformance evidence required by each card.
+* Run the full baseline suites from the Testing section.
+* Only after implementation and required verification succeed, comment on the linked issue with
+  completion evidence, close it, and move its project card to `Done`.
+* If required work or verification remains incomplete, leave the issue open and do not move the
+  card to `Done`; report the blocker and remaining work.
+
+### `code review`
+
+* Review committed branch changes from the merge base with current `origin/main`, together with
+  staged and unstaged worktree changes.
+* Prioritize correctness bugs, uncaught edge cases, code duplication, technical debt, unnecessary
+  complexity, maintenance risk, specification drift, and missing tests.
+* Report findings first in severity order, with precise file and line references and concise
+  remediation guidance. If no findings exist, say so and identify residual testing or coverage
+  risks.
+* Do not edit code, GitHub issues, or project state unless the user explicitly requests fixes.
+
+### `card details`
+
+* Fetch the complete project through explicit sufficient limits or pagination; never rely on a
+  GitHub CLI default page size. Report the count and identities of all discovered `Underspecified`
+  cards before proposing changes.
+* Inspect every card in `Underspecified`, its linked issue, dependencies, relevant repository state,
+  and canonical specifications. Also inspect relevant cards in every other column for dependencies,
+  overlap, conflicts, superseding work, and already-settled design decisions; do not change those
+  cards unless they are themselves being clarified under this workflow.
+* Resolve discoverable facts independently. Ask targeted questions only for product or
+  language-design ambiguity that the repository cannot settle.
+* Replace vague titles and bodies with implementation-specific goals, required behavior,
+  constraints, dependencies, acceptance criteria, tests, documentation requirements, and explicit
+  exclusions.
+* Move fully clarified cards to `Todo`. Leave cards with unresolved decisions in `Underspecified`.
+* Do not implement the cards under this alias.
+
+### `spec sync`
+
+* Compare the canonical `spec/` corpus with implemented behavior, tests, examples, clarified GitHub
+  issues, `LANGUAGE.md`, `PLAN.md`, `CONFORMANCE.md`, `DIAGNOSTICS.md`, `README.md`, and
+  `WEB_INTRODUCTION.md`.
+* Repair factual and documentation drift when intent is unambiguous. Ask before resolving conflicts
+  between observable language behaviors; neither current code nor a GitHub card silently overrides
+  canonical semantics.
+* Update the owning `spec/` document first. Use `LANGUAGE.md` only for navigation, global invariants,
+  or shared terminology, and update other documentation and conformance records as applicable.
+* Do not change interpreter behavior under this alias.
+* Run documentation and corpus checks, plus the full baseline suites when the affected documentation
+  is covered by them.
+
+### `new PR`
+
+* Require a cleanly understood change set and preserve unrelated user changes. Fetch current
+  `main`, inspect the complete diff, and run the full baseline suites before creating or updating
+  the pull request.
+* Update `VERSION` according to the existing policy: increment `UPDATE` normally; increment `MINOR`
+  and reset `UPDATE` only when a roadmap phase is completed; never increment `MAJOR` without
+  explicit project-owner authorization. Validate the transition with the repository script.
+* If currently on `main`, create a concise feature branch derived from the changes.
+* Commit the intended pending changes with a concise summary, push the branch, and create a
+  ready-for-review pull request targeting `main`.
+* Use a clear title and a concise body covering behavior, tests, documentation, linked issues, and
+  the version transition. If the branch already has an open pull request to `main`, update it rather
+  than creating a duplicate.
+* Never merge the pull request, force-push, or include unrelated changes.
+
+After every repeatable workflow, report tests run, GitHub state changes, remaining limitations, and
+links to created or updated issues and pull requests.

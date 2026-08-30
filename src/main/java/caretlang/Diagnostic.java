@@ -13,6 +13,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String LEX_INVALID_NUMBER = "LEX_INVALID_NUMBER";
         static final String LEX_UNTERMINATED_STRING = "LEX_UNTERMINATED_STRING";
         static final String LEX_INVALID_ESCAPE = "LEX_INVALID_ESCAPE";
+        static final String LEX_INVALID_LAYOUT_MARKER = "LEX_INVALID_LAYOUT_MARKER";
         static final String PARSE_INVALID_SYNTAX = "PARSE_INVALID_SYNTAX";
         static final String PARSE_UNEXPECTED_INDENT = "PARSE_UNEXPECTED_INDENT";
         static final String PARSE_INVALID_EXPRESSION = "PARSE_INVALID_EXPRESSION";
@@ -47,6 +48,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String INVALID_INFIX_ARITY = "INVALID_INFIX_ARITY";
         static final String INVALID_COMPOSITION_LEFT = "INVALID_COMPOSITION_LEFT";
         static final String INVALID_COMPOSITION_RIGHT = "INVALID_COMPOSITION_RIGHT";
+        static final String INVALID_MAP_TRANSFORM = "INVALID_MAP_TRANSFORM";
         static final String TOO_MANY_ARGUMENTS = "TOO_MANY_ARGUMENTS";
         static final String CALL_DEPTH_EXCEEDED = "CALL_DEPTH_EXCEEDED";
         static final String INVALID_CONDITION = "INVALID_CONDITION";
@@ -60,9 +62,11 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String INVALID_FIELD_TARGET = "INVALID_FIELD_TARGET";
         static final String MISSING_FIELD = "MISSING_FIELD";
         static final String INVALID_DYNAMIC_FIELD_NAME = "INVALID_DYNAMIC_FIELD_NAME";
+        static final String NOT_DEREFERENCEABLE = "NOT_DEREFERENCEABLE";
         static final String MIXED_COLLECTION_SHAPE = "MIXED_COLLECTION_SHAPE";
         static final String DUPLICATE_FIELD = "DUPLICATE_FIELD";
         static final String CALLABLE_EQUALITY = "CALLABLE_EQUALITY";
+        static final String CALLABLE_RENDERING = "CALLABLE_RENDERING";
         static final String MIXED_HOLE_STYLES = "MIXED_HOLE_STYLES";
         static final String INVALID_ASSERTION = "INVALID_ASSERTION";
         static final String INTERNAL_ERROR = "INTERNAL_ERROR";

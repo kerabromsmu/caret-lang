@@ -86,14 +86,19 @@ final class MainTest {
                 10
                 ~
                 10
-                [(field "kind" Dictionary), (field "names" count,name), (field "shape" named), (field "size" 2)]
+                [
+                  "kind" = "Dictionary"
+                  "names" = "count,name"
+                  "shape" = "named"
+                  "size" = 2
+                ]
                 """, invocation.output());
         assertEquals("", invocation.error());
     }
 
     @Test
     void collectionOrderingExampleRunsEndToEnd() {
-        Invocation invocation = run(Path.of("examples/collection_order.caret"));
+        Invocation invocation = run(Path.of("examples/features/collection_order.caret"));
         assertEquals(0, invocation.exitCode());
         assertEquals("Collection\nempty\ntrue\ntrue\na,with,z\n1\ntrue\ntrue\nDictionary\n",
                 invocation.output());

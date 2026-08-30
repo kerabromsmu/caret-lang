@@ -33,7 +33,7 @@ final class LanguageSyntax {
             "true", "false", "and", "or", "not", "with", "outer", "root", "module");
     private static final Set<String> NON_ARGUMENT_KEYWORDS = Set.of("and", "or", "not");
     private static final Set<String> MULTI_CHARACTER_SYMBOLS = Set.of("==", "!=", ">=", "<=", ">>", "->");
-    private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@+-*/%^=<>.&!?~$";
+    private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@:+-*/%^=<>.&!?~$";
 
     static int contractParameterArity(String name) {
         return name.equals("Sequence") ? 1 : 0;

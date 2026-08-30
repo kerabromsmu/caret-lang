@@ -1981,13 +1981,13 @@ as the argument to `print`.
 Therefore:
 
 ```caret
-map values $ x -> x * 2
+map (x -> x * 2) values
 ```
 
 means:
 
 ```caret
-map values (x -> x * 2)
+map (x -> x * 2) values
 ```
 
 This allows lambdas to be passed without requiring parentheses in many common cases.
@@ -2071,7 +2071,7 @@ use (parse >> validate)
 Likewise:
 
 ```caret
-map values $ normalize >> validate
+map (normalize >> validate) values
 ```
 
 passes the composed function:
@@ -2276,4 +2276,3 @@ f $ expression
 means evaluate the complete right-hand expression and pass its result to the left-hand expression.
 
 Together, `with`, `outer`, and `$` allow Caret code to remain concise without introducing implicit object receivers or excessive grouping parentheses.
-

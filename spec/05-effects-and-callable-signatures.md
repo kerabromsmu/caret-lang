@@ -242,6 +242,11 @@ it must not encode a silent contract-first or effect-first precedence. Callable 
 metadata is independent: an assignment such as `(pure Int) callback = value` constrains `callback`
 itself to satisfy `Int`, not the result of calling it.
 
+Implementation status: the prototype classifies every declaration clause once into this analyzed
+form. Contract inference, overload dispatch, runtime boundary validation, effect constraints, and
+callable-signature metadata consume that shared result; raw effect terms never appear as reflected
+parameter or result requirements.
+
 <a id="callable-signature-metadata"></a>
 ## Callable signature metadata
 
@@ -276,9 +281,12 @@ instance retains its substitutions and is not generalized again.
 
 Implementation status: the prototype implements right-associative, exact-arity arrow contracts,
 inline or named clause use, structural predicate checking, contravariant parameters,
-covariant results, explicit visible effect allowances, and standalone contiguous numbered variables.
-Variables shared across an enclosing declaration header, complete substitution through derived
-callables, and the full conservative overlap proof for overloads remain planned.
+covariant results, explicit visible effect allowances, and contiguous numbered variables shared
+across complete declaration headers. Prefix and hole partials retain substitutions in their derived
+signatures. Derived signatures project repeated and reordered holes, composition specializes
+compatible parameter/result variables and unions invocation effects, and overload partials retain
+projected survivor signatures with conservative summaries. The full conservative overlap proof for
+arrow-contract satisfaction across overload domains remains planned.
 
 A callable signature is an ordinary first-class structural contract written with a bracketed
 parameter-requirement list and a right-associative arrow:
@@ -337,11 +345,20 @@ For example:
   ...
 ```
 
-generalizes one input-element contract and one output-element contract, then instantiates both
+The prototype currently implements the runtime `map transform values` callable for Sequences.
+Until higher-order effect substitution is implemented, its public callable metadata deliberately
+reports an unknown effect upper bound rather than incorrectly
+claiming purity or a fixed effect set. Runtime application still uses the ordinary guarded callable
+path and preserves element order.
+
+This declaration generalizes one input-element contract and one output-element contract, then instantiates both
 freshly at every use of `map`. Variables may appear as ordinary constructor arguments and within
 conjunctions such as `(_1 Number)`. All indices from `_1` through the highest used index must occur;
 their first occurrence order need not match numeric order. An unnumbered `_` is invalid in contract-
 variable context, and ordinary expression holes retain their existing partial-application meaning.
+Each variable must occur at least twice, because a single occurrence expresses no relationship.
+Incompatible concrete bounds on repeated occurrences produce `INCOMPATIBLE_CONTRACTS` at the later
+bound with the earlier bound attached as related source information.
 
 A standalone generic arrow contract quantifies its own variables. A candidate then satisfies it
 only when the candidate scheme is at least as general; a monomorphic `Int -> Int` callable does not
@@ -385,8 +402,8 @@ being equal, while aliases preserve identity.
 <a id="callable-reflection-schema"></a>
 ### Callable reflection schema
 
-Reflecting a callable produces an immutable, non-callable `Function` reference with a fixed public
-shape:
+Reflecting a callable produces an immutable, non-callable metadata Dictionary with a fixed public
+shape and an opaque dereference target:
 
 ```text
 kind        "Function"
@@ -448,25 +465,42 @@ declaration is the public interface. When an inferred component is itself the un
 interface, that component remains visible. The effective requirement, guarantee, and upper-bound
 fields always contain exactly the facts on which code in the current environment may rely.
 
+Callable metadata Collections are projected lazily when their fields are observed. Projection uses
+the intersection of the visibility captured when reflection occurred and the current observer's
+environment, so moving metadata can preserve or reduce visibility but can never amplify it. This
+rule applies recursively to nested signature and descriptor Collections, enumeration, rendering,
+equality, and dereference. The observation context and projection mechanism are interpreter/compiler
+state and are not Caret values or reflective fields.
+
 An overload's top-level `signature` is its conservative summary. Its parameter requirements are
 `~` while several alternative domains survive; applicability consumers inspect `variants` rather
 than treating those alternatives as a conjunction. Common result guarantees and the unioned effect
 bound remain available. When narrowing leaves one variant, the summary is that specialized exact
 signature, while `variants` continues to identify the surviving overload variant.
 
-Function references compare by target callable identity as already specified. Signature,
-parameter, result, effect-summary, and variable metadata compare structurally after canonical
+Function metadata references compare by their underlying callable target, so aliases of one target
+remain equal while distinct callables do not collapse after names are hidden. Signature, parameter,
+result, effect-summary, and variable metadata compare structurally after canonical
 variable numbering. `ContractRef` and `Effect` values compare by their underlying descriptor
-identity. Reflecting the same reference again returns the same view; a newly narrowed partial is a
-new callable identity with a new immutable view.
+identity. Dereferencing returns the original callable; reflecting the metadata itself describes
+that Dictionary. A newly narrowed partial has a new callable identity and immutable metadata view.
 
 Callable reflection never exposes capture names or values, bound partial values, implementation
 kind, source spans, native origin, Java objects, or capability handles. Authorized semantic-code
 reflection is the separate mechanism for inspecting code and still obeys module, sandbox, and
 authority visibility.
 
+Implementation status: lazy non-amplifying projection, descriptor identity, aliases, derived
+callables, overload survivors, and opaque authorized dereference are implemented through an
+internal observation-context seam. The later module and sandbox runtimes will supply their concrete
+contexts to this seam; no module or sandbox handle is exposed to Caret.
+
 <a id="partial-and-composed-signatures"></a>
 ### Partial and composed signatures
+
+Implementation status: implemented for named functions, built-ins, prefix and hole partials,
+compositions, and narrowed closed overload sets. Proven bridge conflicts use the semantic
+`INCOMPATIBLE_CONTRACTS` diagnostic; relationships that cannot be proved remain runtime-checked.
 
 Supplying an ordinary prefix argument validates that parameter, specializes the current signature
 variables, removes the filled parameter, and preserves the specialized result and invocation-effect

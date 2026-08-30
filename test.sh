@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+scripts/test-version-policy.sh
+bash scripts/check-example-coverage.sh
 CARET_TEST_TMP=$(mktemp -d /tmp/caret-tests.XXXXXX)
 trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
 ./gradlew --quiet installDist
-CARET_LAUNCHER=build/install/caret-lang-prototype/bin/caret-lang-prototype
+CARET_LAUNCHER=build/install/caret/bin/caret
 
 expect_failure() {
   local source_file=$1
@@ -67,32 +69,41 @@ count,name
 EXPECTED
 diff -u "$CARET_TEST_TMP/expected.txt" "$CARET_TEST_TMP/output.txt"
 
-"$CARET_LAUNCHER" examples/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
-diff -u examples/implemented_features.expected "$CARET_TEST_TMP/implemented-features-output.txt"
+"$CARET_LAUNCHER" examples/features/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
+diff -u examples/features/implemented_features.expected "$CARET_TEST_TMP/implemented-features-output.txt"
 
-"$CARET_LAUNCHER" examples/contracts.caret > "$CARET_TEST_TMP/contracts-output.txt"
-diff -u examples/contracts.expected "$CARET_TEST_TMP/contracts-output.txt"
+"$CARET_LAUNCHER" examples/features/contracts.caret > "$CARET_TEST_TMP/contracts-output.txt"
+diff -u examples/features/contracts.expected "$CARET_TEST_TMP/contracts-output.txt"
 
-"$CARET_LAUNCHER" examples/contract_inference.caret > "$CARET_TEST_TMP/contract-inference-output.txt"
-diff -u examples/contract_inference.expected "$CARET_TEST_TMP/contract-inference-output.txt"
+"$CARET_LAUNCHER" examples/features/contract_inference.caret > "$CARET_TEST_TMP/contract-inference-output.txt"
+diff -u examples/features/contract_inference.expected "$CARET_TEST_TMP/contract-inference-output.txt"
 
-"$CARET_LAUNCHER" examples/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
-diff -u examples/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
+"$CARET_LAUNCHER" examples/features/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
+diff -u examples/features/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
 
-"$CARET_LAUNCHER" examples/overloads.caret > "$CARET_TEST_TMP/overloads-output.txt"
-diff -u examples/overloads.expected "$CARET_TEST_TMP/overloads-output.txt"
+"$CARET_LAUNCHER" examples/features/overloads.caret > "$CARET_TEST_TMP/overloads-output.txt"
+diff -u examples/features/overloads.expected "$CARET_TEST_TMP/overloads-output.txt"
 
-"$CARET_LAUNCHER" examples/callable_reflection.caret > "$CARET_TEST_TMP/callable-reflection-output.txt"
-diff -u examples/callable_reflection.expected "$CARET_TEST_TMP/callable-reflection-output.txt"
+"$CARET_LAUNCHER" examples/features/callable_reflection.caret > "$CARET_TEST_TMP/callable-reflection-output.txt"
+diff -u examples/features/callable_reflection.expected "$CARET_TEST_TMP/callable-reflection-output.txt"
 
-"$CARET_LAUNCHER" examples/arrow_contracts.caret > "$CARET_TEST_TMP/arrow-contracts-output.txt"
-diff -u examples/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contracts-output.txt"
+"$CARET_LAUNCHER" examples/features/arrow_contracts.caret > "$CARET_TEST_TMP/arrow-contracts-output.txt"
+diff -u examples/features/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contracts-output.txt"
 
-"$CARET_LAUNCHER" examples/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
-diff -u examples/effects.expected "$CARET_TEST_TMP/effects-output.txt"
+"$CARET_LAUNCHER" examples/features/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
+diff -u examples/features/effects.expected "$CARET_TEST_TMP/effects-output.txt"
 
-"$CARET_LAUNCHER" examples/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
-diff -u examples/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
+"$CARET_LAUNCHER" examples/features/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
+diff -u examples/features/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
+
+"$CARET_LAUNCHER" examples/features/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
+diff -u examples/features/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
+
+"$CARET_LAUNCHER" examples/features/layout_mapping.caret > "$CARET_TEST_TMP/layout-mapping-output.txt"
+diff -u examples/features/layout_mapping.expected "$CARET_TEST_TMP/layout-mapping-output.txt"
+
+"$CARET_LAUNCHER" examples/features/map.caret > "$CARET_TEST_TMP/map-output.txt"
+diff -u examples/features/map.expected "$CARET_TEST_TMP/map-output.txt"
 
 run_test_file examples/testing.caret "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
@@ -240,6 +251,7 @@ expect_failure examples/errors/not_a_contract.caret unused
 expect_failure examples/errors/dynamic_not_a_contract.caret unused
 expect_failure examples/errors/contract_violation.caret unused
 expect_failure examples/errors/incompatible_inferred_contracts.caret unused
+expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
 expect_failure examples/errors/invalid_refinement.caret unused
 expect_failure examples/errors/inconsistent_overload_arity.caret unused

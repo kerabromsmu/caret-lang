@@ -2,4 +2,4 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ./gradlew --quiet installDist
-exec build/install/caret-lang-prototype/bin/caret-lang-prototype
+exec build/install/caret/bin/caret

@@ -14,6 +14,7 @@ from ordinary Caret source use focused Java evidence.
 | LEX-UNICODE-FORM | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_form.caret` |
 | LEX-INVALID-UNICODE | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_escape.caret` |
 | LEX-INVALID-CODE-POINT | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_code_point.caret` |
+| LEX-INVALID-LAYOUT-MARKER | public | LEX_INVALID_LAYOUT_MARKER | `LexerTest#layoutMarkersIgnoreCommentsAndStringsAndRejectInvalidPlacement` |
 | PARSE-NESTING-DEPTH | public | PARSE_INVALID_EXPRESSION | `examples/errors/expression_nesting_depth.caret` |
 | PARSE-UNEXPECTED-INDENT | public | PARSE_UNEXPECTED_INDENT | `examples/errors/unexpected_indent.caret` |
 | PARSE-INCONSISTENT-INDENT | public | PARSE_UNEXPECTED_INDENT | `examples/errors/inconsistent_continuation_indent.caret` |
@@ -37,10 +38,12 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-PREMATURE-READ | internal | READ_BEFORE_INITIALIZATION | `InterpreterTest#reportsReadsBeforeSequentialDeclarations` |
 | RUNTIME-UNKNOWN-NAME | public | UNKNOWN_NAME | `examples/errors/unknown_name.caret` |
 | RUNTIME-NOT-CALLABLE | public | NOT_CALLABLE | `examples/errors/not_callable.caret` |
+| RUNTIME-NOT-DEREFERENCEABLE | public | NOT_DEREFERENCEABLE | `InterpreterTest#dereferencesReflectionDictionariesForFunctionsValuesAndMembers` |
 | RUNTIME-INFIX-NOT-CALLABLE | public | NOT_CALLABLE | `examples/errors/non_callable_infix.caret` |
 | RUNTIME-INVALID-INFIX-ARITY | public | INVALID_INFIX_ARITY | `examples/errors/invalid_infix_arity.caret` |
 | RUNTIME-INVALID-COMPOSITION-LEFT | public | INVALID_COMPOSITION_LEFT | `examples/errors/non_callable_composition.caret` |
 | RUNTIME-INVALID-COMPOSITION-RIGHT | public | INVALID_COMPOSITION_RIGHT | `examples/errors/invalid_composition_arity.caret` |
+| RUNTIME-INVALID-MAP-TRANSFORM | public | INVALID_MAP_TRANSFORM | `InterpreterTest#mapRejectsInvalidInputsAndRetainsLocatedElementFailures` |
 | RUNTIME-AMBIGUOUS-CALL-ARITY | public | TOO_MANY_ARGUMENTS | `examples/errors/ambiguous_call_arity.caret` |
 | INTERNAL-TOO-MANY-FUNCTION-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
 | INTERNAL-TOO-MANY-PARTIAL-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
@@ -59,6 +62,7 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-MISSING-REFLECTED-FIELD | public | MISSING_FIELD | `examples/errors/missing_reflected_field.caret` |
 | RUNTIME-INVALID-DYNAMIC-FIELD | public | INVALID_DYNAMIC_FIELD_NAME | `examples/errors/invalid_dynamic_key.caret` |
 | RUNTIME-CALLABLE-EQUALITY | public | CALLABLE_EQUALITY | `examples/errors/callable_equality.caret` |
+| RUNTIME-CALLABLE-RENDERING | public | CALLABLE_RENDERING | `InterpreterTest#toStringRejectsUnsupportedCallablesAndNonStringSpecializationResults` |
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
 | RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret` |
@@ -66,13 +70,14 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | RUNTIME-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-INCOMPATIBLE-CONTRACTS | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_inferred_contracts.caret` |
+| SEMANTIC-INCOMPATIBLE-COMPOSITION | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_composition_contracts.caret` |
 | SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
 | SEMANTIC-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `examples/errors/mixed_collection_shape.caret` |
 | SEMANTIC-DUPLICATE-FIELD | public | DUPLICATE_FIELD | `InterpreterTest#rejectsMixedAndDuplicateNamedCollectionElements` |
 | RUNTIME-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `InterpreterTest#fieldCollectionsRejectMixedDuplicateAndNonStringKeys` |
 | RUNTIME-DUPLICATE-FIELD | public | DUPLICATE_FIELD | `InterpreterTest#fieldCollectionsRejectMixedDuplicateAndNonStringKeys` |
 | SEMANTIC-INVALID-REFINEMENT | public | INVALID_REFINEMENT | `ContractInferenceTest#validatesOnlyProvenPureUnaryBooleanRefinements`; `InterpreterTest#invalidRefinementsAreRejectedBeforeProgramEffects`; `examples/errors/invalid_refinement.caret` |
-| SEMANTIC-INVALID-CONTRACT-VARIABLE | public | INVALID_CONTRACT_VARIABLE | `InterpreterTest#arrowContractVariablesAreContiguousAndRequireGenericRelationships` |
+| SEMANTIC-INVALID-CONTRACT-VARIABLE | public | INVALID_CONTRACT_VARIABLE | `InterpreterTest#arrowContractVariablesAreContiguousAndRequireGenericRelationships`; `InterpreterTest#declarationVariablesIncludeNestedArrowsAndRejectUnrelatedOccurrences` |
 | SEMANTIC-AMBIGUOUS-CLAUSE-NAME | public | AMBIGUOUS_CLAUSE_NAME | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-UNKNOWN-CLAUSE-NAME | public | UNKNOWN_CLAUSE_NAME | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-CONFLICTING-EFFECT-ALLOWANCE | public | CONFLICTING_EFFECT_ALLOWANCE | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |

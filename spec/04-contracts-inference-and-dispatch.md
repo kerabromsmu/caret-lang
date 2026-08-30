@@ -115,9 +115,9 @@ factory          // calls factory and produces its named Collection
 ```
 
 This rule is not limited to zero-argument functions. `@function` refers to the function binding
-without invoking it regardless of the function's arity. The result is a non-callable function
-reference whose reflective fields include `kind` and `remaining`. References to the same function
-compare equal by target identity; references to different functions do not.
+without invoking it regardless of the function's arity. The result is a non-callable metadata
+Dictionary whose fields include `kind` and `remaining`; `@function:` restores the callable.
+Metadata dictionaries compare structurally by their public fields.
 
 <a id="contracts-type-derivation-and-collections"></a>
 ## Contracts, Type Derivation, and Collections
@@ -317,12 +317,18 @@ named functions until the standard environment explicitly introduces additional 
 operator variants. Merely satisfying a user-defined contract named `Comparable` does not inject an
 implementation into `<`.
 
+Standard callable bindings are extensible overload sets unless a future declaration mechanism
+seals them. Same-name Caret definitions add contract-specific variants, and ordinary most-specific dispatch selects them
+both for direct conversion and recursive collection conversion. Every specialization must return a
+String when extending `toString`. Module callables use the same binding model once imports are
+implemented; no sealing syntax is implemented yet.
+
 <a id="structural-equality-capability"></a>
 ##### Structural equality capability
 
 `Eq` in the operator matrix is the standard structural capability descriptor used by the built-in
 equality operators. Scalar values, null, missing, contract values by descriptor identity,
-non-callable function references by target identity, and language-owned metadata descriptors
+structurally comparable metadata dictionaries, and language-owned metadata descriptors
 satisfy it. Immutable collections satisfy `Eq` only when every recursively reachable
 member does. Planned containers satisfy it by stable container identity, without reading their
 contents.

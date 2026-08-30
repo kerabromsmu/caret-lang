@@ -399,11 +399,33 @@ final class ParserTest {
 
         LangException reflection = assertThrows(LangException.class,
                 () -> new Parser("print @").parseProgram());
-        assertTrue(reflection.getMessage().contains("Expected expression"));
+        assertTrue(reflection.getMessage().contains("Expected an identifier, literal"));
 
         LangException export = assertThrows(LangException.class,
                 () -> new Parser("^ = 1").parseProgram());
         assertTrue(export.getMessage().contains("Invalid assignment or function definition"));
+    }
+
+    @Test
+    void reflectionConsumesOnePrimaryAndDereferenceIsAdjacentPostfix() {
+        Field metadataField = assertInstanceOf(Field.class, expression("@function.kind"));
+        assertInstanceOf(Reflect.class, metadataField.target());
+
+        Apply application = assertInstanceOf(Apply.class, expression("@function value"));
+        assertInstanceOf(Reflect.class, application.function());
+
+        Reflect grouped = assertInstanceOf(Reflect.class, expression("@(function value)"));
+        assertInstanceOf(Group.class, grouped.target());
+
+        Reflect member = assertInstanceOf(Reflect.class, expression("object.@field"));
+        assertInstanceOf(Field.class, member.target());
+
+        Dereference dereference = assertInstanceOf(Dereference.class, expression("@function:"));
+        assertInstanceOf(Reflect.class, dereference.target());
+
+        assertInstanceOf(Reflect.class, expression("@[1 2]"));
+        assertThrows(LangException.class, () -> expression("value :"));
+        assertThrows(LangException.class, () -> expression("@-1"));
     }
 
     @Test
@@ -564,6 +586,81 @@ final class ParserTest {
             assertEquals(Diagnostic.Codes.PARSE_RESERVED_BINDING, error.diagnostic().code());
             assertEquals(1, error.span().start().column());
         }
+    }
+
+    @Test
+    void recoveringParserCollectsIndependentFailuresAndRetainsLaterDeclarations() {
+        Parser.ParseResult result = new Parser("""
+                first = (1 + )
+                kept = 2
+                second = scope.
+                later = 3
+                """).parseProgramRecovering();
+
+        assertEquals(List.of(1, 3), result.diagnostics().stream()
+                .map(diagnostic -> diagnostic.primarySpan().start().line()).toList());
+        assertEquals(List.of("kept", "later"), result.statements().stream()
+                .map(statement -> ((Assign) statement).name()).toList());
+    }
+
+    @Test
+    void recoveringParserResumesInsideFunctionBodiesWithoutCascades() {
+        Parser.ParseResult result = new Parser("""
+                make =
+                  first = 1
+                  broken = add
+                    value = 2
+                  last = 3
+                after = 4
+                """).parseProgramRecovering();
+
+        assertEquals(1, result.diagnostics().size());
+        assertEquals(4, result.diagnostics().getFirst().primarySpan().start().line());
+        FunctionDef function = assertInstanceOf(FunctionDef.class, result.statements().getFirst());
+        assertEquals(List.of("first", "last"), function.body().stream()
+                .map(statement -> ((Assign) statement).name()).toList());
+        assertEquals(5, function.span().end().line());
+        assertEquals("after", assertInstanceOf(Assign.class, result.statements().get(1)).name());
+    }
+
+    @Test
+    void recoveringParserKeepsPhysicalLocationsUnderLogicalLayoutMapping() {
+        Parser.ParseResult result = new Parser("""
+                make = \\\\
+                        broken = (1 + )
+                        valid = 2
+                """).parseProgramRecovering();
+
+        assertEquals(1, result.diagnostics().size());
+        SourcePosition location = result.diagnostics().getFirst().primarySpan().start();
+        assertEquals(2, location.line());
+        assertEquals(23, location.column());
+        FunctionDef function = assertInstanceOf(FunctionDef.class, result.statements().getFirst());
+        assertEquals("valid", assertInstanceOf(Assign.class, function.body().getFirst()).name());
+    }
+
+    @Test
+    void expressionRewritingPreservesEveryPhysicalSpan() {
+        Expr original = expression("@(source[dynamic]) value + (other 2)");
+        java.util.ArrayList<SourceSpan> before = new java.util.ArrayList<>();
+        AstTraversal.walkPreOrder(original, node -> before.add(node.span()));
+
+        Expr rewritten = AstRewriter.rewrite(original, ignored -> java.util.Optional.empty());
+        java.util.ArrayList<SourceSpan> after = new java.util.ArrayList<>();
+        AstTraversal.walkPreOrder(rewritten, node -> after.add(node.span()));
+
+        assertEquals(before, after);
+    }
+
+    @Test
+    void reflectionCanBeAnUngroupedApplicationArgument() {
+        Apply outer = assertInstanceOf(Apply.class, expression("seqGet @function.signature.parameters 0"));
+        assertInstanceOf(Literal.class, outer.argument());
+        Apply first = assertInstanceOf(Apply.class, outer.function());
+        Field parameters = assertInstanceOf(Field.class, first.argument());
+        assertEquals("parameters", parameters.field());
+        Field signature = assertInstanceOf(Field.class, parameters.target());
+        assertInstanceOf(Reflect.class, signature.target());
     }
 
     private Expr expression(String source) {

@@ -58,7 +58,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Objects.requireNonNull(key, "field key");
             Objects.requireNonNull(value, "field value");
         }
-        @Override public String toString() { return ValueSemantics.render(this); }
+        @Override public @NotNull String toString() { return ValueSemantics.render(this); }
     }
 
     /** The single shape-neutral empty collection literal. */
@@ -72,6 +72,39 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     non-sealed interface Reflective extends Value {
         Optional<Value> find(String name);
         Map<String, Value> fields();
+    }
+
+    /** Internal lazy Dictionary projection. Its observation context is never a Caret value. */
+    final class ProjectedDictionary implements Reflective {
+        @FunctionalInterface interface Projection { Map<String, Value> fields(ReflectionContext context); }
+        private final Projection projection;
+        private final ReflectionContext captured;
+        private final Value reflectedTarget;
+        private final Object semanticIdentity;
+
+        ProjectedDictionary(Projection projection, ReflectionContext captured, Value reflectedTarget,
+                            Object semanticIdentity) {
+            this.projection = Objects.requireNonNull(projection);
+            this.captured = Objects.requireNonNull(captured);
+            this.reflectedTarget = reflectedTarget;
+            this.semanticIdentity = semanticIdentity;
+        }
+
+        private ReflectionContext effective(ReflectionContext observer) { return captured.intersect(observer); }
+        @Override public Optional<Value> find(String name) { return find(name, ReflectionContext.defining()); }
+        Optional<Value> find(String name, ReflectionContext observer) {
+            return Optional.ofNullable(fields(observer).get(name));
+        }
+        @Override public Map<String, Value> fields() { return fields(ReflectionContext.defining()); }
+        Map<String, Value> fields(ReflectionContext observer) {
+            return Collections.unmodifiableMap(new LinkedHashMap<>(projection.fields(effective(observer))));
+        }
+        Optional<Value> reflectedTarget(ReflectionContext observer) {
+            return reflectedTarget != null && effective(observer).dereference()
+                    ? Optional.of(reflectedTarget) : Optional.empty();
+        }
+        Object semanticIdentity() { return semanticIdentity; }
+        @Override public String toString() { return ValueSemantics.render(this); }
     }
 
     final class Seq implements Value, Iterable<Value> {
@@ -212,6 +245,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         private final Tree root;
         private final int size;
+        private final Value reflectedTarget;
+        private final ReflectionContext reflectionContext;
         private volatile Map<String, Value> materialized;
 
         public Dictionary(Map<String, Value> entries) {
@@ -222,11 +257,30 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             }
             this.root = builtRoot;
             this.size = checked.size();
+            this.reflectedTarget = null;
+            this.reflectionContext = null;
         }
 
         private Dictionary(Tree root, int size) {
+            this(root, size, null, null);
+        }
+
+        private Dictionary(Tree root, int size, Value reflectedTarget, ReflectionContext reflectionContext) {
             this.root = Objects.requireNonNull(root);
             this.size = size;
+            this.reflectedTarget = reflectedTarget;
+            this.reflectionContext = reflectionContext;
+        }
+
+        static Dictionary reflection(Map<String, Value> entries, Value target, ReflectionContext context) {
+            Dictionary dictionary = new Dictionary(entries);
+            return new Dictionary(dictionary.root, dictionary.size, Objects.requireNonNull(target),
+                    Objects.requireNonNull(context));
+        }
+
+        Optional<Value> reflectedTarget(ReflectionContext observer) {
+            return reflectedTarget != null && reflectionContext.intersect(Objects.requireNonNull(observer)).dereference()
+                    ? Optional.of(reflectedTarget) : Optional.empty();
         }
 
         public Map<String, Value> entries() {
@@ -456,11 +510,13 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Callable left;
         private final Callable right;
         private final CallInvoker invoker;
+        private final CallableSignature signature;
 
         ComposedFunction(Callable left, Callable right, CallInvoker invoker) {
             this.left = Objects.requireNonNull(left);
             this.right = Objects.requireNonNull(right);
             this.invoker = Objects.requireNonNull(invoker);
+            this.signature = CallableSignature.compose(left.signature(), right.signature()).signature();
         }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
@@ -481,7 +537,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public CallableSignature signature() {
-            return CallableSignature.compose(left.signature(), right.signature());
+            return signature;
         }
 
         @Override public String toString() {
@@ -542,6 +598,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             BoundArguments next = bound.appended(argument);
+            CallableSignature specialized = signature.specializeFirst(argument.value());
             if (next.size() == params.size()) {
                 return implementation.apply(next.values(), callSpan);
             }
@@ -549,7 +606,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                         "Too many arguments for " + name, callSpan);
             }
-            return new FunctionValue(name, params, next, implementation, refinementEligible, signature.dropFirst());
+            return new FunctionValue(name, params, next, implementation, refinementEligible, specialized);
         }
 
         @Override public int remainingArity() {
@@ -569,88 +626,131 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
-    final class FunctionReference implements Reflective {
-        private final Callable target;
+    final class CallableMetadata {
+        private CallableMetadata() {}
 
-        FunctionReference(Callable target) {
-            this.target = Objects.requireNonNull(target);
+        static Value reflection(Callable target, ReflectionContext captured) {
+            return projected(captured, context -> fields(target, context), target);
         }
 
-        @Override public Optional<Value> find(String name) {
-            return Optional.ofNullable(fields().get(name));
-        }
-
-        @Override public Map<String, Value> fields() {
+        private static Map<String, Value> fields(Callable target, ReflectionContext context) {
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
             fields.put("kind", new Str("Function"));
-            fields.put("name", target.publicName().equals("<anonymous>")
+            fields.put("name", target.publicName().equals("<anonymous>") || !context.callableNames()
                     ? Missing.INSTANCE : new Str(target.publicName()));
             fields.put("remaining", new Num(target.remainingArity()));
-            fields.put("signature", signatureValue(target.signature()));
+            fields.put("signature", signatureValue(target.signature(), context));
             fields.put("variants", new Seq(target.variantSignatures().stream()
-                    .map(FunctionReference::signatureValue).toList()));
-            return Collections.unmodifiableMap(fields);
+                    .map(signature -> signatureValue(signature, context)).toList()));
+            return fields;
         }
 
-        private static Value signatureValue(CallableSignature signature) {
-            return metadata("Signature", Map.of(
+        private static Value signatureValue(CallableSignature signature, ReflectionContext captured) {
+            return projected(captured, context -> Map.of(
                     "parameters", new Seq(java.util.stream.IntStream.range(0, signature.parameters().size())
-                            .mapToObj(index -> parameterValue(signature.parameters().get(index), index)).toList()),
-                    "result", resultValue(signature.result()),
-                    "effects", effectsValue(signature.effects()),
-                    "variables", new Seq(signature.variables().stream().map(FunctionReference::variableValue).toList())));
+                            .mapToObj(index -> parameterValue(signature.parameters().get(index), index, context)).toList()),
+                    "result", resultValue(signature.result(), context),
+                    "effects", effectsValue(signature.effects(), context),
+                    "variables", new Seq(signature.variables().stream()
+                            .map(variable -> variableValue(variable, context)).toList())), null, "Signature");
         }
 
-        private static Value parameterValue(CallableSignature.Parameter parameter, int position) {
-            return metadata("Parameter", Map.of(
+        private static Value parameterValue(CallableSignature.Parameter parameter, int position,
+                                            ReflectionContext captured) {
+            return projected(captured, context -> Map.of(
                     "position", new Num(position),
                     "name", parameter.name() == null ? Missing.INSTANCE : new Str(parameter.name()),
-                    "requirements", refs(parameter.requirements()),
-                    "declared", nullableRefs(parameter.declared()),
-                    "inferred", nullableRefs(parameter.inferred())));
+                    "requirements", refs(effective(parameter.requirements(), parameter.declared(), context), context),
+                    "declared", nullableRefs(parameter.declared(), context),
+                    "inferred", inferredRefs(parameter.inferred(), parameter.declared(), context)), null, "Parameter");
         }
 
-        private static Value resultValue(CallableSignature.Result result) {
-            return metadata("FunctionResult", Map.of("guarantees", refs(result.guarantees()),
-                    "declared", nullableRefs(result.declared()), "inferred", nullableRefs(result.inferred())));
+        private static Value resultValue(CallableSignature.Result result, ReflectionContext captured) {
+            return projected(captured, context -> Map.of(
+                    "guarantees", refs(effective(result.guarantees(), result.declared(), context), context),
+                    "declared", nullableRefs(result.declared(), context),
+                    "inferred", inferredRefs(result.inferred(), result.declared(), context)), null, "FunctionResult");
         }
 
-        private static Value effectsValue(CallableSignature.Effects effects) {
-            return metadata("FunctionEffects", Map.of("upperBound", nullableNames(effects.upperBound(), "Effect"),
-                    "declared", nullableNames(effects.declared(), "Effect"),
-                    "inferred", nullableNames(effects.inferred(), "Effect")));
+        private static Value effectsValue(CallableSignature.Effects effects, ReflectionContext captured) {
+            return projected(captured, context -> Map.of(
+                    "upperBound", nullableEffects(effective(effects.upperBound(), effects.declared(), context), context),
+                    "declared", nullableEffects(effects.declared(), context),
+                    "inferred", inferredEffects(effects.inferred(), effects.declared(), context)), null, "FunctionEffects");
         }
 
-        private static Value variableValue(CallableSignature.Variable variable) {
-            return metadata("SignatureVariable", Map.of("index", new Num(variable.index()),
-                    "requirements", refs(variable.requirements())));
+        private static Value variableValue(CallableSignature.Variable variable, ReflectionContext captured) {
+            return projected(captured, context -> Map.of("index", new Num(variable.index()),
+                    "requirements", refs(variable.requirements(), context)), null, "SignatureVariable");
         }
 
-        private static Value refs(List<String> names) { return nullableNames(names, "ContractRef"); }
-        private static Value nullableRefs(List<String> names) {
-            return names == null ? Missing.INSTANCE : refs(names);
+        private static Value refs(List<CallableSignature.ContractTerm> terms, ReflectionContext context) {
+            return new Seq(terms.stream().map(term -> termValue(term, context)).toList());
         }
-        private static Value nullableNames(List<String> names, String kind) {
-            return names == null ? Missing.INSTANCE : new Seq(names.stream()
-                    .map(name -> name.startsWith("_")
-                            ? metadata("VariableRef", Map.of("index", new Num(
-                                    Integer.parseInt(name.substring(1)) - 1)))
-                            : metadata(kind, Map.of("name", new Str(name)))).toList());
+        private static Value nullableRefs(List<CallableSignature.ContractTerm> names, ReflectionContext context) {
+            return names == null ? Missing.INSTANCE : refs(names, context);
         }
-        private static Value metadata(String kind, Map<String, Value> values) {
-            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
-            fields.put("kind", new Str(kind));
-            fields.putAll(values);
-            return new Dictionary(fields);
+        private static Value inferredRefs(List<CallableSignature.ContractTerm> inferred,
+                                          List<CallableSignature.ContractTerm> declared,
+                                          ReflectionContext context) {
+            return !context.inferredFacts() && declared != null ? Missing.INSTANCE : nullableRefs(inferred, context);
         }
-
-        @Override public boolean equals(Object other) {
-            return other instanceof FunctionReference reference && target == reference.target;
+        private static Value termValue(CallableSignature.ContractTerm term, ReflectionContext captured) {
+            return switch (term) {
+                case CallableSignature.VariableRef variable -> metadata("VariableRef", captured,
+                        Map.of("index", new Num(variable.index())));
+                case CallableSignature.NamedRef named -> projected(captured, context -> Map.of(
+                        "name", context.names(named.identity()) ? new Str(named.name()) : Missing.INSTANCE),
+                        null, named.identity(), "ContractRef");
+                case CallableSignature.AppliedRef applied -> metadata("ContractApplication", captured, Map.of(
+                        "constructor", termValue(applied.constructor(), captured),
+                        "arguments", new Seq(applied.arguments().stream()
+                                .map(argument -> termValue(argument, captured)).toList())));
+                case CallableSignature.ModifiedRef modified -> metadata("ModifiedContractRef", captured, Map.of(
+                        "base", termValue(modified.base(), captured), "nullable", new Bool(modified.nullable()),
+                        "optional", new Bool(modified.optional())));
+                case CallableSignature.ArrowRef arrow -> metadata("ArrowContractRef", captured, Map.of(
+                        "parameters", new Seq(arrow.parameters().stream().map(requirements ->
+                                (Value) new Seq(requirements.stream()
+                                        .map(requirement -> termValue(requirement, captured)).toList())).toList()),
+                        "result", termValue(arrow.result(), captured)));
+            };
         }
-
-        @Override public int hashCode() { return System.identityHashCode(target); }
-
-        @Override public String toString() { return "<function-reference " + target + ">"; }
+        private static Value nullableEffects(List<CallableSignature.EffectRef> effects, ReflectionContext context) {
+            return effects == null ? Missing.INSTANCE : new Seq(effects.stream().map(effect ->
+                    projected(context, observer -> Map.of("name", observer.names(effect.identity())
+                            ? new Str(effect.name()) : Missing.INSTANCE), null, effect.identity(), "Effect")).toList());
+        }
+        private static Value inferredEffects(List<CallableSignature.EffectRef> inferred,
+                                             List<CallableSignature.EffectRef> declared,
+                                             ReflectionContext context) {
+            return !context.inferredFacts() && declared != null ? Missing.INSTANCE : nullableEffects(inferred, context);
+        }
+        private static <T> List<T> effective(List<T> complete, List<T> declared, ReflectionContext context) {
+            return !context.inferredFacts() && declared != null ? declared : complete;
+        }
+        private static Value metadata(String kind, ReflectionContext captured, Map<String, Value> values) {
+            return projected(captured, ignored -> values, null, kind);
+        }
+        private static Value projected(ReflectionContext captured, ProjectionBody body,
+                                       Value target, String kind) {
+            return projected(captured, body, target, null, kind);
+        }
+        private static Value projected(ReflectionContext captured, ProjectionBody body,
+                                       Value target, Object semanticIdentity, String kind) {
+            return new ProjectedDictionary(context -> {
+                LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+                fields.put("kind", new Str(kind));
+                fields.putAll(body.fields(context));
+                return fields;
+            }, captured, target, semanticIdentity);
+        }
+        private static Value projected(ReflectionContext captured, ProjectionBody body, Value target) {
+            return new ProjectedDictionary(body::fields, captured, target, target);
+        }
+        @FunctionalInterface private interface ProjectionBody {
+            Map<String, Value> fields(ReflectionContext context);
+        }
     }
 
     final class HoleFunction implements Callable {
@@ -658,18 +758,26 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final int arity;
         private final BoundArguments bound;
         private final Function<List<Argument>, Value> implementation;
+        private final CallableSignature signature;
 
         public HoleFunction(String display, int arity, Function<List<Argument>, Value> implementation) {
-            this(display, arity, BoundArguments.empty(), implementation);
+            this(display, arity, implementation,
+                    CallableSignature.unknown(java.util.Collections.nCopies(arity, null)));
+        }
+
+        HoleFunction(String display, int arity, Function<List<Argument>, Value> implementation,
+                     CallableSignature signature) {
+            this(display, arity, BoundArguments.empty(), implementation, signature);
         }
 
         private HoleFunction(String display, int arity, BoundArguments bound,
-                             Function<List<Argument>, Value> implementation) {
+                             Function<List<Argument>, Value> implementation, CallableSignature signature) {
             this.display = Objects.requireNonNull(display, "partial display");
             if (arity < 1) throw new IllegalArgumentException("Partial arity must be positive");
             this.arity = arity;
             this.bound = Objects.requireNonNull(bound);
             this.implementation = Objects.requireNonNull(implementation, "partial implementation");
+            this.signature = Objects.requireNonNull(signature, "partial signature");
         }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
@@ -679,12 +787,15 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                         "Too many arguments for partial expression", callSpan);
             }
-            return new HoleFunction(display, arity, next, implementation);
+            return new HoleFunction(display, arity, next, implementation,
+                    signature.specializeFirst(argument.value()));
         }
 
         @Override public int remainingArity() {
             return arity - bound.size();
         }
+
+        @Override public CallableSignature signature() { return signature; }
 
         @Override public String toString() {
             return "<partial " + display + "/" + remainingArity() + ">";

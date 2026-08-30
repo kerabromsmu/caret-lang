@@ -82,6 +82,16 @@ Declaration and update order therefore do not affect equality. `^name = value` i
 ordinary Field whose String key is `"name"`; reserved binding spellings remain valid static keys
 because fields are members, not lexical bindings.
 
+The standard `toString` representation preserves collection shape. Empty collections render as
+`[]`; flat positional collections render inline as `[ 1 2 3 ]`. Named collections render one
+canonically ordered, quoted key per indented line using `"key" = value`. A positional collection
+containing another collection also uses indented multiline form. Nested Strings use canonical
+Caret quoting and escapes, while a top-level String converts to its raw text. Rendering traverses
+collections without consuming the Java call stack and never exposes host implementation text.
+
+Collection conversion recursively uses the active polymorphic `toString` overload set, allowing a
+contract-specific specialization to control the representation of a contained value.
+
 <a id="collections"></a>
 ### Collections
 

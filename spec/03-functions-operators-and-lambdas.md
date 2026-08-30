@@ -20,6 +20,13 @@ The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the planned
 `with`, `outer`, `root`, and `module`, `_`, and numbered holes such as `_1` are reserved and cannot
 be used as binding or parameter names.
 
+Nested functions capture referenced enclosing bindings by resolver-owned symbol identity. The
+analyzed function representation records each distinct upvalue once, in first semantic source-use
+order, together with its source lexical depth, slot, declaration span, and first-use span. Runtime
+closures consume the same metadata and retain binding references, which preserves forward
+initialization and recursion without making a lexical scope a first-class value. Capture metadata is
+an internal lowering fact and is not exposed by ordinary callable reflection.
+
 <a id="function-application"></a>
 ## Function application
 
@@ -113,7 +120,9 @@ inside 7
 Every `_` introduces a future argument, ordered left to right.
 
 Non-hole parts of a partial expression are evaluated and captured when the partial function is
-created.
+created. Unlike lexical closure upvalues, these fixed operands are captured as the evaluated values;
+later mutation facilities cannot cause the fixed expression to be evaluated again or substitute a
+different value.
 
 Numbered holes reorder and reuse future arguments:
 
@@ -153,19 +162,20 @@ From lower to higher precedence:
 8. named binary infix functions
 9. addition `+ -`
 10. multiplication `* / %`
-11. unary `- not @`
+11. unary `- not`
 12. function application
-13. field and dynamic lookup
+13. reflection primary `@`
+14. field lookup and adjacent dereference `:`
 
 Lambda construction will also bind more tightly than `$` once lambdas are implemented.
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
-The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, and `#`,
+The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, `:`, and `#`,
 they are consumed by layout handling before expression parsing and have no expression precedence.
-The roles remain separate: `$` groups syntax-level application, `@` reifies a binding or program
-entity, `#` changes execution stage, and `\\`/`\*` change only the mapping from physical to logical
-indentation.
+The roles remain separate: `$` groups syntax-level application, `@` reifies one identifier, literal,
+or parenthesized expression, adjacent postfix `:` restores its opaque target, `#` changes execution
+stage, and `\\`/`\*` change only the mapping from physical to logical indentation.
 
 <a id="unified-binary-functions-and-operators"></a>
 ## Unified binary functions and operators
@@ -791,7 +801,7 @@ Lambdas may be used directly with collection functions.
 Examples:
 
 ```caret
-numbers map (x -> x * 2)
+map (x -> x * 2) numbers
 ```
 
 ```caret
@@ -799,7 +809,7 @@ numbers filter (x -> x > 0)
 ```
 
 ```caret
-people map (person -> person.name)
+map (person -> person.name) people
 ```
 
 Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.

@@ -273,6 +273,7 @@ final class ContractInference {
             case Field ignored -> Shape.unknown();
             case DynamicField ignored -> Shape.unknown();
             case Reflect ignored -> Shape.unknown();
+            case Dereference ignored -> Shape.unknown();
             case ContractModifier ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
             case ContractVariable ignored -> Shape.unknown();
@@ -399,8 +400,9 @@ final class ContractInference {
 
     private EnumSet<BuiltinContract> clause(ContractClause clause) {
         EnumSet<BuiltinContract> result = EnumSet.noneOf(BuiltinContract.class);
-        if (clause != null) {
-            for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        if (analyzed != null) {
+            for (Resolution.ContractBinding reference : analyzed.valueRequirements()) {
                 BuiltinContract builtin = BuiltinContract.named(reference.name()).orElse(null);
                 if (builtin == null || builtin == BuiltinContract.ANY) continue;
                 result.add(builtin);
@@ -565,6 +567,7 @@ final class ContractInference {
                     .plus(expressionEffects(field.name(), visible));
             case Reflect reflect -> reflect.target() instanceof Name
                     ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
+            case Dereference dereference -> expressionEffects(dereference.target(), visible);
             case ContractModifier modifier -> expressionEffects(modifier.target(), visible);
             case CollectionLiteral collection -> collection.elements().stream()
                     .map(element -> expressionEffects(element.value(), visible))
@@ -682,7 +685,9 @@ final class ContractInference {
 
     private void validateClause(ContractClause clause, Map<Integer, FunctionDef> functions,
                                 Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
-        for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        if (analyzed == null) return;
+        for (Resolution.ContractBinding reference : analyzed.valueRequirements()) {
             Resolution.Binding binding = reference.binding();
             if (binding == null) continue;
             if (binding.refinementEligible() != null) {
@@ -747,6 +752,7 @@ final class ContractInference {
             case Field field -> containsHole(field.target());
             case DynamicField field -> containsHole(field.target()) || containsHole(field.name());
             case Reflect reflect -> containsHole(reflect.target());
+            case Dereference dereference -> containsHole(dereference.target());
             case ContractModifier modifier -> containsHole(modifier.target());
             case Group group -> containsHole(group.expression());
             case CollectionLiteral collection -> collection.elements().stream()

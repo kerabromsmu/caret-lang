@@ -4,7 +4,8 @@ Caret is an experimental concise programming language implemented as a Java 21 t
 interpreter. The current prototype supports:
 
 - finite numbers, strings, Booleans, null (`?`), and missing (`~`);
-- indentation-delimited functions, lexical closures, direct and mutual recursion;
+- indentation-delimited functions, lexical closures with resolver-owned upvalue metadata, and
+  direct and mutual recursion;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
@@ -13,7 +14,10 @@ interpreter. The current prototype supports:
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
-- persistent sequences and canonically ordered Dictionaries with structural equality; and
+- persistent sequences and canonically ordered Dictionaries with structural equality;
+- higher-order Sequence mapping through `map transform values` for current callable forms;
+- polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
+- stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
 - proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
@@ -25,7 +29,7 @@ interpreter. The current prototype supports:
 - closed same-name function overload sets with contract-based most-specific dispatch, generic
   fallbacks, prefix/infix calls, and persistent hole partials.
 - first-class pure callable arrow contracts such as `[Number] -> Number`, including exact arity,
-  structural predicate checks, inline higher-order clauses, and standalone numbered variables.
+  structural predicate checks, inline higher-order clauses, and declaration-wide numbered variables.
 - environment-relative effect identities and mixed declaration clauses, including explicit function
   allowances, callable-value constraints, and effectful arrow contracts.
 
@@ -73,11 +77,12 @@ members available for lexical lookup without copying them, while resolver-only p
 `outer.name` recover shadowed enclosing names without exposing lexical environments as values.
 `with` and `outer` are specified but not implemented by the current prototype.
 
-Planned layout markers `\\` and `\*` remap physical indentation to effective logical indentation
+Layout markers `\\` and `\*` remap physical indentation to effective logical indentation
 before ordinary layout parsing. `\\` establishes an adjusted baseline for a following
 indentation-defined region and `\*` restores the previous mapping; neither marker is an expression,
 scope, or control-flow operation. The mappings stack, an unmatched restoration is a no-op, and an
-active mapping may remain through end of file. These markers are specified but not implemented.
+active mapping may remain through end of file. The prototype implements these mappings for its
+currently supported indentation-opening headers.
 
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code
@@ -106,15 +111,63 @@ feature documents as a searchable MkDocs Material learning site with a left-hand
 The same release-hardening work will produce a runnable, implemented-only
 “Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
 
-See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
+See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret) for a runnable
 program demonstrating every feature currently supported by the prototype.
-[`examples/contracts.caret`](examples/contracts.caret) demonstrates built-in and user-defined
+[`examples/features/contracts.caret`](examples/features/contracts.caret) demonstrates built-in and user-defined
 contracts and derivation.
+
+Focused positive demonstrations live in [`examples/features/`](examples/features/). Every `.caret`
+program there has checked golden output and is exercised by `test.sh`. The general smoke demo and
+Caret-native test programs remain directly under `examples/`; located failure fixtures remain under
+`examples/errors/`.
+
+## Download a release
+
+Every successful merge to `main` publishes an immutable versioned release on the
+[GitHub Releases page](https://github.com/kerabromsmu/caret-lang/releases). The rolling
+[`main-snapshot`](https://github.com/kerabromsmu/caret-lang/releases/tag/main-snapshot) prerelease
+points to the newest successfully tested version. Java 21 is the only runtime prerequisite; a
+downloaded release does not require Gradle or a repository checkout.
+
+Download either `caret-<version>.zip` or `caret-<version>.tar` and extract it. On Linux and macOS,
+make the launcher executable if the archive tool did not preserve its mode:
+
+```bash
+chmod +x caret-<version>/bin/caret
+```
+
+Run a program, start the REPL, or run a Caret-native test file:
+
+```bash
+caret-<version>/bin/caret program.caret
+caret-<version>/bin/caret
+caret-<version>/bin/caret test tests.caret
+```
+
+On Windows, use `caret-<version>\bin\caret.bat` with the same arguments. Each archive also contains
+this README, `LICENSE`, `NOTICE`, and the runnable `examples/` tree.
+
+### Release versions
+
+The tracked [`VERSION`](VERSION) file is the source of the release version in
+`MAJOR.MINOR.UPDATE` form. The project starts at `0.1.0`, with `0.1.x` representing the Phase 1
+development line from [`PLAN.md`](PLAN.md).
+
+- Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
+- Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
+- Increment `MAJOR` by exactly one and reset both lower components only when the project owner
+  explicitly authorizes a major release.
+
+Ordinary feature commits do not update `VERSION`. Select and increment it only while preparing a
+pull request whose target is `main`; pull-request and release automation reject unchanged,
+malformed, decreasing, skipped, or mixed-component transitions for that handoff. Immutable releases use the tag
+`v<version>`; `main-snapshot` is only a moving download alias and does not create another version
+number.
 
 ## Requirements
 
 - Java 21
-- A POSIX-compatible shell for the provided launchers
+- A POSIX-compatible shell for the source-checkout launchers (`run.sh`, `repl.sh`, and `test.sh`)
 
 The Gradle wrapper downloads the required Gradle distribution and dependencies on first use.
 
@@ -123,7 +176,7 @@ The Gradle wrapper downloads the required Gradle distribution and dependencies o
 The project launcher builds the distribution and runs a Caret source file:
 
 ```bash
-./run.sh examples/implemented_features.caret
+./run.sh examples/features/implemented_features.caret
 ```
 
 With no arguments, it runs `examples/demo.caret`:
@@ -246,9 +299,12 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Contract-selected collection representations, first-class dynamic fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- Arrow contracts support explicit visible effect allowances. Declaration-wide contract variables
-  and complete overload-domain proofs remain planned.
-- Physical-to-logical layout baseline modifiers (`\\` and `\*`) are specified but not implemented.
+- Arrow contracts support explicit visible effect allowances and declaration-wide contract variables.
+  Complete overload-domain proofs remain planned.
+- Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
+  planned headers become eligible as their syntax is implemented.
+- `map` supports current unary callable values at runtime, but generalized element/result variables,
+  lambdas, and precise higher-order effect propagation remain planned.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
@@ -284,7 +340,7 @@ The ordinary runtime provides:
 - `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`,
   `Field`, and `Dictionary` as first-class contracts; `Field K V` and `Dictionary K V` are curried;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
-- `seqEmpty`, `seqAdd`, `seqGet`, and `seqSize`; and
+- `seqEmpty`, `seqAdd`, `seqGet`, `seqSize`, and callable-first `map`; and
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
 
 Invalid text indexes, sequence indexes, slices, and numeric text conversions return `~`. Dictionary
@@ -304,13 +360,19 @@ Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `names`. Fi
 ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
 or update order; their value expressions are still evaluated in source order. Identifier shorthand
 `^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
-Sequence reflection exposes its applicable collection metadata. `@function` returns a
-non-callable function reference exposing `kind`, visible
+Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
+non-callable metadata Dictionary exposing `kind`, visible
 declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
-the known invocation-effect bound. Prefix partials specialize their remaining parameters, while
-compositions union known invocation effects. Both `type (@function)` and `(@function).kind` report
-`"Function"`. References compare by target identity. Reflection exposes no captures, bound arguments,
+the known invocation-effect bound. Metadata fields are lazily filtered for the observing execution
+environment, retain descriptor identity behind hidden names, and cannot gain visibility when moved
+between environments. The internal observation policy is not a Caret value. Prefix and hole partials specialize variables and project their
+remaining parameters; repeated holes conjoin requirements. Compositions specialize compatible
+parameter/result relationships and union known invocation effects. Narrowed overloads preserve
+every survivor signature plus a conservative summary. `type (@function)` reports `"Dictionary"`, while
+`@function.kind` reports `"Function"`. Adjacent postfix `:` restores the reflected target, as in
+`alias = @function:` when dereference remains authorized. Metadata preserves callable/descriptor
+identity and otherwise compares structurally. Reflection exposes no captures, bound arguments,
 Java implementation objects, or callable capability, and does not invoke a reflected function.
 
 ## License

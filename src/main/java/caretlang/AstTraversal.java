@@ -26,6 +26,7 @@ final class AstTraversal {
             case Field field -> List.of(field.target());
             case DynamicField field -> List.of(field.target(), field.name());
             case Reflect reflect -> List.of(reflect.target());
+            case Dereference dereference -> List.of(dereference.target());
             case ContractModifier modifier -> List.of(modifier.target());
             case Group group -> List.of(group.expression());
             case CollectionLiteral collection -> collection.elements().stream()
@@ -63,6 +64,7 @@ final class AstTraversal {
             case DynamicField field -> new DynamicField(
                     children.get(0), children.get(1), field.optional(), field.span());
             case Reflect reflect -> new Reflect(children.getFirst(), reflect.span());
+            case Dereference dereference -> new Dereference(children.getFirst(), dereference.span());
             case ContractModifier modifier -> new ContractModifier(children.getFirst(), modifier.nullable(),
                     modifier.optional(), modifier.span());
             case Group group -> new Group(children.getFirst(), group.span());

@@ -71,18 +71,20 @@ lambdas remain deferred to Phase 3. Right-associative low-precedence `$` applica
 the ordinary callable path. Language-owned callable signature metadata and its safe reflective
 projection are implemented for named functions, built-ins, prefix partials, compositions, and
 closed overload sets. Exact-arity arrow contracts now work as named or inline structural
-predicates with explicit visible effect allowances; declaration-wide variables and complete generic
-substitution remain unfinished.
+predicates with explicit visible effect allowances. Declaration-wide variables and substitution
+through prefix and hole partials are implemented; complete overload-domain proofs remain unfinished.
+Derived callable signatures now project repeated and reordered holes, specialize composition
+bridges, separate construction effects from invocation bounds, and preserve projected overload
+survivor signatures with conservative summaries.
 
 ### Layout and expressions
 
 - Extend the structured logical-line engine already used by grouped expressions, dynamic lookups,
   ungrouped multiline argument lists, and indented bodies to lambdas, collection literals, `format`, `cycle`,
   rules, and trailing blocks as those constructs are implemented.
-- Add a pre-parse layout-mapping stack for planned terminal `\\` baseline adjustments and standalone
-  `\*` restoration lines. Compute effective logical indentation before ordinary layout handling;
-  preserve physical coordinates, stacking, valid EOF, unmatched-restoration no-op behavior, and
-  formatter-visible marker placement exactly as specified.
+- Preserve the implemented pre-parse layout-mapping stack for terminal `\\` baseline adjustments
+  and standalone `\*` restoration lines as later indentation-opening forms are added. Effective
+  indentation is computed before parsing while diagnostics retain physical coordinates.
 - Preserve raw source columns and complete spans through desugaring. Add recovery boundaries so one
   malformed declaration does not erase useful later diagnostics in compiler mode.
 - Keep function application tighter than infix operators and make conditional branches lazy.
@@ -94,8 +96,8 @@ substitution remain unfinished.
 - Preserve the resolver's implemented block-wide function predeclaration, source-ordered
   non-function initialization, duplicate diagnostics, lexical depths/slots, closure capture, and
   established `^name = name` export pattern as later declaration forms are added.
-- Extend resolver-owned lexical slots into explicit upvalue/lowering metadata for the compiler and
-  verify eager partial capture against mutation introduced later.
+- Preserve the implemented resolver-owned upvalue/lowering metadata and eager partial-value capture
+  as mutation and compiler lowering are introduced later.
 - Preserve implemented structural equality for scalars, named Collections, and positional collections and the located
   rejection of callable equality as new value kinds arrive.
 
@@ -117,8 +119,8 @@ substitution remain unfinished.
   callable contracts without changing collection or lambda parsing. Support exact nullary and
   multi-parameter arity, conjunctive parameter positions, mixed result/effect clauses, nesting, and
   declaration-wide numbered contract variables with source spans.
-- Replace contract-only semantic handling of declaration clauses with an analyzed split between
-  conjunctive value requirements and an optional effect allowance, preserving source spans and the
+- Preserve the implemented single analyzed representation of declaration clauses, split between
+  conjunctive value requirements and an optional effect allowance with source spans and
   position-specific function, parameter, and assignment meanings.
 - Preserve implemented prefix symbolic calls (`+ 2 3`), prefix named calls, and fixed-precedence
   infix binary calls (`2 add 3`), including the expression-start classification rule.
@@ -130,9 +132,10 @@ substitution remain unfinished.
   use the shared callable path.
 - Expand function reflection over the settled nested `Function`/`Signature` schema, including
   remaining parameter, result, effect, generalized-variable, and surviving-overload descriptors.
-  Apply environment-relative inferred-fact and descriptor-name filtering, preserve target-identity
-  reference equality, and expose no captures, bound values, provenance, implementation objects, or
-  authority. Keep `@function` itself non-callable.
+  Preserve environment-relative lazy inferred-fact and descriptor-name filtering through the
+  internal non-amplifying observation-context seam, target/descriptor identity, and the prohibition
+  on exposing captures, bound values, provenance, implementation objects, or authority. Keep
+  `@function` itself non-callable.
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 
@@ -615,10 +618,10 @@ minimum purity/effect analysis, proven-predicate refinements, and nullable/optio
 are complete. Initial parameterized contracts are also complete through `Sequence T`. The shared
 callable-signature scheme and safe callable reflection are now implemented for the current callable
 kinds. Exact-arity higher-order arrow contracts are now parsed and analyzed over that metadata,
-including inline clauses, variance checks, standalone variables, explicit effects, and runnable examples.
+including inline clauses, variance checks, declaration-wide variables, explicit effects, and runnable examples.
 The environment-relative effect catalog and mixed-clause analysis now enforce public declaration
 allowances and callable-value constraints. Next complete unknown higher-order invocation rejection,
-catalog aliases, and declaration-wide substitution through derived callables. Callable signatures, reflection, explicit higher-order arrow contracts,
+catalog aliases, and complete higher-order effect propagation. Callable signatures, reflection, explicit higher-order arrow contracts,
 and the initial static operator matrix are settled. Mixed-clause and callable-effect diagnostic
 codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
 unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather

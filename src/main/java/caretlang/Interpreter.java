@@ -11,6 +11,7 @@ final class Interpreter {
     private final CallableDispatcher calls = new CallableDispatcher();
     private ContractInference inference;
     private final EffectCatalog effectCatalog;
+    private ReflectionContext reflectionContext = ReflectionContext.defining();
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
 
@@ -25,12 +26,17 @@ final class Interpreter {
         if (testReporter != null) installTestBuiltins(testReporter);
     }
 
+    void reflectionContext(ReflectionContext context) {
+        this.reflectionContext = Objects.requireNonNull(context);
+    }
+
     void execute(List<Stmt> program) {
-        int checkpoint = globals.checkpoint();
+        Environment.Checkpoint checkpoint = globals.checkpoint();
         try {
             Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
             inference = ContractInference.analyze(program, resolution);
             validateEffectAllowances(program, resolution);
+            validateCompositionCompatibility(program, resolution);
             executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
             globals.rollbackTo(checkpoint);
@@ -63,6 +69,76 @@ final class Interpreter {
             }
             validateEffectAllowances(function.body(), resolution);
         }
+    }
+
+    private void validateCompositionCompatibility(List<Stmt> statements, Resolution resolution) {
+        HashMap<Integer, List<CallableSignature>> variants = new HashMap<>();
+        collectFunctionSignatures(statements, resolution, variants);
+        HashMap<Integer, CallableSignature> signatures = new HashMap<>();
+        variants.forEach((symbol, values) -> signatures.put(symbol, CallableSignature.summarize(values)));
+        validateCompositionCompatibility(statements, resolution, signatures);
+    }
+
+    private void collectFunctionSignatures(List<Stmt> statements, Resolution resolution,
+                                           Map<Integer, List<CallableSignature>> signatures) {
+        for (Stmt statement : statements) {
+            if (!(statement instanceof FunctionDef function)) continue;
+            Integer symbol = resolution.symbolId(function.span());
+            if (symbol != null) signatures.computeIfAbsent(symbol, ignored -> new ArrayList<>())
+                    .add(CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
+            collectFunctionSignatures(function.body(), resolution, signatures);
+        }
+    }
+
+    private void validateCompositionCompatibility(List<Stmt> statements, Resolution resolution,
+                                                  Map<Integer, CallableSignature> signatures) {
+        for (Stmt statement : statements) {
+            switch (statement) {
+                case Assign assign -> validateCompositionCompatibility(assign.value(), resolution, signatures);
+                case ExprStmt expression -> validateCompositionCompatibility(expression.expression(), resolution, signatures);
+                case PrintLine line -> validateCompositionCompatibility(line.ordinaryCall(), resolution, signatures);
+                case FunctionDef function -> validateCompositionCompatibility(function.body(), resolution, signatures);
+            }
+        }
+    }
+
+    private void validateCompositionCompatibility(Expr expression, Resolution resolution,
+                                                  Map<Integer, CallableSignature> signatures) {
+        for (Expr child : AstTraversal.children(expression)) {
+            validateCompositionCompatibility(child, resolution, signatures);
+        }
+        if (!(expression instanceof Compose(Expr left1, Expr right1, SourceSpan span))) return;
+        CallableSignature left = knownSignature(left1, resolution, signatures);
+        CallableSignature right = knownSignature(right1, resolution, signatures);
+        if (left == null || right == null || right.parameters().size() != 1) return;
+        CallableSignature.Composition composition = CallableSignature.compose(left, right);
+        if (composition.compatibility() == CallableSignature.Compatibility.INCOMPATIBLE) {
+            throw incompatibleComposition(span, left1.span(), right1.span());
+        }
+    }
+
+    private CallableSignature knownSignature(Expr expression, Resolution resolution,
+                                             Map<Integer, CallableSignature> signatures) {
+        if (expression instanceof Group group) return knownSignature(group.expression(), resolution, signatures);
+        if (expression instanceof Name name) {
+            Resolution.Binding binding = resolution.binding(name);
+            return binding == null ? null : signatures.get(binding.symbolId());
+        }
+        if (expression instanceof Compose compose) {
+            CallableSignature left = knownSignature(compose.left(), resolution, signatures);
+            CallableSignature right = knownSignature(compose.right(), resolution, signatures);
+            return left == null || right == null ? null : CallableSignature.compose(left, right).signature();
+        }
+        return null;
+    }
+
+    private static LangException incompatibleComposition(SourceSpan span, SourceSpan left, SourceSpan right) {
+        return new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.INCOMPATIBLE_CONTRACTS,
+                "Composition result cannot satisfy the right callable parameter",
+                span, List.of(
+                new Diagnostic.Related("Left composition operand", left),
+                new Diagnostic.Related("Right composition operand", right))));
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
@@ -105,12 +181,18 @@ final class Interpreter {
             if (statement instanceof Assign assign) declare(env, assign.name(), assign.span());
             else if (statement instanceof FunctionDef function) {
                 List<FunctionDef> group = groups.computeIfAbsent(function.name(), ignored -> new ArrayList<>());
-                if (group.isEmpty()) declare(env, function.name(), function.span());
+                if (group.isEmpty() && !(env.localValue(function.name()) instanceof Value.Callable)) {
+                    declare(env, function.name(), function.span());
+                }
                 group.add(function);
             }
         }
         for (var entry : groups.entrySet()) {
             ArrayList<OverloadVariant> variants = new ArrayList<>();
+            Value existing = env.localValue(entry.getKey());
+            if (existing instanceof Value.Callable callable && !(existing instanceof Value.ContractValue)) {
+                variants.add(new OverloadVariant(null, callable));
+            }
             for (FunctionDef function : entry.getValue()) {
                 Value.FunctionValue raw = rawFunction(function, env, resolution);
                 variants.add(new OverloadVariant(function, raw));
@@ -125,13 +207,17 @@ final class Interpreter {
                                     parameter.contracts(), resolution, env, "parameter " + parameter.name());
                             return new Value.Argument(checked, argument.span());
                         });
-                env.initialize(entry.getKey(), value);
+                if (existing == null) env.initialize(entry.getKey(), value);
+                else env.replace(entry.getKey(), value);
                 functions.put(function, value);
             } else {
                 Value.Callable overload = new OverloadCallable(entry.getKey(), List.copyOf(variants),
                         List.copyOf(variants), Map.of(), Map.of(), env, resolution);
-                env.initialize(entry.getKey(), overload);
-                for (OverloadVariant variant : variants) functions.put(variant.definition(), overload);
+                if (existing == null) env.initialize(entry.getKey(), overload);
+                else env.replace(entry.getKey(), overload);
+                for (OverloadVariant variant : variants) {
+                    if (variant.definition() != null) functions.put(variant.definition(), overload);
+                }
             }
         }
         return functions;
@@ -140,8 +226,12 @@ final class Interpreter {
     private Value.FunctionValue rawFunction(FunctionDef function, Environment env, Resolution resolution) {
         List<String> parameterNames = function.params().stream().map(Parameter::name).toList();
         boolean refinementEligible = inference != null && inference.isRefinementEligible(function);
+        LinkedHashMap<Integer, Environment.BindingReference> captures = new LinkedHashMap<>();
+        for (Resolution.Upvalue upvalue : resolution.upvalues(function)) {
+            captures.put(upvalue.symbolId(), env.referenceAt(upvalue.lexicalDepth(), upvalue.slot()));
+        }
         return new Value.FunctionValue(function.name(), parameterNames, (arguments, ignoredCallSpan) -> {
-            Environment parameters = new Environment(env);
+            Environment parameters = new Environment(env, captures);
             for (int i = 0; i < function.params().size(); i++) {
                 parameters.define(function.params().get(i).name(), arguments.get(i).value());
             }
@@ -151,7 +241,7 @@ final class Interpreter {
         }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
     }
 
-    private record OverloadVariant(FunctionDef definition, Value.FunctionValue function) {}
+    private record OverloadVariant(FunctionDef definition, Value.Callable function) {}
     private record ApplicabilityKey(Object requirement, int position) {}
     private record RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) {}
 
@@ -183,7 +273,7 @@ final class Interpreter {
         }
 
         private Value bind(int position, Value.Argument argument, SourceSpan callSpan) {
-            if (position < 0 || position >= all.getFirst().definition().params().size()
+            if (position < 0 || position >= variantArity(all.getFirst())
                     || arguments.containsKey(position)) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                         "Invalid overload argument position", argument.span());
@@ -191,12 +281,12 @@ final class Interpreter {
             LinkedHashMap<ApplicabilityKey, Boolean> nextCache = new LinkedHashMap<>(cache);
             ArrayList<OverloadVariant> survivors = new ArrayList<>();
             for (OverloadVariant variant : viable) {
-                if (matches(variant.definition().params().get(position).contracts(), argument, position,
+                if (matches(variantClause(variant, position), argument, position,
                         nextCache, contractEnvironment, resolution)) survivors.add(variant);
             }
             LinkedHashMap<Integer, Value.Argument> nextArguments = new LinkedHashMap<>(arguments);
             nextArguments.put(position, argument);
-            boolean complete = nextArguments.size() == all.getFirst().definition().params().size();
+            boolean complete = nextArguments.size() == variantArity(all.getFirst());
             if (survivors.isEmpty()) {
                 throw overloadFailure(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD,
                         "No applicable overload: " + name, complete ? callSpan : argument.span(), all);
@@ -214,11 +304,15 @@ final class Interpreter {
             for (int index = 0; index < nextArguments.size(); index++) {
                 result = invoke((Value.Callable) result, nextArguments.get(index), callSpan);
             }
+            if (name.equals("toString") && !(underlying(result) instanceof Value.Str)) {
+                throw runtime(Diagnostic.Codes.EXPECTED_STRING,
+                        "toString specialization must return a String", callSpan);
+            }
             return result;
         }
 
         @Override public int remainingArity() {
-            return all.getFirst().definition().params().size() - arguments.size();
+            return variantArity(all.getFirst()) - arguments.size();
         }
 
         @Override public CallableSignature signature() {
@@ -226,24 +320,42 @@ final class Interpreter {
         }
 
         @Override public List<CallableSignature> variantSignatures() {
-            return viable.stream().map(variant -> specialize(variant.function().signature())).toList();
+            return fullVariantSignatures().stream().map(this::removeBoundParameters).toList();
         }
 
-        private CallableSignature specialize(CallableSignature signature) {
-            ArrayList<CallableSignature.Parameter> parameters = new ArrayList<>();
+        private List<CallableSignature> fullVariantSignatures() {
+            return viable.stream().map(variant -> {
+                CallableSignature signature = variant.function().signature();
+                for (Map.Entry<Integer, Value.Argument> argument : arguments.entrySet()) {
+                    signature = signature.specializeParameter(argument.getKey(), argument.getValue().value());
+                }
+                return signature;
+            }).toList();
+        }
+
+        private CallableSignature removeBoundParameters(CallableSignature signature) {
+            ArrayList<List<Integer>> positions = new ArrayList<>();
             for (int index = 0; index < signature.parameters().size(); index++) {
-                if (!arguments.containsKey(index)) parameters.add(signature.parameters().get(index));
+                if (!arguments.containsKey(index)) positions.add(List.of(index));
             }
-            return signature.withParameters(parameters);
+            return signature.projectParameters(positions);
         }
 
         @Override public String publicName() { return name; }
         @Override public String toString() { return "<overload " + name + "/" + remainingArity() + ">"; }
     }
 
+    private int variantArity(OverloadVariant variant) {
+        return variant.definition() == null ? variant.function().remainingArity() : variant.definition().params().size();
+    }
+
+    private ContractClause variantClause(OverloadVariant variant, int position) {
+        return variant.definition() == null ? null : variant.definition().params().get(position).contracts();
+    }
+
     private boolean matches(ContractClause clause, Value.Argument argument, int position,
                             Map<ApplicabilityKey, Boolean> cache, Environment env, Resolution resolution) {
-        for (Resolution.ContractBinding binding : resolution.contracts(clause)) {
+        for (Resolution.ContractBinding binding : valueRequirements(resolution.clause(clause))) {
             Object requirement = resolveRequirement(binding, env, resolution);
             ApplicabilityKey key = new ApplicabilityKey(requirement, position);
             Boolean accepted = cache.get(key);
@@ -270,7 +382,7 @@ final class Interpreter {
                                       Resolution resolution) {
         Value resolved = binding.inline() == null
                 ? underlying(binding.binding() == null ? globals.get(binding.name())
-                : env.getAt(binding.binding().lexicalDepth(), binding.binding().slot()))
+                : env.getResolved(binding.binding()))
                 : evalInner(binding.inline(), env, resolution);
         if (resolved instanceof Value.ContractValue contract) {
             ContractDescriptor descriptor = contract.descriptor();
@@ -296,9 +408,9 @@ final class Interpreter {
     private boolean moreSpecific(OverloadVariant left, OverloadVariant right, Environment env,
                                  Resolution resolution) {
         boolean strict = false;
-        for (int position = 0; position < left.definition().params().size(); position++) {
-            ContractClause l = left.definition().params().get(position).contracts();
-            ContractClause r = right.definition().params().get(position).contracts();
+        for (int position = 0; position < variantArity(left); position++) {
+            ContractClause l = variantClause(left, position);
+            ContractClause r = variantClause(right, position);
             boolean lr = clauseImplies(l, r, env, resolution);
             if (!lr) return false;
             strict |= !clauseImplies(r, l, env, resolution);
@@ -308,8 +420,10 @@ final class Interpreter {
 
     private boolean clauseImplies(ContractClause left, ContractClause right, Environment env,
                                   Resolution resolution) {
-        List<Object> l = resolution.contracts(left).stream().map(binding -> resolveRequirement(binding, env, resolution)).toList();
-        List<Object> r = resolution.contracts(right).stream().map(binding -> resolveRequirement(binding, env, resolution)).toList();
+        List<Object> l = valueRequirements(resolution.clause(left)).stream()
+                .map(binding -> resolveRequirement(binding, env, resolution)).toList();
+        List<Object> r = valueRequirements(resolution.clause(right)).stream()
+                .map(binding -> resolveRequirement(binding, env, resolution)).toList();
         if (r.isEmpty()) return true;
         if (l.isEmpty()) return false;
         return r.stream().allMatch(required -> l.stream().anyMatch(candidate -> requirementImplies(candidate, required)));
@@ -329,8 +443,9 @@ final class Interpreter {
 
     private LangException overloadFailure(String code, String message, SourceSpan span,
                                           List<OverloadVariant> variants) {
-        List<Diagnostic.Related> related = variants.stream().map(variant -> new Diagnostic.Related(
-                "Overload variant declared here", variant.definition().span())).toList();
+        List<Diagnostic.Related> related = variants.stream().filter(variant -> variant.definition() != null)
+                .map(variant -> new Diagnostic.Related(
+                        "Overload variant declared here", variant.definition().span())).toList();
         return new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME, code, message, span, related));
     }
 
@@ -343,10 +458,12 @@ final class Interpreter {
                                    Resolution resolution, Environment contractEnvironment, String subject,
                                    boolean constrainCallableEffects) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
-        for (Resolution.ContractBinding reference : resolution.contracts(clause)) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        for (Resolution.ContractBinding reference : valueRequirements(analyzed)) {
+            if (isContractVariable(reference.name())) continue;
             Value resolved = reference.inline() == null
                     ? underlying(reference.binding() == null ? globals.get(reference.name())
-                    : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()))
+                    : contractEnvironment.getResolved(reference.binding()))
                     : evalInner(reference.inline(), contractEnvironment, resolution);
             if (!reference.arguments().isEmpty()) {
                 if (!(resolved instanceof Value.ContractValue constructor)) {
@@ -397,8 +514,8 @@ final class Interpreter {
                 continue;
             }
             if (contract.accepts(value)) continue;
-            List<Diagnostic.Related> related = clause == null ? List.of()
-                    : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), clause.span()));
+            List<Diagnostic.Related> related = analyzed == null ? List.of()
+                    : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), analyzed.span()));
             throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
                     Diagnostic.Codes.CONTRACT_VIOLATION,
                     "Contract violation for " + subject + ": expected " + contract.publicName()
@@ -424,7 +541,9 @@ final class Interpreter {
                     "Effect constraint requires a callable value", valueSpan,
                     List.of(new Diagnostic.Related("Effect constraint declared here", analyzed.span()))));
         }
-        List<String> upper = callable.signature().effects().upperBound();
+        List<String> upper = callable.signature().effects().upperBound() == null ? null
+                : callable.signature().effects().upperBound().stream()
+                .map(CallableSignature.EffectRef::name).toList();
         if (upper == null) {
             throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
                     Diagnostic.Codes.UNKNOWN_CALL_EFFECTS,
@@ -443,12 +562,17 @@ final class Interpreter {
         }
     }
 
+    private static List<Resolution.ContractBinding> valueRequirements(Resolution.AnalyzedClause clause) {
+        return clause == null ? List.of() : clause.valueRequirements();
+    }
+
     private ContractDescriptor resolveContractDescriptor(Resolution.ContractBinding reference,
                                                          Environment contractEnvironment,
                                                          Resolution resolution) {
+        if (isContractVariable(reference.name())) return BuiltinContract.ANY;
         Value resolved = reference.inline() == null
                 ? underlying(reference.binding() == null ? globals.get(reference.name())
-                : contractEnvironment.getAt(reference.binding().lexicalDepth(), reference.binding().slot()))
+                : contractEnvironment.getResolved(reference.binding()))
                 : evalInner(reference.inline(), contractEnvironment, resolution);
         if (!(resolved instanceof Value.ContractValue contract)) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.NOT_A_CONTRACT,
@@ -485,7 +609,7 @@ final class Interpreter {
                     Value overloadPartial = overloadHolePartial(captured, arity, env, resolution);
                     if (overloadPartial != null) return overloadPartial;
                     return new Value.HoleFunction(expr.toString(), arity,
-                            supplied -> eval(captured, env, supplied, resolution));
+                            supplied -> eval(captured, env, supplied, resolution), holeSignature(captured, arity));
                 }
             }
             Expr resolved = holeArgs == null ? expr : bindHoles(expr, new HoleBinder(holeArgs));
@@ -584,9 +708,12 @@ final class Interpreter {
 
         @Override public int remainingArity() { return arity - arguments.size(); }
         @Override public CallableSignature signature() {
-            return CallableSignature.unknown(Collections.nCopies(remainingArity(), null));
+            return CallableSignature.summarize(variantSignatures());
         }
-        @Override public List<CallableSignature> variantSignatures() { return overload.variantSignatures(); }
+        @Override public List<CallableSignature> variantSignatures() {
+            return overload.fullVariantSignatures().stream().map(signature ->
+                    projectHoleSignature(signature, pending, arity, arguments.size())).toList();
+        }
         @Override public String toString() { return "<overload-partial " + display + "/" + remainingArity() + ">"; }
     }
 
@@ -594,8 +721,7 @@ final class Interpreter {
         if (expr instanceof Literal(Value value1, SourceSpan ignored)) return value1;
         if (expr instanceof Name nameExpression) {
             Resolution.Binding binding = resolution.binding(nameExpression);
-            Value value = binding == null ? env.get(nameExpression.name())
-                    : env.getAt(binding.lexicalDepth(), binding.slot());
+            Value value = binding == null ? env.get(nameExpression.name()) : env.getResolved(binding);
             Value callableValue = underlying(value);
             if (callableValue instanceof Value.Callable callable && callable.remainingArity() == 0) {
                 return invokeZero(callable, expr.span());
@@ -644,6 +770,11 @@ final class Interpreter {
                         Diagnostic.Codes.INVALID_COMPOSITION_RIGHT,
                         "Composition right operand must be a callable requiring exactly one argument",
                         rightExpression.span());
+            }
+            CallableSignature.Composition composition = CallableSignature.compose(
+                    leftCallable.signature(), rightCallable.signature());
+            if (composition.compatibility() == CallableSignature.Compatibility.INCOMPATIBLE) {
+                throw incompatibleComposition(expr.span(), leftExpression.span(), rightExpression.span());
             }
             return new Value.ComposedFunction(leftCallable, rightCallable, this::invoke);
         }
@@ -715,12 +846,24 @@ final class Interpreter {
             Value targetValue;
             if (target instanceof Name nameExpression) {
                 Resolution.Binding binding = resolution.binding(nameExpression);
-                targetValue = binding == null ? env.get(nameExpression.name())
-                        : env.getAt(binding.lexicalDepth(), binding.slot());
+                targetValue = binding == null ? env.get(nameExpression.name()) : env.getResolved(binding);
             } else {
                 targetValue = evalInner(target, env, resolution);
             }
             return reflect(targetValue);
+        }
+        if (expr instanceof Dereference(Expr target, SourceSpan ignored)) {
+            Value reference = underlying(evalInner(target, env, resolution));
+            if (reference instanceof Value.ProjectedDictionary dictionary) {
+                Optional<Value> reflected = dictionary.reflectedTarget(reflectionContext);
+                if (reflected.isPresent()) return reflected.get();
+            }
+            if (reference instanceof Value.Dictionary dictionary) {
+                Optional<Value> reflected = dictionary.reflectedTarget(reflectionContext);
+                if (reflected.isPresent()) return reflected.get();
+            }
+            throw runtime(Diagnostic.Codes.NOT_DEREFERENCEABLE,
+                    "Value is not dereferenceable: " + reference, expr.span());
         }
         if (expr instanceof ContractModifier(Expr target, boolean nullable, boolean optional,
                                              SourceSpan ignored)) {
@@ -837,8 +980,7 @@ final class Interpreter {
 
     private Value bindingValue(Name expression, Environment env, Resolution resolution) {
         Resolution.Binding binding = resolution.binding(expression);
-        return binding == null ? env.get(expression.name())
-                : env.getAt(binding.lexicalDepth(), binding.slot());
+        return binding == null ? env.get(expression.name()) : env.getResolved(binding);
     }
 
     private Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan span) {
@@ -898,8 +1040,8 @@ final class Interpreter {
             case ">=" -> new Value.Bool(number(leftArgument) >= number(rightArgument));
             case "<" -> new Value.Bool(number(leftArgument) < number(rightArgument));
             case "<=" -> new Value.Bool(number(leftArgument) <= number(rightArgument));
-            case "==" -> new Value.Bool(ValueSemantics.equal(left, right));
-            case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right));
+            case "==" -> new Value.Bool(ValueSemantics.equal(left, right, reflectionContext));
+            case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right, reflectionContext));
             default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
         };
     }
@@ -982,12 +1124,30 @@ final class Interpreter {
         }
 
         globals.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {
-            output.println(args.getFirst().value());
+            output.println(ValueSemantics.render(args.getFirst().value(), null, reflectionContext));
             return args.getFirst().value();
         }, false, CallableSignature.builtin(List.of("value"), List.of("Output"))));
 
         globals.define("type", new Value.FunctionValue("type", List.of("value"),
                 args -> new Value.Str(ValueSemantics.kind(args.getFirst()))));
+
+        globals.define("toString", locatedFunction("toString", List.of("value"), (args, span) -> {
+            Value value = underlying(args.getFirst().value());
+            if (value instanceof Value.Callable) {
+                throw runtime(Diagnostic.Codes.CALLABLE_RENDERING,
+                        "Callable values do not have a standard textual representation", span);
+            }
+            return new Value.Str(ValueSemantics.render(value, nested -> {
+                Value callable = globals.get("toString");
+                Value rendered = underlying(invoke((Value.Callable) callable,
+                        new Value.Argument(nested, span), span));
+                if (!(rendered instanceof Value.Str(String value1))) {
+                    throw runtime(Diagnostic.Codes.EXPECTED_STRING,
+                            "toString specialization must return a String", span);
+                }
+                return value1;
+            }, reflectionContext));
+        }));
 
         globals.define("textSize", locatedFunction("textSize", List.of("text"), (args, ignored) -> {
             String value = text(args.getFirst());
@@ -1037,6 +1197,16 @@ final class Interpreter {
         }));
         globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
+        List<String> mapParameters = List.of("transform", "values");
+        globals.define("map", new Value.FunctionValue("map", mapParameters, (args, span) -> {
+            Value.Callable transform = unaryMapTransform(args.getFirst());
+            Value.Seq values = sequence(args.get(1));
+            ArrayList<Value> mapped = new ArrayList<>(values.size());
+            for (Value value : values) {
+                mapped.add(invoke(transform, new Value.Argument(value, args.get(1).span()), span));
+            }
+            return new Value.Seq(mapped);
+        }, false, CallableSignature.unknown(mapParameters)));
 
         globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dictionary(Map.of())));
         globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
@@ -1072,7 +1242,8 @@ final class Interpreter {
                     String name = text(args.get(0));
                     Value actual = args.get(1).value();
                     Value expected = args.get(2).value();
-                    reporter.record(name, actual, expected, ValueSemantics.equal(actual, expected), span);
+                    reporter.record(name, actual, expected,
+                            ValueSemantics.equal(actual, expected, reflectionContext), span);
                     return Value.Missing.INSTANCE;
                 }, false, CallableSignature.builtin(
                         List.of("name", "actual", "expected"), List.of("TestReport"))));
@@ -1103,10 +1274,20 @@ final class Interpreter {
                 "Expected sequence, got: " + argument.value(), argument.span());
     }
 
+    private Value.Callable unaryMapTransform(Value.Argument argument) {
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Callable callable && callable.remainingArity() == 1) return callable;
+        throw runtime(Diagnostic.Codes.INVALID_MAP_TRANSFORM,
+                "map transform must be a callable requiring exactly one argument", argument.span());
+    }
+
     private Value.Dictionary dictionary(Value.Argument argument) {
         Value raw = underlying(argument.value());
         if (raw instanceof Value.EmptyCollection) return new Value.Dictionary(Map.of());
         if (raw instanceof Value.Dictionary dictionary) return dictionary;
+        if (raw instanceof Value.ProjectedDictionary dictionary) {
+            return new Value.Dictionary(dictionary.fields(reflectionContext));
+        }
         throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
                 "Expected dictionary, got: " + argument.value(), argument.span());
     }
@@ -1139,21 +1320,24 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.INVALID_FIELD_TARGET,
                     "Field access requires a named collection or reflective value, got: " + target);
         }
-        Optional<Value> value = reflective.find(name);
+        Optional<Value> value = reflective instanceof Value.ProjectedDictionary projected
+                ? projected.find(name, reflectionContext) : reflective.find(name);
         if (value.isPresent()) return value.get();
         if (optional) return Value.Missing.INSTANCE;
-        if (target instanceof Value.Dictionary || target instanceof Value.EmptyCollection) {
+        if (target instanceof Value.Dictionary || target instanceof Value.ProjectedDictionary
+                || target instanceof Value.EmptyCollection) {
             throw runtime(Diagnostic.Codes.MISSING_FIELD, "Collection has no field: " + name);
         }
         throw runtime(Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: " + name);
     }
 
     private Value reflect(Value value) {
-        value = underlying(value);
-        if (value instanceof Value.FunctionReference reference) return reference;
-        if (value instanceof Value.ContractValue contract) return contract;
-        if (value instanceof Value.Callable callable) return new Value.FunctionReference(callable);
-        return new Value.Dictionary(ValueSemantics.reflectionFields(value));
+        Value reflected = underlying(value);
+        if (reflected instanceof Value.Callable callable && !(reflected instanceof Value.Reflective)) {
+            return Value.CallableMetadata.reflection(callable, reflectionContext);
+        }
+        Map<String, Value> fields = ValueSemantics.reflectionFields(reflected, reflectionContext);
+        return Value.Dictionary.reflection(fields, value, reflectionContext);
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {
@@ -1221,6 +1405,62 @@ final class Interpreter {
                 : Optional.empty());
     }
 
+    private CallableSignature holeSignature(Expr expression, int arity) {
+        ArrayList<Expr> arguments = new ArrayList<>();
+        Expr target = expression;
+        while (target instanceof Apply apply) {
+            arguments.addFirst(apply.argument());
+            target = apply.function();
+        }
+        if (!(target instanceof Literal literal) || !(underlying(literal.value()) instanceof Value.Callable callable)) {
+            return CallableSignature.unknown(Collections.nCopies(arity, null));
+        }
+        CallableSignature specialized = callable.signature();
+        for (int index = 0; index < arguments.size() && index < specialized.parameters().size(); index++) {
+            if (arguments.get(index) instanceof Literal fixed) {
+                specialized = specialized.specializeParameter(index, fixed.value());
+            }
+        }
+        ArrayList<List<Integer>> projected = emptyPositionProjection(arity);
+        int ordinaryIndex = 0;
+        for (int argumentIndex = 0; argumentIndex < arguments.size(); argumentIndex++) {
+            Expr argument = arguments.get(argumentIndex);
+            if (argumentIndex >= specialized.parameters().size()) break;
+            if (argument instanceof Hole hole) {
+                int index = hole.index() == 0 ? ordinaryIndex++ : hole.index() - 1;
+                ArrayList<Integer> positions = new ArrayList<>(projected.get(index));
+                positions.add(argumentIndex);
+                projected.set(index, List.copyOf(positions));
+            } else {
+                if (!(argument instanceof Literal)) {
+                    return CallableSignature.unknown(Collections.nCopies(arity, null));
+                }
+            }
+        }
+        return specialized.projectParameters(projected);
+    }
+
+    private CallableSignature projectHoleSignature(CallableSignature signature,
+                                                    List<PendingOverloadArgument> pending,
+                                                    int totalArity, int supplied) {
+        ArrayList<List<Integer>> projected = emptyPositionProjection(totalArity - supplied);
+        for (PendingOverloadArgument argument : pending) {
+            if (!(argument.expression() instanceof Hole hole) || hole.index() == 0) continue;
+            int publicIndex = hole.index() - 1 - supplied;
+            if (publicIndex < 0 || publicIndex >= projected.size()) continue;
+            ArrayList<Integer> positions = new ArrayList<>(projected.get(publicIndex));
+            positions.add(argument.position());
+            projected.set(publicIndex, List.copyOf(positions));
+        }
+        return signature.projectParameters(projected);
+    }
+
+    private static ArrayList<List<Integer>> emptyPositionProjection(int arity) {
+        ArrayList<List<Integer>> result = new ArrayList<>();
+        for (int index = 0; index < arity; index++) result.add(List.of());
+        return result;
+    }
+
     private static final class HoleBinder {
         private final List<Value.Argument> values;
         private int index;
@@ -1252,4 +1492,6 @@ final class Interpreter {
     private static LangException runtime(String code, String message, SourceSpan span) {
         return new LangException(Diagnostic.Phase.RUNTIME, code, message, span);
     }
+
+    private static boolean isContractVariable(String name) { return name.matches("_[1-9][0-9]*"); }
 }

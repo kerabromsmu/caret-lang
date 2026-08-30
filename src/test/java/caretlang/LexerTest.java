@@ -99,4 +99,22 @@ final class LexerTest {
         assertEquals(List.of(0, 2, 2, 0), lines.stream().map(Lexer.LogicalLine::indent).toList());
         assertEquals(List.of(1, 2, 5, 6), lines.stream().map(Lexer.LogicalLine::number).toList());
     }
+
+    @Test
+    void logicalLayoutMappingsEstablishRestoreAndStackBaselines() {
+        List<Lexer.LogicalLine> lines = Lexer.logicalLines("outer = \\\\\nfirst\ninner = \\\\\n  nested\n\\*\nsecond\n\\*\nfinal\n");
+        assertEquals(List.of(0, 1, 1, 2, 1, 0), lines.stream().map(Lexer.LogicalLine::indent).toList());
+        assertEquals(List.of("outer =", "first", "inner =", "nested", "second", "final"),
+                lines.stream().map(Lexer.LogicalLine::text).toList());
+    }
+
+    @Test
+    void layoutMarkersIgnoreCommentsAndStringsAndRejectInvalidPlacement() {
+        List<Lexer.LogicalLine> lines = Lexer.logicalLines("text = \"\\\\\"\nvalue = 1 // \\\\\n\\*\n");
+        assertEquals(List.of(0, 0), lines.stream().map(Lexer.LogicalLine::indent).toList());
+
+        LangException error = assertThrows(LangException.class, () -> Lexer.logicalLines("call \\\\"));
+        assertEquals(Diagnostic.Codes.LEX_INVALID_LAYOUT_MARKER, error.diagnostic().code());
+        assertEquals(new SourcePosition(5, 1, 6), error.span().start());
+    }
 }

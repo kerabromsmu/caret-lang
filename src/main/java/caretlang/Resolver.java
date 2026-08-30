@@ -10,6 +10,7 @@ import caretlang.Ast.ContractVariable;
 import caretlang.Ast.Compose;
 import caretlang.Ast.ContractModifier;
 import caretlang.Ast.DynamicField;
+import caretlang.Ast.Dereference;
 import caretlang.Ast.Expr;
 import caretlang.Ast.ExprStmt;
 import caretlang.Ast.Field;
@@ -23,6 +24,7 @@ import caretlang.Ast.Reflect;
 import caretlang.Ast.Stmt;
 import caretlang.Ast.Unary;
 
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -50,11 +52,15 @@ final class Resolver {
     }
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
-    private final IdentityHashMap<Ast.ContractClause, List<Resolution.ContractBinding>> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.ContractClause, Resolution.AnalyzedClause> clauses = new IdentityHashMap<>();
     private final EffectCatalog effectCatalog;
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines = new IdentityHashMap<>();
+    private final IdentityHashMap<FunctionDef, LinkedHashMap<Integer, Resolution.Upvalue>> upvalues =
+            new IdentityHashMap<>();
+    private final java.util.Set<ArrowContract> headerArrows =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    private final ArrayDeque<FunctionDef> functions = new ArrayDeque<>();
     private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
     private final java.util.Map<Integer, Integer> directAliases = new java.util.HashMap<>();
     private int nextSymbolId;
@@ -77,8 +83,8 @@ final class Resolver {
             root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
         }
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names, resolver.contracts, resolver.clauses, resolver.calls,
-                resolver.builtinPrintLines, resolver.declarations);
+        return new Resolution(resolver.names, resolver.clauses, resolver.calls,
+                resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.declarations);
     }
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
@@ -123,6 +129,19 @@ final class Resolver {
             boolean function = statement instanceof FunctionDef;
             Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
             if (original != null) {
+                if (function && original.declaration() == null && original.callableArity() != null
+                        && original.contractState() != ContractState.CONTRACT) {
+                    if (!java.util.Objects.equals(original.callableArity(), arity)) {
+                        throw new LangException(Diagnostic.Phase.SEMANTIC,
+                                Diagnostic.Codes.INCONSISTENT_OVERLOAD_ARITY,
+                                "Overload variants must have the same arity: " + name, statement.span());
+                    }
+                    scope.symbols.put(name, new Symbol(original.slot(), original.id(), null, true, arity,
+                            original.contractState(), original.contractParameterArity(),
+                            original.refinementEligible(), true));
+                    declarations.put(statement.span(), original.id());
+                    continue;
+                }
                 if (function && original.functionGroup()) {
                     if (!java.util.Objects.equals(original.callableArity(), arity)) {
                         throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
@@ -172,7 +191,9 @@ final class Resolver {
 
     private String domainKey(Ast.ContractClause clause) {
         if (clause == null) return "Any";
-        List<String> keys = contracts.getOrDefault(clause, List.of()).stream()
+        Resolution.AnalyzedClause analyzed = clauses.get(clause);
+        List<String> keys = (analyzed == null ? List.<Resolution.ContractBinding>of()
+                : analyzed.valueRequirements()).stream()
                 .filter(binding -> !isAny(binding)).map(this::contractKey)
                 .distinct().sorted(Comparator.naturalOrder()).toList();
         return keys.isEmpty() ? "Any" : String.join("&", keys);
@@ -213,20 +234,27 @@ final class Resolver {
     }
 
     private void resolveFunction(FunctionDef function, Scope enclosing) {
-        resolverContracts(function.resultContracts(), enclosing);
-        Scope parameters = new Scope(enclosing);
-        HashSet<String> seen = new HashSet<>();
-        for (Ast.Parameter parameter : function.params()) {
-            resolverContracts(parameter.contracts(), enclosing);
-            if (!seen.add(parameter.name())) {
-                throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER,
-                        "Duplicate parameter: " + parameter.name(), function.span());
+        functions.push(function);
+        upvalues.put(function, new LinkedHashMap<>());
+        try {
+            validateHeaderVariables(function);
+            resolverContracts(function.resultContracts(), enclosing);
+            Scope parameters = new Scope(enclosing);
+            HashSet<String> seen = new HashSet<>();
+            for (Ast.Parameter parameter : function.params()) {
+                resolverContracts(parameter.contracts(), enclosing);
+                if (!seen.add(parameter.name())) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER,
+                            "Duplicate parameter: " + parameter.name(), function.span());
+                }
+                parameters.symbols.put(parameter.name(),
+                        new Symbol(parameters.nextSlot++, nextSymbolId++, parameter.span(), true, null,
+                                ContractState.UNKNOWN, null, null, false));
             }
-            parameters.symbols.put(parameter.name(),
-                    new Symbol(parameters.nextSlot++, nextSymbolId++, parameter.span(), true, null,
-                            ContractState.UNKNOWN, null, null, false));
+            resolveBlock(function.body(), new Scope(parameters), true);
+        } finally {
+            functions.pop();
         }
-        resolveBlock(function.body(), new Scope(parameters), true);
     }
 
     private void resolverContracts(Ast.ContractClause clause, Scope scope) {
@@ -277,7 +305,6 @@ final class Resolver {
             }
             resolved.add(binding);
         }
-        contracts.put(clause, List.copyOf(resolved));
         clauses.put(clause, new Resolution.AnalyzedClause(List.copyOf(resolved),
                 pure != null || !effects.isEmpty() ? List.copyOf(effects) : null, clause.span()));
     }
@@ -309,6 +336,10 @@ final class Resolver {
     }
 
     private Resolution.ContractBinding resolveContract(Ast.ContractName name, Scope scope) {
+            if (isContractVariable(name.name())) {
+                return new Resolution.ContractBinding(name.name(), null, resolveContractArguments(name, scope),
+                        name.nullable(), name.optional(), name.span());
+            }
             int depth = 0;
             for (Scope current = scope; current != null; current = current.parent, depth++) {
                 Symbol symbol = current.symbols.get(name.name());
@@ -412,6 +443,7 @@ final class Resolver {
                 resolveExpr(field.name(), scope, functionBody, deferred);
             }
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
+            case Dereference dereference -> resolveExpr(dereference.target(), scope, functionBody, deferred);
             case ContractModifier modifier -> {
                 resolveExpr(modifier.target(), scope, functionBody, deferred);
                 if (knownContractState(modifier.target(), scope) == ContractState.NON_CONTRACT) {
@@ -447,7 +479,7 @@ final class Resolver {
                 }
             }
             case ArrowContract arrow -> {
-                validateContractVariables(arrow);
+                if (!headerArrows.contains(arrow)) validateContractVariables(arrow);
                 arrow.parameters().forEach(parameter -> parameter.forEach(
                         requirement -> resolveExpr(requirement, scope, functionBody, deferred)));
                 resolveExpr(arrow.result(), scope, functionBody, deferred);
@@ -504,20 +536,122 @@ final class Resolver {
     }
 
     private void validateContractVariables(ArrowContract arrow) {
-        java.util.TreeSet<Integer> indexes = new java.util.TreeSet<>();
+        java.util.TreeMap<Integer, List<SourceSpan>> occurrences = new java.util.TreeMap<>();
         AstTraversal.walkPreOrder(arrow, expression -> {
-            if (expression instanceof ContractVariable variable) indexes.add(variable.index());
+            if (expression instanceof ContractVariable(int index, SourceSpan span)) {
+                occurrences.computeIfAbsent(index, ignored -> new ArrayList<>()).add(span);
+            }
         });
-        if (indexes.isEmpty()) return;
+        if (occurrences.isEmpty()) return;
         int expected = 1;
-        for (int index : indexes) {
-            if (index != expected) {
-                throw new LangException(Diagnostic.Phase.SEMANTIC,
-                        Diagnostic.Codes.INVALID_CONTRACT_VARIABLE,
-                        "Contract variable indices must be contiguous from _1", arrow.span());
+        for (var entry : occurrences.entrySet()) {
+            if (entry.getKey() != expected) {
+                throw invalidContractVariable("Contract variable indices must be contiguous from _1",
+                        entry.getValue().getFirst(), List.of());
+            }
+            if (entry.getValue().size() < 2) {
+                throw invalidContractVariable("Contract variable must relate at least two arrow positions: _"
+                        + entry.getKey(), entry.getValue().getFirst(), List.of());
             }
             expected++;
         }
+    }
+
+    private void validateHeaderVariables(FunctionDef function) {
+        java.util.TreeMap<Integer, List<SourceSpan>> occurrences = new java.util.TreeMap<>();
+        collectHeaderVariables(function.resultContracts(), occurrences);
+        function.params().forEach(parameter -> collectHeaderVariables(parameter.contracts(), occurrences));
+        if (occurrences.isEmpty()) return;
+        int expected = 1;
+        for (var entry : occurrences.entrySet()) {
+            if (entry.getKey() != expected) {
+                throw invalidContractVariable("Contract variable indices must be contiguous from _1",
+                        entry.getValue().getFirst(), List.of());
+            }
+            if (entry.getValue().size() < 2) {
+                throw invalidContractVariable("Contract variable must relate at least two header positions: _"
+                        + entry.getKey(), entry.getValue().getFirst(), List.of());
+            }
+            expected++;
+        }
+        validateHeaderVariableBounds(function);
+    }
+
+    private record HeaderVariableBound(BuiltinContract contract, SourceSpan span) {}
+
+    private void validateHeaderVariableBounds(FunctionDef function) {
+        java.util.Map<Integer, List<HeaderVariableBound>> bounds = new java.util.TreeMap<>();
+        collectHeaderVariableBounds(function.resultContracts(), bounds);
+        function.params().forEach(parameter -> collectHeaderVariableBounds(parameter.contracts(), bounds));
+        for (var entry : bounds.entrySet()) {
+            List<HeaderVariableBound> values = entry.getValue();
+            for (int right = 0; right < values.size(); right++) {
+                for (int left = 0; left < right; left++) {
+                    HeaderVariableBound earlier = values.get(left);
+                    HeaderVariableBound later = values.get(right);
+                    if (!ContractRelations.implies(earlier.contract(), later.contract())
+                            && !ContractRelations.implies(later.contract(), earlier.contract())) {
+                        throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                                Diagnostic.Codes.INCOMPATIBLE_CONTRACTS,
+                                "Incompatible inferred contracts: " + earlier.contract().publicName()
+                                        + " and " + later.contract().publicName(), later.span(),
+                                List.of(new Diagnostic.Related("Earlier bound for _" + entry.getKey(),
+                                        earlier.span()))));
+                    }
+                }
+            }
+        }
+    }
+
+    private void collectHeaderVariableBounds(Ast.ContractClause clause,
+            java.util.Map<Integer, List<HeaderVariableBound>> bounds) {
+        if (clause == null) return;
+        List<Integer> variables = clause.names().stream().filter(name -> isContractVariable(name.name()))
+                .map(name -> Integer.parseInt(name.name().substring(1))).toList();
+        if (variables.isEmpty()) return;
+        for (Ast.ContractName name : clause.names()) {
+            BuiltinContract.named(name.name()).ifPresent(contract -> variables.forEach(variable -> bounds
+                    .computeIfAbsent(variable, ignored -> new ArrayList<>())
+                    .add(new HeaderVariableBound(contract, name.span()))));
+        }
+    }
+
+    private void collectHeaderVariables(Ast.ContractClause clause,
+                                        java.util.Map<Integer, List<SourceSpan>> occurrences) {
+        if (clause == null) return;
+        clause.names().forEach(name -> collectHeaderVariables(name, occurrences));
+    }
+
+    private void collectHeaderVariables(Ast.ContractName name,
+                                        java.util.Map<Integer, List<SourceSpan>> occurrences) {
+        if (isContractVariable(name.name())) addOccurrence(name.name(), name.span(), occurrences);
+        name.arguments().forEach(argument -> collectHeaderVariables(argument, occurrences));
+        if (name.inline() instanceof ArrowContract arrow) {
+            headerArrows.add(arrow);
+            AstTraversal.walkPreOrder(arrow, expression -> {
+                if (expression instanceof ContractVariable(int index, SourceSpan span)) {
+                    occurrences.computeIfAbsent(index, ignored -> new ArrayList<>()).add(span);
+                }
+            });
+        }
+    }
+
+    private static void addOccurrence(String spelling, SourceSpan span,
+                                      java.util.Map<Integer, List<SourceSpan>> occurrences) {
+        try {
+            int index = Integer.parseInt(spelling.substring(1));
+            occurrences.computeIfAbsent(index, ignored -> new ArrayList<>()).add(span);
+        } catch (NumberFormatException tooLarge) {
+            throw invalidContractVariable("Contract variable index is too large", span, List.of());
+        }
+    }
+
+    private static boolean isContractVariable(String name) { return name.matches("_[1-9][0-9]*"); }
+
+    private static LangException invalidContractVariable(String message, SourceSpan span,
+                                                          List<Diagnostic.Related> related) {
+        return new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, message, span, related));
     }
 
     private void resolveName(Name name, Scope scope, boolean functionBody, boolean deferred) {
@@ -536,7 +670,9 @@ final class Resolver {
                 premature = true;
                 continue;
             }
-            names.put(name, binding(symbol, depth, functionBody && depth >= 2));
+            boolean captured = functionBody && depth >= 2;
+            names.put(name, binding(symbol, depth, captured));
+            if (captured) recordUpvalue(symbol, depth - 2, name.span());
             return;
         }
         if (premature) {
@@ -551,6 +687,20 @@ final class Resolver {
     private static Resolution.Binding binding(Symbol symbol, int depth, boolean captured) {
         return new Resolution.Binding(depth, symbol.slot(), symbol.id(), symbol.declaration(), captured,
                 symbol.refinementEligible());
+    }
+
+    private void recordUpvalue(Symbol symbol, int lexicalDepth, SourceSpan firstUseSpan) {
+        FunctionDef function = functions.peek();
+        if (function == null) throw new IllegalStateException("Captured binding outside a function");
+        LinkedHashMap<Integer, Resolution.Upvalue> captures = upvalues.get(function);
+        captures.computeIfAbsent(symbol.id(), ignored -> new Resolution.Upvalue(captures.size(), symbol.id(),
+                lexicalDepth, symbol.slot(), symbol.declaration(), firstUseSpan));
+    }
+
+    private IdentityHashMap<FunctionDef, List<Resolution.Upvalue>> resolvedUpvalues() {
+        IdentityHashMap<FunctionDef, List<Resolution.Upvalue>> result = new IdentityHashMap<>();
+        upvalues.forEach((function, captures) -> result.put(function, List.copyOf(captures.values())));
+        return result;
     }
 
     private void duplicate(String name, SourceSpan span, Symbol original) {

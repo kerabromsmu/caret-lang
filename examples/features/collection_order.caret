@@ -11,11 +11,11 @@ NamedCollection = Dictionary String
 AnyNamedCollection = NamedCollection Any
 (AnyNamedCollection) checked = fromFields
 
-print (@empty).kind
-print (@empty).shape
+print @empty.kind
+print @empty.shape
 print Sequence empty
 print Dictionary empty
-print (@named).names
+print @named.names
 print named.with
 print named == fromFields
 print fromFields == fromUpdates

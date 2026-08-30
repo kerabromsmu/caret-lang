@@ -64,7 +64,7 @@ final class ArrowContractDescriptor implements ContractDescriptor {
     private boolean acceptsParameters(CallableSignature signature) {
         if (signature.parameters().size() != parameters.size()) return false;
         for (int index = 0; index < parameters.size(); index++) {
-            List<String> accepted = signature.parameters().get(index).requirements();
+            List<CallableSignature.ContractTerm> accepted = signature.parameters().get(index).requirements();
             if (!namesImply(parameters.get(index), accepted)) return false;
         }
         return variablesCompatible(signature);
@@ -74,9 +74,10 @@ final class ArrowContractDescriptor implements ContractDescriptor {
         if (signature.effects().upperBound() == null) return false;
         Set<String> allowance = effects.stream().map(EffectDescriptor::canonicalName)
                 .collect(java.util.stream.Collectors.toSet());
-        if (!allowance.containsAll(signature.effects().upperBound())) return false;
-        List<String> guarantees = signature.result().guarantees();
-        return guarantees.stream().anyMatch(candidate -> nameImplies(candidate, result.publicName()));
+        if (!allowance.containsAll(signature.effects().upperBound().stream()
+                .map(CallableSignature.EffectRef::name).toList())) return false;
+        List<CallableSignature.ContractTerm> guarantees = signature.result().guarantees();
+        return guarantees.stream().anyMatch(candidate -> nameImplies(candidate.render(), result.publicName()));
     }
 
     private boolean variablesCompatible(CallableSignature signature) {
@@ -85,10 +86,11 @@ final class ArrowContractDescriptor implements ContractDescriptor {
         collectVariables(result, required);
         if (required.isEmpty()) return true;
         if (signature.variables().size() < required.size()) return false;
-        Set<String> occurrences = new LinkedHashSet<>();
-        signature.parameters().forEach(parameter -> occurrences.addAll(parameter.requirements()));
-        occurrences.addAll(signature.result().guarantees());
-        return required.stream().allMatch(index -> occurrences.contains("_" + index));
+        Set<Integer> occurrences = new LinkedHashSet<>();
+        signature.parameters().forEach(parameter -> parameter.requirements()
+                .forEach(term -> collectVariables(term, occurrences)));
+        signature.result().guarantees().forEach(term -> collectVariables(term, occurrences));
+        return required.stream().allMatch(index -> occurrences.contains(index - 1));
     }
 
     private static void collectVariables(ContractDescriptor contract, Set<Integer> indexes) {
@@ -99,10 +101,25 @@ final class ArrowContractDescriptor implements ContractDescriptor {
         if (contract instanceof ModifiedContract modified) collectVariables(modified.base(), indexes);
     }
 
-    private static boolean namesImply(List<ContractDescriptor> supplied, List<String> accepted) {
+    private static void collectVariables(CallableSignature.ContractTerm term, Set<Integer> indexes) {
+        switch (term) {
+            case CallableSignature.VariableRef variable -> indexes.add(variable.index());
+            case CallableSignature.AppliedRef applied -> applied.arguments()
+                    .forEach(argument -> collectVariables(argument, indexes));
+            case CallableSignature.ModifiedRef modified -> collectVariables(modified.base(), indexes);
+            case CallableSignature.ArrowRef arrow -> {
+                arrow.parameters().forEach(parameter -> parameter.forEach(value -> collectVariables(value, indexes)));
+                collectVariables(arrow.result(), indexes);
+            }
+            default -> { }
+        }
+    }
+
+    private static boolean namesImply(List<ContractDescriptor> supplied,
+                                      List<CallableSignature.ContractTerm> accepted) {
         if (accepted.isEmpty()) return true;
-        return accepted.stream().allMatch(target -> target.matches("_[1-9][0-9]*") || supplied.stream()
-                .anyMatch(source -> nameImplies(source.publicName(), target)));
+        return accepted.stream().allMatch(target -> target instanceof CallableSignature.VariableRef
+                || supplied.stream().anyMatch(source -> nameImplies(source.publicName(), target.render())));
     }
 
     private static boolean conjunctionImplies(List<ContractDescriptor> supplied,
