@@ -227,7 +227,9 @@ their lazy evaluation rules.
 Caret likewise plans to use contracts as one common model for types, interfaces, refinements, and
 capabilities. Contracts form derivation graphs and work as predicates. Behavior remains in ordinary
 functions, with the most-specific applicable implementation selected from contract-specialized
-definitions.
+definitions. Overload domains are normalized by contract identity and declared derivation before
+execution; redundant bases and `Any` do not create distinct variants, and refinement predicates are
+never run merely to order definitions.
 
 The prototype includes built-in predicates plus unary user-defined contract construction. Use
 `Tag = contract ~` for a nominal base, `Numeric = contract Number` for one base, and

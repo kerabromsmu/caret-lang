@@ -431,6 +431,12 @@ parameter and an explicit `Any` requirement are the same generic fallback and ca
 two overload variants. A statically empty constraint is an invalid declaration rather than a
 dispatch variant that wins by accepting no values.
 
+The prototype normalizes overload declaration domains by canonical binding identity and the
+statically declared nominal derivation graph. It removes `Any`, duplicates, and base requirements
+already implied by a stricter term before comparing declarations; this includes forward multiple-
+base diamonds without executing refinements. Runtime specificity uses the same conservative
+implication rules and keeps incomparable variants unordered.
+
 Null and missing alternatives are normalized separately from the conjunction for ordinary present
 values. Their implication follows accepted-set inclusion: `T` implies both `T?` and `T~`; each of
 those implies `T?~`; and `T?` and `T~` are incomparable. Base implication must also hold, so `Int?`

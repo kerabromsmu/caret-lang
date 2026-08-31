@@ -8,6 +8,7 @@ import caretlang.Ast.Binary;
 import caretlang.Ast.Conditional;
 import caretlang.Ast.ContractVariable;
 import caretlang.Ast.Compose;
+import caretlang.Ast.CollectionLiteral;
 import caretlang.Ast.ContractModifier;
 import caretlang.Ast.DynamicField;
 import caretlang.Ast.Dereference;
@@ -63,6 +64,7 @@ final class Resolver {
     private final ArrayDeque<FunctionDef> functions = new ArrayDeque<>();
     private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
     private final java.util.Map<Integer, Integer> directAliases = new java.util.HashMap<>();
+    private final java.util.Map<Integer, java.util.Set<Integer>> staticContractBases = new java.util.HashMap<>();
     private int nextSymbolId;
     private Integer anyContractSymbol;
 
@@ -113,6 +115,7 @@ final class Resolver {
                 case FunctionDef function -> resolveFunction(function, scope);
             }
         }
+        recordStaticContractBases(statements);
         validateOverloadDomains(statements);
     }
 
@@ -192,11 +195,70 @@ final class Resolver {
     private String domainKey(Ast.ContractClause clause) {
         if (clause == null) return "Any";
         Resolution.AnalyzedClause analyzed = clauses.get(clause);
-        List<String> keys = (analyzed == null ? List.<Resolution.ContractBinding>of()
-                : analyzed.valueRequirements()).stream()
-                .filter(binding -> !isAny(binding)).map(this::contractKey)
+        List<Resolution.ContractBinding> requirements = analyzed == null ? List.of()
+                : analyzed.valueRequirements();
+        List<String> keys = requirements.stream().filter(binding -> !isAny(binding))
+                .filter(binding -> requirements.stream().noneMatch(other -> other != binding
+                        && contractBindingImplies(other, binding)
+                        && !contractBindingImplies(binding, other)))
+                .map(this::contractKey)
                 .distinct().sorted(Comparator.naturalOrder()).toList();
         return keys.isEmpty() ? "Any" : String.join("&", keys);
+    }
+
+    private boolean contractBindingImplies(Resolution.ContractBinding left,
+                                           Resolution.ContractBinding right) {
+        if (left.nullable() && !right.nullable() || left.optional() && !right.optional()) return false;
+        if (left.arguments().size() != right.arguments().size()) return false;
+        for (int i = 0; i < left.arguments().size(); i++) {
+            if (!contractBindingImplies(left.arguments().get(i), right.arguments().get(i))) return false;
+        }
+        if (isAny(right)) return true;
+        if (left.binding() == null || right.binding() == null) {
+            BuiltinContract l = BuiltinContract.named(left.name()).orElse(null);
+            BuiltinContract r = BuiltinContract.named(right.name()).orElse(null);
+            return l != null && r != null && ContractRelations.implies(l, r);
+        }
+        int source = canonicalSymbol(left.binding().symbolId());
+        int target = canonicalSymbol(right.binding().symbolId());
+        if (source == target) return true;
+        java.util.Set<Integer> visited = new java.util.HashSet<>();
+        java.util.ArrayDeque<Integer> pending = new java.util.ArrayDeque<>();
+        pending.add(source);
+        while (!pending.isEmpty()) {
+            int current = pending.removeFirst();
+            if (!visited.add(current)) continue;
+            for (int base : staticContractBases.getOrDefault(current, java.util.Set.of())) {
+                if (base == target) return true;
+                pending.addLast(base);
+            }
+        }
+        return false;
+    }
+
+    private void recordStaticContractBases(List<Stmt> statements) {
+        for (Stmt statement : statements) {
+            if (!(statement instanceof Assign assign)) continue;
+            Expr value = assign.value();
+            while (value instanceof Group group) value = group.expression();
+            if (!(value instanceof Apply apply) || !(apply.function() instanceof Name constructor)
+                    || !constructor.name().equals("contract")) continue;
+            Integer derived = declarations.get(assign.span());
+            if (derived == null) continue;
+            java.util.LinkedHashSet<Integer> bases = new java.util.LinkedHashSet<>();
+            collectStaticContractBases(apply.argument(), bases);
+            staticContractBases.put(canonicalSymbol(derived), java.util.Set.copyOf(bases));
+        }
+    }
+
+    private void collectStaticContractBases(Expr expression, java.util.Set<Integer> result) {
+        while (expression instanceof Group group) expression = group.expression();
+        if (expression instanceof Name name) {
+            Resolution.Binding binding = names.get(name);
+            if (binding != null) result.add(canonicalSymbol(binding.symbolId()));
+        } else if (expression instanceof CollectionLiteral collection) {
+            collection.elements().forEach(element -> collectStaticContractBases(element.value(), result));
+        }
     }
 
     private boolean isAny(Resolution.ContractBinding binding) {

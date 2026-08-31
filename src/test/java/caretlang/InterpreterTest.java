@@ -1845,6 +1845,40 @@ final class InterpreterTest {
     }
 
     @Test
+    void overloadSpecificityUsesNormalizedStaticContractDomains() {
+        assertEquals("both\nleft\nfallback\n", execute("""
+                Root = contract ~
+                Left = contract Root
+                Right = contract Root
+                Both = contract [Left Right Root]
+
+                select (Any) value = "fallback"
+                select (Left) value = "left"
+                select (Both) value = "both"
+
+                (Both) both = 1
+                (Left) left = 1
+                print select both
+                print select left
+                print select 1
+                """));
+
+        LangException redundant = expectDiagnostic("""
+                Root = contract ~
+                Child = contract Root
+                choose (Child Root) value = value
+                choose (Child) value = value
+                """, "Duplicate definition: choose", 4, 1);
+        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, redundant.diagnostic().code());
+
+        LangException anyFallback = expectDiagnostic("""
+                choose value = value
+                choose (Any) value = value
+                """, "Duplicate definition: choose", 2, 1);
+        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, anyFallback.diagnostic().code());
+    }
+
+    @Test
     void explicitNullAndMissingVariantsOutrankModifiedContractAlternatives() {
         assertEquals("null\nnullable\nmissing\noptional\nnull\nmissing\n", execute("""
                 nullable (Number?) value = "nullable"

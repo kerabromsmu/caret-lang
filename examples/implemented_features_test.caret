@@ -330,6 +330,16 @@ assertEqual "overload selects Number" (coverageDescribe 42) "number"
 assertEqual "overload selects String" (coverageDescribe "hello") "text"
 assertEqual "overload retains generic fallback" (coverageDescribe true) "fallback"
 assertEqual "overload partial narrows survivors" (coverageNumberPair 1) "numbers"
+
+CoverageRoot = contract ~
+CoverageLeft = contract CoverageRoot
+CoverageRight = contract CoverageRoot
+CoverageBoth = contract [CoverageLeft CoverageRight CoverageRoot]
+coverageSpecific (Any) value = "fallback"
+coverageSpecific (CoverageLeft) value = "left"
+coverageSpecific (CoverageBoth) value = "both"
+(CoverageBoth) coverageBothValue = 1
+assertEqual "normalized diamond overload is most specific" (coverageSpecific coverageBothValue) "both"
 assertEqual "overload reflection exposes exact variants" (seqSize (@coverageDescribe).variants) 3
 
 // Arrow contracts inspect signatures without invocation and preserve generalized relationships.
