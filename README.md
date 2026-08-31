@@ -194,6 +194,15 @@ With Gradle:
 Language errors are written to standard error and return a nonzero process status.
 Missing or unreadable source files are reported as ordinary CLI errors without Java stack traces.
 
+Inspect inferred callable contracts and effects without executing the program:
+
+```bash
+build/install/caret/bin/caret inspect examples/features/inference.caret
+```
+
+The report uses deterministic source order and distinguishes declared, inferred, effective, empty,
+and unavailable (`~`) facts. A diagnostic produces no partial report and returns a nonzero status.
+
 ## REPL
 
 Start the REPL:
@@ -291,11 +300,10 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
   Trailing callable blocks remain unavailable until lambda syntax is implemented.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
-  dynamically. Initial named-function constraint inference and the internal purity analysis needed
-  to validate refinement predicates are implemented;
+  dynamically. Named-function constraint inference and Phase 2 transitive/higher-order effect
+  analysis are implemented, including the read-only `caret inspect` report;
   nullable/optional contract unions and the initial `Sequence T` parameterized contract are
-  implemented, while general parameterized contracts, complete static dispatch proof, and complete
-  higher-order effect propagation are not implemented.
+  implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
 - Contract-selected collection representations, first-class dynamic fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
@@ -303,8 +311,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
   Complete overload-domain proofs remain planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
-- `map` supports current unary callable values at runtime, but generalized element/result variables,
-  lambdas, and precise higher-order effect propagation remain planned.
+- `map` supports current unary callable values and propagates the supplied transform's known effect
+  bound, but generalized element/result variables and lambdas remain planned.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, bytecode, or optimizer.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract

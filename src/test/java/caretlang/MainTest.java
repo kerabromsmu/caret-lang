@@ -132,12 +132,13 @@ final class MainTest {
     void rejectsExtraFileModeArguments() {
         Invocation invocation = run("one.caret", "two.caret");
         assertEquals(1, invocation.exitCode());
-        assertEquals("Usage: caret <file> | caret test <file>\n", invocation.error());
+        assertEquals("Usage: caret <file> | caret test <file> | caret inspect <file>\n", invocation.error());
     }
 
     @Test
     void hostCatalogMessagesHaveExactOutput() {
         assertEquals("Usage: caret test <file>\n", run("test").error());
+        assertEquals("Usage: caret inspect <file>\n", run("inspect").error());
         assertEquals("Error: Cannot read Caret test file sample.caret: unavailable",
                 HostMessageCatalog.TEST_READ_FAILURE.format(Path.of("sample.caret"), "unavailable"));
         assertEquals("Error: Caret REPL requires an interactive terminal. "
@@ -145,6 +146,63 @@ final class MainTest {
                 HostMessageCatalog.REPL_TERMINAL_REQUIRED.format());
         assertEquals("Warning: Cannot write REPL history at history; using in-memory history: denied",
                 HostMessageCatalog.REPL_HISTORY_WRITE.format(Path.of("history"), "denied"));
+    }
+
+    @Test
+    void inspectReportsDeterministicVisibleFactsWithoutExecutingTheProgram() throws Exception {
+        Path program = temporaryDirectory.resolve("inference.caret");
+        Files.writeString(program, """
+                (Output Number) räkna (Number) value =
+                  print value
+                  value
+                dynamic callback value = callback value
+                print "must not execute"
+                """);
+
+        Invocation invocation = run("inspect", program.toString());
+
+        assertEquals(0, invocation.exitCode());
+        assertEquals("""
+                function räkna/1 @ 1:1
+                  parameter value: effective=[Number, _1] declared=[Number] inferred=[Number, _1]
+                  result: effective=[Number, _1] declared=[Number] inferred=[_1]
+                  effects: upper=[Output] declared=[Output] inferred=[Output]
+                  variables: [_1:[Number]]
+                function dynamic/2 @ 4:1
+                  parameter callback: effective=[] declared=~ inferred=[]
+                  parameter value: effective=[] declared=~ inferred=[]
+                  result: effective=[] declared=~ inferred=[]
+                  effects: upper=~ declared=[] inferred=~
+                  variables: []
+                """, invocation.output());
+        assertEquals("", invocation.error());
+        assertFalse(invocation.output().contains("must not execute"));
+    }
+
+    @Test
+    void inspectDiagnosticsProduceNoPartialReport() throws Exception {
+        Path program = temporaryDirectory.resolve("invalid-inference.caret");
+        Files.writeString(program, """
+                valid value = value
+                (pure) broken value = print value
+                """);
+
+        Invocation invocation = run("inspect", program.toString());
+
+        assertEquals(1, invocation.exitCode());
+        assertEquals("", invocation.output());
+        assertTrue(invocation.error().contains("Function effect allowance exceeded: Output"));
+    }
+
+    @Test
+    void inspectReportsUnreadableFilesWithoutAStackTrace() {
+        Path missing = temporaryDirectory.resolve("missing-inspection.caret");
+        Invocation invocation = run("inspect", missing.toString());
+
+        assertEquals(1, invocation.exitCode());
+        assertEquals("", invocation.output());
+        assertTrue(invocation.error().contains("Cannot read Caret source file"));
+        assertFalse(invocation.error().contains("Exception in thread"));
     }
 
     @Test

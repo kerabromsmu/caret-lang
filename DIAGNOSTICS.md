@@ -96,8 +96,10 @@ from ordinary Caret source use focused Java evidence.
 | INTERNAL-INVARIANT | internal | INTERNAL_ERROR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
 | HOST-FILE-USAGE | host | — | `MainTest#rejectsExtraFileModeArguments` |
 | HOST-TEST-USAGE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
+| HOST-INSPECT-USAGE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-SOURCE-READ-FAILURE | host | — | `MainTest#fileSystemFailuresAreReportedWithoutAStackTrace` |
 | HOST-TEST-READ-FAILURE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
+| HOST-INSPECT-READ-FAILURE | host | — | `MainTest#inspectReportsUnreadableFilesWithoutAStackTrace` |
 | HOST-REPL-TERMINAL-REQUIRED | host | — | `DiagnosticCoverageTest#catalogsAndCoverageRowsStayInSync` |
 | HOST-REPL-HISTORY-READ | host | — | `JLineReplTest#unreadableHistoryFallsBackToMemoryWithAClearWarning` |
 | HOST-REPL-HISTORY-WRITE | host | — | `DiagnosticCoverageTest#catalogsAndCoverageRowsStayInSync` |

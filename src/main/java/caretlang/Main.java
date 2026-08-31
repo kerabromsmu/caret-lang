@@ -2,6 +2,7 @@ package caretlang;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +30,13 @@ public final class Main {
                 return 1;
             }
             return runFile(Path.of(args[1]), output, error, true);
+        }
+        if (args.length > 0 && args[0].equals("inspect")) {
+            if (args.length != 2) {
+                error.println(HostMessageCatalog.INSPECT_USAGE.format());
+                return 1;
+            }
+            return inspectFile(Path.of(args[1]), output, error);
         }
 
         if (args.length > 1) {
@@ -70,5 +78,23 @@ public final class Main {
             return 1;
         }
         return reporter == null || reporter.finish() ? 0 : 1;
+    }
+
+    private static int inspectFile(Path program, PrintStream output, PrintStream error) {
+        final String source;
+        try {
+            source = Files.readString(program);
+        } catch (IOException fileError) {
+            error.println(HostMessageCatalog.INSPECT_READ_FAILURE.format(program, fileError.getMessage()));
+            return 1;
+        }
+        try {
+            output.print(new Interpreter(new PrintStream(OutputStream.nullOutputStream()))
+                    .inspect(new Parser(source).parseProgram()));
+            return 0;
+        } catch (LangException diagnostic) {
+            error.println("Error: " + diagnostic.getMessage());
+            return 1;
+        }
     }
 }

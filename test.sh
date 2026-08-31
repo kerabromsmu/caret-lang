@@ -105,6 +105,9 @@ diff -u examples/features/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contra
 "$CARET_LAUNCHER" examples/features/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
 diff -u examples/features/effects.expected "$CARET_TEST_TMP/effects-output.txt"
 
+"$CARET_LAUNCHER" inspect examples/features/inference.caret > "$CARET_TEST_TMP/inference-output.txt"
+diff -u examples/features/inference.expected "$CARET_TEST_TMP/inference-output.txt"
+
 "$CARET_LAUNCHER" examples/features/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
 diff -u examples/features/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
 

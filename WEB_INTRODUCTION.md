@@ -372,6 +372,10 @@ contract/effect clauses, non-callable effect constraints, unavailable callable e
 effects outside an allowance. A failure keeps the same behavioral code whether static analysis or
 a dynamic boundary discovers it, while its phase and source locations record where it was found.
 
+Plain-text tooling can inspect the same analysis without running the program. `caret inspect FILE`
+reports named callable parameters, results, generalized variables, and declared/inferred/effective
+effect facts in stable source order; `~` means that a fact is unavailable rather than known empty.
+
 ## Contained mutability
 
 Caret values remain immutable by default. Planned mutability is introduced only through an explicit

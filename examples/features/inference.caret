@@ -1,0 +1,5 @@
+(Output Number) noisy (Number) value =
+  print value
+  value
+
+identity value = value

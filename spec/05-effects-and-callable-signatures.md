@@ -599,6 +599,11 @@ For a pure function, tooling may display:
 
 Such annotations are IDE presentation only and are not part of Caret source syntax.
 
-The compiler should also provide a way to inspect fully inferred contracts and effects in plain-text environments.
+The prototype provides `caret inspect FILE` for plain-text environments. It analyzes without
+executing top-level program code and prints named callable declarations in deterministic semantic
+source order. Each entry distinguishes effective, declared, and inferred parameter/result facts;
+the effective, declared, and inferred effect sets; generalized variables; and unavailable facts as
+`~`. Names are language-owned and environment-relative. A diagnostic suppresses the complete report,
+uses the ordinary stderr rendering, and returns a nonzero process status.
 
 ---

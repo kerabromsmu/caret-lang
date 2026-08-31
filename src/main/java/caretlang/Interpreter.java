@@ -48,6 +48,14 @@ final class Interpreter {
         }
     }
 
+    String inspect(List<Stmt> program) {
+        Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
+        inference = ContractInference.analyze(program, resolution);
+        validateEffectAllowances(program, resolution);
+        validateCompositionCompatibility(program, resolution);
+        return InferenceReporter.render(program, inference, resolution);
+    }
+
     private void validateEffectAllowances(List<Stmt> statements, Resolution resolution) {
         for (Stmt statement : statements) {
             if (!(statement instanceof FunctionDef function)) continue;

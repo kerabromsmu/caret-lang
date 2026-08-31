@@ -2,10 +2,12 @@ package caretlang;
 
 /** Stable host/CLI messages that are not Caret language diagnostics. */
 enum HostMessageCatalog {
-    FILE_USAGE("HOST-FILE-USAGE", "Usage: caret <file> | caret test <file>"),
+    FILE_USAGE("HOST-FILE-USAGE", "Usage: caret <file> | caret test <file> | caret inspect <file>"),
     TEST_USAGE("HOST-TEST-USAGE", "Usage: caret test <file>"),
+    INSPECT_USAGE("HOST-INSPECT-USAGE", "Usage: caret inspect <file>"),
     SOURCE_READ_FAILURE("HOST-SOURCE-READ-FAILURE", "Error: Cannot read Caret source file %s: %s"),
     TEST_READ_FAILURE("HOST-TEST-READ-FAILURE", "Error: Cannot read Caret test file %s: %s"),
+    INSPECT_READ_FAILURE("HOST-INSPECT-READ-FAILURE", "Error: Cannot read Caret source file %s: %s"),
     REPL_TERMINAL_REQUIRED("HOST-REPL-TERMINAL-REQUIRED",
             "Error: Caret REPL requires an interactive terminal. Run ./repl.sh from a terminal window."),
     REPL_HISTORY_READ("HOST-REPL-HISTORY-READ", "Warning: Cannot read REPL history at %s; using in-memory history: %s"),
