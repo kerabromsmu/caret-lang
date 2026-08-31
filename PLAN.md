@@ -177,8 +177,9 @@ symbol identities rather than source-span equality.
   every potentially selectable overlapping variant to satisfy result and effect constraints. Treat
   unknown overlap as possible and do not execute refinements or combine partial domains to prove
   coverage in the initial implementation.
-- Represent derivation as a checked logical-inclusion graph supporting multiple bases. Reject cycles
-  and retain enough provenance to explain failed membership and invalid derivation.
+- Preserve the implemented checked logical-inclusion graph with forward references, multiple and
+  redundant bases, transitive diamond implication, cycle rejection, and declaration provenance for
+  invalid derivation diagnostics.
 - Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
   static membership proofs where possible and retaining runtime checks when proof is unavailable.
 - Implement the initial operator matrix over `Number`, `String`, structural `Eq`, and `Boolean?~`.

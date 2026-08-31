@@ -229,6 +229,14 @@ assert "separate contracts have distinct identity" (Positive != OtherPositive)
 assert "identical requirement lists do not imply equality" (CompositeOne != CompositeTwo)
 assertEqual "contract reflection lists refinements" (@Positive).requirements ["positive"]
 
+Diamond = contract [Left Right Root]
+Right = contract Root
+Left = contract Root
+Root = contract ~
+(Diamond) diamondValue = "diamond"
+assert "forward diamond retains left membership" (Left diamondValue)
+assert "forward diamond retains transitive root membership" (Root diamondValue)
+
 NumberOrNull = Number?
 NumberOrMissing = Number~
 NumberOrAbsent = Number?~

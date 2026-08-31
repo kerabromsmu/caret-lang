@@ -662,7 +662,8 @@ final class Resolver {
             if (symbol == null) continue;
             // A function body may close over a later outer assignment because invocation happens
             // dynamically. Its own block declarations and parameters must still be initialized.
-            if (!symbol.initialized() && !(functionBody && depth >= 2)) {
+            if (!symbol.initialized() && symbol.contractState() != ContractState.CONTRACT
+                    && !(functionBody && depth >= 2)) {
                 if (deferred) {
                     names.put(name, binding(symbol, depth, false));
                     return;

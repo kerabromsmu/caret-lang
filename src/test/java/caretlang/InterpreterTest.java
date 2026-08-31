@@ -240,6 +240,36 @@ final class InterpreterTest {
     }
 
     @Test
+    void contractDerivationSupportsForwardDiamondsAndRejectsCycles() {
+        assertEquals("true\ntrue\ntrue\n", execute("""
+                Diamond = contract [Left Right Root]
+                Right = contract Root
+                Left = contract Root
+                Root = contract ~
+
+                (Diamond) value = 1
+                print Diamond value
+                print Left value
+                print Root value
+                """));
+
+        LangException direct = assertThrows(LangException.class,
+                () -> execute("Self = contract Self"));
+        assertEquals(Diagnostic.Codes.CONTRACT_DERIVATION_CYCLE, direct.diagnostic().code());
+        assertEquals(1, direct.diagnostic().primarySpan().start().line());
+        assertFalse(direct.diagnostic().related().isEmpty());
+
+        LangException indirect = assertThrows(LangException.class, () -> execute("""
+                First = contract Second
+                Second = contract Third
+                Third = contract First
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_DERIVATION_CYCLE, indirect.diagnostic().code());
+        assertEquals(3, indirect.diagnostic().primarySpan().start().line());
+        assertEquals(3, indirect.diagnostic().related().size());
+    }
+
+    @Test
     void constructsAndEnforcesParameterizedSequenceContracts() {
         assertEquals("true\nfalse\ntrue\ntrue\nSequence Number\n[ \"Sequence\" ]\n[ \"Number\" ]\n", execute("""
                 Numbers = Sequence Number

@@ -144,6 +144,7 @@ final class Interpreter {
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
         LinkedHashMap<String, Value> exports = new LinkedHashMap<>();
         IdentityHashMap<FunctionDef, Value.Callable> functions = prepareDeclarations(statements, env, resolution);
+        IdentityHashMap<Assign, UserContract> contractPlaceholders = prepareContractDeclarations(statements, env);
         Value last = Value.Missing.INSTANCE;
 
         for (Stmt statement : statements) {
@@ -151,9 +152,19 @@ final class Interpreter {
                                             Expr value1, SourceSpan ignored)) {
                 Value value = eval(value1, env, null, resolution);
                 value = validateContracts(value, value1.span(), contracts, resolution, env, "binding " + name);
-                if (value instanceof Value.ContractValue contract
-                        && contract.descriptor() instanceof UserContract user) user.nameIfAnonymous(name);
-                env.initialize(name, value);
+                UserContract placeholder = contractPlaceholders.get(statement);
+                if (placeholder != null && value instanceof Value.ContractValue contract
+                        && contract.descriptor() instanceof UserContract constructed) {
+                    placeholder.configureFrom(constructed);
+                    placeholder.nameIfAnonymous(name);
+                    rejectContractCycle(placeholder, statement.span());
+                    value = new Value.ContractValue(placeholder);
+                    env.replace(name, value);
+                } else {
+                    if (value instanceof Value.ContractValue contract
+                            && contract.descriptor() instanceof UserContract user) user.nameIfAnonymous(name);
+                    env.initialize(name, value);
+                }
                 if (exported) exports.put(name, value);
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
@@ -170,6 +181,52 @@ final class Interpreter {
         }
 
         return exports.isEmpty() ? last : new Value.Dictionary(exports);
+    }
+
+    private IdentityHashMap<Assign, UserContract> prepareContractDeclarations(List<Stmt> statements,
+                                                                               Environment env) {
+        IdentityHashMap<Assign, UserContract> result = new IdentityHashMap<>();
+        for (Stmt statement : statements) {
+            if (!(statement instanceof Assign assign) || !isContractConstruction(assign.value())) continue;
+            UserContract placeholder = new UserContract(assign.span());
+            placeholder.nameIfAnonymous(assign.name());
+            env.initialize(assign.name(), new Value.ContractValue(placeholder));
+            result.put(assign, placeholder);
+        }
+        return result;
+    }
+
+    private static boolean isContractConstruction(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
+        return expression instanceof Apply apply && apply.function() instanceof Name name
+                && name.name().equals("contract");
+    }
+
+    private static void rejectContractCycle(UserContract root, SourceSpan span) {
+        Set<ContractDescriptor> visiting = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<ContractDescriptor> visited = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        ArrayList<UserContract> path = new ArrayList<>();
+        if (!findContractCycle(root, visiting, visited, path)) return;
+        List<Diagnostic.Related> related = path.stream().map(contract -> new Diagnostic.Related(
+                "Contract in derivation cycle: " + contract.publicName(), contract.declarationSpan()))
+                .filter(item -> item.span() != null).toList();
+        throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.CONTRACT_DERIVATION_CYCLE,
+                "Contract derivation cycle: " + root.publicName(), span, related));
+    }
+
+    private static boolean findContractCycle(ContractDescriptor current, Set<ContractDescriptor> visiting,
+                                             Set<ContractDescriptor> visited, List<UserContract> path) {
+        if (visiting.contains(current)) return true;
+        if (!visited.add(current)) return false;
+        visiting.add(current);
+        if (current instanceof UserContract user) path.add(user);
+        for (ContractDescriptor base : current.bases()) {
+            if (findContractCycle(base, visiting, visited, path)) return true;
+        }
+        visiting.remove(current);
+        if (current instanceof UserContract) path.removeLast();
+        return false;
     }
 
     private IdentityHashMap<FunctionDef, Value.Callable> prepareDeclarations(List<Stmt> statements,

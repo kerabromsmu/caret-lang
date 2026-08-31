@@ -72,6 +72,7 @@ from ordinary Caret source use focused Java evidence.
 | SEMANTIC-INCOMPATIBLE-CONTRACTS | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_inferred_contracts.caret`; `examples/errors/incompatible_declared_inference.caret` |
 | SEMANTIC-INCOMPATIBLE-COMPOSITION | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_composition_contracts.caret` |
 | SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
+| SEMANTIC-CONTRACT-DERIVATION-CYCLE | public | CONTRACT_DERIVATION_CYCLE | `examples/errors/contract_derivation_cycle.caret` |
 | SEMANTIC-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `examples/errors/mixed_collection_shape.caret` |
 | SEMANTIC-DUPLICATE-FIELD | public | DUPLICATE_FIELD | `InterpreterTest#rejectsMixedAndDuplicateNamedCollectionElements` |
 | RUNTIME-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `InterpreterTest#fieldCollectionsRejectMixedDuplicateAndNonStringKeys` |

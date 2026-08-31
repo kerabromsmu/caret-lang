@@ -31,7 +31,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `CORE-INFIX-002` | Symbolic prefix, infix, grouped subtraction, and symbolic partial examples |
 | `CORE-COMP-001` | Left-to-right pipelines, chaining, partial left operands, reflection, and invalid operand/arity fixtures |
 | `LAYOUT-MAP-001`, `LAYOUT-BASE-001`, `LAYOUT-RESTORE-001`, `LAYOUT-STACK-001`, `LAYOUT-PLACE-001` | `features/layout_mapping.caret` and the master layout-mapping assertion |
-| `CONTRACT-001`, `CONTRACT-CORE-001`, `CONTRACT-003`, `CONTRACT-005`, `CONTRACT-006` | `contracts.caret`; built-in, derived, nullable, optional, and parameterized `Sequence T` predicates, binding/parameter/result clauses, nesting, partial application, and reflection |
+| `CONTRACT-001`, `CONTRACT-CORE-001`, `CONTRACT-003`, `CONTRACT-005`, `CONTRACT-006`, `CONTRACT-IMPLY-001`, `CONTRACT-VARIANCE-001` | `contracts.caret`; built-in, forward multiple-base derivation, nullable, optional, and parameterized `Sequence T` predicates, binding/parameter/result clauses, nesting, partial application, reflection, and the derivation-cycle error fixture |
 | `CONTRACT-004`, `CLAUSE-PARAM-001`, `CLAUSE-ASSIGN-001`, `CLAUSE-RESOLVE-001`, `CLAUSE-DIAG-001`, `EFFECT-CATALOG-001` | `features/effects.caret`; mixed clauses, explicit allowances, pure callable constraints, normalization, diagnostics, and reflection |
 | `CONTRACT-002` | `refinements.caret`; proven-pure predicate requirements and the invalid-refinement fixture |
 | `CONTRACT-INFER-001` | `contract_inference.caret`; declared/inferred separation, generalized identity flow, numeric constraints, string `+`, truth semantics, and conditional joins; incompatible-constraint fixtures |

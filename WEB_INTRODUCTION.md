@@ -225,7 +225,9 @@ definitions.
 
 The prototype includes built-in predicates plus unary user-defined contract construction. Use
 `Tag = contract ~` for a nominal base, `Numeric = contract Number` for one base, and
-`AB = contract [A B]` for multiple bases. Clauses can constrain bindings, parameters, and function
+`AB = contract [A B]` for multiple bases. Contract declarations may refer forward within their
+block; multiple-base diamonds imply every transitive base, while direct and indirect derivation
+cycles are rejected with their declaration locations. Clauses can constrain bindings, parameters, and function
 results. An internal analysis also propagates known effects and conservatively rejects unknown
 dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
 fixed operands are captured into partial applications. Proven unary Boolean functions

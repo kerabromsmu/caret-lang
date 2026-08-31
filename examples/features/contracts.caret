@@ -47,3 +47,10 @@ print Numbers numbers
 print NestedNumbers nestedNumbers
 print (@Numbers).name
 print (@Numbers).requirements
+
+Diamond = contract [Left Right Root]
+Right = contract Root
+Left = contract Root
+Root = contract ~
+(Diamond) diamondValue = "diamond"
+print Root diamondValue

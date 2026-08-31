@@ -47,6 +47,8 @@ enum DiagnosticCatalog {
     INVALID_CONTRACT_VARIABLE("SEMANTIC-INVALID-CONTRACT-VARIABLE", Diagnostic.Phase.SEMANTIC,
             Diagnostic.Codes.INVALID_CONTRACT_VARIABLE,
             "Contract variable .*", PUBLIC),
+    CONTRACT_DERIVATION_CYCLE("SEMANTIC-CONTRACT-DERIVATION-CYCLE", Diagnostic.Phase.SEMANTIC,
+            Diagnostic.Codes.CONTRACT_DERIVATION_CYCLE, "Contract derivation cycle: .*", PUBLIC),
     AMBIGUOUS_CLAUSE_NAME("SEMANTIC-AMBIGUOUS-CLAUSE-NAME", Diagnostic.Phase.SEMANTIC,
             Diagnostic.Codes.AMBIGUOUS_CLAUSE_NAME, "Ambiguous clause name: .*", PUBLIC),
     UNKNOWN_CLAUSE_NAME("SEMANTIC-UNKNOWN-CLAUSE-NAME", Diagnostic.Phase.SEMANTIC,

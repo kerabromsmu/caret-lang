@@ -36,6 +36,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String AMBIGUOUS_CONTRACT = "AMBIGUOUS_CONTRACT";
         static final String INVALID_REFINEMENT = "INVALID_REFINEMENT";
         static final String INVALID_CONTRACT_VARIABLE = "INVALID_CONTRACT_VARIABLE";
+        static final String CONTRACT_DERIVATION_CYCLE = "CONTRACT_DERIVATION_CYCLE";
         static final String AMBIGUOUS_CLAUSE_NAME = "AMBIGUOUS_CLAUSE_NAME";
         static final String UNKNOWN_CLAUSE_NAME = "UNKNOWN_CLAUSE_NAME";
         static final String CONFLICTING_EFFECT_ALLOWANCE = "CONFLICTING_EFFECT_ALLOWANCE";

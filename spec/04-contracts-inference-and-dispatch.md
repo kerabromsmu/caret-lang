@@ -388,6 +388,9 @@ signedness conversion, or mixed-representation promotion.
 Bindings whose values are contracts are predeclared throughout their lexical block where the
 ordinary declaration rules require it, so their bases may use forward references. Direct and
 indirect contract-derivation cycles are compile-time errors.
+The prototype implements this as a checked identity graph: multiple and redundant bases are
+accepted, diamond derivation retains transitive implication, and a rejected cycle reports the
+participating declaration locations. Graph construction never evaluates refinement predicates.
 `contract` always takes exactly one ordinary argument: `~`, one contract or predicate, or one
 collection of requirements.
 
@@ -437,6 +440,12 @@ parameter, so `Sequence Int` implies `Sequence Number` when `Int` implies `Numbe
 `Container` parameters are invariant by default: `Container Int` and `Container Number` do not
 imply one another unless their argument descriptors are identical. No constructor is assumed
 covariant merely because its current implementation appears read-only.
+
+The prototype's static implication foundation implements descriptor identity, transitive nominal
+derivation, null/missing accepted-set inclusion, and covariance for the implemented immutable
+`Sequence` constructor. Parameter conjunction ordering uses those proofs, normalizes duplicate and
+`Any` requirements, and keeps null and missing alternatives distinct. Unknown relationships remain
+incomparable. Mutable `Container` variance remains tied to that later value-kind implementation.
 
 ---
 

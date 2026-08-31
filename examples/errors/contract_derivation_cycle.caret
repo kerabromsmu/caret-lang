@@ -1,0 +1,3 @@
+First = contract Second
+Second = contract Third
+Third = contract First
