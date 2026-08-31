@@ -1111,6 +1111,19 @@ constructor is not invoked during membership testing.
 
 The resulting value may be used anywhere an ordinary contract may be used.
 
+The prototype implements this exact structural template model for concrete Collections and
+reifiable collection constructors. Positional and named shape, comparable fixed values,
+unconstrained and contracted holes, repeated numbered-hole equality, direct nesting, and dynamic
+field keys participate in membership. Dynamic keys and fixed expressions are evaluated once during
+constructor creation. Template contracts compose with aliases, null/missing modifiers,
+parameterized collection contracts, conservative implication, overload dispatch, and ordinary
+contract reflection. The unresolved optional-member surface spelling remains unimplemented.
+
+Reflection retains kind `Contract` and adds language-owned `shape`, `size`, and `elements` metadata.
+Element metadata identifies its public name, constraint kind, zero-based repeated-hole parameter,
+and public requirement names without exposing captures, source spans, Java objects, or executable
+descriptor internals.
+
 For example:
 
 ```caret

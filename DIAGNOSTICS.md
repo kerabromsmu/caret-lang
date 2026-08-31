@@ -61,6 +61,8 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-MISSING-COLLECTION-FIELD | public | MISSING_FIELD | `examples/errors/required_missing_field.caret` |
 | RUNTIME-MISSING-REFLECTED-FIELD | public | MISSING_FIELD | `examples/errors/missing_reflected_field.caret` |
 | RUNTIME-INVALID-DYNAMIC-FIELD | public | INVALID_DYNAMIC_FIELD_NAME | `examples/errors/invalid_dynamic_key.caret` |
+| RUNTIME-TEMPLATE-INVALID-CONSTRUCTOR | public | TEMPLATE_INVALID_CONSTRUCTOR | `examples/errors/template_invalid_constructor.caret` |
+| RUNTIME-TEMPLATE-NONCOMPARABLE-FIXED-VALUE | public | TEMPLATE_NONCOMPARABLE_FIXED_VALUE | `examples/errors/template_noncomparable_fixed.caret` |
 | RUNTIME-CALLABLE-EQUALITY | public | CALLABLE_EQUALITY | `examples/errors/callable_equality.caret` |
 | RUNTIME-CALLABLE-RENDERING | public | CALLABLE_RENDERING | `InterpreterTest#toStringRejectsUnsupportedCallablesAndNonStringSpecializationResults` |
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |

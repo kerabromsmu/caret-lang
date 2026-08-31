@@ -427,6 +427,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                     .map(base -> (Value) new Str(base.publicName())).toList()));
             fields.put("requirements", new Seq(contract.requirements().stream()
                     .map(requirement -> (Value) new Str(requirement)).toList()));
+            if (contract instanceof TemplateContract template) fields.putAll(template.reflectionFields());
             return Collections.unmodifiableMap(fields);
         }
         @Override public String toString() { return "<contract " + contract.publicName() + ">"; }

@@ -98,6 +98,8 @@ enum DiagnosticCatalog {
     MISSING_COLLECTION_FIELD("RUNTIME-MISSING-COLLECTION-FIELD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MISSING_FIELD, "Collection has no field: .*", PUBLIC),
     MISSING_REFLECTED_FIELD("RUNTIME-MISSING-REFLECTED-FIELD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: .*", PUBLIC),
     INVALID_DYNAMIC_FIELD("RUNTIME-INVALID-DYNAMIC-FIELD", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME, "Dynamic field name must be a string, got: .*", PUBLIC),
+    TEMPLATE_INVALID_CONSTRUCTOR("RUNTIME-TEMPLATE-INVALID-CONSTRUCTOR", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TEMPLATE_INVALID_CONSTRUCTOR, "template requires .*", PUBLIC),
+    TEMPLATE_NONCOMPARABLE_FIXED_VALUE("RUNTIME-TEMPLATE-NONCOMPARABLE-FIXED-VALUE", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TEMPLATE_NONCOMPARABLE_FIXED_VALUE, "Template fixed value does not support equality.*", PUBLIC),
     RUNTIME_MIXED_COLLECTION_SHAPE("RUNTIME-MIXED-COLLECTION-SHAPE", Diagnostic.Phase.RUNTIME,
             Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
             "A collection cannot mix Field values and positional elements", PUBLIC),

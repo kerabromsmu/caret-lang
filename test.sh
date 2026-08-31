@@ -84,6 +84,9 @@ diff -u examples/features/operators.expected "$CARET_TEST_TMP/operators-output.t
 "$CARET_LAUNCHER" examples/features/collection_constructors.caret > "$CARET_TEST_TMP/collection-constructors-output.txt"
 diff -u examples/features/collection_constructors.expected "$CARET_TEST_TMP/collection-constructors-output.txt"
 
+"$CARET_LAUNCHER" examples/features/templates.caret > "$CARET_TEST_TMP/templates-output.txt"
+diff -u examples/features/templates.expected "$CARET_TEST_TMP/templates-output.txt"
+
 "$CARET_LAUNCHER" examples/features/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
 diff -u examples/features/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
 
@@ -259,6 +262,8 @@ expect_failure examples/errors/contract_violation.caret unused
 expect_failure examples/errors/incompatible_inferred_contracts.caret unused
 expect_failure examples/errors/incompatible_declared_inference.caret unused
 expect_failure examples/errors/contract_derivation_cycle.caret unused
+expect_failure examples/errors/template_invalid_constructor.caret unused
+expect_failure examples/errors/template_noncomparable_fixed.caret unused
 expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
 expect_failure examples/errors/invalid_refinement.caret unused

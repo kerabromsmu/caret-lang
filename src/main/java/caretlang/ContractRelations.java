@@ -14,6 +14,9 @@ final class ContractRelations {
                 && right instanceof ArrowContractDescriptor arrowRight) {
             return arrowLeft.implies(arrowRight);
         }
+        if (left instanceof TemplateContract templateLeft && right instanceof TemplateContract templateRight) {
+            return templateLeft.implies(templateRight);
+        }
         if (left instanceof ContractVariableDescriptor leftVariable
                 || right instanceof ContractVariableDescriptor) return left.equals(right);
 

@@ -36,6 +36,12 @@ coverageConstructor = [_2 _1 _1]
 assertEqual "collection literals own numbered holes" (coverageConstructor "same" 2) [2 "same" "same"]
 coverageContractedConstructor = [[(Number) _] _]
 assertEqual "nested collection holes share one constructor" (coverageContractedConstructor 3 "tail") [[3] "tail"]
+
+CoveragePoint = template [(Number) _ (Number) _]
+assert "structural template accepts exact matching shape" (CoveragePoint [1 2])
+assert "structural template rejects wrong members" (not CoveragePoint [1 "two"])
+CoverageDiagonal = template [_1 _1]
+assert "repeated template holes impose equality" (CoverageDiagonal [3 3])
 assertEqual "symbolic operator partial" (increment 5) 6
 assertEqual "grouped prefix subtraction" ((-) 7 2) 5
 assertEqual "zero-argument function invocation" answer 42

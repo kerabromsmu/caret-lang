@@ -224,6 +224,12 @@ fixed captures, numbered-hole reuse, and hole contracts as language-owned metada
 always yields a complete Collection. Their internal structure and captured values are not exposed
 through reflection.
 
+The ordinary `template` callable turns a concrete Collection or a reifiable constructor into an
+exact structural contract. Templates combine positional or named shape, fixed values, contracted
+holes, direct nesting, repeated-hole equality, and one-time dynamic field names. They remain normal
+contracts for aliases, modifiers, parameterization, reflection, and most-specific overload
+dispatch; malformed or opaque constructors receive located template diagnostics.
+
 Built-in operators expose pure language-owned signatures. Arithmetic and ordering are numeric;
 `+` has closed numeric and string-concatenation variants, with non-string values rendered through
 Caret's extensible `toString` path. Equality is recursive and structural but rejects live callables

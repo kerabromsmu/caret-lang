@@ -163,6 +163,10 @@ final class Interpreter {
                 } else {
                     if (value instanceof Value.ContractValue contract
                             && contract.descriptor() instanceof UserContract user) user.nameIfAnonymous(name);
+                    if (value instanceof Value.ContractValue contract
+                            && contract.descriptor() instanceof TemplateContract template) {
+                        template.nameIfAnonymous(name);
+                    }
                     env.initialize(name, value);
                 }
                 if (exported) exports.put(name, value);
@@ -1333,6 +1337,27 @@ final class Interpreter {
                     (callable, refinementArgument) -> invoke(callable, refinementArgument,
                             refinementArgument.span())));
         }));
+        globals.define("template", locatedFunction("template", List.of("specimen"), (args, span) -> {
+            Value specimen = underlying(args.getFirst().value());
+            CollectionConstructorDescriptor descriptor;
+            if (specimen instanceof CollectionConstructorCallable constructor) {
+                if (!constructor.arguments.isEmpty()) {
+                    throw runtime(Diagnostic.Codes.TEMPLATE_INVALID_CONSTRUCTOR,
+                            "template requires an unbound collection constructor", args.getFirst().span());
+                }
+                descriptor = constructor.descriptor();
+            } else {
+                descriptor = concreteTemplateDescriptor(specimen, args.getFirst().span());
+                if (descriptor == null) {
+                    throw runtime(Diagnostic.Codes.TEMPLATE_INVALID_CONSTRUCTOR,
+                            "template requires a Collection or reifiable collection constructor",
+                            args.getFirst().span());
+                }
+            }
+            validateTemplateFixedValues(descriptor.root());
+            return new Value.ContractValue(new TemplateContract(descriptor,
+                    (callable, argument) -> invoke(callable, argument, argument.span())));
+        }));
         for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
             String operator = descriptor.spelling();
             globals.define(operator, new BuiltinOperatorCallable(operator));
@@ -1467,6 +1492,51 @@ final class Interpreter {
     private Value.FunctionValue function(String name, List<String> parameters,
                                          java.util.function.Function<List<Value>, Value> implementation) {
         return new Value.FunctionValue(name, parameters, implementation);
+    }
+
+    private CollectionConstructorDescriptor concreteTemplateDescriptor(Value value, SourceSpan span) {
+        CollectionConstructorDescriptor.CollectionNode root = concreteTemplateCollection(value, span);
+        return root == null ? null : new CollectionConstructorDescriptor(root, List.of());
+    }
+
+    private CollectionConstructorDescriptor.CollectionNode concreteTemplateCollection(Value value,
+                                                                                       SourceSpan span) {
+        value = underlying(value);
+        if (value instanceof Value.EmptyCollection) {
+            return new CollectionConstructorDescriptor.CollectionNode(false, List.of(), span);
+        }
+        if (value instanceof Value.Seq sequence) {
+            ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
+            for (Value member : sequence.values()) elements.add(new CollectionConstructorDescriptor.Element(
+                    null, concreteTemplateNode(member, span), span));
+            return new CollectionConstructorDescriptor.CollectionNode(false, elements, span);
+        }
+        Map<String, Value> fields;
+        if (value instanceof Value.Dictionary dictionary) fields = dictionary.entries();
+        else if (value instanceof Value.ProjectedDictionary dictionary) {
+            fields = dictionary.fields(reflectionContext);
+        } else return null;
+        ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
+        fields.forEach((name, member) -> elements.add(new CollectionConstructorDescriptor.Element(
+                name, concreteTemplateNode(member, span), span)));
+        return new CollectionConstructorDescriptor.CollectionNode(true, elements, span);
+    }
+
+    private CollectionConstructorDescriptor.Node concreteTemplateNode(Value value, SourceSpan span) {
+        CollectionConstructorDescriptor.CollectionNode nested = concreteTemplateCollection(value, span);
+        return nested == null ? new CollectionConstructorDescriptor.FixedNode(value, span) : nested;
+    }
+
+    private void validateTemplateFixedValues(CollectionConstructorDescriptor.Node node) {
+        if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) {
+            if (!ValueSemantics.equalityEligible(fixed.value())) {
+                throw runtime(Diagnostic.Codes.TEMPLATE_NONCOMPARABLE_FIXED_VALUE,
+                        "Template fixed value does not support equality: "
+                                + ValueSemantics.kind(fixed.value()), fixed.span());
+            }
+        } else if (node instanceof CollectionConstructorDescriptor.CollectionNode collection) {
+            collection.elements().forEach(element -> validateTemplateFixedValues(element.value()));
+        }
     }
 
     private Value.FunctionValue locatedFunction(String name, List<String> parameters,
@@ -1611,19 +1681,71 @@ final class Interpreter {
                                                                                   Environment env,
                                                                                   Resolution resolution,
                                                                                   ConstructorBuild build) {
-        boolean named = !literal.elements().isEmpty()
-                && literal.elements().stream().allMatch(NamedElement.class::isInstance);
-        boolean positional = literal.elements().stream().noneMatch(NamedElement.class::isInstance);
-        if (!named && !positional) return null;
         ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
         for (CollectionElement element : literal.elements()) {
+            CollectionConstructorDescriptor.Element dynamic = element instanceof PositionalElement
+                    ? dynamicConstructorField(element.value(), env, resolution, build) : null;
+            if (dynamic != null) {
+                elements.add(dynamic);
+                continue;
+            }
             CollectionConstructorDescriptor.Node node = constructorNode(
                     element.value(), env, resolution, build);
             if (node == null) return null;
             elements.add(new CollectionConstructorDescriptor.Element(
                     element instanceof NamedElement field ? field.name() : null, node, element.span()));
         }
+        boolean named = !elements.isEmpty() && elements.stream().allMatch(element -> element.name() != null);
+        boolean positional = elements.stream().noneMatch(element -> element.name() != null);
+        if (!named && !positional) return null;
+        LinkedHashMap<String, SourceSpan> names = new LinkedHashMap<>();
+        for (CollectionConstructorDescriptor.Element element : elements) {
+            if (element.name() == null) continue;
+            SourceSpan first = names.putIfAbsent(element.name(), element.span());
+            if (first != null) throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.DUPLICATE_FIELD, "Duplicate field: " + element.name(), element.span(),
+                    List.of(new Diagnostic.Related("First field named " + element.name(), first))));
+        }
         return new CollectionConstructorDescriptor.CollectionNode(named, elements, literal.span());
+    }
+
+    private CollectionConstructorDescriptor.Element dynamicConstructorField(Expr expression, Environment env,
+                                                                             Resolution resolution,
+                                                                             ConstructorBuild build) {
+        Expr raw = expression;
+        while (raw instanceof Group group) raw = group.expression();
+        if (raw instanceof AmbiguousCall call && call.first() instanceof Name name
+                && name.name().equals("field")) {
+            return resolvedDynamicConstructorField(call.middle(), call.last(), expression.span(),
+                    env, resolution, build);
+        }
+        if (raw instanceof Apply outer && outer.function() instanceof AmbiguousCall call
+                && call.first() instanceof Name name && name.name().equals("field")) {
+            Expr contracted = new Apply(call.last(), outer.argument(),
+                    SourceSpan.cover(call.last().span(), outer.argument().span()));
+            return resolvedDynamicConstructorField(call.middle(), contracted, expression.span(),
+                    env, resolution, build);
+        }
+        if (!(raw instanceof Apply outer) || !(outer.function() instanceof Apply inner)) return null;
+        Expr target = inner.function();
+        while (target instanceof Group group) target = group.expression();
+        if (!(target instanceof Name name) || !name.name().equals("field")) return null;
+        return resolvedDynamicConstructorField(inner.argument(), outer.argument(), expression.span(),
+                env, resolution, build);
+    }
+
+    private CollectionConstructorDescriptor.Element resolvedDynamicConstructorField(
+            Expr keyExpression, Expr valueExpression, SourceSpan span, Environment env,
+            Resolution resolution, ConstructorBuild build) {
+        Value key = underlying(eval(keyExpression, env, null, resolution));
+        if (!(key instanceof Value.Str(String fieldName))) {
+            throw runtime(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME,
+                    "Dynamic field name must be a string, got: " + key, keyExpression.span());
+        }
+        CollectionConstructorDescriptor.Node value = constructorNode(
+                valueExpression, env, resolution, build);
+        if (value == null) return null;
+        return new CollectionConstructorDescriptor.Element(fieldName, value, span);
     }
 
     private CollectionConstructorDescriptor.Node constructorNode(Expr expression, Environment env,

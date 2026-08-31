@@ -1921,6 +1921,66 @@ final class InterpreterTest {
     }
 
     @Test
+    void structuralTemplatesAreOrdinaryExactCollectionContracts() {
+        assertEquals("true\nfalse\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\npoint\ncollection\ntrue\npositional\n2\nhole\n", execute("""
+                Point = template [(Number) _ (Number) _]
+                PointAlias = Point
+                print Point [1 2]
+                print Point [1 "two"]
+                print Point [1 2 3]
+
+                Diagonal = template [_1 _1]
+                print Diagonal [3 3]
+                print Diagonal [3 4]
+
+                Named = template [^name = (String) _ ^active = true]
+                print Named [^name = "Caret" ^active = true]
+                print Named [^name = "Caret" ^active = false]
+
+                Fixed = template [1 [2 3]]
+                print Fixed [1 [2 3]]
+                print PointAlias [4 5]
+
+                dynamicName = "score"
+                Dynamic = template [
+                  field dynamicName (Number) _
+                ]
+                print Dynamic [^score = 9]
+
+                describe (Collection) value = "collection"
+                describe (Point) value = "point"
+                print describe [6 7]
+                print describe [6 "seven"]
+
+                NullablePoint = Point?
+                print NullablePoint ?
+                print (@Point).shape
+                print (@Point).size
+                print (seqGet (@Point).elements 0).constraint
+                """));
+
+        LangException opaque = assertThrows(LangException.class,
+                () -> execute("""
+                        invalid = template [
+                          numberText _
+                        ]
+                        """));
+        assertEquals(Diagnostic.Codes.TEMPLATE_INVALID_CONSTRUCTOR, opaque.diagnostic().code());
+
+        LangException callableFixed = assertThrows(LangException.class,
+                () -> execute("invalid = template [@print:]"));
+        assertEquals(Diagnostic.Codes.TEMPLATE_NONCOMPARABLE_FIXED_VALUE,
+                callableFixed.diagnostic().code());
+
+        LangException dynamicKey = assertThrows(LangException.class, () -> execute("""
+                invalid = template [
+                  field 1 _
+                ]
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME, dynamicKey.diagnostic().code());
+    }
+
+    @Test
     void explicitNullAndMissingVariantsOutrankModifiedContractAlternatives() {
         assertEquals("null\nnullable\nmissing\noptional\nnull\nmissing\n", execute("""
                 nullable (Number?) value = "nullable"

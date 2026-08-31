@@ -211,7 +211,7 @@ symbol identities rather than source-span equality.
 - Preserve eligible hole functions with language-owned collection-constructor descriptors retaining
   shape, nesting, fields, fixed captures, hole identities, and hole contracts. Keep ordinary eager
   capture and numbered-hole behavior; never expose Java AST or runtime implementation objects.
-- Implement `template` as an ordinary callable over concrete collections and reifiable collection
+- Preserve implemented `template` as an ordinary callable over concrete collections and reifiable collection
   constructors. It produces an ordinary first-class `Contract` and rejects arbitrary callables or
   non-structural partial expressions with a stable located diagnostic.
 - Establish the shared diagnostic/error descriptor from `ErrorTemplate`: stable code, phase,
