@@ -568,6 +568,12 @@ An omitted declaration and explicit `pure` both provide the empty allowed set. T
 computed independently and never enlarged merely because a broader allowance was written. Catalog
 aliases are compared by descriptor identity during this subset check.
 
+The prototype propagates current-phase effects through resolver-identified aliases, constrained
+higher-order parameters, nested named closures, composition, prefix and hole partials, overload
+narrowing, and recursive fixed points. Eager fixed operands contribute to callable construction;
+the target callable's bound describes later invocation. An unresolved dynamic call keeps the bound
+unavailable, and allowance failures are diagnosed before top-level program effects execute.
+
 IDE tooling should expose inferred effects directly at function declarations.
 
 For example, the source:

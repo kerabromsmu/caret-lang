@@ -182,6 +182,19 @@ final class InterpreterTest {
     }
 
     @Test
+    void inferredAllowanceViolationsAbortBeforeAnyProgramEffects() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        LangException error = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                (pure) invalid value = print value
+                print "must not execute"
+                """).parseProgram()));
+
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, error.diagnostic().code());
+        assertEquals("", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
     void callableMetadataUsesAnalyzedValueRequirementsInsteadOfRawEffectTerms() {
         assertEquals("1\nNumber\n1\nOutput\n1\nNumber\n0\n", execute("""
                 (Output Number) noisy (Number) value =

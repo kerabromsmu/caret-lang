@@ -444,4 +444,46 @@ final class ContractInferenceTest {
         assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
         assertTrue(error.getMessage().contains("observable effects"));
     }
+
+    @Test
+    void callableBindingsPartialsAndCompositionsPropagateInvocationEffects() {
+        List<Ast.Stmt> program = new Parser("""
+                (Output) emit value = print value
+                identity value = value
+                (Output) emitSecond first second = print second
+
+                (Output) throughAlias value =
+                  alias = emit
+                  alias value
+
+                (Output) throughPrefix value =
+                  partial = emitSecond "fixed"
+                  partial value
+
+                (Output) throughHole value =
+                  partial = emitSecond _ value
+                  partial "fixed"
+
+                (Output) throughComposition value =
+                  pipeline = identity >> emit
+                  pipeline value
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        for (int index : List.of(3, 4, 5, 6)) {
+            ContractInference.EffectSummary effects = inference.effects((Ast.FunctionDef) program.get(index));
+            assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT), effects.effects());
+            assertFalse(effects.unknownDynamicCall());
+        }
+    }
+
+    @Test
+    void oneConstrainedCallbackDoesNotHideAnotherUnknownCallback() {
+        List<Ast.Stmt> program = new Parser("""
+                invokeBoth (pure) known unknown value = known (unknown value)
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        assertTrue(inference.effects((Ast.FunctionDef) program.getFirst()).unknownDynamicCall());
+    }
 }

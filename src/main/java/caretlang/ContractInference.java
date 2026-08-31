@@ -678,13 +678,59 @@ final class ContractInference {
         EffectSummary result = EffectSummary.PURE;
         for (Stmt statement : statements) {
             result = result.plus(switch (statement) {
-                case Assign assign -> expressionEffects(assign.value(), visible);
+                case Assign assign -> {
+                    EffectSummary construction = expressionEffects(assign.value(), visible);
+                    CallableEffects callable = callableValueEffects(assign.value(), visible);
+                    if (callable != null) visible.put(assign.name(), new CallableEffects(
+                            callable.arity(), callable.summary(), resolution.symbolId(assign.span())));
+                    yield construction;
+                }
                 case ExprStmt expression -> expressionEffects(expression.expression(), visible);
                 case PrintLine line -> expressionEffects(printExpression(line), visible);
                 case FunctionDef ignored -> EffectSummary.PURE;
             });
         }
         return result;
+    }
+
+    private CallableEffects callableValueEffects(Expr expression, Map<String, CallableEffects> visible) {
+        while (expression instanceof Group group) expression = group.expression();
+        if (expression instanceof Name name) return resolvedCallable(name, visible);
+        if (expression instanceof Compose compose) {
+            CallableEffects left = callableValueEffects(compose.left(), visible);
+            CallableEffects right = callableValueEffects(compose.right(), visible);
+            if (left == null || right == null || right.arity() != 1) return null;
+            return new CallableEffects(left.arity(), left.summary().plus(right.summary()), null);
+        }
+        if (containsHole(expression)) {
+            Expr target = expression;
+            while (target instanceof Apply apply) target = apply.function();
+            CallableEffects callable = callableValueEffects(target, visible);
+            if (callable == null) return null;
+            return new CallableEffects(holeArity(expression), callable.summary(), null);
+        }
+        ArrayList<Expr> arguments = new ArrayList<>();
+        Expr target = expression;
+        while (target instanceof Apply apply) {
+            arguments.addFirst(apply.argument());
+            target = apply.function();
+        }
+        if (arguments.isEmpty()) return null;
+        CallableEffects callable = callableValueEffects(target, visible);
+        if (callable == null || arguments.size() >= callable.arity()) return null;
+        return new CallableEffects(callable.arity() - arguments.size(), callable.summary(), null);
+    }
+
+    private static int holeArity(Expr expression) {
+        int[] ordinary = {0};
+        int[] highest = {0};
+        AstTraversal.walkPreOrder(expression, candidate -> {
+            if (candidate instanceof Hole hole) {
+                if (hole.index() == 0) ordinary[0]++;
+                else highest[0] = Math.max(highest[0], hole.index());
+            }
+        });
+        return highest[0] == 0 ? ordinary[0] : highest[0];
     }
 
     private EffectSummary expressionEffects(Expr expression, Map<String, CallableEffects> visible) {

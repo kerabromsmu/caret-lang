@@ -143,17 +143,18 @@ Current status: Phase 2 is in progress. Unary user-defined base and derived cont
 implemented alongside runtime-kind contracts. Multiple bases are passed as one ordinary `[A B]`
 collection. Binding, parameter, and result clauses acquire or validate membership at runtime.
 Initial constraint inference and
-generalized contract variables for named functions are implemented. A minimum effect analysis now
-propagates known named-call effects, preserves unknown dynamic calls, and proves refinement
+generalized contract variables for named functions are implemented. The Phase 2 effect analysis
+propagates named, aliased, higher-order, closure, composition, partial, overload, and recursive-call
+effects, preserves unknown dynamic calls, and proves refinement
 eligibility without exposing effect syntax. Proven unary Boolean callables now participate as
 first-class predicate requirements in derived contracts and direct clauses, including through
 aliases. Nullable/optional contract modifiers are implemented as first-class, identity-stable
 contract unions without collapsing null into missing. The initial parameterized-contract slice is
 also implemented as `Sequence T`, with constructor metadata preserved through aliases, recursive
 element validation, nesting, modifiers, identity semantics, reflection, and conservative outer-kind
-inference. Environment-relative public effect identities, declaration allowances, callable
-constraints, and effectful arrow contracts are implemented; complete higher-order propagation and
-catalog aliasing remain subsequent Phase 2 slices. Closed same-name overload sets now provide observational applicability, unique
+inference. Environment-relative public effect identities, catalog aliases, declaration allowances,
+callable constraints, guarded invocation bounds, and effectful arrow contracts are implemented.
+Closed same-name overload sets now provide observational applicability, unique
 most-specific runtime selection, generic fallbacks, persistent prefix and hole narrowing,
 and distinct no-applicable/ambiguous diagnostics. Complete static selection remains planned; the
 initial signature/reflection schema is implemented.
