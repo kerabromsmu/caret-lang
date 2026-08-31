@@ -142,6 +142,46 @@ final class InterpreterTest {
     }
 
     @Test
+    void effectCatalogAliasesPreserveIdentityAndRemainSeparateFromBindings() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        EffectCatalog catalog = EffectCatalog.standard(false).alias("console", "Output");
+        Interpreter interpreter = new Interpreter(
+                new PrintStream(bytes, true, StandardCharsets.UTF_8), null, catalog);
+        interpreter.execute(new Parser("""
+                console = 42
+                (console Number) announce (Number) value =
+                  print value
+                  value
+                print announce 7
+                """).parseProgram());
+        assertEquals("7\n7\n", bytes.toString(StandardCharsets.UTF_8));
+
+        Interpreter isolated = new Interpreter(new PrintStream(new ByteArrayOutputStream()), null, catalog);
+        LangException unavailable = assertThrows(LangException.class, () -> isolated.execute(new Parser("""
+                (console) permitted value = value
+                print console
+                """).parseProgram()));
+        assertEquals(Diagnostic.Codes.UNKNOWN_NAME, unavailable.diagnostic().code());
+    }
+
+    @Test
+    void invocationRejectsUnavailableEffectBoundsBeforeExecutingTheCallable() {
+        LangException error = expectDiagnostic("""
+                invoke callback value = callback value
+                invoke print "not printed"
+                """, "no known effect upper bound", 2, 1);
+        assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, error.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
+
+        LangException mixed = expectDiagnostic("""
+                invokeBoth (pure) known unknown value = known (unknown value)
+                identity value = value
+                invokeBoth identity identity 1
+                """, "no known effect upper bound", 3, 1);
+        assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, mixed.diagnostic().code());
+    }
+
+    @Test
     void callableMetadataUsesAnalyzedValueRequirementsInsteadOfRawEffectTerms() {
         assertEquals("1\nNumber\n1\nOutput\n1\nNumber\n0\n", execute("""
                 (Output Number) noisy (Number) value =
@@ -713,8 +753,8 @@ final class InterpreterTest {
     void resolvesCallableParametersAsPrefixOrInfixFromRuntimeArity() {
         assertEquals("5\n5\n", execute("""
                 add left right = left + right
-                applyInfix left operation right = left operation right
-                applyPrefix operation left right = operation left right
+                applyInfix left (pure) operation right = left operation right
+                applyPrefix (pure) operation left right = operation left right
                 print applyInfix 2 add 3
                 print applyPrefix add 2 3
                 """));

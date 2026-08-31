@@ -202,7 +202,8 @@ final class ContractInference {
                 EffectSummary inferred = EffectSummary.PURE;
                 for (FunctionDef variant : allDefinitions) {
                     if (variant.name().equals(function.name())) {
-                        inferred = inferred.plus(inferEffects(variant.body(), visibleEffects));
+                        inferred = inferred.plus(inferEffects(variant.body(),
+                                withConstrainedParameters(variant, visibleEffects)));
                     }
                 }
                 CallableEffects previous = visibleEffects.get(function.name());
@@ -218,7 +219,8 @@ final class ContractInference {
             FunctionContract inferred = definitionCounts.get(function.name()) > 1
                     ? infer(function, visible) : visible.get(function.name());
             contracts.put(function, inferred);
-            EffectSummary inferredEffects = inferEffects(function.body(), visibleEffects);
+            EffectSummary inferredEffects = inferEffects(function.body(),
+                    withConstrainedParameters(function, visibleEffects));
             effects.put(function, inferredEffects);
             analyzeBlock(function.body(), visible, visibleEffects, false);
         }
@@ -615,6 +617,42 @@ final class ContractInference {
         return new CallableEffects(arity, summary, null);
     }
 
+    private Map<String, CallableEffects> withConstrainedParameters(
+            FunctionDef function, Map<String, CallableEffects> enclosing) {
+        HashMap<String, CallableEffects> visible = new HashMap<>(enclosing);
+        for (Ast.Parameter parameter : function.params()) {
+            Resolution.AnalyzedClause clause = resolution.clause(parameter.contracts());
+            if (clause == null) continue;
+            List<EffectDescriptor> allowance = clause.effectAllowance();
+            // A clause-only callable constraint does not declare arity. Two is sufficient for
+            // both prefix partial analysis and the language's binary infix classification; the
+            // runtime value retains and checks its exact arity.
+            int arity = 2;
+            if (allowance == null) {
+                Ast.ArrowContract arrow = clause.valueRequirements().stream()
+                        .map(Resolution.ContractBinding::inline).filter(Ast.ArrowContract.class::isInstance)
+                        .map(Ast.ArrowContract.class::cast).findFirst().orElse(null);
+                if (arrow == null) continue;
+                arity = arrow.parameters().size();
+                allowance = arrow.effectTerms().stream().map(term -> switch (term.name()) {
+                    case "Output" -> EffectCatalog.OUTPUT;
+                    case "TestReport" -> EffectCatalog.TEST_REPORT;
+                    case "StateRead" -> EffectCatalog.STATE_READ;
+                    case "StateWrite" -> EffectCatalog.STATE_WRITE;
+                    default -> null;
+                }).filter(Objects::nonNull).toList();
+            }
+            EnumSet<BuiltinEffect> effects = EnumSet.noneOf(BuiltinEffect.class);
+            for (EffectDescriptor effect : allowance) {
+                if (effect == EffectCatalog.OUTPUT) effects.add(BuiltinEffect.OUTPUT);
+                if (effect == EffectCatalog.TEST_REPORT) effects.add(BuiltinEffect.TEST_REPORT);
+            }
+            visible.put(parameter.name(), new CallableEffects(
+                    arity, new EffectSummary(effects, false), -1));
+        }
+        return visible;
+    }
+
     private EffectSummary inferEffects(List<Stmt> statements, Map<String, CallableEffects> enclosing) {
         Map<String, CallableEffects> visible = new HashMap<>(enclosing);
         List<FunctionDef> nested = statements.stream().filter(FunctionDef.class::isInstance)
@@ -627,7 +665,7 @@ final class ContractInference {
         do {
             changed = false;
             for (FunctionDef function : nested) {
-                EffectSummary inferred = inferEffects(function.body(), visible);
+                EffectSummary inferred = inferEffects(function.body(), withConstrainedParameters(function, visible));
                 CallableEffects previous = visible.get(function.name());
                 if (!inferred.equals(previous.summary())) {
                     visible.put(function.name(), new CallableEffects(
@@ -726,6 +764,7 @@ final class ContractInference {
         CallableEffects candidate = visible.get(name.name());
         if (candidate == null) return null;
         Resolution.Binding binding = resolution.binding(name);
+        if (candidate.symbolId() != null && candidate.symbolId() == -1) return binding == null ? null : candidate;
         if (candidate.symbolId() == null) {
             return binding == null || binding.declarationSpan() == null ? candidate : null;
         }

@@ -353,11 +353,11 @@ For example:
   ...
 ```
 
-The prototype currently implements the runtime `map transform values` callable for Sequences.
-Until higher-order effect substitution is implemented, its public callable metadata deliberately
-reports an unknown effect upper bound rather than incorrectly
-claiming purity or a fixed effect set. Runtime application still uses the ordinary guarded callable
-path and preserves element order.
+The prototype implements the runtime `map transform values` callable for Sequences. Before its
+transform is supplied, its invocation-effect bound is deliberately unavailable. Supplying the
+transform produces a partial callable whose bound is that transform's descriptor-identity effect
+set. Completing `map` therefore uses the ordinary guarded callable path without claiming purity or
+a fixed effect set, and preserves element order.
 
 This declaration generalizes one input-element contract and one output-element contract, then instantiates both
 freshly at every use of `map`. Variables may appear as ordinary constructor arguments and within

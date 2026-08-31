@@ -162,7 +162,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         return new CallableSignature(parameters,
                 new Result(union(declaredResult, inferredResult),
                         function.resultContracts() == null ? null : declaredResult, inferredResult),
-                new Effects(declaredEffects, declaredEffects, effects), variables);
+                new Effects(effects == null ? null : declaredEffects, declaredEffects, effects), variables);
     }
 
     CallableSignature dropFirst() {

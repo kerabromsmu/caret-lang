@@ -159,8 +159,8 @@ print 2 joinDigits 3 + 4
 print (2 joinDigits 3 < 30)
 
 // Callable parameters use the same runtime prefix/infix selection rule.
-applyInfix left operation right = left operation right
-applyPrefix operation left right = operation left right
+applyInfix left (pure) operation right = left operation right
+applyPrefix (pure) operation left right = operation left right
 print applyInfix 2 add 3
 print applyPrefix add 2 3
 

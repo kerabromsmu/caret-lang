@@ -10,11 +10,20 @@ final class CallableDispatcher implements Value.CallInvoker {
     private int depth;
 
     @Override public Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan callSpan) {
+        if (callable.remainingArity() == 1) requireKnownEffects(callable, callSpan);
         return withinDepth(callSpan, () -> callable.apply(argument, callSpan));
     }
 
     Value invokeZero(Value.Callable callable, SourceSpan callSpan) {
+        requireKnownEffects(callable, callSpan);
         return withinDepth(callSpan, () -> callable.invokeZero(callSpan));
+    }
+
+    private static void requireKnownEffects(Value.Callable callable, SourceSpan span) {
+        if (callable.signature().effects().upperBound() == null) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_CALL_EFFECTS,
+                    "Callable invocation has no known effect upper bound", span);
+        }
     }
 
     private Value withinDepth(SourceSpan span, Supplier<Value> invocation) {

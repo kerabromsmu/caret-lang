@@ -319,9 +319,10 @@ clause once, so callable reflection reports `Number` only as a result requiremen
 as an effect; source order does not change that meaning.
 
 The prototype implements the runtime `map transform values` operation for Sequences and current
-named, partial, and composed callable values. Declaration-wide variable schemes retain their
-substitutions through prefix and hole partials; lambdas and precise transform-effect propagation
-remain planned.
+named, partial, and composed callable values. Once its transform is supplied, the resulting partial
+exposes that transform's invocation-effect bound; invoking a callable whose bound remains
+unavailable fails before its body executes. Declaration-wide variable schemes retain their
+substitutions through prefix and hole partials; lambdas remain planned.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
@@ -366,7 +367,7 @@ beyond `Sequence T`, universal literals, `ErrorTemplate`, and `Result` remain pl
 the unary contract, refinement, and initial sequence-parameterization foundation described above
 is implemented.
 
-The planned effect system likewise assigns distinct stable codes to malformed mixed
+The implemented Phase 2 effect foundation assigns distinct stable codes to malformed mixed
 contract/effect clauses, non-callable effect constraints, unavailable callable effect bounds, and
 effects outside an allowance. A failure keeps the same behavioral code whether static analysis or
 a dynamic boundary discovers it, while its phase and source locations record where it was found.

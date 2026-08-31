@@ -418,6 +418,9 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public int remainingArity() { return 1; }
+        @Override public CallableSignature signature() {
+            return CallableSignature.builtin(List.of("value"), List.of());
+        }
         @Override public Optional<Value> find(String name) { return Optional.ofNullable(fields().get(name)); }
         @Override public Map<String, Value> fields() {
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();

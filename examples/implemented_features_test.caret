@@ -168,8 +168,8 @@ assertEqual "named infix is left associative" (1 joinDigits 2 joinDigits 3) 123
 assertEqual "named infix binds below addition" (2 joinDigits 3 + 4) 27
 assert "named infix binds above comparison" (2 joinDigits 3 < 30)
 
-applyInfix left operation right = left operation right
-applyPrefix operation left right = operation left right
+applyInfix left (pure) operation right = left operation right
+applyPrefix (pure) operation left right = operation left right
 assertEqual "callable parameter in infix position" (applyInfix 2 add 3) 5
 assertEqual "callable parameter in prefix position" (applyPrefix add 2 3) 5
 

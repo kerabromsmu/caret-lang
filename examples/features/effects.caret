@@ -10,6 +10,7 @@ print (@EffectfulNumber).name
 print EffectfulNumber noisy
 print noisy 3
 print copy 2
+print map noisy [4]
 
 noisySignature = (@noisy).signature
 print seqSize noisySignature.result.declared

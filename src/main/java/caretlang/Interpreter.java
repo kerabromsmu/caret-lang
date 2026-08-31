@@ -20,8 +20,12 @@ final class Interpreter {
     }
 
     Interpreter(PrintStream output, TestReporter testReporter) {
+        this(output, testReporter, EffectCatalog.standard(testReporter != null));
+    }
+
+    Interpreter(PrintStream output, TestReporter testReporter, EffectCatalog effectCatalog) {
         this.output = output;
-        this.effectCatalog = EffectCatalog.standard(testReporter != null);
+        this.effectCatalog = Objects.requireNonNull(effectCatalog);
         installBuiltins();
         if (testReporter != null) installTestBuiltins(testReporter);
     }
@@ -338,6 +342,38 @@ final class Interpreter {
             return operatorSignatures(operator).stream().map(signature -> arguments.isEmpty()
                     ? signature : signature.specializeFirst(arguments.getFirst().value())).toList();
         }
+    }
+
+    /** Higher-order map exposes the selected transform's invocation bound after partial application. */
+    private final class MapCallable implements Value.Callable {
+        private final Value.Callable transform;
+
+        private MapCallable() { this(null); }
+        private MapCallable(Value.Callable transform) { this.transform = transform; }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            if (transform == null) return new MapCallable(unaryMapTransform(argument));
+            Value.Seq values = sequence(argument);
+            ArrayList<Value> mapped = new ArrayList<>(values.size());
+            for (Value value : values) {
+                mapped.add(invoke(transform, new Value.Argument(value, argument.span()), callSpan));
+            }
+            return new Value.Seq(mapped);
+        }
+
+        @Override public int remainingArity() { return transform == null ? 2 : 1; }
+
+        @Override public CallableSignature signature() {
+            if (transform == null) return CallableSignature.unknown(List.of("transform", "values"));
+            CallableSignature.Effects effects = transform.signature().effects();
+            return new CallableSignature(
+                    List.of(new CallableSignature.Parameter("values", List.of(), null, null)),
+                    new CallableSignature.Result(List.of(), null, null),
+                    new CallableSignature.Effects(effects.upperBound(), null, effects.inferred()), List.of());
+        }
+
+        @Override public String publicName() { return "map"; }
+        @Override public String toString() { return "<fn map/" + remainingArity() + ">"; }
     }
 
     private static List<CallableSignature> operatorSignatures(String operator) {
@@ -1437,16 +1473,7 @@ final class Interpreter {
         }));
         globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
-        List<String> mapParameters = List.of("transform", "values");
-        globals.define("map", new Value.FunctionValue("map", mapParameters, (args, span) -> {
-            Value.Callable transform = unaryMapTransform(args.getFirst());
-            Value.Seq values = sequence(args.get(1));
-            ArrayList<Value> mapped = new ArrayList<>(values.size());
-            for (Value value : values) {
-                mapped.add(invoke(transform, new Value.Argument(value, args.get(1).span()), span));
-            }
-            return new Value.Seq(mapped);
-        }, false, CallableSignature.unknown(mapParameters)));
+        globals.define("map", new MapCallable());
 
         globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dictionary(Map.of())));
         globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
@@ -1868,7 +1895,7 @@ final class Interpreter {
             target = apply.function();
         }
         if (!(target instanceof Literal literal) || !(underlying(literal.value()) instanceof Value.Callable callable)) {
-            return CallableSignature.unknown(Collections.nCopies(arity, null));
+            return structuralHoleSignature(expression, arity);
         }
         CallableSignature specialized = callable.signature();
         for (int index = 0; index < arguments.size() && index < specialized.parameters().size(); index++) {
@@ -1888,11 +1915,32 @@ final class Interpreter {
                 projected.set(index, List.copyOf(positions));
             } else {
                 if (!(argument instanceof Literal)) {
-                    return CallableSignature.unknown(Collections.nCopies(arity, null));
+                    return structuralHoleSignature(expression, arity);
                 }
             }
         }
         return specialized.projectParameters(projected);
+    }
+
+    private CallableSignature structuralHoleSignature(Expr expression, int arity) {
+        ArrayList<CallableSignature.EffectRef> effects = new ArrayList<>();
+        boolean[] unknown = {false};
+        AstTraversal.walkPreOrder(expression, candidate -> {
+            if (!(candidate instanceof Literal literal)
+                    || !(underlying(literal.value()) instanceof Value.Callable callable)) return;
+            List<CallableSignature.EffectRef> upper = callable.signature().effects().upperBound();
+            if (upper == null) unknown[0] = true;
+            else for (CallableSignature.EffectRef effect : upper) {
+                if (effects.stream().noneMatch(existing -> existing.identity() == effect.identity())) {
+                    effects.add(effect);
+                }
+            }
+        });
+        List<CallableSignature.Parameter> parameters = Collections.nCopies(arity,
+                new CallableSignature.Parameter(null, List.of(), null, null));
+        List<CallableSignature.EffectRef> upper = unknown[0] ? null : List.copyOf(effects);
+        return new CallableSignature(parameters, new CallableSignature.Result(List.of(), null, null),
+                new CallableSignature.Effects(upper, null, upper), List.of());
     }
 
     private CallableSignature projectHoleSignature(CallableSignature signature,
