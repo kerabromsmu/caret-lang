@@ -708,6 +708,20 @@ final class Interpreter {
 
     private Value eval(Expr expr, Environment env, List<Value.Argument> holeArgs, Resolution resolution) {
         try {
+            if (holeArgs == null && expr instanceof CollectionLiteral collection) {
+                HoleAnalysis collectionHoles = analyzeCollectionHoles(collection);
+                if (!collectionHoles.indexes().isEmpty()) {
+                    int arity = holeArity(expr, collectionHoles.indexes());
+                    CollectionConstructorDescriptor descriptor = collectionConstructor(
+                            collection, env, resolution, collectionHoles.indexes());
+                    if (descriptor != null) return new CollectionConstructorCallable(descriptor, List.of());
+                    Expr captured = captureNonHoleParts(expr, env,
+                            collectionHoles.containsHole(), resolution);
+                    return new Value.HoleFunction(expr.toString(), arity,
+                            supplied -> eval(captured, env, supplied, resolution),
+                            holeSignature(captured, arity));
+                }
+            }
             if (holeArgs == null && !(expr instanceof Compose)) {
                 HoleAnalysis analysis = analyzeHoles(expr);
                 if (!analysis.indexes().isEmpty()) {
@@ -725,6 +739,87 @@ final class Interpreter {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
                     "Maximum Caret evaluation depth exceeded", expr.span());
         }
+    }
+
+    private final class CollectionConstructorCallable implements Value.Callable {
+        private final CollectionConstructorDescriptor descriptor;
+        private final List<Value.Argument> arguments;
+
+        private CollectionConstructorCallable(CollectionConstructorDescriptor descriptor,
+                                              List<Value.Argument> arguments) {
+            this.descriptor = descriptor;
+            this.arguments = List.copyOf(arguments);
+        }
+
+        CollectionConstructorDescriptor descriptor() { return descriptor; }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            int parameter = arguments.size();
+            argument = validateConstructorArgument(parameter, argument,
+                    descriptor.parameterRequirements().get(parameter));
+            ArrayList<Value.Argument> next = new ArrayList<>(arguments);
+            next.add(argument);
+            if (next.size() == descriptor.arity()) return materialize(descriptor.root(), next);
+            return new CollectionConstructorCallable(descriptor, next);
+        }
+
+        @Override public int remainingArity() { return descriptor.arity() - arguments.size(); }
+        @Override public String publicName() { return "<collection-constructor>"; }
+        @Override public CallableSignature signature() {
+            CallableSignature signature = CallableSignature.collectionConstructor(
+                    descriptor.parameterRequirements());
+            for (Value.Argument argument : arguments) signature = signature.specializeFirst(argument.value());
+            return signature;
+        }
+        @Override public String toString() {
+            return "<collection-constructor/" + remainingArity() + ">";
+        }
+    }
+
+    private Value.Argument validateConstructorArgument(int parameter, Value.Argument argument,
+                                                       List<Object> requirements) {
+        LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
+        for (Object requirement : requirements) {
+            boolean accepted;
+            if (requirement instanceof ContractDescriptor contract) {
+                ContractDescriptor nominal = contract instanceof ModifiedContract modified
+                        ? modified.base() : contract;
+                if (nominal instanceof UserContract user
+                        && user.canAcquire(argument.value(), argument.span())) {
+                    acquired.add(nominal);
+                    accepted = true;
+                } else accepted = contract.accepts(argument.value());
+            } else {
+                accepted = truth(invoke((Value.Callable) requirement, argument, argument.span()));
+            }
+            if (!accepted) throw new LangException(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.CONTRACT_VIOLATION,
+                    "Contract violation for collection constructor parameter _" + (parameter + 1),
+                    argument.span());
+        }
+        if (acquired.isEmpty()) return argument;
+        Value value = argument.value();
+        if (value instanceof Value.Attributed(Value raw, Set<ContractDescriptor> existing)) {
+            acquired.addAll(existing);
+            value = new Value.Attributed(raw, acquired);
+        } else value = new Value.Attributed(value, acquired);
+        return new Value.Argument(value, argument.span());
+    }
+
+    private Value materialize(CollectionConstructorDescriptor.Node node, List<Value.Argument> arguments) {
+        if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) return fixed.value();
+        if (node instanceof CollectionConstructorDescriptor.HoleNode hole) {
+            return arguments.get(hole.parameter()).value();
+        }
+        CollectionConstructorDescriptor.CollectionNode collection =
+                (CollectionConstructorDescriptor.CollectionNode) node;
+        if (collection.elements().isEmpty()) return Value.EmptyCollection.INSTANCE;
+        if (!collection.named()) return new Value.Seq(collection.elements().stream()
+                .map(element -> materialize(element.value(), arguments)).toList());
+        LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+        collection.elements().forEach(element -> fields.put(element.name(),
+                materialize(element.value(), arguments)));
+        return new Value.Dictionary(fields);
     }
 
     private Value evalInner(Expr expr, Environment env, Resolution resolution) {
@@ -927,7 +1022,8 @@ final class Interpreter {
         }
         if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
             Value fn = underlying(evalInner(function, env, resolution));
-            Value argument = evalInner(argument1, env, resolution);
+            Value argument = argument1 instanceof CollectionLiteral
+                    ? eval(argument1, env, null, resolution) : evalInner(argument1, env, resolution);
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
@@ -1480,6 +1576,111 @@ final class Interpreter {
         return ValueSemantics.underlying(value);
     }
 
+    private CollectionConstructorDescriptor collectionConstructor(CollectionLiteral literal,
+                                                                  Environment env,
+                                                                  Resolution resolution,
+                                                                  List<Integer> indexes) {
+        ConstructorBuild build = new ConstructorBuild(indexes.stream().anyMatch(index -> index > 0));
+        CollectionConstructorDescriptor.CollectionNode root = constructorCollection(
+                literal, env, resolution, build);
+        if (root == null) return null;
+        int arity = build.numbered
+                ? indexes.stream().mapToInt(Integer::intValue).max().orElseThrow()
+                : indexes.size();
+        ArrayList<List<Object>> requirements = new ArrayList<>();
+        for (int index = 0; index < arity; index++) requirements.add(List.of());
+        for (CollectionConstructorDescriptor.HoleNode hole : build.holes) {
+            ArrayList<Object> combined = new ArrayList<>(requirements.get(hole.parameter()));
+            for (Object requirement : hole.requirements()) {
+                if (combined.stream().noneMatch(existing -> existing == requirement)) combined.add(requirement);
+            }
+            requirements.set(hole.parameter(), List.copyOf(combined));
+        }
+        return new CollectionConstructorDescriptor(root, requirements);
+    }
+
+    private static final class ConstructorBuild {
+        private final boolean numbered;
+        private int ordinary;
+        private final ArrayList<CollectionConstructorDescriptor.HoleNode> holes = new ArrayList<>();
+        private ConstructorBuild(boolean numbered) { this.numbered = numbered; }
+        private int parameter(Hole hole) { return numbered ? hole.index() - 1 : ordinary++; }
+    }
+
+    private CollectionConstructorDescriptor.CollectionNode constructorCollection(CollectionLiteral literal,
+                                                                                  Environment env,
+                                                                                  Resolution resolution,
+                                                                                  ConstructorBuild build) {
+        boolean named = !literal.elements().isEmpty()
+                && literal.elements().stream().allMatch(NamedElement.class::isInstance);
+        boolean positional = literal.elements().stream().noneMatch(NamedElement.class::isInstance);
+        if (!named && !positional) return null;
+        ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
+        for (CollectionElement element : literal.elements()) {
+            CollectionConstructorDescriptor.Node node = constructorNode(
+                    element.value(), env, resolution, build);
+            if (node == null) return null;
+            elements.add(new CollectionConstructorDescriptor.Element(
+                    element instanceof NamedElement field ? field.name() : null, node, element.span()));
+        }
+        return new CollectionConstructorDescriptor.CollectionNode(named, elements, literal.span());
+    }
+
+    private CollectionConstructorDescriptor.Node constructorNode(Expr expression, Environment env,
+                                                                 Resolution resolution,
+                                                                 ConstructorBuild build) {
+        Expr unwrapped = expression;
+        while (unwrapped instanceof Group group) unwrapped = group.expression();
+        if (unwrapped instanceof Hole hole) return constructorHole(hole, List.of(), build);
+        if (unwrapped instanceof Apply apply && apply.argument() instanceof Hole hole) {
+            List<Object> requirements = constructorRequirements(apply.function(), env, resolution);
+            if (requirements != null) return constructorHole(hole, requirements, build);
+        }
+        if (unwrapped instanceof CollectionLiteral nested) {
+            return constructorCollection(nested, env, resolution, build);
+        }
+        HoleAnalysis nestedHoles = analyzeCollectionHoles(expression);
+        if (!nestedHoles.indexes().isEmpty()) return null;
+        return new CollectionConstructorDescriptor.FixedNode(
+                eval(expression, env, null, resolution), expression.span());
+    }
+
+    private CollectionConstructorDescriptor.HoleNode constructorHole(Hole hole, List<Object> requirements,
+                                                                      ConstructorBuild build) {
+        CollectionConstructorDescriptor.HoleNode node = new CollectionConstructorDescriptor.HoleNode(
+                build.parameter(hole), requirements, hole.span());
+        build.holes.add(node);
+        return node;
+    }
+
+    private List<Object> constructorRequirements(Expr expression, Environment env,
+                                                 Resolution resolution) {
+        ArrayList<Expr> expressions = new ArrayList<>();
+        if (!flattenConstructorRequirements(expression, expressions)) return null;
+        ArrayList<Object> requirements = new ArrayList<>();
+        for (Expr requirement : expressions) {
+            Value value = underlying(evalInner(requirement, env, resolution));
+            if (value instanceof Value.ContractValue contract) requirements.add(contract.descriptor());
+            else if (value instanceof Value.Callable callable && callable.refinementEligible()) {
+                requirements.add(callable);
+            } else return null;
+        }
+        return List.copyOf(requirements);
+    }
+
+    private boolean flattenConstructorRequirements(Expr expression, List<Expr> result) {
+        while (expression instanceof Group group) expression = group.expression();
+        if (expression instanceof Apply apply) {
+            return flattenConstructorRequirements(apply.function(), result)
+                    && flattenConstructorRequirements(apply.argument(), result);
+        }
+        if (expression instanceof Name || expression instanceof ContractModifier) {
+            result.add(expression);
+            return true;
+        }
+        return false;
+    }
+
     private record HoleAnalysis(List<Integer> indexes, IdentityHashMap<Expr, Boolean> containsHole) {}
 
     private int holeArity(Expr expr, List<Integer> indexes) {
@@ -1494,18 +1695,31 @@ final class Interpreter {
     }
 
     private HoleAnalysis analyzeHoles(Expr expr) {
+        return analyzeHoles(expr, false);
+    }
+
+    private HoleAnalysis analyzeCollectionHoles(Expr expr) {
+        return analyzeHoles(expr, true);
+    }
+
+    private HoleAnalysis analyzeHoles(Expr expr, boolean traverseCollections) {
         ArrayList<Integer> indexes = new ArrayList<>();
         IdentityHashMap<Expr, Boolean> containsHole = new IdentityHashMap<>();
-        markHoles(expr, indexes, containsHole);
+        markHoles(expr, indexes, containsHole, traverseCollections, true);
         return new HoleAnalysis(List.copyOf(indexes), containsHole);
     }
 
     private boolean markHoles(Expr expr, List<Integer> indexes,
-                              IdentityHashMap<Expr, Boolean> containsHole) {
+                              IdentityHashMap<Expr, Boolean> containsHole,
+                              boolean traverseCollections, boolean root) {
+        if (!root && expr instanceof CollectionLiteral && !traverseCollections) {
+            containsHole.put(expr, false);
+            return false;
+        }
         boolean found = expr instanceof Hole;
         if (expr instanceof Hole hole) indexes.add(hole.index());
         for (Expr child : AstTraversal.children(expr)) {
-            found |= markHoles(child, indexes, containsHole);
+            found |= markHoles(child, indexes, containsHole, traverseCollections, false);
         }
         containsHole.put(expr, found);
         return found;

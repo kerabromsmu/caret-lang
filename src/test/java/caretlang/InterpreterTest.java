@@ -1879,6 +1879,48 @@ final class InterpreterTest {
     }
 
     @Test
+    void collectionLiteralsOwnReifiableStructuralHoles() {
+        assertEquals("capture\n[ \"capture\" 1 ]\n[ \"capture\" 3 ]\n[ 2 1 1 ]\n[\n  [ 4 ]\n  5\n]\n[\n  \"fixed\" = 7\n  \"name\" = 6\n]\n1\nNumber\ntrue\n[ 8 ]\n", execute("""
+                identity value = value
+                constructor = [
+                  print "capture"
+                  _
+                ]
+                print constructor 1
+                print constructor 3
+
+                repeated = [_2 _1 _1]
+                print repeated 1 2
+
+                nested = [[_] _]
+                print nested 4 5
+
+                named = [^name = _ ^fixed = 7]
+                print named 6
+
+                numeric = [(Number) _]
+                print @numeric.remaining
+                print (seqGet (seqGet @numeric.signature.parameters 0).requirements 0).name
+
+                Tagged = contract Number
+                taggedConstructor = [(Tagged) _]
+                tagged = taggedConstructor 7
+                print Tagged (seqGet tagged 0)
+
+                passedThrough = identity [_]
+                print passedThrough 8
+                """));
+
+        LangException violation = assertThrows(LangException.class,
+                () -> execute("numeric = [(Number) _]\nnumeric \"wrong\""));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, violation.diagnostic().code());
+
+        LangException mixed = assertThrows(LangException.class,
+                () -> execute("invalid = [_ _1]"));
+        assertEquals(Diagnostic.Codes.MIXED_HOLE_STYLES, mixed.diagnostic().code());
+    }
+
+    @Test
     void explicitNullAndMissingVariantsOutrankModifiedContractAlternatives() {
         assertEquals("null\nnullable\nmissing\noptional\nnull\nmissing\n", execute("""
                 nullable (Number?) value = "nullable"

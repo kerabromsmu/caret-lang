@@ -81,6 +81,9 @@ diff -u examples/features/contract_inference.expected "$CARET_TEST_TMP/contract-
 "$CARET_LAUNCHER" examples/features/operators.caret > "$CARET_TEST_TMP/operators-output.txt"
 diff -u examples/features/operators.expected "$CARET_TEST_TMP/operators-output.txt"
 
+"$CARET_LAUNCHER" examples/features/collection_constructors.caret > "$CARET_TEST_TMP/collection-constructors-output.txt"
+diff -u examples/features/collection_constructors.expected "$CARET_TEST_TMP/collection-constructors-output.txt"
+
 "$CARET_LAUNCHER" examples/features/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
 diff -u examples/features/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
 

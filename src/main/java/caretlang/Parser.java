@@ -771,6 +771,13 @@ final class Parser {
                     Expr value = multiline ? collectionLineExpression()
                             : hasTopLevelOperatorBeforeCollectionEnd()
                             ? lowPrecedenceApplication() : postfix();
+                    if (!multiline && value instanceof Group
+                            && (peek().text().equals("_")
+                            || peek().kind() == Kind.IDENT
+                            && peek().text().matches("_[1-9][0-9]*"))) {
+                        Expr hole = primary();
+                        value = new Apply(value, hole, SourceSpan.cover(value.span(), hole.span()));
+                    }
                     elements.add(new PositionalElement(value, value.span()));
                 }
                 consume("]", "Expected ']'");

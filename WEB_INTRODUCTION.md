@@ -218,6 +218,12 @@ the same literal describe a list, set, dictionary, packed buffer, or heterogeneo
 surrounding contracts select behavior and representation. Dynamic fields will become ordinary
 first-class collection elements rather than a separate object or JSON notation.
 
+A collection literal containing holes now produces a reifiable collection constructor before a
+surrounding call receives it. These constructors retain positional or named shape, direct nesting,
+fixed captures, numbered-hole reuse, and hole contracts as language-owned metadata; applying one
+always yields a complete Collection. Their internal structure and captured values are not exposed
+through reflection.
+
 Built-in operators expose pure language-owned signatures. Arithmetic and ordering are numeric;
 `+` has closed numeric and string-concatenation variants, with non-string values rendered through
 Caret's extensible `toString` path. Equality is recursive and structural but rejects live callables

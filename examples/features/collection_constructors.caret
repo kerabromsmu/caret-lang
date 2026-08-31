@@ -1,0 +1,11 @@
+identity value = value
+
+reordered = [_2 _1 _1]
+print reordered "same" 2
+
+nested = [[(Number) _] _]
+print nested 3 "tail"
+print (seqGet (seqGet @nested.signature.parameters 0).requirements 0).name
+
+named = identity [^name = _ ^active = true]
+print named "Caret"

@@ -208,7 +208,7 @@ symbol identities rather than source-span equality.
 - Introduce built-in scalar/value contracts and structural contracts for named Collections,
   callables, SIMD values, formats, rules, and cycles as those kinds arrive. Contract failures identify
   the declaration/call and failing contract with related spans.
-- Extend eligible hole functions with language-owned collection-constructor descriptors retaining
+- Preserve eligible hole functions with language-owned collection-constructor descriptors retaining
   shape, nesting, fields, fixed captures, hole identities, and hole contracts. Keep ordinary eager
   capture and numbered-hole behavior; never expose Java AST or runtime implementation objects.
 - Implement `template` as an ordinary callable over concrete collections and reifiable collection

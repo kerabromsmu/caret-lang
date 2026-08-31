@@ -1906,6 +1906,19 @@ descriptor. A nested literal used as the operand of an inner call materializes i
 that call first. A collection expression never evaluates to a collection containing hole values and
 does not automatically become a template.
 
+The prototype implements collection-owned structural constructors for positional and named shapes,
+direct nested literals, eagerly captured fixed members, contracted holes, and ordinary or numbered
+holes. Repeated numbered holes share one constructor parameter and therefore one supplied value.
+Computed-hole members remain ordinary opaque partial callables rather than falsely claiming a
+reifiable structural descriptor.
+
+The descriptor is immutable language-owned data and retains source provenance internally for later
+template diagnostics. It is not exposed as Java AST or runtime implementation state. The constructor
+itself follows ordinary callable equality rules, so direct equality is invalid; reflection retains
+ordinary callable target identity and exposes only its public parameter/result contracts, never
+fixed captures or descriptor internals. Applying the constructor always produces a complete
+Collection and can never materialize a hole value.
+
 Template construction is explicit:
 
 ```caret
