@@ -382,6 +382,12 @@ operator variants specifying accepted pairs, result contracts, overflow, divisio
 rules before those combinations are implemented. This initial matrix defines no implicit widening,
 signedness conversion, or mixed-representation promotion.
 
+The prototype implements this initial operator matrix, including four reflected closed `+`
+variants, language-owned recursive rendering for concatenation, recursive `Eq` eligibility,
+normalized lazy truth results, and relational `+` results retained through direct named-function
+calls and later ordinary-binding constraints. More general relational propagation through nested
+compositions remains conservative rather than selecting a numeric default.
+
 <a id="contract-declaration-and-identity"></a>
 #### Contract binding and identity
 

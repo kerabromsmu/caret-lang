@@ -30,6 +30,7 @@ assertEqual "multiline function body" (scale base) 20
 increment = + _ 1
 assertEqual "prefix symbolic operator" (+ 2 3) 5
 assertEqual "prefix and infix operators agree" (+ 2 3) (2 + 3)
+assertEqual "plus exposes four closed variants" (seqSize @(+).variants) 4
 assertEqual "symbolic operator partial" (increment 5) 6
 assertEqual "grouped prefix subtraction" ((-) 7 2) 5
 assertEqual "zero-argument function invocation" answer 42

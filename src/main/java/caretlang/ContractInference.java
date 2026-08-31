@@ -46,30 +46,50 @@ final class ContractInference {
     record FunctionContract(List<Set<BuiltinContract>> parameterRequirements,
                             List<Set<BuiltinContract>> inferredParameterRequirements,
                             Set<BuiltinContract> resultGuarantees, Set<BuiltinContract> inferredResultGuarantees,
-                            Integer resultParameter, boolean generalizedResult) {
+                            Integer resultParameter, boolean generalizedResult,
+                            Integer plusLeftParameter, Integer plusRightParameter) {
         FunctionContract {
             parameterRequirements = parameterRequirements.stream().map(Set::copyOf).toList();
             inferredParameterRequirements = inferredParameterRequirements.stream().map(Set::copyOf).toList();
             resultGuarantees = Set.copyOf(resultGuarantees);
             inferredResultGuarantees = Set.copyOf(inferredResultGuarantees);
         }
+
+        FunctionContract(List<Set<BuiltinContract>> parameterRequirements,
+                         List<Set<BuiltinContract>> inferredParameterRequirements,
+                         Set<BuiltinContract> resultGuarantees,
+                         Set<BuiltinContract> inferredResultGuarantees,
+                         Integer resultParameter, boolean generalizedResult) {
+            this(parameterRequirements, inferredParameterRequirements, resultGuarantees,
+                    inferredResultGuarantees, resultParameter, generalizedResult, null, null);
+        }
     }
 
     private static final class Shape {
         private final EnumSet<BuiltinContract> guarantees;
         private final Integer parameter;
+        private final PlusChoice plusChoice;
         private boolean generalized;
 
         private Shape(EnumSet<BuiltinContract> guarantees, Integer parameter, boolean generalized) {
+            this(guarantees, parameter, generalized, null);
+        }
+
+        private Shape(EnumSet<BuiltinContract> guarantees, Integer parameter, boolean generalized,
+                      PlusChoice plusChoice) {
             this.guarantees = guarantees;
             this.parameter = parameter;
             this.generalized = generalized;
+            this.plusChoice = plusChoice;
         }
 
         static Shape unknown() { return new Shape(EnumSet.noneOf(BuiltinContract.class), null, false); }
         static Shape generic() { return new Shape(EnumSet.noneOf(BuiltinContract.class), null, true); }
         static Shape concrete(BuiltinContract contract) { return new Shape(EnumSet.of(contract), null, false); }
         static Shape parameter(int index) { return new Shape(EnumSet.noneOf(BuiltinContract.class), index, false); }
+        static Shape unresolvedPlus(Shape left, Shape right) {
+            return new Shape(EnumSet.noneOf(BuiltinContract.class), null, true, new PlusChoice(left, right));
+        }
         EnumSet<BuiltinContract> guarantees() { return guarantees; }
         Integer parameter() { return parameter; }
         boolean generalized() { return generalized; }
@@ -78,6 +98,8 @@ final class ContractInference {
             generalized = false;
         }
     }
+
+    private record PlusChoice(Shape left, Shape right) {}
 
     private record DeclaredParameters(List<Set<BuiltinContract>> domains, List<Boolean> explicit) {
         DeclaredParameters {
@@ -102,7 +124,7 @@ final class ContractInference {
 
     static ContractInference analyze(List<Stmt> program, Resolution resolution) {
         ContractInference inference = new ContractInference(resolution);
-        inference.analyzeBlock(program, Map.of(), BUILTIN_EFFECTS);
+        inference.analyzeBlock(program, Map.of(), BUILTIN_EFFECTS, true);
         inference.validateRefinementClauses(program);
         return inference;
     }
@@ -139,7 +161,7 @@ final class ContractInference {
     }
 
     private void analyzeBlock(List<Stmt> statements, Map<String, FunctionContract> enclosing,
-                              Map<String, CallableEffects> enclosingEffects) {
+                              Map<String, CallableEffects> enclosingEffects, boolean analyzeOrdinaryBindings) {
         LinkedHashMap<String, FunctionDef> definitions = new LinkedHashMap<>();
         ArrayList<FunctionDef> allDefinitions = new ArrayList<>();
         HashMap<String, Integer> definitionCounts = new HashMap<>();
@@ -198,15 +220,15 @@ final class ContractInference {
             contracts.put(function, inferred);
             EffectSummary inferredEffects = inferEffects(function.body(), visibleEffects);
             effects.put(function, inferredEffects);
-            analyzeBlock(function.body(), visible, visibleEffects);
+            analyzeBlock(function.body(), visible, visibleEffects, false);
         }
-        analyzeOrdinaryBindings(statements, visible);
+        if (analyzeOrdinaryBindings) analyzeOrdinaryBindings(statements, visible);
     }
 
     private static FunctionContract empty(FunctionDef function) {
         List<Set<BuiltinContract>> parameters = new ArrayList<>();
         for (int i = 0; i < function.params().size(); i++) parameters.add(Set.of());
-        return new FunctionContract(parameters, parameters, Set.of(), Set.of(), null, false);
+        return new FunctionContract(parameters, parameters, Set.of(), Set.of(), null, false, null, null);
     }
 
     private FunctionContract infer(FunctionDef function, Map<String, FunctionContract> visible) {
@@ -249,8 +271,10 @@ final class ContractInference {
             effectiveRequirements.add(explicitParameters.get(index)
                     ? declaredDomains.get(index) : requirements.get(index));
         }
+        Integer plusLeft = result.plusChoice == null ? null : result.plusChoice.left().parameter();
+        Integer plusRight = result.plusChoice == null ? null : result.plusChoice.right().parameter();
         return new FunctionContract(effectiveRequirements, new ArrayList<>(requirements), guarantees,
-                inferredGuarantees, result.parameter(), generalizedResult);
+                inferredGuarantees, result.parameter(), generalizedResult, plusLeft, plusRight);
     }
 
     private Shape expression(Expr expression, Map<String, Integer> parameters, Map<String, Shape> locals,
@@ -269,13 +293,17 @@ final class ContractInference {
                         constrain(operand, EnumSet.of(BuiltinContract.NUMBER), requirements, unary.operand().span());
                         yield Shape.concrete(BuiltinContract.NUMBER);
                     }
-                    case "not" -> Shape.concrete(BuiltinContract.BOOLEAN);
+                    case "not" -> {
+                        requireTruth(operand, unary.operand().span());
+                        yield Shape.concrete(BuiltinContract.BOOLEAN);
+                    }
                     default -> Shape.unknown();
                 };
             }
             case Binary binary -> binary(binary, parameters, locals, requirements, visible);
             case Conditional conditional -> {
                 Shape condition = expression(conditional.condition(), parameters, locals, requirements, visible);
+                requireTruth(condition, conditional.condition().span());
                 Shape yes = expression(conditional.whenTrue(), parameters, locals, requirements, visible);
                 Shape no = expression(conditional.whenFalse(), parameters, locals, requirements, visible);
                 if (conditional.condition() instanceof Literal(Value.Bool booleanValue, SourceSpan ignored)) {
@@ -341,7 +369,11 @@ final class ContractInference {
                     default -> Shape.concrete(BuiltinContract.NUMBER);
                 };
             }
-            case "and", "or" -> Shape.concrete(BuiltinContract.BOOLEAN);
+            case "and", "or" -> {
+                requireTruth(left, binary.left().span());
+                requireTruth(right, binary.right().span());
+                yield Shape.concrete(BuiltinContract.BOOLEAN);
+            }
             case "==", "!=" -> Shape.concrete(BuiltinContract.BOOLEAN);
             default -> Shape.unknown();
         };
@@ -358,7 +390,15 @@ final class ContractInference {
         }
         // `+` is relational: an unresolved operand may be Number or String. Do not invent a
         // numeric constraint; later relational inference can specialize this further.
-        return Shape.unknown();
+        return Shape.unresolvedPlus(left, right);
+    }
+
+    private static void requireTruth(Shape shape, SourceSpan span) {
+        if (shape.guarantees().isEmpty()) return;
+        if (shape.guarantees().stream().allMatch(contract -> contract == BuiltinContract.BOOLEAN
+                || contract == BuiltinContract.NULL || contract == BuiltinContract.MISSING)) return;
+        throw conflict(span, shape.guarantees(), Set.of(
+                BuiltinContract.BOOLEAN, BuiltinContract.NULL, BuiltinContract.MISSING));
     }
 
     private Shape ambiguousCall(AmbiguousCall call, Map<String, Integer> parameters,
@@ -406,6 +446,10 @@ final class ContractInference {
         if (called.resultParameter() != null && called.resultParameter() < shapes.size()) {
             return shapes.get(called.resultParameter());
         }
+        if (called.plusLeftParameter() != null && called.plusRightParameter() != null
+                && called.plusLeftParameter() < shapes.size() && called.plusRightParameter() < shapes.size()) {
+            return plus(shapes.get(called.plusLeftParameter()), shapes.get(called.plusRightParameter()));
+        }
         return called.generalizedResult() ? Shape.generic()
                 : new Shape(enumSet(called.resultGuarantees()), null, false);
     }
@@ -444,6 +488,10 @@ final class ContractInference {
     private void constrain(Shape shape, Set<BuiltinContract> constraints,
                            List<EnumSet<BuiltinContract>> requirements, SourceSpan span) {
         if (constraints.isEmpty()) return;
+        if (shape.plusChoice != null) {
+            constrainPlus(shape, constraints, requirements, span);
+            return;
+        }
         if (shape.parameter() != null) {
             EnumSet<BuiltinContract> target = requirements.get(shape.parameter());
             DeclaredParameters declared = declaredParameterDomains.get(requirements);
@@ -466,6 +514,33 @@ final class ContractInference {
                 constraints.stream().noneMatch(required -> ContractRelations.implies(actual, required)))) {
             throw conflict(span, shape.guarantees(), constraints);
         }
+    }
+
+    private void constrainPlus(Shape result, Set<BuiltinContract> constraints,
+                               List<EnumSet<BuiltinContract>> requirements, SourceSpan span) {
+        boolean number = constraints.stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.NUMBER));
+        boolean string = constraints.stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.STRING));
+        if (number == string) {
+            if (!number) throw conflict(span, result.guarantees(), constraints);
+            return;
+        }
+        PlusChoice choice = result.plusChoice;
+        if (number) {
+            constrain(choice.left(), Set.of(BuiltinContract.NUMBER), requirements, span);
+            constrain(choice.right(), Set.of(BuiltinContract.NUMBER), requirements, span);
+        } else {
+            boolean leftString = choice.left().guarantees().contains(BuiltinContract.STRING);
+            boolean rightString = choice.right().guarantees().contains(BuiltinContract.STRING);
+            if (!leftString && !rightString) {
+                boolean leftNumber = choice.left().guarantees().contains(BuiltinContract.NUMBER);
+                boolean rightNumber = choice.right().guarantees().contains(BuiltinContract.NUMBER);
+                if (leftNumber) constrain(choice.right(), Set.of(BuiltinContract.STRING), requirements, span);
+                else if (rightNumber) constrain(choice.left(), Set.of(BuiltinContract.STRING), requirements, span);
+            }
+        }
+        result.resolveWith(constraints);
     }
 
     private static boolean declarationGuarantees(Set<BuiltinContract> declared,

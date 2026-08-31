@@ -302,6 +302,56 @@ final class Interpreter {
     private record ApplicabilityKey(Object requirement, int position) {}
     private record RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) {}
 
+    private final class BuiltinOperatorCallable implements Value.Callable {
+        private final String operator;
+        private final List<Value.Argument> arguments;
+
+        private BuiltinOperatorCallable(String operator) { this(operator, List.of()); }
+
+        private BuiltinOperatorCallable(String operator, List<Value.Argument> arguments) {
+            this.operator = operator;
+            this.arguments = List.copyOf(arguments);
+        }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            ArrayList<Value.Argument> next = new ArrayList<>(arguments);
+            next.add(argument);
+            if (next.size() == 2) return binaryOperation(operator, next, callSpan);
+            if (next.size() > 2) throw new LangException(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.TOO_MANY_ARGUMENTS, "Too many arguments for " + operator, callSpan);
+            return new BuiltinOperatorCallable(operator, next);
+        }
+
+        @Override public int remainingArity() { return 2 - arguments.size(); }
+
+        @Override public String publicName() { return operator; }
+
+        @Override public CallableSignature signature() {
+            return CallableSignature.summarize(variantSignatures());
+        }
+
+        @Override public List<CallableSignature> variantSignatures() {
+            return operatorSignatures(operator).stream().map(signature -> arguments.isEmpty()
+                    ? signature : signature.specializeFirst(arguments.getFirst().value())).toList();
+        }
+    }
+
+    private static List<CallableSignature> operatorSignatures(String operator) {
+        if (operator.equals("+")) return List.of(
+                CallableSignature.operator(List.of("Number", "Number"), "Number"),
+                CallableSignature.operator(List.of("String", "String"), "String"),
+                CallableSignature.operator(List.of("String", "Any"), "String"),
+                CallableSignature.operator(List.of("Any", "String"), "String"));
+        if (operator.equals("==") || operator.equals("!=")) {
+            return List.of(CallableSignature.operator(List.of("Eq", "Eq"), "Boolean"));
+        }
+        String result = switch (operator) {
+            case ">", ">=", "<", "<=" -> "Boolean";
+            default -> "Number";
+        };
+        return List.of(CallableSignature.operator(List.of("Number", "Number"), result));
+    }
+
     private final class OverloadCallable implements Value.Callable {
         private final String name;
         private final List<OverloadVariant> all;
@@ -1070,8 +1120,13 @@ final class Interpreter {
         Value right = underlying(rightArgument.value());
         return switch (op) {
             case "+" -> {
-                if (left instanceof Value.Str || right instanceof Value.Str)
-                    yield new Value.Str(left.toString() + right);
+                if (left instanceof Value.Str || right instanceof Value.Str) {
+                    String leftText = left instanceof Value.Str(String text) ? text
+                            : concatenateText(leftArgument, callSpan);
+                    String rightText = right instanceof Value.Str(String text) ? text
+                            : concatenateText(rightArgument, callSpan);
+                    yield new Value.Str(leftText + rightText);
+                }
                 yield finiteNumber(number(leftArgument) + number(rightArgument),
                         "Numeric result is not finite", callSpan);
             }
@@ -1101,6 +1156,14 @@ final class Interpreter {
             case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right, reflectionContext));
             default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
         };
+    }
+
+    private String concatenateText(Value.Argument argument, SourceSpan span) {
+        Value.Callable renderer = (Value.Callable) globals.get("toString");
+        Value rendered = underlying(invoke(renderer, argument, span));
+        if (rendered instanceof Value.Str(String text)) return text;
+        throw runtime(Diagnostic.Codes.EXPECTED_STRING,
+                "toString specialization must return a String", span);
     }
 
     private double number(Value value) {
@@ -1176,8 +1239,7 @@ final class Interpreter {
         }));
         for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
             String operator = descriptor.spelling();
-            globals.define(operator, locatedFunction(operator, List.of("left", "right"),
-                    (args, span) -> binaryOperation(operator, args, span)));
+            globals.define(operator, new BuiltinOperatorCallable(operator));
         }
 
         globals.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {

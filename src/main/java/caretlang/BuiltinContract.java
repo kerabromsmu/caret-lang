@@ -8,6 +8,7 @@ enum BuiltinContract implements ContractDescriptor {
     NUMBER("Number") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.NUMBER); } },
     STRING("String") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.STRING); } },
     BOOLEAN("Boolean") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.BOOLEAN); } },
+    EQ("Eq") { @Override public boolean accepts(Value value) { return ValueSemantics.equalityEligible(value); } },
     NULL("Null") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.NULL); } },
     MISSING("Missing") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.MISSING); } },
     FUNCTION("Function") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.FUNCTION); } },

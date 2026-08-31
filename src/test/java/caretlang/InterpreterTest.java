@@ -270,6 +270,31 @@ final class InterpreterTest {
     }
 
     @Test
+    void operatorsUseLanguageRenderingTruthAndStructuralEqualityPolicies() {
+        assertEquals("value:7\n[ value:1 value:2 ]!\ntrue\ntrue\ntrue\n", execute("""
+                (String) toString (Number) value = "value:" + numberText value
+                print ("" + 7)
+                print ([1 2] + "!")
+                print (not ?)
+                print (~ or true)
+                print (? & (1 / 0) ! false) == false
+                """));
+
+        LangException nestedCallable = assertThrows(LangException.class,
+                () -> execute("print [print] == [print]"));
+        assertEquals(Diagnostic.Codes.CALLABLE_EQUALITY, nestedCallable.diagnostic().code());
+
+        LangException zero = assertThrows(LangException.class, () -> execute("print 1 / 0"));
+        assertEquals(Diagnostic.Codes.DIVISION_BY_ZERO, zero.diagnostic().code());
+        assertEquals(1, zero.diagnostic().primarySpan().start().line());
+
+        String huge = "9".repeat(200);
+        LangException nonFinite = assertThrows(LangException.class,
+                () -> execute("print " + huge + " * " + huge));
+        assertEquals(Diagnostic.Codes.NON_FINITE_RESULT, nonFinite.diagnostic().code());
+    }
+
+    @Test
     void constructsAndEnforcesParameterizedSequenceContracts() {
         assertEquals("true\nfalse\ntrue\ntrue\nSequence Number\n[ \"Sequence\" ]\n[ \"Number\" ]\n", execute("""
                 Numbers = Sequence Number
@@ -1303,7 +1328,10 @@ final class InterpreterTest {
         assertDiagnostic("print (1).absent~", "Field access requires a named collection", 1, 7);
         assertDiagnostic("print 1 + true", "Expected number", 1, 11);
         assertDiagnostic("print 1 2", "Value is not callable", 1, 7);
-        assertDiagnostic("print 1 & true ! false", "Condition must be Boolean", 1, 7);
+        LangException invalidCondition = assertThrows(LangException.class,
+                () -> execute("print 1 & true ! false"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, invalidCondition.diagnostic().code());
+        assertEquals(1, invalidCondition.diagnostic().primarySpan().start().line());
     }
 
     @Test

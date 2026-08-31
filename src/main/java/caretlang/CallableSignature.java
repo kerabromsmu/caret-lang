@@ -95,6 +95,17 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                 new Result(List.of(), null, null), new Effects(effectRefs(effects), null, effectRefs(effects)), List.of());
     }
 
+    static CallableSignature operator(List<String> parameterContracts, String resultContract) {
+        List<Parameter> parameters = java.util.stream.IntStream.range(0, parameterContracts.size())
+                .mapToObj(index -> new Parameter(index == 0 ? "left" : "right",
+                        List.of(new NamedRef(parameterContracts.get(index))), null,
+                        List.of(new NamedRef(parameterContracts.get(index)))))
+                .toList();
+        List<ContractTerm> result = List.of(new NamedRef(resultContract));
+        return new CallableSignature(parameters, new Result(result, null, result),
+                new Effects(List.of(), null, List.of()), List.of());
+    }
+
     static CallableSignature inferred(FunctionDef function, ContractInference inference, Resolution resolution) {
         ContractInference.FunctionContract facts = inference.contract(function);
         ContractInference.EffectSummary effectFacts = inference.effects(function);

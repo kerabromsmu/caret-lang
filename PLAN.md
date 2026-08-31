@@ -182,7 +182,8 @@ symbol identities rather than source-span equality.
   invalid derivation diagnostics.
 - Preserve implemented unary contract predicates and proven-pure Boolean refinements while adding
   static membership proofs where possible and retaining runtime checks when proof is unavailable.
-- Implement the initial operator matrix over `Number`, `String`, structural `Eq`, and `Boolean?~`.
+- Preserve the implemented initial operator matrix over `Number`, `String`, structural `Eq`, and
+  `Boolean?~`, including reflected closed `+` variants and later-context relational inference.
   Preserve String-plus-Any language rendering, numeric-only ordering, Number-only arithmetic
   guarantees, recursive callable rejection in equality, and lazy normalized truth operations.
 - Retain closed `+` alternatives across whole-block constraint collection, resolve them from operands

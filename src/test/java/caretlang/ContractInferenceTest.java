@@ -217,6 +217,46 @@ final class ContractInferenceTest {
     }
 
     @Test
+    void retainsClosedPlusChoicesUntilLaterBlockContext() {
+        ContractInference.analyze(new Parser("""
+                choose condition =
+                  condition & 1 ! "text"
+
+                unresolved = choose true + 1
+                (Number) resolved = unresolved
+                """).parseProgram());
+
+        ContractInference.analyze(new Parser("""
+                choose condition =
+                  condition & 1 ! "text"
+
+                unresolved = 1 + choose true
+                (String) resolved = unresolved
+                """).parseProgram());
+
+        LangException ambiguous = assertThrows(LangException.class,
+                () -> ContractInference.analyze(new Parser("""
+                        choose condition =
+                          condition & 1 ! "text"
+
+                        unresolved = choose true + 1
+                        """).parseProgram()));
+        assertEquals(Diagnostic.Codes.AMBIGUOUS_CONTRACT, ambiguous.diagnostic().code());
+        assertEquals(4, ambiguous.diagnostic().primarySpan().start().line());
+    }
+
+    @Test
+    void rejectsStaticallyKnownValuesOutsideOperatorDomains() {
+        for (String source : List.of("value = -\"text\"", "value = 1 < \"text\"",
+                "value = not 1", "value = 1 and true", "value = false or 1",
+                "value = 1 & true ! false")) {
+            LangException error = assertThrows(LangException.class,
+                    () -> ContractInference.analyze(new Parser(source).parseProgram()), source);
+            assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, error.diagnostic().code(), source);
+        }
+    }
+
+    @Test
     void checksKnownCallsInExpressionStatements() {
         LangException error = assertThrows(LangException.class, () -> ContractInference.analyze(new Parser("""
                 numeric value =

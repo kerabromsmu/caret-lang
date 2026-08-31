@@ -111,6 +111,24 @@ final class ValueSemantics {
         return true;
     }
 
+    static boolean equalityEligible(Value root) {
+        ArrayDeque<Value> pending = new ArrayDeque<>();
+        pending.push(root);
+        while (!pending.isEmpty()) {
+            Value value = underlying(pending.pop());
+            if (value instanceof Value.Callable) return false;
+            if (value instanceof Value.Field field) pending.push(field.value());
+            else if (value instanceof Value.Dictionary dictionary) {
+                dictionary.entries().values().forEach(pending::push);
+            } else if (value instanceof Value.ProjectedDictionary dictionary) {
+                dictionary.fields(ReflectionContext.defining()).values().forEach(pending::push);
+            } else if (value instanceof Value.Seq sequence) {
+                sequence.values().forEach(pending::push);
+            }
+        }
+        return true;
+    }
+
     static String render(Value root) {
         return render(root, null, ReflectionContext.defining());
     }

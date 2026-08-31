@@ -218,6 +218,12 @@ the same literal describe a list, set, dictionary, packed buffer, or heterogeneo
 surrounding contracts select behavior and representation. Dynamic fields will become ordinary
 first-class collection elements rather than a separate object or JSON notation.
 
+Built-in operators expose pure language-owned signatures. Arithmetic and ordering are numeric;
+`+` has closed numeric and string-concatenation variants, with non-string values rendered through
+Caret's extensible `toString` path. Equality is recursive and structural but rejects live callables
+at any depth. Boolean operations accept Boolean, null, and missing, normalize to Boolean, and retain
+their lazy evaluation rules.
+
 Caret likewise plans to use contracts as one common model for types, interfaces, refinements, and
 capabilities. Contracts form derivation graphs and work as predicates. Behavior remains in ordinary
 functions, with the most-specific applicable implementation selected from contract-specialized
