@@ -101,12 +101,14 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         ArrayList<Parameter> parameters = new ArrayList<>();
         for (int index = 0; index < function.params().size(); index++) {
             List<ContractTerm> declared = terms(resolution.clause(function.params().get(index).contracts()), resolution);
-            List<ContractTerm> inferred = facts == null ? List.of() : sorted(facts.parameterRequirements().get(index));
+            List<ContractTerm> inferred = facts == null ? List.of()
+                    : sorted(facts.inferredParameterRequirements().get(index));
             parameters.add(new Parameter(function.params().get(index).name(), union(declared, inferred),
                     function.params().get(index).contracts() == null ? null : declared, inferred));
         }
         List<ContractTerm> declaredResult = terms(resolution.clause(function.resultContracts()), resolution);
-        List<ContractTerm> inferredResult = facts == null ? List.of() : sorted(facts.resultGuarantees());
+        List<ContractTerm> inferredResult = facts == null ? List.of()
+                : sorted(facts.inferredResultGuarantees());
         ArrayList<Variable> variables = new ArrayList<>();
         if (facts != null && facts.resultParameter() != null) {
             inferredResult = List.of(new VariableRef(0));

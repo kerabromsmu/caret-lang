@@ -43,10 +43,13 @@ final class ContractInferenceTest {
         ContractInference inference = ContractInference.analyze(program);
         Ast.FunctionDef identity = (Ast.FunctionDef) program.get(0);
         Ast.FunctionDef increment = (Ast.FunctionDef) program.get(1);
-        assertEquals(new ContractInference.FunctionContract(List.of(Set.of()), Set.of(), 0, false),
+        assertEquals(new ContractInference.FunctionContract(List.of(Set.of()), List.of(Set.of()),
+                Set.of(), Set.of(), 0, false),
                 inference.contract(identity));
         assertEquals(new ContractInference.FunctionContract(List.of(Set.of(BuiltinContract.NUMBER)),
-                Set.of(BuiltinContract.NUMBER), null, false), inference.contract(increment));
+                List.of(Set.of(BuiltinContract.NUMBER)), Set.of(BuiltinContract.NUMBER),
+                Set.of(BuiltinContract.NUMBER), null, false),
+                inference.contract(increment));
     }
 
     @Test
@@ -89,6 +92,48 @@ final class ContractInferenceTest {
                 """).parseProgram()));
         assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, error.diagnostic().code());
         assertEquals(2, error.diagnostic().primarySpan().start().line());
+    }
+
+    @Test
+    void validatesInferredNeedsAndGuaranteesAgainstExplicitInterfaces() {
+        LangException strengthening = assertThrows(LangException.class,
+                () -> ContractInference.analyze(new Parser("""
+                        numeric (Any) value =
+                          value * 2
+                        """).parseProgram()));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, strengthening.diagnostic().code());
+        assertEquals(2, strengthening.diagnostic().primarySpan().start().line());
+
+        LangException guarantee = assertThrows(LangException.class,
+                () -> ContractInference.analyze(new Parser("""
+                        (Number) invalid =
+                          "text"
+                        """).parseProgram()));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, guarantee.diagnostic().code());
+        assertEquals(1, guarantee.diagnostic().primarySpan().start().line());
+
+        List<Ast.Stmt> program = new Parser("""
+                numeric (Number) value =
+                  value * 2
+                """).parseProgram();
+        ContractInference.FunctionContract contract = ContractInference.analyze(program)
+                .contract((Ast.FunctionDef) program.getFirst());
+        assertEquals(List.of(Set.of(BuiltinContract.NUMBER)), contract.parameterRequirements());
+        assertEquals(List.of(Set.of(BuiltinContract.NUMBER)), contract.inferredParameterRequirements());
+        assertEquals(Set.of(BuiltinContract.NUMBER), contract.resultGuarantees());
+    }
+
+    @Test
+    void preservesDeclaredDomainsWithoutInventingImplementationNeeds() {
+        List<Ast.Stmt> program = new Parser("""
+                (Number) constant (Number) ignored =
+                  1
+                """).parseProgram();
+        ContractInference.FunctionContract contract = ContractInference.analyze(program)
+                .contract((Ast.FunctionDef) program.getFirst());
+        assertEquals(List.of(Set.of(BuiltinContract.NUMBER)), contract.parameterRequirements());
+        assertEquals(List.of(Set.of()), contract.inferredParameterRequirements());
+        assertEquals(Set.of(BuiltinContract.NUMBER), contract.resultGuarantees());
     }
 
     @Test

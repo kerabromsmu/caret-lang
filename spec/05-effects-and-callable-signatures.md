@@ -276,6 +276,13 @@ group is analyzed. Each external use instantiates them freshly, while ordinary a
 scheme and all parameter/result relationships. Once a callable use is partially applied, that
 instance retains its substitutions and is not generalized again.
 
+Implementation status: the prototype separately records effective, declared, and inferred
+parameter and result components. It rejects proven declaration/inference conflicts, generalizes
+undeclared parameter/result flow after monomorphic recursive-group analysis, instantiates external
+uses independently, and retains substitutions through aliases and partial callables. The internal
+external-module observation context verifies stable-interface projection until modules are
+implemented.
+
 <a id="arrow-signature-contracts"></a>
 ### Arrow-signature contracts
 

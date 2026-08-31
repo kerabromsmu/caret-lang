@@ -259,7 +259,9 @@ remain unequal even with identical requirements. Contract reflection exposes pub
 refinement-requirement names without exposing implementation callables.
 The prototype infers initial built-in constraints for unannotated named functions and uses
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
-each call instantiates those variables independently.
+each call instantiates those variables independently. Explicit callable declarations remain stable
+interfaces: implementation inference may retain stronger local result facts, but it cannot silently
+narrow a declared parameter domain, and external observation does not expose those stronger facts.
 
 The prototype can state a pure higher-order callable contract directly. A bracketed parameter
 list followed by `->` describes exact arity, result guarantees, and an optional maximum effect set:

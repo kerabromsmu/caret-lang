@@ -282,12 +282,14 @@ coverageIncrement value = coverageInferIdentity value * 1 + 1
 coverageSuffix value = value + "!"
 coverageNegate value = not value
 coverageChooseNumber condition = condition & coverageIncrement 4 ! coverageIncrement 8
+(Number) coverageDeclaredConstant (Number) ignored = 1
 assertEqual "inferred generic identity accepts text" (coverageInferIdentity "generic") "generic"
 assertEqual "inferred generic identity accepts numbers" (coverageInferIdentity 42) 42
 assertEqual "inferred numeric result survives a conditional" (coverageChooseNumber true) 5
 assertEqual "inferred truth accepts null" (coverageChooseNumber ?) 9
 assertEqual "inferred string plus" (coverageSuffix "works") "works!"
 assert "inferred Boolean negation" (coverageNegate false)
+assertEqual "declared and inferred parameters stay separate" (seqSize (seqGet (@coverageDeclaredConstant).signature.parameters 0).inferred) 0
 
 // Pure predicates are first-class refinements and retain eligibility through aliases.
 coveragePositive value = value > 0

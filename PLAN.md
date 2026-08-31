@@ -165,9 +165,9 @@ symbol identities rather than source-span equality.
 
 - Preserve implemented source-spanned contract construction, derivation, refinement, binding,
   parameter, result, and nullable/optional modifier forms (`T?`, `T~`, `T?~`).
-- Validate inferred callable needs and guarantees against declarations without silently
-  strengthening parameter interfaces. Generalize undeclared signature components, instantiate them
-  freshly per use, and retain substitutions in derived partial callables.
+- Preserve implemented validation of inferred callable needs and guarantees against declarations
+  without silently strengthening parameter interfaces. Undeclared signature components generalize,
+  instantiate freshly per use, and retain substitutions in derived partial callables.
 - Implement arrow-contract satisfaction and implication with exact arity, contravariant parameters,
   covariant results, effect-bound inclusion, and generalized-variable compatibility. Unknown
   relationships return false as predicates and retain ordinary boundary contract failures; checks

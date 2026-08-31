@@ -10,6 +10,9 @@ suffix value =
 negate value =
   not value
 
+(Number) declaredConstant (Number) ignored =
+  1
+
 chooseNumber condition =
   condition & increment 4 ! increment 8
 
@@ -19,3 +22,4 @@ print chooseNumber true
 print chooseNumber ?
 print suffix "works"
 print negate false
+print seqSize (seqGet (@declaredConstant).signature.parameters 0).inferred

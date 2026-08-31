@@ -44,11 +44,14 @@ final class ContractInference {
     private static final Map<String, CallableEffects> BUILTIN_EFFECTS = builtinEffects();
 
     record FunctionContract(List<Set<BuiltinContract>> parameterRequirements,
-                            Set<BuiltinContract> resultGuarantees,
+                            List<Set<BuiltinContract>> inferredParameterRequirements,
+                            Set<BuiltinContract> resultGuarantees, Set<BuiltinContract> inferredResultGuarantees,
                             Integer resultParameter, boolean generalizedResult) {
         FunctionContract {
             parameterRequirements = parameterRequirements.stream().map(Set::copyOf).toList();
+            inferredParameterRequirements = inferredParameterRequirements.stream().map(Set::copyOf).toList();
             resultGuarantees = Set.copyOf(resultGuarantees);
+            inferredResultGuarantees = Set.copyOf(inferredResultGuarantees);
         }
     }
 
@@ -76,9 +79,16 @@ final class ContractInference {
         }
     }
 
+    private record DeclaredParameters(List<Set<BuiltinContract>> domains, List<Boolean> explicit) {
+        DeclaredParameters {
+            domains = domains.stream().map(Set::copyOf).toList();
+            explicit = List.copyOf(explicit);
+        }
+    }
+
     private final IdentityHashMap<FunctionDef, FunctionContract> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<FunctionDef, EffectSummary> effects = new IdentityHashMap<>();
-    private final IdentityHashMap<List<EnumSet<BuiltinContract>>, List<Set<BuiltinContract>>>
+    private final IdentityHashMap<List<EnumSet<BuiltinContract>>, DeclaredParameters>
             declaredParameterDomains = new IdentityHashMap<>();
     private final Resolution resolution;
 
@@ -196,18 +206,22 @@ final class ContractInference {
     private static FunctionContract empty(FunctionDef function) {
         List<Set<BuiltinContract>> parameters = new ArrayList<>();
         for (int i = 0; i < function.params().size(); i++) parameters.add(Set.of());
-        return new FunctionContract(parameters, Set.of(), null, false);
+        return new FunctionContract(parameters, parameters, Set.of(), Set.of(), null, false);
     }
 
     private FunctionContract infer(FunctionDef function, Map<String, FunctionContract> visible) {
         List<EnumSet<BuiltinContract>> requirements = new ArrayList<>();
+        List<Set<BuiltinContract>> declaredDomains = new ArrayList<>();
+        List<Boolean> explicitParameters = new ArrayList<>();
         Map<String, Integer> parameters = new HashMap<>();
         for (int i = 0; i < function.params().size(); i++) {
-            EnumSet<BuiltinContract> explicit = clause(function.params().get(i).contracts());
-            requirements.add(explicit);
+            declaredDomains.add(clause(function.params().get(i).contracts()));
+            requirements.add(EnumSet.noneOf(BuiltinContract.class));
+            explicitParameters.add(function.params().get(i).contracts() != null);
             parameters.put(function.params().get(i).name(), i);
         }
-        declaredParameterDomains.put(requirements, requirements.stream().map(Set::copyOf).toList());
+        declaredParameterDomains.put(requirements,
+                new DeclaredParameters(declaredDomains, explicitParameters));
         Map<String, Shape> locals = new HashMap<>();
         Shape result = Shape.unknown();
         for (Stmt statement : function.body()) {
@@ -226,10 +240,17 @@ final class ContractInference {
         }
         EnumSet<BuiltinContract> declaredResult = clause(function.resultContracts());
         constrain(result, declaredResult, requirements, function.span());
-        EnumSet<BuiltinContract> guarantees = result.guarantees().clone();
+        EnumSet<BuiltinContract> inferredGuarantees = result.guarantees().clone();
+        EnumSet<BuiltinContract> guarantees = inferredGuarantees.clone();
         guarantees.addAll(declaredResult);
         boolean generalizedResult = result.generalized();
-        return new FunctionContract(new ArrayList<>(requirements), guarantees, result.parameter(), generalizedResult);
+        ArrayList<Set<BuiltinContract>> effectiveRequirements = new ArrayList<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            effectiveRequirements.add(explicitParameters.get(index)
+                    ? declaredDomains.get(index) : requirements.get(index));
+        }
+        return new FunctionContract(effectiveRequirements, new ArrayList<>(requirements), guarantees,
+                inferredGuarantees, result.parameter(), generalizedResult);
     }
 
     private Shape expression(Expr expression, Map<String, Integer> parameters, Map<String, Shape> locals,
@@ -237,7 +258,8 @@ final class ContractInference {
                              Map<String, FunctionContract> visible) {
         return switch (expression) {
             case Literal literal -> literal(literal.value());
-            case Name name -> parameters.containsKey(name.name()) ? Shape.parameter(parameters.get(name.name()))
+            case Name name -> parameters.containsKey(name.name())
+                    ? parameterShape(parameters.get(name.name()), requirements)
                     : locals.getOrDefault(name.name(), Shape.unknown());
             case Group group -> expression(group.expression(), parameters, locals, requirements, visible);
             case Unary unary -> {
@@ -284,6 +306,12 @@ final class ContractInference {
                     : Shape.concrete(BuiltinContract.SEQUENCE);
             case ArrowContract ignored -> Shape.unknown();
         };
+    }
+
+    private Shape parameterShape(int index, List<EnumSet<BuiltinContract>> requirements) {
+        DeclaredParameters declared = declaredParameterDomains.get(requirements);
+        if (declared == null || !declared.explicit().get(index)) return Shape.parameter(index);
+        return new Shape(enumSet(declared.domains().get(index)), index, false);
     }
 
     private static boolean staticallyFieldElement(CollectionElement element) {
@@ -418,12 +446,10 @@ final class ContractInference {
         if (constraints.isEmpty()) return;
         if (shape.parameter() != null) {
             EnumSet<BuiltinContract> target = requirements.get(shape.parameter());
-            List<Set<BuiltinContract>> declared = declaredParameterDomains.get(requirements);
-            if (declared != null) {
-                Set<BuiltinContract> domain = declared.get(shape.parameter());
-                if ((domain.contains(BuiltinContract.NULL) && !constraints.contains(BuiltinContract.NULL))
-                        || (domain.contains(BuiltinContract.MISSING)
-                        && !constraints.contains(BuiltinContract.MISSING))) {
+            DeclaredParameters declared = declaredParameterDomains.get(requirements);
+            if (declared != null && declared.explicit().get(shape.parameter())) {
+                Set<BuiltinContract> domain = declared.domains().get(shape.parameter());
+                if (!declarationGuarantees(domain, constraints)) {
                     throw conflict(span, domain, constraints);
                 }
             }
@@ -440,6 +466,14 @@ final class ContractInference {
                 constraints.stream().noneMatch(required -> ContractRelations.implies(actual, required)))) {
             throw conflict(span, shape.guarantees(), constraints);
         }
+    }
+
+    private static boolean declarationGuarantees(Set<BuiltinContract> declared,
+                                                 Set<BuiltinContract> inferredNeed) {
+        if (inferredNeed.isEmpty()) return true;
+        if (declared.isEmpty()) return false;
+        return declared.stream().allMatch(accepted -> inferredNeed.stream()
+                .anyMatch(required -> ContractRelations.implies(accepted, required)));
     }
 
     private static void rejectDisjoint(Set<BuiltinContract> contracts, SourceSpan span) {

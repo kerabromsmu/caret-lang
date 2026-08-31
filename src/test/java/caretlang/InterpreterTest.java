@@ -834,19 +834,41 @@ final class InterpreterTest {
         interpreter.execute(new Parser("""
                 definingParameter = seqGet metadata.signature.parameters 0
                 print metadata.name
-                print (seqGet definingParameter.inferred 0).name
+                print seqSize definingParameter.inferred
                 print parameter.inferred
                 print sandboxMetadata.name
                 print (seqGet sandboxMetadata.signature.parameters 0).inferred
                 """).parseProgram());
 
-        assertEquals("~\n~\n~\n~\n~\n0\ntransform\nNumber\n~\n~\n~\n",
+        assertEquals("~\n~\n~\n~\n~\n0\ntransform\n0\n~\n~\n~\n",
                 bytes.toString(StandardCharsets.UTF_8));
 
         LangException denied = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
                 callable = sandboxMetadata:
                 """).parseProgram()));
         assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, denied.diagnostic().code());
+    }
+
+    @Test
+    void callableReflectionSeparatesStableDeclarationsFromStrongerLocalInference() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("""
+                (Collection) makeSequence =
+                  [1]
+                metadata = @makeSequence
+                print seqSize metadata.signature.result.guarantees
+                print (seqGet metadata.signature.result.inferred 0).name
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
+        interpreter.execute(new Parser("""
+                print seqSize metadata.signature.result.guarantees
+                print (seqGet metadata.signature.result.guarantees 0).name
+                print metadata.signature.result.inferred
+                """).parseProgram());
+
+        assertEquals("2\nSequence\n1\n~\n~\n", bytes.toString(StandardCharsets.UTF_8));
     }
 
     @Test

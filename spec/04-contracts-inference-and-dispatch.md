@@ -36,6 +36,11 @@ generalized and each external use receives a fresh instantiation. Ordinary non-c
 must instead resolve from their initializer or context. An actual use that still leaves a required
 contract variable unresolved is a located compile-time ambiguity error.
 
+Explicit callable declarations remain distinct from implementation inference. An implementation
+need must be guaranteed by the declared parameter domain; it cannot silently narrow that public
+domain. Inferred results incompatible with an explicit result clause are rejected with a located
+`INCOMPATIBLE_CONTRACTS` diagnostic.
+
 The semantic analyzer also computes an initial effect summary for named functions. It propagates
 known effects through direct named calls, includes effects from the fixed subexpressions captured
 eagerly while constructing partials, and records an
