@@ -20,3 +20,11 @@ print numberChoice 2
 print holeChoice 1
 print (seqGet (seqGet (@choose).signature.parameters 0).requirements 0).index
 print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).name
+
+(Number) covered (Any) value = 1
+(String) covered (String) value = "text"
+(Number) unsafeOverlap (Any) value = 1
+(String) unsafeOverlap (Number) value = "text"
+
+print NumberTransform covered
+print NumberTransform unsafeOverlap

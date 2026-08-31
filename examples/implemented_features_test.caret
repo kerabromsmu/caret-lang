@@ -334,6 +334,13 @@ assertEqual "arrow parameter rejects a callable with a narrower domain" (Coverag
 assert "covariant arrow result accepts a stronger guarantee" (CoverageLooseResult coverageArrowDouble)
 assertEqual "arrow-constrained higher-order call" (coverageApply coverageArrowDouble 21) 42
 
+(Number) coverageArrowSafe (Any) value = 1
+(String) coverageArrowSafe (String) value = "text"
+(Number) coverageArrowUnsafe (Any) value = 1
+(String) coverageArrowUnsafe (Number) value = "text"
+assert "whole-domain fallback with disjoint variant satisfies arrow contract" (CoverageNumberTransform coverageArrowSafe)
+assertEqual "overlapping incompatible result rejects overload arrow contract" (CoverageNumberTransform coverageArrowUnsafe) false
+
 (_1) coverageChoose (_1) left (_1) right = left
 coverageNumberChoice = coverageChoose 1
 coverageHoleChoice = coverageChoose _ 2

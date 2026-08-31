@@ -254,6 +254,9 @@ print (describe 42)
 Overloads retain generic fallbacks and narrow through prefix, infix, and direct hole partials.
 No-match and incomparable-match calls have distinct located diagnostics; a single function keeps
 the ordinary parameter contract behavior.
+Arrow contracts accept an overload only when one variant covers the complete requested domain and
+every variant that might also be selected has compatible results and effects. Proven-disjoint
+variants do not interfere; unknown overlap remains conservatively possible.
 Contract equality follows descriptor identity: aliases compare equal, but separate constructions
 remain unequal even with identical requirements. Contract reflection exposes public base and
 refinement-requirement names without exposing implementation callables.

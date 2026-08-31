@@ -59,6 +59,45 @@ final class InterpreterTest {
     }
 
     @Test
+    void arrowContractsRequireWholeOverloadCoverageAndSafeOverlappingVariants() {
+        assertEquals("true\nfalse\nfalse\nfalse\ntrue\nfalse\n", execute("""
+                NumberTransform = [Number] -> Number
+                AnyTransform = [Any] -> Any
+
+                (Number) safe (Any) value = 1
+                (String) safe (String) value = "text"
+
+                (Number) unsafe (Any) value = 1
+                (String) unsafe (Number) value = "text"
+
+                (Number) partial (Number) value = value
+                (String) partial (String) value = value
+
+                explode value = value / 0 > 0
+                Positive = contract [Number explode]
+                (Number) uncertain (Any) value = 1
+                (String) uncertain (Positive) value = "text"
+
+                (Number) safeEffects (Any) value = 1
+                (Output String) safeEffects (String) value =
+                  print value
+                  "text"
+
+                (Number) unsafeEffects (Any) value = 1
+                (Output Number) unsafeEffects (Number) value =
+                  print value
+                  value
+
+                print NumberTransform safe
+                print NumberTransform unsafe
+                print AnyTransform partial
+                print NumberTransform uncertain
+                print NumberTransform safeEffects
+                print NumberTransform unsafeEffects
+                """));
+    }
+
+    @Test
     void effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced() {
         assertEquals("3\n3\ntrue\n2\n", execute("""
                 (Output Number) noisy (Number) value =

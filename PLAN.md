@@ -168,11 +168,12 @@ symbol identities rather than source-span equality.
 - Preserve implemented validation of inferred callable needs and guarantees against declarations
   without silently strengthening parameter interfaces. Undeclared signature components generalize,
   instantiate freshly per use, and retain substitutions in derived partial callables.
-- Implement arrow-contract satisfaction and implication with exact arity, contravariant parameters,
-  covariant results, effect-bound inclusion, and generalized-variable compatibility. Unknown
+- Preserve implemented arrow-contract satisfaction and implication with exact arity,
+  contravariant parameters, covariant results, effect-bound inclusion, and generalized-variable
+  compatibility. Unknown
   relationships return false as predicates and retain ordinary boundary contract failures; checks
   never invoke the candidate or acquire nominal membership.
-- For overload values, require one variant to prove complete required-domain coverage and require
+- Preserve the implemented overload proof requiring one variant to cover the complete domain and
   every potentially selectable overlapping variant to satisfy result and effect constraints. Treat
   unknown overlap as possible and do not execute refinements or combine partial domains to prove
   coverage in the initial implementation.

@@ -292,8 +292,9 @@ covariant results, explicit visible effect allowances, and contiguous numbered v
 across complete declaration headers. Prefix and hole partials retain substitutions in their derived
 signatures. Derived signatures project repeated and reordered holes, composition specializes
 compatible parameter/result variables and unions invocation effects, and overload partials retain
-projected survivor signatures with conservative summaries. The full conservative overlap proof for
-arrow-contract satisfaction across overload domains remains planned.
+projected survivor signatures with conservative summaries. Overload satisfaction requires one
+whole-domain covering variant and compatible results and effects from every potentially selectable
+overlapping variant; unknown overlap is treated as possible and partial domains are not combined.
 
 A callable signature is an ordinary first-class structural contract written with a bracketed
 parameter-requirement list and a right-associative arrow:
