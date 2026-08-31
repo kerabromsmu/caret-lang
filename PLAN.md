@@ -214,7 +214,7 @@ symbol identities rather than source-span equality.
 - Preserve implemented `template` as an ordinary callable over concrete collections and reifiable collection
   constructors. It produces an ordinary first-class `Contract` and rejects arbitrary callables or
   non-structural partial expressions with a stable located diagnostic.
-- Establish the shared diagnostic/error descriptor from `ErrorTemplate`: stable code, phase,
+- Preserve the shared diagnostic/error descriptor from `ErrorTemplate`: stable code, phase,
   message, primary location, related locations, cause, and subsystem details. Aborting diagnostics
   retain control-flow semantics; expected operation failures use the corresponding Caret value.
 

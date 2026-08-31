@@ -42,6 +42,17 @@ assert "structural template accepts exact matching shape" (CoveragePoint [1 2])
 assert "structural template rejects wrong members" (not CoveragePoint [1 "two"])
 CoverageDiagonal = template [_1 _1]
 assert "repeated template holes impose equality" (CoverageDiagonal [3 3])
+
+coverageError = [
+  ^code = "TEST"
+  ^phase = "runtime"
+  ^message = "example"
+  ^location = ~
+  ^related = []
+  ^cause = ~
+  ^details = []
+]
+assert "ErrorTemplate accepts the shared seven-field shape" (ErrorTemplate coverageError)
 assertEqual "symbolic operator partial" (increment 5) 6
 assertEqual "grouped prefix subtraction" ((-) 7 2) 5
 assertEqual "zero-argument function invocation" answer 42

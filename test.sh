@@ -87,6 +87,9 @@ diff -u examples/features/collection_constructors.expected "$CARET_TEST_TMP/coll
 "$CARET_LAUNCHER" examples/features/templates.caret > "$CARET_TEST_TMP/templates-output.txt"
 diff -u examples/features/templates.expected "$CARET_TEST_TMP/templates-output.txt"
 
+"$CARET_LAUNCHER" examples/features/error_template.caret > "$CARET_TEST_TMP/error-template-output.txt"
+diff -u examples/features/error_template.expected "$CARET_TEST_TMP/error-template-output.txt"
+
 "$CARET_LAUNCHER" examples/features/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
 diff -u examples/features/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
 

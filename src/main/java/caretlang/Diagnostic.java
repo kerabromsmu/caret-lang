@@ -1,9 +1,10 @@
 package caretlang;
 
 import java.util.List;
+import java.util.Objects;
 
 record Diagnostic(Phase phase, String code, String message, SourceSpan primarySpan,
-                  List<Related> related) {
+                  List<Related> related, Diagnostic cause, Value details) {
     enum Phase { LEXER, PARSER, SEMANTIC, RUNTIME, LOWERING, COMPILER }
 
     static final class Codes {
@@ -81,17 +82,33 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
 
     Diagnostic {
         related = List.copyOf(related);
+        Objects.requireNonNull(phase);
+        Objects.requireNonNull(code);
+        Objects.requireNonNull(message);
+        details = details == null ? Value.EmptyCollection.INSTANCE : details;
+        if (!(ValueSemantics.underlying(details) instanceof Value.EmptyCollection
+                || ValueSemantics.underlying(details) instanceof Value.Seq
+                || ValueSemantics.underlying(details) instanceof Value.Dictionary
+                || ValueSemantics.underlying(details) instanceof Value.ProjectedDictionary)) {
+            throw new IllegalArgumentException("Diagnostic details must be a Collection");
+        }
     }
 
     Diagnostic(Phase phase, String code, String message, SourceSpan primarySpan) {
-        this(phase, code, message, primarySpan, List.of());
+        this(phase, code, message, primarySpan, List.of(), null, Value.EmptyCollection.INSTANCE);
+    }
+
+    Diagnostic(Phase phase, String code, String message, SourceSpan primarySpan, List<Related> related) {
+        this(phase, code, message, primarySpan, related, null, Value.EmptyCollection.INSTANCE);
     }
 
     Diagnostic withPrimarySpanIfAbsent(SourceSpan fallback) {
         return primarySpan == null
-                ? new Diagnostic(phase, code, message, fallback, related)
+                ? new Diagnostic(phase, code, message, fallback, related, cause, details)
                 : this;
     }
+
+    Value errorValue() { return ErrorValues.fromDiagnostic(this); }
 
     String render() {
         if (primarySpan == null) return message;
@@ -102,6 +119,9 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
             SourcePosition relatedStart = note.span().start();
             rendered.append("\n  Note: Line ").append(relatedStart.line())
                     .append(", column ").append(relatedStart.column()).append(": ").append(note.message());
+        }
+        if (cause != null) {
+            rendered.append("\n  Caused by: ").append(cause.render().replace("\n", "\n    "));
         }
         return rendered.toString();
     }

@@ -2423,3 +2423,15 @@ failures.
 `ErrorTemplate` defines failure payloads, while `Result` defines the common enclosing protocol.
 Public APIs that must return either success or failure still require a separately specified result
 envelope; no union, exception-catching, or propagation syntax is implied here.
+
+The prototype implements `ErrorTemplate` as the standard recursive structural contract with the
+seven fields above. `phase` uses the lowercase language-owned phase names; `location` is `~` or an
+exact Collection containing one-based `line`, `column`, `endLine`, and `endColumn`; each `related`
+entry contains `message` and `location`. `cause` is `~` or another `ErrorTemplate`, and `details` is
+always a Collection. Every field remains present even when its value is missing or empty.
+
+Aborting diagnostics retain the same immutable descriptor and can be projected to this value shape,
+but remain `LangException` control flow rather than catchable Caret values. Cause chains contain only
+language diagnostic descriptors, have a bounded projection depth, and never retain or reveal Java
+exceptions, stack traces, implementation objects, or host serialization identities. Structural
+equality and reflection operate solely on the projected Caret Collections.

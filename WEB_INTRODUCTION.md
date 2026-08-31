@@ -230,6 +230,12 @@ holes, direct nesting, repeated-hole equality, and one-time dynamic field names.
 contracts for aliases, modifiers, parameterization, reflection, and most-specific overload
 dispatch; malformed or opaque constructors receive located template diagnostics.
 
+Caret uses one exact `ErrorTemplate` contract for structured expected failures and the descriptors
+behind aborting diagnostics. It carries stable code, phase, message, one-based location, related
+locations, an optional recursive cause, and Collection-valued subsystem details. Aborting failures
+remain control flow, while APIs that specify recoverable failure return the corresponding ordinary
+Caret value without exposing host exceptions or stack traces.
+
 Built-in operators expose pure language-owned signatures. Arithmetic and ordering are numeric;
 `+` has closed numeric and string-concatenation variants, with non-string values rendered through
 Caret's extensible `toString` path. Equality is recursive and structural but rejects live callables
