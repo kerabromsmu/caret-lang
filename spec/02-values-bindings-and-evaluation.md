@@ -24,6 +24,20 @@ literals are reported as language errors rather than leaking a Java numeric-conv
 Numbers must remain finite. Literals outside the finite range and arithmetic producing a non-finite
 result are errors. Division and remainder by zero are errors.
 
+### Immutable semantics and storage ownership
+
+Caret values are observably immutable. An implementation may reuse collection storage only while
+an internal ownership fact proves that no alias can observe the older representation. Binding,
+passing into an interpreted function, capture by a closure or partial, export, reflection, and
+insertion beneath a shared collection conservatively end uniqueness. Unknown ownership always uses
+persistent allocation.
+
+Ownership is neither a Caret value nor reflective metadata, and it does not affect equality,
+ordering, diagnostics, or effects. The prototype has an internal optimization-disabled mode whose
+persistent behavior is authoritative. Its enabled mode currently reuses proven-unique ephemeral
+Sequence and Dictionary storage for `seqAdd` and `dictPut`; both modes must produce identical
+observable results, including on failures.
+
 Strings recognize `\\`, `\"`, `\n`, `\r`, `\t`, and Unicode code-point escapes written as
 `\u{1F642}`. Unknown, incomplete, surrogate, and out-of-range escapes are lexical errors.
 

@@ -139,7 +139,7 @@ survivor signatures with conservative summaries.
 
 ## Phase 2 — Types, contracts, effects, and ownership foundation
 
-Current status: Phase 2 is in progress. Unary user-defined base and derived contracts are
+Current status: Phase 2 is complete. Unary user-defined base and derived contracts are
 implemented alongside runtime-kind contracts. Multiple bases are passed as one ordinary `[A B]`
 collection. Binding, parameter, and result clauses acquire or validate membership at runtime.
 Initial constraint inference and
@@ -161,6 +161,9 @@ initial signature/reflection schema is implemented.
 The effect pass includes eagerly captured fixed operands in partial expressions, treats
 over-application through an unknown returned callable conservatively, and uses resolver-owned
 symbol identities rather than source-span equality.
+The `caret inspect` command exposes the resulting language-owned signature facts without executing
+the source program. Conservative internal ownership tracking and its optimization-disabled
+reference mode complete the Phase 2 storage-reuse foundation without changing Caret semantics.
 
 ### Contract and type model
 
@@ -251,12 +254,12 @@ symbol identities rather than source-span equality.
 
 ### Ownership and optimization contract
 
-- Define immutable value semantics separately from storage optimization. Add an internal uniqueness
-  or ownership analysis that may update state in place only when no observable alias can distinguish
-  it.
-- Keep ownership an optimization initially; results must match persistent semantics with the
-  optimization disabled. This foundation later supports efficient cycles, collection updates, SIMD memory,
-  and compiled execution.
+- Immutable value semantics are separate from the implemented internal uniqueness tracker. Ephemeral
+  Sequence and Dictionary updates may reuse storage only before binding, parameter passing, capture,
+  export, nesting under shared storage, or reflection makes an alias observable.
+- Ownership remains an internal optimization. Differential tests establish that enabled execution
+  matches the authoritative optimization-disabled persistent behavior. This foundation later supports
+  efficient cycles, collection updates, SIMD memory, and compiled execution.
 
 ## Phase 3 — Lambdas and higher-order programming
 

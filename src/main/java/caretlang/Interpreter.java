@@ -11,6 +11,7 @@ final class Interpreter {
     private final CallableDispatcher calls = new CallableDispatcher();
     private ContractInference inference;
     private final EffectCatalog effectCatalog;
+    private final OwnershipTracker ownership;
     private ReflectionContext reflectionContext = ReflectionContext.defining();
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
@@ -24,8 +25,14 @@ final class Interpreter {
     }
 
     Interpreter(PrintStream output, TestReporter testReporter, EffectCatalog effectCatalog) {
+        this(output, testReporter, effectCatalog, OwnershipTracker.Mode.ENABLED);
+    }
+
+    Interpreter(PrintStream output, TestReporter testReporter, EffectCatalog effectCatalog,
+                OwnershipTracker.Mode ownershipMode) {
         this.output = output;
         this.effectCatalog = Objects.requireNonNull(effectCatalog);
+        this.ownership = new OwnershipTracker(Objects.requireNonNull(ownershipMode));
         installBuiltins();
         if (testReporter != null) installTestBuiltins(testReporter);
     }
@@ -179,9 +186,13 @@ final class Interpreter {
                             && contract.descriptor() instanceof TemplateContract template) {
                         template.nameIfAnonymous(name);
                     }
+                    ownership.share(value);
                     env.initialize(name, value);
                 }
-                if (exported) exports.put(name, value);
+                if (exported) {
+                    ownership.share(value);
+                    exports.put(name, value);
+                }
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
                 last = eval(expression, env, null, resolution);
@@ -196,7 +207,7 @@ final class Interpreter {
             }
         }
 
-        return exports.isEmpty() ? last : new Value.Dictionary(exports);
+        return exports.isEmpty() ? last : ownership.fresh(new Value.Dictionary(exports));
     }
 
     private IdentityHashMap<Assign, UserContract> prepareContractDeclarations(List<Stmt> statements,
@@ -306,7 +317,9 @@ final class Interpreter {
         return new Value.FunctionValue(function.name(), parameterNames, (arguments, ignoredCallSpan) -> {
             Environment parameters = new Environment(env, captures);
             for (int i = 0; i < function.params().size(); i++) {
-                parameters.define(function.params().get(i).name(), arguments.get(i).value());
+                Value value = arguments.get(i).value();
+                ownership.share(value);
+                parameters.define(function.params().get(i).name(), value);
             }
             Value result = executeBlock(function.body(), new Environment(parameters), resolution);
             return validateContracts(result, function.body().getLast().span(),
@@ -350,6 +363,9 @@ final class Interpreter {
             return operatorSignatures(operator).stream().map(signature -> arguments.isEmpty()
                     ? signature : signature.specializeFirst(arguments.getFirst().value())).toList();
         }
+        @Override public List<Value> retainedValues() {
+            return arguments.stream().map(Value.Argument::value).toList();
+        }
     }
 
     /** Higher-order map exposes the selected transform's invocation bound after partial application. */
@@ -366,7 +382,7 @@ final class Interpreter {
             for (Value value : values) {
                 mapped.add(invoke(transform, new Value.Argument(value, argument.span()), callSpan));
             }
-            return new Value.Seq(mapped);
+            return ownership.fresh(new Value.Seq(mapped));
         }
 
         @Override public int remainingArity() { return transform == null ? 2 : 1; }
@@ -381,6 +397,9 @@ final class Interpreter {
         }
 
         @Override public String publicName() { return "map"; }
+        @Override public List<Value> retainedValues() {
+            return transform == null ? List.of() : List.of(transform);
+        }
         @Override public String toString() { return "<fn map/" + remainingArity() + ">"; }
     }
 
@@ -468,6 +487,9 @@ final class Interpreter {
 
         @Override public int remainingArity() {
             return variantArity(all.getFirst()) - arguments.size();
+        }
+        @Override public List<Value> retainedValues() {
+            return arguments.values().stream().map(Value.Argument::value).toList();
         }
 
         @Override public CallableSignature signature() {
@@ -811,6 +833,10 @@ final class Interpreter {
             return new CollectionConstructorCallable(descriptor, next);
         }
 
+        @Override public List<Value> retainedValues() {
+            return arguments.stream().map(Value.Argument::value).toList();
+        }
+
         @Override public int remainingArity() { return descriptor.arity() - arguments.size(); }
         @Override public String publicName() { return "<collection-constructor>"; }
         @Override public CallableSignature signature() {
@@ -862,12 +888,12 @@ final class Interpreter {
         CollectionConstructorDescriptor.CollectionNode collection =
                 (CollectionConstructorDescriptor.CollectionNode) node;
         if (collection.elements().isEmpty()) return Value.EmptyCollection.INSTANCE;
-        if (!collection.named()) return new Value.Seq(collection.elements().stream()
-                .map(element -> materialize(element.value(), arguments)).toList());
+        if (!collection.named()) return ownership.fresh(new Value.Seq(collection.elements().stream()
+                .map(element -> materialize(element.value(), arguments)).toList()));
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         collection.elements().forEach(element -> fields.put(element.name(),
                 materialize(element.value(), arguments)));
-        return new Value.Dictionary(fields);
+        return ownership.fresh(new Value.Dictionary(fields));
     }
 
     private Value evalInner(Expr expr, Environment env, Resolution resolution) {
@@ -963,6 +989,11 @@ final class Interpreter {
         @Override public List<CallableSignature> variantSignatures() {
             return overload.fullVariantSignatures().stream().map(signature ->
                     projectHoleSignature(signature, pending, arity, arguments.size())).toList();
+        }
+        @Override public List<Value> retainedValues() {
+            ArrayList<Value> retained = new ArrayList<>(overload.retainedValues());
+            retained.addAll(arguments.stream().map(Value.Argument::value).toList());
+            return List.copyOf(retained);
         }
         @Override public String toString() { return "<overload-partial " + display + "/" + remainingArity() + ">"; }
     }
@@ -1148,7 +1179,7 @@ final class Interpreter {
                         "A collection cannot mix Field values and positional elements",
                         elements.get(mixed).span());
             }
-            if (ordinary) return new Value.Seq(values);
+            if (ordinary) return ownership.fresh(new Value.Seq(values));
             LinkedHashMap<String, Value> dictionary = new LinkedHashMap<>();
             LinkedHashMap<String, SourceSpan> locations = new LinkedHashMap<>();
             for (int i = 0; i < values.size(); i++) {
@@ -1163,7 +1194,7 @@ final class Interpreter {
                 }
                 dictionary.put(field.key(), field.value());
             }
-            return new Value.Dictionary(dictionary);
+            return ownership.fresh(new Value.Dictionary(dictionary));
         }
         if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                                           boolean explicitPure, SourceSpan ignored)) {
@@ -1470,9 +1501,9 @@ final class Interpreter {
         globals.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
                 new Value.Field(requiredDictionaryKey(args.getFirst()), args.get(1).value())));
 
-        globals.define("seqEmpty", function("seqEmpty", List.of(), args -> new Value.Seq(List.of())));
+        globals.define("seqEmpty", function("seqEmpty", List.of(), args -> ownership.fresh(new Value.Seq(List.of()))));
         globals.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) ->
-                sequence(args.getFirst()).appended(args.get(1).value())));
+                ownership.append(sequence(args.getFirst()), args.get(1).value())));
         globals.define("seqGet", locatedFunction("seqGet", List.of("sequence", "index"), (args, ignored) -> {
             Value.Seq values = sequence(args.get(0));
             OptionalInt index = index(args.get(1));
@@ -1483,9 +1514,10 @@ final class Interpreter {
                 new Value.Num(sequence(args.getFirst()).size())));
         globals.define("map", new MapCallable());
 
-        globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dictionary(Map.of())));
+        globals.define("dictEmpty", function("dictEmpty", List.of(), args ->
+                ownership.fresh(new Value.Dictionary(Map.of()))));
         globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
-                dictionary(args.getFirst()).put(requiredDictionaryKey(args.get(1)), args.get(2).value())));
+                ownership.put(dictionary(args.getFirst()), requiredDictionaryKey(args.get(1)), args.get(2).value())));
         globals.define("dictGet", locatedFunction("dictGet", List.of("dictionary", "key"), (args, ignored) -> {
             String key = dictionaryKey(args.get(1));
             return key == null ? Value.Missing.INSTANCE
@@ -1495,8 +1527,8 @@ final class Interpreter {
             String key = dictionaryKey(args.get(1));
             return new Value.Bool(key != null && dictionary(args.get(0)).containsKey(key));
         }));
-        globals.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> new Value.Seq(
-                dictionary(args.getFirst()).entries().keySet().stream().map(Value.Str::new).toList())));
+        globals.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> ownership.fresh(
+                new Value.Seq(dictionary(args.getFirst()).entries().keySet().stream().map(Value.Str::new).toList()))));
     }
 
     private void installTestBuiltins(TestReporter reporter) {
@@ -1588,7 +1620,7 @@ final class Interpreter {
 
     private Value.Seq sequence(Value.Argument argument) {
         Value raw = underlying(argument.value());
-        if (raw instanceof Value.EmptyCollection) return new Value.Seq(List.of());
+        if (raw instanceof Value.EmptyCollection) return ownership.fresh(new Value.Seq(List.of()));
         if (raw instanceof Value.Seq sequence) return sequence;
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
@@ -1603,10 +1635,10 @@ final class Interpreter {
 
     private Value.Dictionary dictionary(Value.Argument argument) {
         Value raw = underlying(argument.value());
-        if (raw instanceof Value.EmptyCollection) return new Value.Dictionary(Map.of());
+        if (raw instanceof Value.EmptyCollection) return ownership.fresh(new Value.Dictionary(Map.of()));
         if (raw instanceof Value.Dictionary dictionary) return dictionary;
         if (raw instanceof Value.ProjectedDictionary dictionary) {
-            return new Value.Dictionary(dictionary.fields(reflectionContext));
+            return ownership.fresh(new Value.Dictionary(dictionary.fields(reflectionContext)));
         }
         throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
                 "Expected dictionary, got: " + argument.value(), argument.span());
@@ -1652,6 +1684,7 @@ final class Interpreter {
     }
 
     private Value reflect(Value value) {
+        ownership.share(value);
         Value reflected = underlying(value);
         if (reflected instanceof Value.Callable callable && !(reflected instanceof Value.Reflective)) {
             return Value.CallableMetadata.reflection(callable, reflectionContext);
@@ -1884,10 +1917,15 @@ final class Interpreter {
 
     private Expr captureNonHoleParts(Expr expr, Environment env,
                                      IdentityHashMap<Expr, Boolean> containsHole, Resolution resolution) {
-        return AstRewriter.rewrite(expr, candidate -> !containsHole.get(candidate)
-                ? Optional.of(new Literal(evalInner(candidate, env, resolution), candidate.span()))
-                : Optional.empty());
+        return AstRewriter.rewrite(expr, candidate -> {
+            if (containsHole.get(candidate)) return Optional.empty();
+            Value captured = evalInner(candidate, env, resolution);
+            ownership.share(captured);
+            return Optional.of(new Literal(captured, candidate.span()));
+        });
     }
+
+    int ownershipReuseCount() { return ownership.reuseCount(); }
 
     private Expr bindHoles(Expr expr, HoleBinder holes) {
         return AstRewriter.rewrite(expr, candidate -> candidate instanceof Hole hole

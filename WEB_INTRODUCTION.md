@@ -433,13 +433,16 @@ environment and is not implemented by the current interpreter.
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
 supports lexical closures, direct and mutual recursion, partial application, named Collections,
-left-to-right function composition, language-owned reflection, persistent collections,
+left-to-right function composition, language-owned reflection, observably persistent collections,
 source-located diagnostics, a REPL, and native test assertions. Execution remains fail-fast, while
 compiler-oriented parsing can recover at declaration boundaries and collect independent failures
 without losing physical spans from valid later declarations.
 Closure analysis records deterministic, source-spanned upvalues by stable binding identity; runtime
 closures use those same internal descriptors without exposing captures or lexical environments
 through reflection.
+An internal conservative ownership tracker may reuse ephemeral Sequence or Dictionary storage, but
+bindings, calls, captures, exports, nesting, and reflection force persistent updates. Ownership is
+not visible to Caret, and an optimization-disabled reference mode is covered by differential tests.
 
 General parameterized contracts, structural templates, contextual collection representations,
 modules, root reification, sandboxing,

@@ -314,7 +314,9 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - `map` supports current unary callable values and propagates the supplied transform's known effect
   bound, but generalized element/result variables and lambdas remain planned.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
-  is no object model, module system, compiler backend, bytecode, or optimizer.
+  is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
+  conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
+  observable persistent semantics.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
   base/requirement metadata.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical

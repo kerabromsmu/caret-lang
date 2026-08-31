@@ -2168,6 +2168,96 @@ final class InterpreterTest {
         assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, effects.diagnostic().code());
     }
 
+    @Test
+    void ownershipOptimizationMatchesPersistentReferenceSemantics() {
+        List<String> programs = List.of("""
+                        print (seqAdd (seqAdd (seqEmpty) 1) 2)
+                        """, """
+                        source = [1]
+                        updated = seqAdd source 2
+                        print source
+                        print updated
+                        """, """
+                        source = dictPut (dictEmpty) "a" 1
+                        updated = dictPut source "b" 2
+                        print source
+                        print updated
+                        print @source
+                        """);
+
+        for (String program : programs) {
+            ModeExecution enabled = execute(program, OwnershipTracker.Mode.ENABLED);
+            ModeExecution disabled = execute(program, OwnershipTracker.Mode.DISABLED);
+            assertEquals(disabled.output(), enabled.output());
+        }
+        assertTrue(execute(programs.getFirst(), OwnershipTracker.Mode.ENABLED).reuseCount() > 0);
+        assertEquals(0, execute(programs.getFirst(), OwnershipTracker.Mode.DISABLED).reuseCount());
+        assertEquals(0, execute(programs.get(1), OwnershipTracker.Mode.ENABLED).reuseCount(),
+                "a bound collection must conservatively use persistent allocation");
+    }
+
+    @Test
+    void capturedAndReflectedCollectionsAreNeverTreatedAsUniqueStorage() {
+        ModeExecution captured = execute("""
+                source = [1]
+                appendLater value = seqAdd source value
+                print appendLater 2
+                print source
+                """, OwnershipTracker.Mode.ENABLED);
+        ModeExecution reflected = execute("""
+                source = [^a = 1]
+                metadata = @source
+                print (dictPut source "b" 2)
+                print source
+                """, OwnershipTracker.Mode.ENABLED);
+        ModeExecution partial = execute("""
+                source = [1]
+                append = seqAdd source _
+                print append 2
+                print source
+                """, OwnershipTracker.Mode.ENABLED);
+
+        assertEquals(0, captured.reuseCount());
+        assertEquals(0, reflected.reuseCount());
+        assertEquals(0, partial.reuseCount());
+    }
+
+    @Test
+    void ownershipOptimizationDoesNotChangeFailureOrRollbackBehavior() {
+        ModeFailure enabled = executeFailure(OwnershipTracker.Mode.ENABLED);
+        ModeFailure disabled = executeFailure(OwnershipTracker.Mode.DISABLED);
+
+        assertEquals(disabled.output(), enabled.output());
+        assertEquals(disabled.code(), enabled.code());
+        assertEquals(disabled.line(), enabled.line());
+        assertTrue(enabled.reuseCount() > 0);
+    }
+
+    private record ModeExecution(String output, int reuseCount) {}
+    private record ModeFailure(String output, String code, int line, int reuseCount) {}
+
+    private ModeExecution execute(String source, OwnershipTracker.Mode mode) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8), null,
+                EffectCatalog.standard(false), mode);
+        interpreter.execute(new Parser(source).parseProgram());
+        return new ModeExecution(bytes.toString(StandardCharsets.UTF_8), interpreter.ownershipReuseCount());
+    }
+
+    private ModeFailure executeFailure(OwnershipTracker.Mode mode) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8), null,
+                EffectCatalog.standard(false), mode);
+        interpreter.execute(new Parser("base = [1]\n").parseProgram());
+        LangException failure = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                temporary = seqAdd (seqAdd (seqEmpty) 2) 3
+                print (1 / 0)
+                """).parseProgram()));
+        interpreter.execute(new Parser("print base\n").parseProgram());
+        return new ModeFailure(bytes.toString(StandardCharsets.UTF_8), failure.diagnostic().code(),
+                failure.span().start().line(), interpreter.ownershipReuseCount());
+    }
+
     private String execute(String source) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));

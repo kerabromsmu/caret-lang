@@ -135,8 +135,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             }
         }
 
-        private final List<Node> chunks;
-        private final int size;
+        private List<Node> chunks;
+        private int size;
         private static final List<Value> UNMATERIALIZED = Collections.unmodifiableList(new ArrayList<>());
         private volatile List<Value> materialized = UNMATERIALIZED;
 
@@ -168,6 +168,14 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             ArrayList<Node> updated = new ArrayList<>(chunks);
             appendChunk(updated, new Leaf(value));
             return new Seq(updated, size + 1);
+        }
+
+        void appendOwned(Value value) {
+            ArrayList<Node> updated = new ArrayList<>(chunks);
+            appendChunk(updated, new Leaf(value));
+            chunks = List.copyOf(updated);
+            size++;
+            materialized = UNMATERIALIZED;
         }
 
         public int size() { return size; }
@@ -243,8 +251,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             }
         }
 
-        private final Tree root;
-        private final int size;
+        private Tree root;
+        private int size;
         private final Value reflectedTarget;
         private final ReflectionContext reflectionContext;
         private volatile Map<String, Value> materialized;
@@ -311,6 +319,15 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Objects.requireNonNull(value);
             boolean present = containsKey(key);
             return new Dictionary(putNode(root, key, value), present ? size : size + 1);
+        }
+
+        void putOwned(String key, Value value) {
+            Objects.requireNonNull(key);
+            Objects.requireNonNull(value);
+            boolean present = containsKey(key);
+            root = putNode(root, key, value);
+            if (!present) size++;
+            materialized = null;
         }
 
         public boolean containsKey(String key) { return find(key).isPresent(); }
@@ -394,6 +411,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return CallableSignature.unknown(java.util.Collections.nCopies(remainingArity(), null));
         }
         default List<CallableSignature> variantSignatures() { return List.of(); }
+        default List<Value> retainedValues() { return List.of(); }
         default boolean refinementEligible() { return false; }
         default String publicName() { return "<anonymous>"; }
 
@@ -463,6 +481,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public int remainingArity() { return target.remainingArity(); }
         @Override public CallableSignature signature() { return target.signature(); }
         @Override public List<CallableSignature> variantSignatures() { return target.variantSignatures(); }
+        @Override public List<Value> retainedValues() { return target.retainedValues(); }
         @Override public String publicName() { return target.publicName(); }
         @Override public boolean refinementEligible() { return target.refinementEligible(); }
         @Override public Value invokeZero(SourceSpan callSpan) { return target.invokeZero(callSpan); }
@@ -544,6 +563,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return signature;
         }
 
+        @Override public List<Value> retainedValues() { return List.of(left, right); }
+
         @Override public String toString() {
             return "<composition/" + remainingArity() + ">";
         }
@@ -622,6 +643,9 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public CallableSignature signature() { return signature; }
+        @Override public List<Value> retainedValues() {
+            return bound.values().stream().map(Argument::value).toList();
+        }
 
         @Override public String publicName() { return name; }
 
@@ -800,6 +824,10 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public CallableSignature signature() { return signature; }
+
+        @Override public List<Value> retainedValues() {
+            return bound.values().stream().map(Argument::value).toList();
+        }
 
         @Override public String toString() {
             return "<partial " + display + "/" + remainingArity() + ">";
