@@ -85,12 +85,13 @@ new sandbox for another script.
 
 ## Exchange values and call functions
 
-`CaretValue` is a sealed public model for finite numbers, text, Booleans, null, missing, Sequences,
-named Collections, and callables. Convenience factories include `number`, `text`, `bool`,
-`nullValue`, `missing`, `sequence`, and `collection`. Null and missing remain distinct.
+`CaretValue` is a sealed public model for finite numbers, text, Booleans, null, missing, fields,
+Sequences, named Collections, and callables. Convenience factories include `number`, `text`,
+`bool`, `nullValue`, `missing`, `sequence`, and `collection`; construct a `FieldValue` directly.
+Null and missing remain distinct.
 
-A successful execution returns a named `CollectionValue` containing only explicitly exported Caret
-bindings. Java can invoke a returned `CaretCallable` directly or through `sandbox.invoke`:
+A successful execution returns a named `CollectionValue` containing every binding in the script's
+top lexical layer. Java can invoke a returned `CaretCallable` directly or through `sandbox.invoke`:
 
 ```java
 CaretCallable function = (CaretCallable) result.find("transform").orElseThrow();
@@ -98,12 +99,15 @@ CaretInvocationResult invocation = function.invoke(List.of(CaretValue.number(21)
 CaretValue answer = invocation.value().orElseThrow();
 ```
 
-Private and lexical Caret bindings cannot be looked up through the embedding API.
+Nested lexical locals are not included, and the embedding API provides no arbitrary lexical lookup.
+Ordinary immutable `CaretValue` data can be passed to another sandbox. Program and callable handles
+remain owned by the sandbox that created them.
 
 ## Supply host values and callbacks
 
-Environment values are evaluated lazily. Callbacks have fixed arity and explicit observable
-effects:
+`CaretEnvironment` is immutable. Environment values are evaluated lazily at most once per
+environment snapshot and remain cached even when the Caret operation that first reads them fails.
+Callbacks have fixed arity and explicit observable effects:
 
 ```java
 CaretEnvironment environment = CaretEnvironment.builder()
@@ -119,14 +123,19 @@ CaretEnvironment environment = CaretEnvironment.builder()
 An effect declaration describes behavior but grants no authority. Every callback effect must also
 be allowed by the environment. `enablePrint()` explicitly exposes host-routed output and allows the
 standard `Output` effect. Output goes only to the `PrintStream` supplied to the sandbox builder.
+An environment swap cannot redirect that destination, and output already written by a failed Caret
+operation is not rolled back.
 
 `enableCallbackRegistration()` lets the script export selected Caret functions through its
 `registerCallbacks` environment binding. Retrieve the committed immutable registry with
-`sandbox.registeredCallbacks()`.
+`sandbox.registeredCallbacks()`. The last registration in a successful execution or invocation
+atomically replaces the complete registry; a failed operation preserves the previous snapshot.
 
 `sandbox.swapEnvironment(replacement)` atomically replaces host values and callbacks for later
-calls. Existing returned Caret callables resolve the replacement environment lazily. A replacement
-callback with an existing name must preserve its arity.
+calls, discards the previous value cache, and preserves sandbox and callable identity. Existing
+returned Caret callables resolve the replacement environment lazily. Removed bindings fail instead
+of retaining their previous authority. A replacement callback with an existing name must preserve
+its arity.
 
 ## Handle failures
 
@@ -149,8 +158,8 @@ if (result.code() == CaretOperationResult.Code.FAILURE) {
 
 Invalid Java-side lifecycle or argument use throws `CaretEmbeddingException` with a stable code.
 Current sandbox operations emit `ALREADY_LOADED`, `HANDLE_CONSUMED`, `BUSY`, `CLOSED`,
-`FOREIGN_HANDLE`, `INVALID_ARGUMENT`, and `INVALID_ARITY`. `STALE_HANDLE` is reserved for a future
-reference-invalidation boundary and is not emitted by the current single-script sandbox.
+`FOREIGN_HANDLE`, `INVALID_ARGUMENT`, and `INVALID_ARITY`. The public `STALE_HANDLE` member is not
+emitted by the current single-script sandbox.
 An ordinary Java callback exception becomes a sanitized Caret runtime diagnostic; its Java cause
 does not become a Caret value. A fatal JVM `Error` escapes and invalidates the sandbox.
 
@@ -161,8 +170,9 @@ does not become a Caret value. A fatal JVM `Error` escapes and invalidates the s
 - A sandbox is deliberately not thread-safe. Concurrent or re-entrant use fails with
   `CaretEmbeddingException.Code.BUSY` rather than corrupting state.
 - Independent sandboxes are isolated and may execute concurrently.
-- Failed execution and invocation attempts roll back Caret mutations and callback-registry changes.
-- Values and callable handles from one sandbox cannot be used as handles in another sandbox.
+- Failed execution and invocation attempts roll back Caret mutations and callback-registry changes;
+  completed host callbacks, output, and resolved host-value cache entries remain observable.
+- Immutable public values may cross between sandboxes. Loaded-program and callable handles may not.
 
 See the generated Javadocs under `docs/javadoc/`, the complete
 [`EmbeddingExample.java`](https://github.com/kerabromsmu/caret-lang/blob/main/src/main/java/caretlang/examples/EmbeddingExample.java),

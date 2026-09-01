@@ -150,6 +150,77 @@ class CaretSandboxTest {
     }
 
     @Test
+    void executionReturnsTopLevelBindingsWithoutExposingNestedLexicalLocals() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            LoadedProgram program = sandbox.load(CaretSource.text("visibility.caret", """
+                    make value =
+                      hidden = value
+                      ^visible = hidden
+
+                    top = 7
+                    """)).value().orElseThrow();
+            CaretValue.CollectionValue result = sandbox.execute(program).value().orElseThrow();
+            assertEquals(Set.of("make", "top"), result.fields().keySet());
+            assertEquals(CaretValue.number(7), result.find("top").orElseThrow());
+            assertTrue(result.find("hidden").isEmpty());
+            assertTrue(result.find("visible").isEmpty());
+        }
+    }
+
+    @Test
+    void immutableValuesArePortableButCallableHandlesRemainSandboxOwned() {
+        try (CaretSandbox first = sandbox(CaretEnvironment.builder().build());
+             CaretSandbox second = sandbox(CaretEnvironment.builder().build())) {
+            CaretCallable firstIdentity = identity(first, "first.caret");
+            CaretCallable secondIdentity = identity(second, "second.caret");
+            CaretValue fromFirst = firstIdentity.invoke(List.of(CaretValue.collection(Map.of(
+                    "number", CaretValue.number(2),
+                    "absence", CaretValue.missing())))).value().orElseThrow();
+
+            assertEquals(fromFirst, secondIdentity.invoke(List.of(fromFirst)).value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.FAILURE,
+                    secondIdentity.invoke(List.of(firstIdentity)).code());
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                    () -> second.invoke(firstIdentity, List.of(CaretValue.missing())));
+        }
+    }
+
+    @Test
+    void hostValueCacheSurvivesRollbackAndIsDiscardedByEnvironmentSwap() {
+        AtomicInteger firstReads = new AtomicInteger();
+        CaretEnvironment first = CaretEnvironment.builder()
+                .value("hostValue", () -> {
+                    firstReads.incrementAndGet();
+                    return CaretValue.number(3);
+                }).build();
+        try (CaretSandbox sandbox = sandbox(first)) {
+            LoadedProgram program = sandbox.load(CaretSource.text("cache.caret", """
+                    read shouldFail =
+                      captured = hostValue
+                      shouldFail & (1 / 0) ! captured
+                    """)).value().orElseThrow();
+            CaretCallable read = (CaretCallable) sandbox.execute(program).value().orElseThrow()
+                    .find("read").orElseThrow();
+
+            assertEquals(CaretOperationResult.Code.FAILURE,
+                    read.invoke(List.of(CaretValue.bool(true))).code());
+            assertEquals(CaretValue.number(3),
+                    read.invoke(List.of(CaretValue.bool(false))).value().orElseThrow());
+            assertEquals(1, firstReads.get());
+
+            AtomicInteger secondReads = new AtomicInteger();
+            sandbox.swapEnvironment(CaretEnvironment.builder()
+                    .value("hostValue", () -> {
+                        secondReads.incrementAndGet();
+                        return CaretValue.number(5);
+                    }).build());
+            assertEquals(CaretValue.number(5),
+                    read.invoke(List.of(CaretValue.bool(false))).value().orElseThrow());
+            assertEquals(1, secondReads.get());
+        }
+    }
+
+    @Test
     void diagnosticsPreserveStablePhaseLocationsAndRelatedNotes() {
         try (CaretSandbox parserSandbox = sandbox(CaretEnvironment.builder().build())) {
             CaretDiagnostic parser = parserSandbox.load(CaretSource.text("parser.caret", "value ="))
@@ -402,6 +473,12 @@ class CaretSandboxTest {
     private static CaretSandbox sandbox(CaretEnvironment environment) {
         return CaretSandbox.builder().environment(environment)
                 .output(new PrintStream(new ByteArrayOutputStream())).build();
+    }
+
+    private static CaretCallable identity(CaretSandbox sandbox, String sourceName) {
+        LoadedProgram program = sandbox.load(CaretSource.text(sourceName, "identity value = value"))
+                .value().orElseThrow();
+        return (CaretCallable) sandbox.execute(program).value().orElseThrow().find("identity").orElseThrow();
     }
 
     private static void assertEmbeddingCode(CaretEmbeddingException.Code expected, Runnable operation) {
