@@ -222,6 +222,7 @@ expect_failure examples/errors/division_by_zero.caret 'Line 1, column 11: Divisi
 expect_failure examples/errors/remainder_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/non_finite_result.caret 'Line 1, column 7: Numeric result is not finite'
 expect_failure examples/errors/invalid_escape.caret 'Line 1, column 17: Unknown string escape: \q'
+expect_failure examples/errors/invalid_layout_marker.caret unused
 expect_failure examples/errors/mixed_holes.caret 'Line 2, column 11: Cannot mix numbered and unnumbered holes'
 expect_failure examples/errors/callable_equality.caret 'Line 2, column 7: Callable values cannot be compared for equality'
 expect_failure examples/errors/non_callable_infix.caret 'Line 2, column 9: Named infix target is not callable: value'
@@ -248,6 +249,7 @@ expect_failure examples/errors/invalid_contract.caret unused
 expect_failure examples/errors/duplicate_parameter.caret unused
 expect_failure examples/errors/not_callable.caret unused
 expect_failure examples/errors/invalid_condition.caret unused
+expect_failure examples/errors/runtime_invalid_condition.caret unused
 expect_failure examples/errors/expected_number.caret unused
 expect_failure examples/errors/expected_string.caret unused
 expect_failure examples/errors/expected_sequence.caret unused

@@ -339,7 +339,7 @@ broader scope.
   observable language behavior. Ask before resolving conflicting semantics. This alias does not
   authorize interpreter behavior changes, `VERSION` changes, commits, pushes, pull-request changes,
   or GitHub issue/project mutations.
-* Run `./gradlew test`, `./test.sh`, `scripts/check-example-coverage.sh`, and `git diff --check`.
+* Run `./gradlew test`, `./test.sh`, `bash scripts/check-example-coverage.sh`, and `git diff --check`.
   Report gaps found and repaired, tests run, remaining limitations, and any GitHub state changes.
 
 ### `new PR`

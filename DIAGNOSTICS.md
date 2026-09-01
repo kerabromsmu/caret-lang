@@ -14,7 +14,7 @@ from ordinary Caret source use focused Java evidence.
 | LEX-UNICODE-FORM | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_form.caret` |
 | LEX-INVALID-UNICODE | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_escape.caret` |
 | LEX-INVALID-CODE-POINT | public | LEX_INVALID_ESCAPE | `examples/errors/invalid_unicode_code_point.caret` |
-| LEX-INVALID-LAYOUT-MARKER | public | LEX_INVALID_LAYOUT_MARKER | `LexerTest#layoutMarkersIgnoreCommentsAndStringsAndRejectInvalidPlacement` |
+| LEX-INVALID-LAYOUT-MARKER | public | LEX_INVALID_LAYOUT_MARKER | `LexerTest#layoutMarkersIgnoreCommentsAndStringsAndRejectInvalidPlacement`; `examples/errors/invalid_layout_marker.caret` |
 | PARSE-NESTING-DEPTH | public | PARSE_INVALID_EXPRESSION | `examples/errors/expression_nesting_depth.caret` |
 | PARSE-UNEXPECTED-INDENT | public | PARSE_UNEXPECTED_INDENT | `examples/errors/unexpected_indent.caret` |
 | PARSE-INCONSISTENT-INDENT | public | PARSE_UNEXPECTED_INDENT | `examples/errors/inconsistent_continuation_indent.caret` |
@@ -45,11 +45,11 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-INVALID-COMPOSITION-RIGHT | public | INVALID_COMPOSITION_RIGHT | `examples/errors/invalid_composition_arity.caret` |
 | RUNTIME-INVALID-MAP-TRANSFORM | public | INVALID_MAP_TRANSFORM | `InterpreterTest#mapRejectsInvalidInputsAndRetainsLocatedElementFailures` |
 | RUNTIME-AMBIGUOUS-CALL-ARITY | public | TOO_MANY_ARGUMENTS | `examples/errors/ambiguous_call_arity.caret` |
-| INTERNAL-TOO-MANY-FUNCTION-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
-| INTERNAL-TOO-MANY-PARTIAL-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
-| RUNTIME-EVALUATION-DEPTH | internal | CALL_DEPTH_EXCEEDED | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
+| INTERNAL-TOO-MANY-FUNCTION-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |
+| INTERNAL-TOO-MANY-PARTIAL-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |
+| RUNTIME-EVALUATION-DEPTH | internal | CALL_DEPTH_EXCEEDED | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |
 | RUNTIME-CALL-DEPTH | public | CALL_DEPTH_EXCEEDED | `examples/errors/call_depth.caret` |
-| RUNTIME-INVALID-CONDITION | public | INVALID_CONDITION | `examples/errors/invalid_condition.caret` |
+| RUNTIME-INVALID-CONDITION | public | INVALID_CONDITION | `examples/errors/runtime_invalid_condition.caret` |
 | RUNTIME-EXPECTED-NUMBER | public | EXPECTED_NUMBER | `examples/errors/expected_number.caret` |
 | RUNTIME-EXPECTED-STRING | public | EXPECTED_STRING | `examples/errors/expected_string.caret` |
 | RUNTIME-EXPECTED-SEQUENCE | public | EXPECTED_SEQUENCE | `examples/errors/expected_sequence.caret` |
@@ -91,15 +91,15 @@ from ordinary Caret source use focused Java evidence.
 | SEMANTIC-INCONSISTENT-OVERLOAD-ARITY | public | INCONSISTENT_OVERLOAD_ARITY | `examples/errors/inconsistent_overload_arity.caret` |
 | RUNTIME-NO-APPLICABLE-OVERLOAD | public | NO_APPLICABLE_OVERLOAD | `examples/errors/no_applicable_overload.caret` |
 | RUNTIME-AMBIGUOUS-OVERLOAD | public | AMBIGUOUS_OVERLOAD | `examples/errors/ambiguous_overload.caret` |
-| INTERNAL-UNKNOWN-UNARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
-| INTERNAL-UNKNOWN-BINARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
-| INTERNAL-INVARIANT | internal | INTERNAL_ERROR | `DiagnosticCoverageTest#internalCatalogVariantsAreConstructible` |
+| INTERNAL-UNKNOWN-UNARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |
+| INTERNAL-UNKNOWN-BINARY-OPERATOR | internal | UNKNOWN_OPERATOR | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |
+| INTERNAL-INVARIANT | internal | INTERNAL_ERROR | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |
 | HOST-FILE-USAGE | host | — | `MainTest#rejectsExtraFileModeArguments` |
 | HOST-TEST-USAGE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-INSPECT-USAGE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-SOURCE-READ-FAILURE | host | — | `MainTest#fileSystemFailuresAreReportedWithoutAStackTrace` |
 | HOST-TEST-READ-FAILURE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-INSPECT-READ-FAILURE | host | — | `MainTest#inspectReportsUnreadableFilesWithoutAStackTrace` |
-| HOST-REPL-TERMINAL-REQUIRED | host | — | `DiagnosticCoverageTest#catalogsAndCoverageRowsStayInSync` |
+| HOST-REPL-TERMINAL-REQUIRED | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-REPL-HISTORY-READ | host | — | `JLineReplTest#unreadableHistoryFallsBackToMemoryWithAClearWarning` |
-| HOST-REPL-HISTORY-WRITE | host | — | `DiagnosticCoverageTest#catalogsAndCoverageRowsStayInSync` |
+| HOST-REPL-HISTORY-WRITE | host | — | `JLineReplTest#unwritableHistoryReportsTheExactWarning` |

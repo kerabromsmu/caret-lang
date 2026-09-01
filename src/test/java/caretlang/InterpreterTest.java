@@ -118,6 +118,9 @@ final class InterpreterTest {
                 use noisy
                 """));
         assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, exceeded.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, exceeded.diagnostic().phase());
+        assertEquals(5, exceeded.span().start().line());
+        assertEquals(5, exceeded.span().start().column());
         assertEquals(Diagnostic.Codes.CONFLICTING_EFFECT_ALLOWANCE,
                 assertThrows(LangException.class, () -> execute("(pure Output) value = 1"))
                         .diagnostic().code());
@@ -1275,6 +1278,7 @@ final class InterpreterTest {
 
         LangException ordinary = assertThrows(LangException.class, () -> execute("value = 1\nprint value:\n"));
         assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, ordinary.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, ordinary.diagnostic().phase());
         assertEquals(7, ordinary.span().start().column());
 
         LangException reflectedFunctionApplied = assertThrows(LangException.class,
@@ -2158,6 +2162,7 @@ final class InterpreterTest {
     void mapRejectsInvalidInputsAndRetainsLocatedElementFailures() {
         LangException transform = expectDiagnostic("map 1 [2]", "exactly one argument", 1, 5);
         assertEquals(Diagnostic.Codes.INVALID_MAP_TRANSFORM, transform.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, transform.diagnostic().phase());
         assertDiagnostic("add left right = left\nmap add [1]", "exactly one argument", 2, 5);
         assertDiagnostic("map numberText [^value = 1]", "Expected sequence", 1, 16);
 

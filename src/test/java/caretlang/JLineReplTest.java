@@ -95,6 +95,20 @@ final class JLineReplTest {
         }
     }
 
+    @Test
+    void unwritableHistoryReportsTheExactWarning() throws Exception {
+        Path historyFile = temporaryDirectory.resolve("write-history");
+        try (Fixture fixture = fixture(historyFile)) {
+            fixture.history().add(Instant.now(), "print 1");
+            Files.createDirectory(historyFile);
+
+            JLineRepl.saveHistory(fixture.reader(), fixture.history(), historyFile, fixture.error());
+
+            assertTrue(fixture.errorText().contains("Warning: Cannot write REPL history at " + historyFile));
+            assertTrue(fixture.errorText().contains("using in-memory history"));
+        }
+    }
+
     private Fixture fixture(Path historyFile) throws Exception {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         ByteArrayOutputStream errorBytes = new ByteArrayOutputStream();
