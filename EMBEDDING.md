@@ -137,13 +137,20 @@ whose `diagnostics()` contain a stable code, phase, message, source location, an
 if (result.code() == CaretOperationResult.Code.FAILURE) {
     for (CaretDiagnostic diagnostic : result.diagnostics()) {
         CaretDiagnostic.Location at = diagnostic.location();
-        System.err.printf("%s:%d:%d: %s%n",
-                at.sourceName(), at.startLine(), at.startColumn(), diagnostic.message());
+        if (at == null) {
+            System.err.printf("%s: %s%n", diagnostic.code(), diagnostic.message());
+        } else {
+            System.err.printf("%s:%d:%d: %s%n",
+                    at.sourceName(), at.startLine(), at.startColumn(), diagnostic.message());
+        }
     }
 }
 ```
 
 Invalid Java-side lifecycle or argument use throws `CaretEmbeddingException` with a stable code.
+Current sandbox operations emit `ALREADY_LOADED`, `HANDLE_CONSUMED`, `BUSY`, `CLOSED`,
+`FOREIGN_HANDLE`, `INVALID_ARGUMENT`, and `INVALID_ARITY`. `STALE_HANDLE` is reserved for a future
+reference-invalidation boundary and is not emitted by the current single-script sandbox.
 An ordinary Java callback exception becomes a sanitized Caret runtime diagnostic; its Java cause
 does not become a Caret value. A fatal JVM `Error` escapes and invalidates the sandbox.
 

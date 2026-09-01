@@ -3,11 +3,14 @@ package caretlang;
 import caretlang.embedding.*;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,6 +22,9 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CaretSandboxTest {
+    @TempDir
+    Path temporaryDirectory;
+
     @Test
     void loadsExecutesRegistersAndInvokesOneScript() {
         try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
@@ -100,8 +106,152 @@ class CaretSandboxTest {
                     """)).value().orElseThrow();
             CaretExecutionResult result = sandbox.execute(program);
             assertEquals(CaretOperationResult.Code.FAILURE, result.code());
-            assertEquals("Host callback failed: explode", result.diagnostics().getFirst().message());
+            CaretDiagnostic diagnostic = result.diagnostics().getFirst();
+            assertEquals("INTERNAL_ERROR", diagnostic.code());
+            assertEquals(CaretDiagnostic.Phase.RUNTIME, diagnostic.phase());
+            assertEquals("Host callback failed: explode", diagnostic.message());
+            assertEquals("failure.caret", diagnostic.location().sourceName());
+            assertEquals(2, diagnostic.location().startLine());
+            assertEquals(10, diagnostic.location().startColumn());
+            assertTrue(diagnostic.notes().isEmpty());
+            assertFalse(diagnostic.toString().contains("secret"));
+            assertFalse(diagnostic.toString().contains("Exception"));
+            assertFalse(diagnostic.toString().contains("java."));
             assertEquals("before\n", bytes.toString(StandardCharsets.UTF_8));
+        }
+    }
+
+    @Test
+    void publicValuesRoundTripWithoutCollapsingNullOrMissing() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            LoadedProgram program = sandbox.load(CaretSource.text("values.caret", "identity value = value"))
+                    .value().orElseThrow();
+            CaretCallable identity = (CaretCallable) sandbox.execute(program).value().orElseThrow()
+                    .find("identity").orElseThrow();
+            List<CaretValue> values = List.of(
+                    CaretValue.number(12.5),
+                    CaretValue.text("Hej 🌍"),
+                    CaretValue.bool(true),
+                    CaretValue.nullValue(),
+                    CaretValue.missing(),
+                    new CaretValue.FieldValue("field", CaretValue.text("value")),
+                    CaretValue.sequence(List.of(CaretValue.number(1), CaretValue.nullValue(), CaretValue.missing())),
+                    CaretValue.collection(Map.of("name", CaretValue.text("Caret"), "none", CaretValue.nullValue())));
+
+            for (CaretValue value : values) {
+                assertEquals(value, identity.invoke(List.of(value)).value().orElseThrow());
+            }
+            assertNotEquals(CaretValue.nullValue(), CaretValue.missing());
+            CaretCallable returned = (CaretCallable) identity.invoke(List.of(identity)).value().orElseThrow();
+            assertEquals(identity.arity(), returned.arity());
+            assertEquals(CaretValue.text("callable"), returned.invoke(List.of(CaretValue.text("callable")))
+                    .value().orElseThrow());
+        }
+    }
+
+    @Test
+    void diagnosticsPreserveStablePhaseLocationsAndRelatedNotes() {
+        try (CaretSandbox parserSandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretDiagnostic parser = parserSandbox.load(CaretSource.text("parser.caret", "value ="))
+                    .diagnostics().getFirst();
+            assertEquals(CaretDiagnostic.Phase.PARSER, parser.phase());
+            assertEquals("parser.caret", parser.location().sourceName());
+            assertEquals(1, parser.location().startLine());
+            assertTrue(parser.location().startColumn() > 0);
+        }
+
+        try (CaretSandbox semanticSandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretDiagnostic semantic = semanticSandbox.load(CaretSource.text("semantic.caret", """
+                    value = 1
+                    value = 2
+                    """)).diagnostics().getFirst();
+            assertEquals("DUPLICATE_DEFINITION", semantic.code());
+            assertEquals(CaretDiagnostic.Phase.SEMANTIC, semantic.phase());
+            assertEquals(2, semantic.location().startLine());
+            assertEquals(1, semantic.location().startColumn());
+            assertFalse(semantic.notes().isEmpty());
+            assertEquals(1, semantic.notes().getFirst().location().startLine());
+        }
+
+        try (CaretSandbox runtimeSandbox = sandbox(CaretEnvironment.builder().build())) {
+            LoadedProgram program = runtimeSandbox.load(CaretSource.text("runtime.caret", "value = 1 / 0"))
+                    .value().orElseThrow();
+            CaretDiagnostic runtime = runtimeSandbox.execute(program).diagnostics().getFirst();
+            assertEquals("DIVISION_BY_ZERO", runtime.code());
+            assertEquals(CaretDiagnostic.Phase.RUNTIME, runtime.phase());
+            assertEquals("runtime.caret", runtime.location().sourceName());
+            assertEquals(1, runtime.location().startLine());
+            assertTrue(runtime.location().startColumn() > 0);
+        }
+    }
+
+    @Test
+    void invalidHostUseHasStableExceptionCodes() {
+        CaretSandbox first = sandbox(CaretEnvironment.builder().build());
+        CaretSandbox second = sandbox(CaretEnvironment.builder().build());
+        try {
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT, () -> first.load(null));
+            LoadedProgram program = first.load(CaretSource.text("host-use.caret", "identity value = value"))
+                    .value().orElseThrow();
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE, () -> second.execute(program));
+            CaretCallable identity = (CaretCallable) first.execute(program).value().orElseThrow()
+                    .find("identity").orElseThrow();
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARITY,
+                    () -> identity.invoke(List.of()));
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> first.invoke(identity, null));
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> first.invoke(identity, Arrays.asList((CaretValue) null)));
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> first.swapEnvironment(null));
+        } finally {
+            first.close();
+            second.close();
+        }
+    }
+
+    @Test
+    void environmentValidationAndArityPreservingReplacementAreTransactional() {
+        assertThrows(IllegalArgumentException.class, () -> CaretEnvironment.builder().value("not-valid", CaretValue::missing));
+        assertThrows(IllegalArgumentException.class, () -> CaretEnvironment.builder()
+                .value("duplicate", CaretValue::missing).value("duplicate", CaretValue::missing));
+        assertThrows(IllegalArgumentException.class, () -> CaretEnvironment.builder()
+                .callback("registerCallbacks", 1, Set.of(), List::getFirst));
+
+        CaretEnvironment initial = CaretEnvironment.builder()
+                .callback("host", 1, Set.of(), values -> CaretValue.text("first")).build();
+        try (CaretSandbox sandbox = sandbox(initial)) {
+            LoadedProgram program = sandbox.load(CaretSource.text("swap.caret", "call value = host value"))
+                    .value().orElseThrow();
+            CaretCallable call = (CaretCallable) sandbox.execute(program).value().orElseThrow()
+                    .find("call").orElseThrow();
+            assertEquals(CaretValue.text("first"), call.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+
+            CaretEnvironment invalid = CaretEnvironment.builder()
+                    .callback("host", 2, Set.of(), values -> CaretValue.text("invalid")).build();
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> sandbox.swapEnvironment(invalid));
+            assertEquals(CaretValue.text("first"), call.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+
+            CaretEnvironment replacement = CaretEnvironment.builder()
+                    .callback("host", 1, Set.of(), values -> CaretValue.text("second")).build();
+            sandbox.swapEnvironment(replacement);
+            assertEquals(CaretValue.text("second"), call.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+        }
+    }
+
+    @Test
+    void sourcePathReadsUtf8AndPreservesNormalizedIdentity() throws Exception {
+        Path sourcePath = temporaryDirectory.resolve("nested").resolve("..").resolve("unicode.caret");
+        Files.writeString(temporaryDirectory.resolve("unicode.caret"), "^message = \"Hej 🌍\"");
+        CaretSource source = CaretSource.path(sourcePath);
+        assertEquals(sourcePath.toAbsolutePath().normalize(), source.path());
+        assertEquals(source.path().toString(), source.name());
+        assertEquals("^message = \"Hej 🌍\"", source.text());
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretValue message = sandbox.execute(sandbox.load(source).value().orElseThrow()).value().orElseThrow()
+                    .find("message").orElseThrow();
+            assertEquals(CaretValue.text("Hej 🌍"), message);
         }
     }
 
@@ -169,7 +319,31 @@ class CaretSandboxTest {
         CaretEmbeddingException closed = assertThrows(CaretEmbeddingException.class,
                 () -> callable.invoke(List.of(CaretValue.number(1))));
         assertEquals(CaretEmbeddingException.Code.CLOSED, closed.code());
+        first.close();
         second.close();
+        second.close();
+    }
+
+    @Test
+    void overlappingUseOfOneSandboxFailsFast() throws Exception {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CaretEnvironment environment = CaretEnvironment.builder()
+                .callback("wait", 1, Set.of(), values -> {
+                    entered.countDown();
+                    if (!release.await(5, TimeUnit.SECONDS)) throw new Exception("release timeout");
+                    return values.getFirst();
+                }).build();
+        try (CaretSandbox sandbox = sandbox(environment);
+             var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            LoadedProgram program = sandbox.load(CaretSource.text("overlap.caret", "value = wait 1"))
+                    .value().orElseThrow();
+            var execution = executor.submit(() -> sandbox.execute(program));
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            assertEmbeddingCode(CaretEmbeddingException.Code.BUSY, sandbox::registeredCallbacks);
+            release.countDown();
+            assertEquals(CaretOperationResult.Code.SUCCESS, execution.get().code());
+        }
     }
 
     @Test
@@ -228,5 +402,10 @@ class CaretSandboxTest {
     private static CaretSandbox sandbox(CaretEnvironment environment) {
         return CaretSandbox.builder().environment(environment)
                 .output(new PrintStream(new ByteArrayOutputStream())).build();
+    }
+
+    private static void assertEmbeddingCode(CaretEmbeddingException.Code expected, Runnable operation) {
+        CaretEmbeddingException failure = assertThrows(CaretEmbeddingException.class, operation::run);
+        assertEquals(expected, failure.code());
     }
 }
