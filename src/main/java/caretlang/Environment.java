@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 final class Environment {
     record Checkpoint(int size, List<Value> values, List<Boolean> initialized) {}
@@ -11,7 +12,18 @@ final class Environment {
                         Boolean refinementEligible) {}
     private static final class Binding {
         private Value value;
+        private Supplier<Value> supplier;
         private boolean initialized;
+
+        private Value read() {
+            if (!initialized) {
+                throw new LangException(Diagnostic.Phase.RUNTIME,
+                        Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
+                        "Binding read before initialization", null);
+            }
+            if (supplier != null && value == null) value = java.util.Objects.requireNonNull(supplier.get());
+            return value;
+        }
     }
 
     static final class BindingReference {
@@ -25,7 +37,7 @@ final class Environment {
                         Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
                         "Binding read before initialization", null);
             }
-            return binding.value;
+            return binding.read();
         }
     }
 
@@ -47,6 +59,20 @@ final class Environment {
     void define(String name, Value value) {
         declare(name);
         initialize(name, value);
+    }
+
+    void defineLazy(String name, Supplier<Value> supplier) {
+        declare(name);
+        Binding binding = values.get(name);
+        binding.supplier = java.util.Objects.requireNonNull(supplier);
+        binding.initialized = true;
+    }
+
+    void resetLazy(String name, Supplier<Value> supplier) {
+        Binding binding = values.get(name);
+        if (binding == null || binding.supplier == null) throw new IllegalArgumentException("Not a lazy binding: " + name);
+        binding.supplier = java.util.Objects.requireNonNull(supplier);
+        binding.value = null;
     }
 
     void declare(String name) {
@@ -77,7 +103,7 @@ final class Environment {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
                         "Binding read before initialization: " + name, null);
             }
-            return binding.value;
+            return binding.read();
         }
         if (parent != null) return parent.get(name);
         throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.UNKNOWN_NAME,
@@ -86,7 +112,7 @@ final class Environment {
 
     Value localValue(String name) {
         Binding binding = values.get(name);
-        return binding == null || !binding.initialized ? null : binding.value;
+        return binding == null || !binding.initialized ? null : binding.read();
     }
 
     void replace(String name, Value value) {
@@ -107,7 +133,7 @@ final class Environment {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
                     "Binding read before initialization", null);
         }
-        return binding.value;
+        return binding.read();
     }
 
     BindingReference referenceAt(int lexicalDepth, int slot) {
@@ -161,8 +187,11 @@ final class Environment {
         }
         for (int index = 0; index < checkpoint.size(); index++) {
             Binding binding = slots.get(index);
-            binding.value = checkpoint.values().get(index);
-            binding.initialized = checkpoint.initialized().get(index);
+            // Host-lazy resolution belongs to the immutable environment snapshot, not Caret state.
+            if (binding.supplier == null) {
+                binding.value = checkpoint.values().get(index);
+                binding.initialized = checkpoint.initialized().get(index);
+            }
         }
     }
 }

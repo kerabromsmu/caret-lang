@@ -21,22 +21,36 @@ import java.util.Set;
 final class ContractInference {
     enum BuiltinEffect { OUTPUT, TEST_REPORT }
 
-    record EffectSummary(Set<BuiltinEffect> effects, boolean unknownDynamicCall) {
-        static final EffectSummary PURE = new EffectSummary(Set.of(), false);
-        static final EffectSummary UNKNOWN = new EffectSummary(Set.of(), true);
+    record EffectSummary(Set<BuiltinEffect> effects, Set<String> symbolicEffects, boolean unknownDynamicCall) {
+        static final EffectSummary PURE = new EffectSummary(Set.of(), Set.of(), false);
+        static final EffectSummary UNKNOWN = new EffectSummary(Set.of(), Set.of(), true);
+
+        EffectSummary(Set<BuiltinEffect> effects, boolean unknownDynamicCall) {
+            this(effects, effects.stream().map(effect -> switch (effect) {
+                case OUTPUT -> "Output";
+                case TEST_REPORT -> "TestReport";
+            }).collect(java.util.stream.Collectors.toSet()), unknownDynamicCall);
+        }
 
         EffectSummary {
             effects = Set.copyOf(effects);
+            symbolicEffects = Set.copyOf(symbolicEffects);
         }
 
-        boolean isProvenPure() { return effects.isEmpty() && !unknownDynamicCall; }
+        boolean isProvenPure() { return symbolicEffects.isEmpty() && !unknownDynamicCall; }
 
         EffectSummary plus(EffectSummary other) {
             EnumSet<BuiltinEffect> combined = effects.isEmpty()
                     ? EnumSet.noneOf(BuiltinEffect.class) : EnumSet.copyOf(effects);
             combined.addAll(other.effects);
-            return new EffectSummary(combined, unknownDynamicCall || other.unknownDynamicCall);
+            HashSet<String> names = new HashSet<>(symbolicEffects);
+            names.addAll(other.symbolicEffects);
+            return new EffectSummary(combined, names, unknownDynamicCall || other.unknownDynamicCall);
         }
+    }
+
+    record ExternalCallable(int arity, Set<String> effects) {
+        ExternalCallable { effects = Set.copyOf(effects); }
     }
 
     private record CallableEffects(int arity, EffectSummary summary, Integer symbolId) {}
@@ -123,8 +137,23 @@ final class ContractInference {
     }
 
     static ContractInference analyze(List<Stmt> program, Resolution resolution) {
+        return analyze(program, resolution, Map.of());
+    }
+
+    static ContractInference analyze(List<Stmt> program, Resolution resolution,
+                                     Map<String, ExternalCallable> externalCallables) {
         ContractInference inference = new ContractInference(resolution);
-        inference.analyzeBlock(program, Map.of(), BUILTIN_EFFECTS, true);
+        HashMap<String, CallableEffects> visible = new HashMap<>(BUILTIN_EFFECTS);
+        externalCallables.forEach((name, callable) -> {
+            Set<BuiltinEffect> known = callable.effects().stream().map(effect -> switch (effect) {
+                case "Output" -> BuiltinEffect.OUTPUT;
+                case "TestReport" -> BuiltinEffect.TEST_REPORT;
+                default -> null;
+            }).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+            visible.put(name, new CallableEffects(callable.arity(),
+                    new EffectSummary(known, callable.effects(), false), null));
+        });
+        inference.analyzeBlock(program, Map.of(), visible, true);
         inference.validateRefinementClauses(program);
         return inference;
     }
@@ -152,8 +181,8 @@ final class ContractInference {
                 || contract.resultGuarantees().contains(BuiltinContract.MISSING)) {
             invalidRefinement(function, "must guarantee a Boolean result");
         }
-        if (!effect.effects().isEmpty()) {
-            invalidRefinement(function, "has observable effects " + effect.effects());
+        if (!effect.symbolicEffects().isEmpty()) {
+            invalidRefinement(function, "has observable effects " + effect.symbolicEffects());
         }
         if (effect.unknownDynamicCall()) {
             invalidRefinement(function, "contains a call whose purity cannot be proved");
