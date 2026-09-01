@@ -79,7 +79,8 @@ monolithic specification moved.
 - Module identity, import visibility, and semantic code values are owned by the
   [modules specification](spec/12-modules-reflection-and-code.md).
 - Capability projection and authority boundaries are owned by the
-  [sandbox specification](spec/13-sandboxes-and-security.md).
+  [sandbox specification](spec/13-sandboxes-and-security.md), including the implemented
+  [Java embedding boundary](spec/13-sandboxes-and-security.md#java-embedding).
 
 ## Legacy major-section links
 

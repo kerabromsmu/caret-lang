@@ -8,6 +8,7 @@ import java.util.*;
 final class Interpreter {
     private final Environment globals = new Environment(null);
     private final PrintStream output;
+    private final java.util.function.BooleanSupplier outputAllowed;
     private final CallableDispatcher calls = new CallableDispatcher();
     private ContractInference inference;
     private final EffectCatalog effectCatalog;
@@ -15,6 +16,7 @@ final class Interpreter {
     private ReflectionContext reflectionContext = ReflectionContext.defining();
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
+    private final Map<String, ContractInference.ExternalCallable> embeddingCallables = new LinkedHashMap<>();
 
     Interpreter(PrintStream output) {
         this(output, null);
@@ -30,7 +32,13 @@ final class Interpreter {
 
     Interpreter(PrintStream output, TestReporter testReporter, EffectCatalog effectCatalog,
                 OwnershipTracker.Mode ownershipMode) {
+        this(output, testReporter, effectCatalog, ownershipMode, () -> true);
+    }
+
+    Interpreter(PrintStream output, TestReporter testReporter, EffectCatalog effectCatalog,
+                OwnershipTracker.Mode ownershipMode, java.util.function.BooleanSupplier outputAllowed) {
         this.output = output;
+        this.outputAllowed = Objects.requireNonNull(outputAllowed);
         this.effectCatalog = Objects.requireNonNull(effectCatalog);
         this.ownership = new OwnershipTracker(Objects.requireNonNull(ownershipMode));
         installBuiltins();
@@ -41,23 +49,92 @@ final class Interpreter {
         this.reflectionContext = Objects.requireNonNull(context);
     }
 
-    void execute(List<Stmt> program) {
+    Value execute(List<Stmt> program) {
         Environment.Checkpoint checkpoint = globals.checkpoint();
         try {
             Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
-            inference = ContractInference.analyze(program, resolution);
+            inference = ContractInference.analyze(program, resolution, embeddingCallables);
             validateEffectAllowances(program, resolution);
             validateCompositionCompatibility(program, resolution);
-            executeBlock(program, globals, resolution);
+            return executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
             globals.rollbackTo(checkpoint);
             throw failure;
         }
     }
 
+    void validate(List<Stmt> program) {
+        Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
+        inference = ContractInference.analyze(program, resolution, embeddingCallables);
+        validateEffectAllowances(program, resolution);
+        validateCompositionCompatibility(program, resolution);
+    }
+
+    void defineEmbeddingValue(String name, java.util.function.Supplier<Value> supplier) {
+        globals.defineLazy(name, supplier);
+    }
+
+    void resetEmbeddingValue(String name, java.util.function.Supplier<Value> supplier) {
+        globals.resetLazy(name, supplier);
+    }
+
+    void defineEmbeddingCallable(String name, int arity,
+                                 java.util.function.Function<List<Value>, Value> callback,
+                                 List<String> effects) {
+        List<String> parameters = java.util.stream.IntStream.range(0, arity)
+                .mapToObj(index -> "arg" + (index + 1)).toList();
+        globals.define(name, new Value.FunctionValue(name, parameters,
+                (arguments, ignored) -> callback.apply(arguments.stream().map(Value.Argument::value).toList()),
+                false, CallableSignature.builtin(parameters, effects)));
+        embeddingCallables.put(name, new ContractInference.ExternalCallable(arity, Set.copyOf(effects)));
+    }
+
+    Value invokeEmbedding(Value.Callable callable, List<Value> arguments) {
+        Environment.Checkpoint checkpoint = globals.checkpoint();
+        try {
+            Value result = callable;
+            SourcePosition position = new SourcePosition(0, 1, 1);
+            SourceSpan span = new SourceSpan(position, position);
+            if (arguments.isEmpty()) return callable.invokeZero(span);
+            for (Value argument : arguments) {
+                if (!(result instanceof Value.Callable next)) {
+                    throw new IllegalArgumentException("Too many arguments");
+                }
+                result = invoke(next, new Value.Argument(argument, span), span);
+            }
+            return result;
+        } catch (RuntimeException | Error failure) {
+            globals.rollbackTo(checkpoint);
+            throw failure;
+        }
+    }
+
+    <T> T embeddingTransaction(java.util.function.Supplier<T> operation) {
+        Environment.Checkpoint checkpoint = globals.checkpoint();
+        try {
+            return operation.get();
+        } catch (RuntimeException | Error failure) {
+            globals.rollbackTo(checkpoint);
+            throw failure;
+        }
+    }
+
+    Value.Dictionary topLevelBindings(List<Stmt> program) {
+        LinkedHashMap<String, Value> bindings = new LinkedHashMap<>();
+        for (Stmt statement : program) {
+            String name = switch (statement) {
+                case Assign assign -> assign.name();
+                case FunctionDef function -> function.name();
+                default -> null;
+            };
+            if (name != null) bindings.put(name, globals.get(name));
+        }
+        return new Value.Dictionary(bindings);
+    }
+
     String inspect(List<Stmt> program) {
         Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
-        inference = ContractInference.analyze(program, resolution);
+        inference = ContractInference.analyze(program, resolution, embeddingCallables);
         validateEffectAllowances(program, resolution);
         validateCompositionCompatibility(program, resolution);
         return InferenceReporter.render(program, inference, resolution);
@@ -73,10 +150,7 @@ final class Interpreter {
             ContractInference.EffectSummary actual = inference.effects(function);
             // Unknown higher-order calls are rejected at the dynamic invocation boundary until
             // parameter-effect substitution is available; known effects are checked here.
-            Set<String> inferred = actual.effects().stream().map(effect -> switch (effect) {
-                case OUTPUT -> "Output";
-                case TEST_REPORT -> "TestReport";
-            }).collect(java.util.stream.Collectors.toSet());
+            Set<String> inferred = actual.symbolicEffects();
             if (!allowed.containsAll(inferred)) {
                 Set<String> unexpected = new LinkedHashSet<>(inferred);
                 unexpected.removeAll(allowed);
@@ -1439,6 +1513,9 @@ final class Interpreter {
         }
 
         globals.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {
+            if (!outputAllowed.getAsBoolean()) {
+                throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Output is not available in the current environment");
+            }
             output.println(ValueSemantics.render(args.getFirst().value(), null, reflectionContext));
             return args.getFirst().value();
         }, false, CallableSignature.builtin(List.of("value"), List.of("Output"))));
@@ -1595,11 +1672,11 @@ final class Interpreter {
     }
 
     private void validateTemplateFixedValues(CollectionConstructorDescriptor.Node node) {
-        if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) {
-            if (!ValueSemantics.equalityEligible(fixed.value())) {
+        if (node instanceof CollectionConstructorDescriptor.FixedNode(Value value, SourceSpan span)) {
+            if (!ValueSemantics.equalityEligible(value)) {
                 throw runtime(Diagnostic.Codes.TEMPLATE_NONCOMPARABLE_FIXED_VALUE,
                         "Template fixed value does not support equality: "
-                                + ValueSemantics.kind(fixed.value()), fixed.span());
+                                + ValueSemantics.kind(value), span);
             }
         } else if (node instanceof CollectionConstructorDescriptor.CollectionNode collection) {
             collection.elements().forEach(element -> validateTemplateFixedValues(element.value()));

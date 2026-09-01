@@ -437,6 +437,11 @@ left-to-right function composition, language-owned reflection, observably persis
 source-located diagnostics, a REPL, and native test assertions. Execution remains fail-fast, while
 compiler-oriented parsing can recover at declaration boundaries and collect independent failures
 without losing physical spans from valid later declarations.
+
+Java applications can embed one script in a host-owned `CaretSandbox`. The host supplies an
+explicit, replaceable environment and output destination; loading and the script's single execution
+attempt are separate; returned and registered Caret functions resolve swapped host values lazily.
+Caret failures are structured results, while invalid Java API use is a coded Java exception.
 Closure analysis records deterministic, source-spanned upvalues by stable binding identity; runtime
 closures use those same internal descriptors without exposing captures or lexical environments
 through reflection.

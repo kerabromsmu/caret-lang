@@ -12,6 +12,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 
 | Conformance requirements | Example coverage |
 |---|---|
+| `EMBED-JAVA-001`, `EMBED-JAVA-002` | `embedding.caret`, exercised through `CaretSandboxTest#runnableEmbeddingExampleIsExercised` |
 | `CORE-VAL-001`, `CORE-VAL-002`, `CORE-TEXT-001`, `CORE-COMMENT-001` | Scalar, name, escape, and comment sections in the successful tour; `errors/invalid_escape.caret` |
 | `CORE-NUM-001` | Arithmetic section; `errors/division_by_zero.caret`, `errors/remainder_by_zero.caret`, `errors/non_finite_result.caret` |
 | `CORE-DIAG-001`, `CORE-DIAG-002`, `CORE-DIAG-003` | All `errors/` fixtures; duplicate-definition and nested-expression fixtures demonstrate related spans and bounded diagnostics |

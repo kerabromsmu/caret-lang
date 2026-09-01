@@ -899,3 +899,60 @@ This allows the same mechanism to support:
 * nested execution environments
 
 without weakening Caret's reflection model.
+
+---
+
+<a id="java-embedding"></a>
+## Java embedding sandbox
+
+The Java 21 prototype exposes `caretlang.embedding` as its initial implemented sandbox boundary.
+An embedded sandbox has a host-controlled environment, private Caret state, and exactly one script
+source. Loading and executing are separate operations: the first `load` call permanently claims the
+source slot and returns a single-attempt handle; `execute` consumes that handle before evaluation.
+Multiple source files require the future module loader.
+
+A successful script execution commits its state and returns an immutable named Collection of every
+binding in that script's top lexical layer. A failed execution rolls Caret state back. Every later
+Java invocation of a returned or registered Caret callable is an independent transaction with the
+same commit rule. Output and completed host callback work are observable effects and cannot be
+rolled back.
+
+The host supplies an immutable `CaretEnvironment`. Named host values are lazy, resolve at most once
+per environment snapshot, and cache either their successful value or sanitized provider failure
+even when a Caret transaction fails. An atomic
+environment swap preserves sandbox and callable identity but discards the old value cache. Existing
+callables resolve host values and callbacks against the current snapshot; removed authority causes
+a Caret failure and never preserves the prior authority.
+
+Before loading, the host may replace the complete environment schema. Loading fixes the names and
+callable metadata visible to that script. Later swaps may replace, remove, or reintroduce those
+known values and callbacks but cannot introduce new names. A rebound callback preserves both arity
+and declared effects; changing either would invalidate the analyzed callable contract and is
+rejected before the active environment or its caches change.
+
+`print` and the reserved `registerCallbacks` bridge are available only when explicitly enabled.
+The output destination belongs to the sandbox builder and cannot be redirected by a swap.
+`registerCallbacks` accepts a named Collection of functions. Its last call in a successful operation
+atomically replaces the Java-visible registry; failure preserves the previous immutable registry
+snapshot. A callable returned through an ordinary result is also invocable and follows the same
+lifetime and authority rules.
+
+All Caret-originated lexer, parser, semantic, authority, callback, and runtime failures cross the
+boundary as result diagnostics. Invalid Java use instead throws one coded `CaretEmbeddingException`.
+This includes a foreign callable anywhere inside a Java-supplied field, Sequence, or Collection,
+whether passed as an invocation argument or returned by a host value provider or callback.
+An uncaught Java callback `Exception` becomes a sanitized Caret internal-error result; a JVM `Error`
+during loading, execution, or invocation escapes after best-effort rollback and invalidates the
+sandbox. Same-sandbox overlap and re-entry
+fail immediately, while independent sandboxes may run concurrently. Closing is idempotent and
+invalidates all sandbox-owned handles.
+
+Unexpected Java implementation failures are not mislabeled as Caret or host-callback failures: they
+invalidate the sandbox and propagate to the host. The downloadable embedding JAR is the named
+`caret.embedding` Java module and exports only `caretlang.embedding`; interpreter, parser, AST,
+bridge, CLI, and runtime implementation packages are not exported.
+
+The public sealed value model preserves null versus missing and uses explicit conversions. It never
+exposes interpreter values, AST nodes, lexical scopes, Java reflection, implementation descriptors,
+or hidden host failures. This embedding API does not implement Caret `sandbox`, modules, `@root`,
+`@module`, or compile-time `#` execution.

@@ -8,6 +8,11 @@ trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
 ./gradlew --quiet installDist
 CARET_LAUNCHER=build/install/caret/bin/caret
 
+java -cp 'build/install/caret/lib/*' caretlang.examples.EmbeddingExample examples/embedding.caret \
+  > "$CARET_TEST_TMP/embedding-output.txt"
+printf 'Hello, Java\n' > "$CARET_TEST_TMP/embedding-expected.txt"
+diff -u "$CARET_TEST_TMP/embedding-expected.txt" "$CARET_TEST_TMP/embedding-output.txt"
+
 expect_failure() {
   local source_file=$1
   local output_file

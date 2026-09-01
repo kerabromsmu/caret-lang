@@ -14,6 +14,61 @@ java {
     }
 }
 
+val embeddingModuleInfo = tasks.register<JavaCompile>("embeddingModuleInfo") {
+    group = "build"
+    description = "Compiles the Java embedding SDK module descriptor."
+    source = fileTree("src/embeddingModule/java")
+    classpath = files()
+    destinationDirectory.set(layout.buildDirectory.dir("classes/java/embeddingModule"))
+    options.compilerArgs.addAll(listOf(
+        "--patch-module", "caret.embedding=${sourceSets.main.get().output.classesDirs.asPath}"
+    ))
+}
+
+val embeddingJar = tasks.register<Jar>("embeddingJar") {
+    group = "distribution"
+    description = "Builds the Java embedding library JAR."
+    dependsOn(embeddingModuleInfo)
+    archiveBaseName.set("caret-embedding")
+    from(sourceSets.main.get().output) {
+        exclude("caretlang/Main.class")
+        exclude("caretlang/JLineRepl*.class")
+        exclude("caretlang/examples/**")
+    }
+    from(embeddingModuleInfo.flatMap { it.destinationDirectory })
+}
+
+val embeddingJavadoc = tasks.register<Javadoc>("embeddingJavadoc") {
+    group = "documentation"
+    description = "Generates API documentation for the public Java embedding facade."
+    source = fileTree("src/main/java/caretlang/embedding") { include("**/*.java") }
+    classpath = sourceSets.main.get().compileClasspath + sourceSets.main.get().output
+    destinationDir = layout.buildDirectory.dir("docs/embedding-javadoc").get().asFile
+    options.encoding = "UTF-8"
+    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all,-missing", true)
+}
+
+tasks.register<Zip>("embeddingSdkZip") {
+    group = "distribution"
+    description = "Builds the standalone Java embedding SDK."
+    dependsOn(embeddingJar, embeddingJavadoc)
+    archiveBaseName.set("caret-java-sdk")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
+
+    into("caret-java-sdk-${project.version}") {
+        from("EMBEDDING.md") { rename { "README.md" } }
+        from("LICENSE", "NOTICE")
+        into("lib") {
+            from(embeddingJar.flatMap { it.archiveFile })
+        }
+        into("examples") {
+            from("src/main/java/caretlang/examples/EmbeddingExample.java")
+            from("examples/embedding.caret")
+        }
+        into("docs/javadoc") { from(embeddingJavadoc.map { it.destinationDir }) }
+    }
+}
+
 application {
     mainClass.set("caretlang.Main")
     applicationName = "caret"
@@ -27,6 +82,7 @@ distributions {
     main {
         contents {
             from("README.md")
+            from("EMBEDDING.md")
             from("LICENSE")
             from("NOTICE")
             from("examples") {

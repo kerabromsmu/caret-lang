@@ -1,7 +1,13 @@
 # Caret language prototype
 
 Caret is an experimental concise programming language implemented as a Java 21 tree-walking
-interpreter. The current prototype supports:
+interpreter. Java applications can embed one Caret script in an isolated
+`caretlang.embedding.CaretSandbox`: the host supplies an explicit environment and output,
+loads source separately from execution, and invokes returned or registered Caret functions.
+See [Embed Caret in Java](EMBEDDING.md), `caretlang.examples.EmbeddingExample`, and
+`examples/embedding.caret`.
+
+The current prototype supports:
 
 - finite numbers, strings, Booleans, null (`?`), and missing (`~`);
 - indentation-delimited functions, lexical closures with resolver-owned upvalue metadata, and
@@ -145,7 +151,9 @@ caret-<version>/bin/caret test tests.caret
 ```
 
 On Windows, use `caret-<version>\bin\caret.bat` with the same arguments. Each archive also contains
-this README, `LICENSE`, `NOTICE`, and the runnable `examples/` tree.
+this README, the [Java embedding guide](EMBEDDING.md), `LICENSE`, `NOTICE`, and the runnable
+`examples/` tree. Java hosts can instead download `caret-java-sdk-<version>.zip`; it contains the
+named embedding module, generated API documentation, and a standalone example.
 
 ### Release versions
 
