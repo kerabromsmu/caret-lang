@@ -63,11 +63,13 @@ jobs:
           ./gradlew test --console=plain
           ./test.sh
       - name: Build distributions
-        run: ./gradlew installDist distZip distTar --console=plain
+        run: ./gradlew installDist distZip distTar embeddingSdkZip --console=plain
       - name: Smoke-test ZIP distribution
         run: scripts/smoke-distribution.sh "build/distributions/caret-${{ steps.version.outputs.version }}.zip"
       - name: Smoke-test tar distribution
         run: scripts/smoke-distribution.sh "build/distributions/caret-${{ steps.version.outputs.version }}.tar"
+      - name: Smoke-test Java embedding SDK
+        run: bash scripts/smoke-embedding-sdk.sh "build/distributions/caret-java-sdk-${{ steps.version.outputs.version }}.zip"
       - name: Upload release assets for cross-platform verification
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v6
@@ -76,6 +78,7 @@ jobs:
           path: |
             build/distributions/caret-${{ steps.version.outputs.version }}.zip
             build/distributions/caret-${{ steps.version.outputs.version }}.tar
+            build/distributions/caret-java-sdk-${{ steps.version.outputs.version }}.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -142,6 +145,12 @@ jobs:
           \`bin/caret test tests.caret\` — run a Caret-native test file
 
           On Windows, use \`bin\\caret.bat\` instead. README, LICENSE, NOTICE, and runnable examples are included in the archive.
+
+          Java hosts can download \`caret-java-sdk-$VERSION.zip\`. It contains the embedding library,
+          runtime dependencies, generated API documentation, and a standalone example. After extraction:
+
+          \`javac -cp "lib/*" -d classes examples/EmbeddingExample.java\`
+          \`java -cp "classes:lib/*" caretlang.examples.EmbeddingExample examples/embedding.caret\`
           EOF
       - name: Publish immutable version and update snapshot alias
         env:
@@ -151,6 +160,7 @@ jobs:
           tag="v$VERSION"
           zip="distribution/caret-$VERSION.zip"
           tar="distribution/caret-$VERSION.tar"
+          sdk="distribution/caret-java-sdk-$VERSION.zip"
 
           if gh release view "$tag" >/dev/null 2>&1; then
             tagged_commit=$(git rev-list -n 1 "$tag")
@@ -159,14 +169,14 @@ jobs:
                 "$tag" "$tagged_commit" "$GITHUB_SHA" >&2
               exit 1
             fi
-            for asset in "$zip" "$tar"; do
+            for asset in "$zip" "$tar" "$sdk"; do
               name=$(basename "$asset")
               if ! gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fx "$name" >/dev/null; then
                 gh release upload "$tag" "$asset"
               fi
             done
           else
-            gh release create "$tag" "$zip" "$tar" \
+            gh release create "$tag" "$zip" "$tar" "$sdk" \
               --target "$GITHUB_SHA" \
               --title "Caret $VERSION" \
               --notes-file release-notes.md
@@ -182,6 +192,7 @@ jobs:
 
           if gh release view main-snapshot >/dev/null 2>&1; then
             gh release upload main-snapshot "$zip" "$tar" --clobber
+            gh release upload main-snapshot "$sdk" --clobber
             gh api --method PATCH "repos/$REPOSITORY/git/refs/tags/main-snapshot" \
               -f sha="$GITHUB_SHA" -F force=true >/dev/null
             gh release edit main-snapshot \
@@ -189,7 +200,7 @@ jobs:
               --notes-file release-notes.md \
               --prerelease
           else
-            gh release create main-snapshot "$zip" "$tar" \
+            gh release create main-snapshot "$zip" "$tar" "$sdk" \
               --target "$GITHUB_SHA" \
               --title "Caret main snapshot ($VERSION)" \
               --notes-file release-notes.md \
@@ -197,7 +208,8 @@ jobs:
           fi
 
           while IFS=$'\t' read -r asset_id asset_name; do
-            if [[ $asset_name != "$(basename "$zip")" && $asset_name != "$(basename "$tar")" ]]; then
+            if [[ $asset_name != "$(basename "$zip")" && $asset_name != "$(basename "$tar")" \
+                && $asset_name != "$(basename "$sdk")" ]]; then
               gh api --method DELETE "repos/$REPOSITORY/releases/assets/$asset_id"
             fi
           done < <(gh api "repos/$REPOSITORY/releases/tags/main-snapshot" \

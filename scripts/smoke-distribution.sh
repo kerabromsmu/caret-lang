@@ -25,7 +25,7 @@ if [[ -z $distribution_root ]]; then
   exit 1
 fi
 
-for required in README.md LICENSE NOTICE examples bin/caret bin/caret.bat; do
+for required in README.md EMBEDDING.md LICENSE NOTICE examples bin/caret bin/caret.bat; do
   if [[ ! -e "$distribution_root/$required" ]]; then
     printf 'Distribution is missing %s: %s\n' "$required" "$archive" >&2
     exit 1
