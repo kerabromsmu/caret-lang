@@ -21,7 +21,7 @@ Built-in argument validation retains individual argument spans, so an invalid op
 that operand rather than the complete call.
 
 Internally, diagnostics retain their phase, a stable diagnostic code, message, primary source span,
-and related source spans. Planned causes and subsystem-specific detail payloads belong to the
+related source spans, an optional language diagnostic cause, and Collection-valued subsystem details. These use the
 [`ErrorTemplate`](06-collections-fields-and-templates.md#standard-error-template) model. A diagnostic that
 aborts lexing, parsing, analysis, or evaluation is not thereby an ordinary catchable Caret value.
 The CLI renders the primary location in the compact form below and follows it

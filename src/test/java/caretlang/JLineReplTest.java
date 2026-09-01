@@ -95,6 +95,26 @@ final class JLineReplTest {
         }
     }
 
+    @Test
+    void unwritableHistoryReportsOneCataloguedWarning() throws Exception {
+        Path historyFile = temporaryDirectory.resolve("write-history");
+        try (Fixture fixture = fixture(historyFile)) {
+            fixture.history().add(Instant.now(), "print 1");
+            Files.createDirectory(historyFile);
+
+            JLineRepl.saveHistory(fixture.reader(), fixture.history(), historyFile, fixture.error());
+
+            String warning = fixture.errorText();
+            String lineSeparator = System.lineSeparator();
+            String prefix = HostMessageCatalog.REPL_HISTORY_WRITE.format(historyFile, "");
+            assertEquals(1, warning.lines().count());
+            assertTrue(warning.startsWith(prefix));
+            assertTrue(warning.endsWith(lineSeparator));
+            String platformCause = warning.substring(prefix.length(), warning.length() - lineSeparator.length());
+            assertFalse(platformCause.isBlank());
+        }
+    }
+
     private Fixture fixture(Path historyFile) throws Exception {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         ByteArrayOutputStream errorBytes = new ByteArrayOutputStream();

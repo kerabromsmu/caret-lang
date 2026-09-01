@@ -95,18 +95,47 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                 new Result(List.of(), null, null), new Effects(effectRefs(effects), null, effectRefs(effects)), List.of());
     }
 
+    static CallableSignature operator(List<String> parameterContracts, String resultContract) {
+        List<Parameter> parameters = java.util.stream.IntStream.range(0, parameterContracts.size())
+                .mapToObj(index -> new Parameter(index == 0 ? "left" : "right",
+                        List.of(new NamedRef(parameterContracts.get(index))), null,
+                        List.of(new NamedRef(parameterContracts.get(index)))))
+                .toList();
+        List<ContractTerm> result = List.of(new NamedRef(resultContract));
+        return new CallableSignature(parameters, new Result(result, null, result),
+                new Effects(List.of(), null, List.of()), List.of());
+    }
+
+    static CallableSignature collectionConstructor(List<List<Object>> requirements) {
+        List<Parameter> parameters = java.util.stream.IntStream.range(0, requirements.size())
+                .mapToObj(index -> {
+                    List<ContractTerm> terms = requirements.get(index).stream().map(requirement ->
+                            requirement instanceof ContractDescriptor contract
+                                    ? (ContractTerm) new NamedRef(contract, contract.publicName())
+                                    : new NamedRef(requirement,
+                                    ((Value.Callable) requirement).publicName())).toList();
+                    return new Parameter("_" + (index + 1), terms, terms, List.of());
+                }).toList();
+        List<ContractTerm> result = List.of(new NamedRef(BuiltinContract.COLLECTION,
+                BuiltinContract.COLLECTION.publicName()));
+        return new CallableSignature(parameters, new Result(result, result, List.of()),
+                new Effects(List.of(), List.of(), List.of()), List.of());
+    }
+
     static CallableSignature inferred(FunctionDef function, ContractInference inference, Resolution resolution) {
         ContractInference.FunctionContract facts = inference.contract(function);
         ContractInference.EffectSummary effectFacts = inference.effects(function);
         ArrayList<Parameter> parameters = new ArrayList<>();
         for (int index = 0; index < function.params().size(); index++) {
             List<ContractTerm> declared = terms(resolution.clause(function.params().get(index).contracts()), resolution);
-            List<ContractTerm> inferred = facts == null ? List.of() : sorted(facts.parameterRequirements().get(index));
+            List<ContractTerm> inferred = facts == null ? List.of()
+                    : sorted(facts.inferredParameterRequirements().get(index));
             parameters.add(new Parameter(function.params().get(index).name(), union(declared, inferred),
                     function.params().get(index).contracts() == null ? null : declared, inferred));
         }
         List<ContractTerm> declaredResult = terms(resolution.clause(function.resultContracts()), resolution);
-        List<ContractTerm> inferredResult = facts == null ? List.of() : sorted(facts.resultGuarantees());
+        List<ContractTerm> inferredResult = facts == null ? List.of()
+                : sorted(facts.inferredResultGuarantees());
         ArrayList<Variable> variables = new ArrayList<>();
         if (facts != null && facts.resultParameter() != null) {
             inferredResult = List.of(new VariableRef(0));
@@ -133,7 +162,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
         return new CallableSignature(parameters,
                 new Result(union(declaredResult, inferredResult),
                         function.resultContracts() == null ? null : declaredResult, inferredResult),
-                new Effects(declaredEffects, declaredEffects, effects), variables);
+                new Effects(effects == null ? null : declaredEffects, declaredEffects, effects), variables);
     }
 
     CallableSignature dropFirst() {

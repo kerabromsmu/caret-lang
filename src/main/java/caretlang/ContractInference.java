@@ -44,29 +44,52 @@ final class ContractInference {
     private static final Map<String, CallableEffects> BUILTIN_EFFECTS = builtinEffects();
 
     record FunctionContract(List<Set<BuiltinContract>> parameterRequirements,
-                            Set<BuiltinContract> resultGuarantees,
-                            Integer resultParameter, boolean generalizedResult) {
+                            List<Set<BuiltinContract>> inferredParameterRequirements,
+                            Set<BuiltinContract> resultGuarantees, Set<BuiltinContract> inferredResultGuarantees,
+                            Integer resultParameter, boolean generalizedResult,
+                            Integer plusLeftParameter, Integer plusRightParameter) {
         FunctionContract {
             parameterRequirements = parameterRequirements.stream().map(Set::copyOf).toList();
+            inferredParameterRequirements = inferredParameterRequirements.stream().map(Set::copyOf).toList();
             resultGuarantees = Set.copyOf(resultGuarantees);
+            inferredResultGuarantees = Set.copyOf(inferredResultGuarantees);
+        }
+
+        FunctionContract(List<Set<BuiltinContract>> parameterRequirements,
+                         List<Set<BuiltinContract>> inferredParameterRequirements,
+                         Set<BuiltinContract> resultGuarantees,
+                         Set<BuiltinContract> inferredResultGuarantees,
+                         Integer resultParameter, boolean generalizedResult) {
+            this(parameterRequirements, inferredParameterRequirements, resultGuarantees,
+                    inferredResultGuarantees, resultParameter, generalizedResult, null, null);
         }
     }
 
     private static final class Shape {
         private final EnumSet<BuiltinContract> guarantees;
         private final Integer parameter;
+        private final PlusChoice plusChoice;
         private boolean generalized;
 
         private Shape(EnumSet<BuiltinContract> guarantees, Integer parameter, boolean generalized) {
+            this(guarantees, parameter, generalized, null);
+        }
+
+        private Shape(EnumSet<BuiltinContract> guarantees, Integer parameter, boolean generalized,
+                      PlusChoice plusChoice) {
             this.guarantees = guarantees;
             this.parameter = parameter;
             this.generalized = generalized;
+            this.plusChoice = plusChoice;
         }
 
         static Shape unknown() { return new Shape(EnumSet.noneOf(BuiltinContract.class), null, false); }
         static Shape generic() { return new Shape(EnumSet.noneOf(BuiltinContract.class), null, true); }
         static Shape concrete(BuiltinContract contract) { return new Shape(EnumSet.of(contract), null, false); }
         static Shape parameter(int index) { return new Shape(EnumSet.noneOf(BuiltinContract.class), index, false); }
+        static Shape unresolvedPlus(Shape left, Shape right) {
+            return new Shape(EnumSet.noneOf(BuiltinContract.class), null, true, new PlusChoice(left, right));
+        }
         EnumSet<BuiltinContract> guarantees() { return guarantees; }
         Integer parameter() { return parameter; }
         boolean generalized() { return generalized; }
@@ -76,9 +99,18 @@ final class ContractInference {
         }
     }
 
+    private record PlusChoice(Shape left, Shape right) {}
+
+    private record DeclaredParameters(List<Set<BuiltinContract>> domains, List<Boolean> explicit) {
+        DeclaredParameters {
+            domains = domains.stream().map(Set::copyOf).toList();
+            explicit = List.copyOf(explicit);
+        }
+    }
+
     private final IdentityHashMap<FunctionDef, FunctionContract> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<FunctionDef, EffectSummary> effects = new IdentityHashMap<>();
-    private final IdentityHashMap<List<EnumSet<BuiltinContract>>, List<Set<BuiltinContract>>>
+    private final IdentityHashMap<List<EnumSet<BuiltinContract>>, DeclaredParameters>
             declaredParameterDomains = new IdentityHashMap<>();
     private final Resolution resolution;
 
@@ -92,7 +124,7 @@ final class ContractInference {
 
     static ContractInference analyze(List<Stmt> program, Resolution resolution) {
         ContractInference inference = new ContractInference(resolution);
-        inference.analyzeBlock(program, Map.of(), BUILTIN_EFFECTS);
+        inference.analyzeBlock(program, Map.of(), BUILTIN_EFFECTS, true);
         inference.validateRefinementClauses(program);
         return inference;
     }
@@ -129,7 +161,7 @@ final class ContractInference {
     }
 
     private void analyzeBlock(List<Stmt> statements, Map<String, FunctionContract> enclosing,
-                              Map<String, CallableEffects> enclosingEffects) {
+                              Map<String, CallableEffects> enclosingEffects, boolean analyzeOrdinaryBindings) {
         LinkedHashMap<String, FunctionDef> definitions = new LinkedHashMap<>();
         ArrayList<FunctionDef> allDefinitions = new ArrayList<>();
         HashMap<String, Integer> definitionCounts = new HashMap<>();
@@ -170,7 +202,8 @@ final class ContractInference {
                 EffectSummary inferred = EffectSummary.PURE;
                 for (FunctionDef variant : allDefinitions) {
                     if (variant.name().equals(function.name())) {
-                        inferred = inferred.plus(inferEffects(variant.body(), visibleEffects));
+                        inferred = inferred.plus(inferEffects(variant.body(),
+                                withConstrainedParameters(variant, visibleEffects)));
                     }
                 }
                 CallableEffects previous = visibleEffects.get(function.name());
@@ -186,28 +219,33 @@ final class ContractInference {
             FunctionContract inferred = definitionCounts.get(function.name()) > 1
                     ? infer(function, visible) : visible.get(function.name());
             contracts.put(function, inferred);
-            EffectSummary inferredEffects = inferEffects(function.body(), visibleEffects);
+            EffectSummary inferredEffects = inferEffects(function.body(),
+                    withConstrainedParameters(function, visibleEffects));
             effects.put(function, inferredEffects);
-            analyzeBlock(function.body(), visible, visibleEffects);
+            analyzeBlock(function.body(), visible, visibleEffects, false);
         }
-        analyzeOrdinaryBindings(statements, visible);
+        if (analyzeOrdinaryBindings) analyzeOrdinaryBindings(statements, visible);
     }
 
     private static FunctionContract empty(FunctionDef function) {
         List<Set<BuiltinContract>> parameters = new ArrayList<>();
         for (int i = 0; i < function.params().size(); i++) parameters.add(Set.of());
-        return new FunctionContract(parameters, Set.of(), null, false);
+        return new FunctionContract(parameters, parameters, Set.of(), Set.of(), null, false, null, null);
     }
 
     private FunctionContract infer(FunctionDef function, Map<String, FunctionContract> visible) {
         List<EnumSet<BuiltinContract>> requirements = new ArrayList<>();
+        List<Set<BuiltinContract>> declaredDomains = new ArrayList<>();
+        List<Boolean> explicitParameters = new ArrayList<>();
         Map<String, Integer> parameters = new HashMap<>();
         for (int i = 0; i < function.params().size(); i++) {
-            EnumSet<BuiltinContract> explicit = clause(function.params().get(i).contracts());
-            requirements.add(explicit);
+            declaredDomains.add(clause(function.params().get(i).contracts()));
+            requirements.add(EnumSet.noneOf(BuiltinContract.class));
+            explicitParameters.add(function.params().get(i).contracts() != null);
             parameters.put(function.params().get(i).name(), i);
         }
-        declaredParameterDomains.put(requirements, requirements.stream().map(Set::copyOf).toList());
+        declaredParameterDomains.put(requirements,
+                new DeclaredParameters(declaredDomains, explicitParameters));
         Map<String, Shape> locals = new HashMap<>();
         Shape result = Shape.unknown();
         for (Stmt statement : function.body()) {
@@ -226,10 +264,19 @@ final class ContractInference {
         }
         EnumSet<BuiltinContract> declaredResult = clause(function.resultContracts());
         constrain(result, declaredResult, requirements, function.span());
-        EnumSet<BuiltinContract> guarantees = result.guarantees().clone();
+        EnumSet<BuiltinContract> inferredGuarantees = result.guarantees().clone();
+        EnumSet<BuiltinContract> guarantees = inferredGuarantees.clone();
         guarantees.addAll(declaredResult);
         boolean generalizedResult = result.generalized();
-        return new FunctionContract(new ArrayList<>(requirements), guarantees, result.parameter(), generalizedResult);
+        ArrayList<Set<BuiltinContract>> effectiveRequirements = new ArrayList<>();
+        for (int index = 0; index < requirements.size(); index++) {
+            effectiveRequirements.add(explicitParameters.get(index)
+                    ? declaredDomains.get(index) : requirements.get(index));
+        }
+        Integer plusLeft = result.plusChoice == null ? null : result.plusChoice.left().parameter();
+        Integer plusRight = result.plusChoice == null ? null : result.plusChoice.right().parameter();
+        return new FunctionContract(effectiveRequirements, new ArrayList<>(requirements), guarantees,
+                inferredGuarantees, result.parameter(), generalizedResult, plusLeft, plusRight);
     }
 
     private Shape expression(Expr expression, Map<String, Integer> parameters, Map<String, Shape> locals,
@@ -237,7 +284,8 @@ final class ContractInference {
                              Map<String, FunctionContract> visible) {
         return switch (expression) {
             case Literal literal -> literal(literal.value());
-            case Name name -> parameters.containsKey(name.name()) ? Shape.parameter(parameters.get(name.name()))
+            case Name name -> parameters.containsKey(name.name())
+                    ? parameterShape(parameters.get(name.name()), requirements)
                     : locals.getOrDefault(name.name(), Shape.unknown());
             case Group group -> expression(group.expression(), parameters, locals, requirements, visible);
             case Unary unary -> {
@@ -247,13 +295,17 @@ final class ContractInference {
                         constrain(operand, EnumSet.of(BuiltinContract.NUMBER), requirements, unary.operand().span());
                         yield Shape.concrete(BuiltinContract.NUMBER);
                     }
-                    case "not" -> Shape.concrete(BuiltinContract.BOOLEAN);
+                    case "not" -> {
+                        requireTruth(operand, unary.operand().span());
+                        yield Shape.concrete(BuiltinContract.BOOLEAN);
+                    }
                     default -> Shape.unknown();
                 };
             }
             case Binary binary -> binary(binary, parameters, locals, requirements, visible);
             case Conditional conditional -> {
                 Shape condition = expression(conditional.condition(), parameters, locals, requirements, visible);
+                requireTruth(condition, conditional.condition().span());
                 Shape yes = expression(conditional.whenTrue(), parameters, locals, requirements, visible);
                 Shape no = expression(conditional.whenFalse(), parameters, locals, requirements, visible);
                 if (conditional.condition() instanceof Literal(Value.Bool booleanValue, SourceSpan ignored)) {
@@ -286,6 +338,12 @@ final class ContractInference {
         };
     }
 
+    private Shape parameterShape(int index, List<EnumSet<BuiltinContract>> requirements) {
+        DeclaredParameters declared = declaredParameterDomains.get(requirements);
+        if (declared == null || !declared.explicit().get(index)) return Shape.parameter(index);
+        return new Shape(enumSet(declared.domains().get(index)), index, false);
+    }
+
     private static boolean staticallyFieldElement(CollectionElement element) {
         if (element instanceof NamedElement) return true;
         Expr expression = element.value();
@@ -313,7 +371,11 @@ final class ContractInference {
                     default -> Shape.concrete(BuiltinContract.NUMBER);
                 };
             }
-            case "and", "or" -> Shape.concrete(BuiltinContract.BOOLEAN);
+            case "and", "or" -> {
+                requireTruth(left, binary.left().span());
+                requireTruth(right, binary.right().span());
+                yield Shape.concrete(BuiltinContract.BOOLEAN);
+            }
             case "==", "!=" -> Shape.concrete(BuiltinContract.BOOLEAN);
             default -> Shape.unknown();
         };
@@ -330,7 +392,15 @@ final class ContractInference {
         }
         // `+` is relational: an unresolved operand may be Number or String. Do not invent a
         // numeric constraint; later relational inference can specialize this further.
-        return Shape.unknown();
+        return Shape.unresolvedPlus(left, right);
+    }
+
+    private static void requireTruth(Shape shape, SourceSpan span) {
+        if (shape.guarantees().isEmpty()) return;
+        if (shape.guarantees().stream().allMatch(contract -> contract == BuiltinContract.BOOLEAN
+                || contract == BuiltinContract.NULL || contract == BuiltinContract.MISSING)) return;
+        throw conflict(span, shape.guarantees(), Set.of(
+                BuiltinContract.BOOLEAN, BuiltinContract.NULL, BuiltinContract.MISSING));
     }
 
     private Shape ambiguousCall(AmbiguousCall call, Map<String, Integer> parameters,
@@ -378,6 +448,10 @@ final class ContractInference {
         if (called.resultParameter() != null && called.resultParameter() < shapes.size()) {
             return shapes.get(called.resultParameter());
         }
+        if (called.plusLeftParameter() != null && called.plusRightParameter() != null
+                && called.plusLeftParameter() < shapes.size() && called.plusRightParameter() < shapes.size()) {
+            return plus(shapes.get(called.plusLeftParameter()), shapes.get(called.plusRightParameter()));
+        }
         return called.generalizedResult() ? Shape.generic()
                 : new Shape(enumSet(called.resultGuarantees()), null, false);
     }
@@ -416,14 +490,16 @@ final class ContractInference {
     private void constrain(Shape shape, Set<BuiltinContract> constraints,
                            List<EnumSet<BuiltinContract>> requirements, SourceSpan span) {
         if (constraints.isEmpty()) return;
+        if (shape.plusChoice != null) {
+            constrainPlus(shape, constraints, requirements, span);
+            return;
+        }
         if (shape.parameter() != null) {
             EnumSet<BuiltinContract> target = requirements.get(shape.parameter());
-            List<Set<BuiltinContract>> declared = declaredParameterDomains.get(requirements);
-            if (declared != null) {
-                Set<BuiltinContract> domain = declared.get(shape.parameter());
-                if ((domain.contains(BuiltinContract.NULL) && !constraints.contains(BuiltinContract.NULL))
-                        || (domain.contains(BuiltinContract.MISSING)
-                        && !constraints.contains(BuiltinContract.MISSING))) {
+            DeclaredParameters declared = declaredParameterDomains.get(requirements);
+            if (declared != null && declared.explicit().get(shape.parameter())) {
+                Set<BuiltinContract> domain = declared.domains().get(shape.parameter());
+                if (!declarationGuarantees(domain, constraints)) {
                     throw conflict(span, domain, constraints);
                 }
             }
@@ -440,6 +516,41 @@ final class ContractInference {
                 constraints.stream().noneMatch(required -> ContractRelations.implies(actual, required)))) {
             throw conflict(span, shape.guarantees(), constraints);
         }
+    }
+
+    private void constrainPlus(Shape result, Set<BuiltinContract> constraints,
+                               List<EnumSet<BuiltinContract>> requirements, SourceSpan span) {
+        boolean number = constraints.stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.NUMBER));
+        boolean string = constraints.stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.STRING));
+        if (number == string) {
+            if (!number) throw conflict(span, result.guarantees(), constraints);
+            return;
+        }
+        PlusChoice choice = result.plusChoice;
+        if (number) {
+            constrain(choice.left(), Set.of(BuiltinContract.NUMBER), requirements, span);
+            constrain(choice.right(), Set.of(BuiltinContract.NUMBER), requirements, span);
+        } else {
+            boolean leftString = choice.left().guarantees().contains(BuiltinContract.STRING);
+            boolean rightString = choice.right().guarantees().contains(BuiltinContract.STRING);
+            if (!leftString && !rightString) {
+                boolean leftNumber = choice.left().guarantees().contains(BuiltinContract.NUMBER);
+                boolean rightNumber = choice.right().guarantees().contains(BuiltinContract.NUMBER);
+                if (leftNumber) constrain(choice.right(), Set.of(BuiltinContract.STRING), requirements, span);
+                else if (rightNumber) constrain(choice.left(), Set.of(BuiltinContract.STRING), requirements, span);
+            }
+        }
+        result.resolveWith(constraints);
+    }
+
+    private static boolean declarationGuarantees(Set<BuiltinContract> declared,
+                                                 Set<BuiltinContract> inferredNeed) {
+        if (inferredNeed.isEmpty()) return true;
+        if (declared.isEmpty()) return false;
+        return declared.stream().allMatch(accepted -> inferredNeed.stream()
+                .anyMatch(required -> ContractRelations.implies(accepted, required)));
     }
 
     private static void rejectDisjoint(Set<BuiltinContract> contracts, SourceSpan span) {
@@ -506,6 +617,42 @@ final class ContractInference {
         return new CallableEffects(arity, summary, null);
     }
 
+    private Map<String, CallableEffects> withConstrainedParameters(
+            FunctionDef function, Map<String, CallableEffects> enclosing) {
+        HashMap<String, CallableEffects> visible = new HashMap<>(enclosing);
+        for (Ast.Parameter parameter : function.params()) {
+            Resolution.AnalyzedClause clause = resolution.clause(parameter.contracts());
+            if (clause == null) continue;
+            List<EffectDescriptor> allowance = clause.effectAllowance();
+            // A clause-only callable constraint does not declare arity. Two is sufficient for
+            // both prefix partial analysis and the language's binary infix classification; the
+            // runtime value retains and checks its exact arity.
+            int arity = 2;
+            if (allowance == null) {
+                Ast.ArrowContract arrow = clause.valueRequirements().stream()
+                        .map(Resolution.ContractBinding::inline).filter(Ast.ArrowContract.class::isInstance)
+                        .map(Ast.ArrowContract.class::cast).findFirst().orElse(null);
+                if (arrow == null) continue;
+                arity = arrow.parameters().size();
+                allowance = arrow.effectTerms().stream().map(term -> switch (term.name()) {
+                    case "Output" -> EffectCatalog.OUTPUT;
+                    case "TestReport" -> EffectCatalog.TEST_REPORT;
+                    case "StateRead" -> EffectCatalog.STATE_READ;
+                    case "StateWrite" -> EffectCatalog.STATE_WRITE;
+                    default -> null;
+                }).filter(Objects::nonNull).toList();
+            }
+            EnumSet<BuiltinEffect> effects = EnumSet.noneOf(BuiltinEffect.class);
+            for (EffectDescriptor effect : allowance) {
+                if (effect == EffectCatalog.OUTPUT) effects.add(BuiltinEffect.OUTPUT);
+                if (effect == EffectCatalog.TEST_REPORT) effects.add(BuiltinEffect.TEST_REPORT);
+            }
+            visible.put(parameter.name(), new CallableEffects(
+                    arity, new EffectSummary(effects, false), -1));
+        }
+        return visible;
+    }
+
     private EffectSummary inferEffects(List<Stmt> statements, Map<String, CallableEffects> enclosing) {
         Map<String, CallableEffects> visible = new HashMap<>(enclosing);
         List<FunctionDef> nested = statements.stream().filter(FunctionDef.class::isInstance)
@@ -518,7 +665,7 @@ final class ContractInference {
         do {
             changed = false;
             for (FunctionDef function : nested) {
-                EffectSummary inferred = inferEffects(function.body(), visible);
+                EffectSummary inferred = inferEffects(function.body(), withConstrainedParameters(function, visible));
                 CallableEffects previous = visible.get(function.name());
                 if (!inferred.equals(previous.summary())) {
                     visible.put(function.name(), new CallableEffects(
@@ -531,13 +678,59 @@ final class ContractInference {
         EffectSummary result = EffectSummary.PURE;
         for (Stmt statement : statements) {
             result = result.plus(switch (statement) {
-                case Assign assign -> expressionEffects(assign.value(), visible);
+                case Assign assign -> {
+                    EffectSummary construction = expressionEffects(assign.value(), visible);
+                    CallableEffects callable = callableValueEffects(assign.value(), visible);
+                    if (callable != null) visible.put(assign.name(), new CallableEffects(
+                            callable.arity(), callable.summary(), resolution.symbolId(assign.span())));
+                    yield construction;
+                }
                 case ExprStmt expression -> expressionEffects(expression.expression(), visible);
                 case PrintLine line -> expressionEffects(printExpression(line), visible);
                 case FunctionDef ignored -> EffectSummary.PURE;
             });
         }
         return result;
+    }
+
+    private CallableEffects callableValueEffects(Expr expression, Map<String, CallableEffects> visible) {
+        while (expression instanceof Group group) expression = group.expression();
+        if (expression instanceof Name name) return resolvedCallable(name, visible);
+        if (expression instanceof Compose compose) {
+            CallableEffects left = callableValueEffects(compose.left(), visible);
+            CallableEffects right = callableValueEffects(compose.right(), visible);
+            if (left == null || right == null || right.arity() != 1) return null;
+            return new CallableEffects(left.arity(), left.summary().plus(right.summary()), null);
+        }
+        if (containsHole(expression)) {
+            Expr target = expression;
+            while (target instanceof Apply apply) target = apply.function();
+            CallableEffects callable = callableValueEffects(target, visible);
+            if (callable == null) return null;
+            return new CallableEffects(holeArity(expression), callable.summary(), null);
+        }
+        ArrayList<Expr> arguments = new ArrayList<>();
+        Expr target = expression;
+        while (target instanceof Apply apply) {
+            arguments.addFirst(apply.argument());
+            target = apply.function();
+        }
+        if (arguments.isEmpty()) return null;
+        CallableEffects callable = callableValueEffects(target, visible);
+        if (callable == null || arguments.size() >= callable.arity()) return null;
+        return new CallableEffects(callable.arity() - arguments.size(), callable.summary(), null);
+    }
+
+    private static int holeArity(Expr expression) {
+        int[] ordinary = {0};
+        int[] highest = {0};
+        AstTraversal.walkPreOrder(expression, candidate -> {
+            if (candidate instanceof Hole hole) {
+                if (hole.index() == 0) ordinary[0]++;
+                else highest[0] = Math.max(highest[0], hole.index());
+            }
+        });
+        return highest[0] == 0 ? ordinary[0] : highest[0];
     }
 
     private EffectSummary expressionEffects(Expr expression, Map<String, CallableEffects> visible) {
@@ -617,6 +810,7 @@ final class ContractInference {
         CallableEffects candidate = visible.get(name.name());
         if (candidate == null) return null;
         Resolution.Binding binding = resolution.binding(name);
+        if (candidate.symbolId() != null && candidate.symbolId() == -1) return binding == null ? null : candidate;
         if (candidate.symbolId() == null) {
             return binding == null || binding.declarationSpan() == null ? candidate : null;
         }

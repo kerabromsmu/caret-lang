@@ -1,0 +1,10 @@
+function noisy/1 @ 1:1
+  parameter value: effective=[Number, _1] declared=[Number] inferred=[Number, _1]
+  result: effective=[Number, _1] declared=[Number] inferred=[_1]
+  effects: upper=[Output] declared=[Output] inferred=[Output]
+  variables: [_1:[Number]]
+function identity/1 @ 5:1
+  parameter value: effective=[_1] declared=~ inferred=[_1]
+  result: effective=[_1] declared=~ inferred=[_1]
+  effects: upper=[] declared=[] inferred=[]
+  variables: [_1:[]]

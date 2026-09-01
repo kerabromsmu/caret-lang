@@ -11,6 +11,7 @@ final class Interpreter {
     private final CallableDispatcher calls = new CallableDispatcher();
     private ContractInference inference;
     private final EffectCatalog effectCatalog;
+    private final OwnershipTracker ownership;
     private ReflectionContext reflectionContext = ReflectionContext.defining();
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
@@ -20,8 +21,18 @@ final class Interpreter {
     }
 
     Interpreter(PrintStream output, TestReporter testReporter) {
+        this(output, testReporter, EffectCatalog.standard(testReporter != null));
+    }
+
+    Interpreter(PrintStream output, TestReporter testReporter, EffectCatalog effectCatalog) {
+        this(output, testReporter, effectCatalog, OwnershipTracker.Mode.ENABLED);
+    }
+
+    Interpreter(PrintStream output, TestReporter testReporter, EffectCatalog effectCatalog,
+                OwnershipTracker.Mode ownershipMode) {
         this.output = output;
-        this.effectCatalog = EffectCatalog.standard(testReporter != null);
+        this.effectCatalog = Objects.requireNonNull(effectCatalog);
+        this.ownership = new OwnershipTracker(Objects.requireNonNull(ownershipMode));
         installBuiltins();
         if (testReporter != null) installTestBuiltins(testReporter);
     }
@@ -42,6 +53,14 @@ final class Interpreter {
             globals.rollbackTo(checkpoint);
             throw failure;
         }
+    }
+
+    String inspect(List<Stmt> program) {
+        Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
+        inference = ContractInference.analyze(program, resolution);
+        validateEffectAllowances(program, resolution);
+        validateCompositionCompatibility(program, resolution);
+        return InferenceReporter.render(program, inference, resolution);
     }
 
     private void validateEffectAllowances(List<Stmt> statements, Resolution resolution) {
@@ -144,6 +163,7 @@ final class Interpreter {
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
         LinkedHashMap<String, Value> exports = new LinkedHashMap<>();
         IdentityHashMap<FunctionDef, Value.Callable> functions = prepareDeclarations(statements, env, resolution);
+        IdentityHashMap<Assign, UserContract> contractPlaceholders = prepareContractDeclarations(statements, env);
         Value last = Value.Missing.INSTANCE;
 
         for (Stmt statement : statements) {
@@ -151,10 +171,28 @@ final class Interpreter {
                                             Expr value1, SourceSpan ignored)) {
                 Value value = eval(value1, env, null, resolution);
                 value = validateContracts(value, value1.span(), contracts, resolution, env, "binding " + name);
-                if (value instanceof Value.ContractValue contract
-                        && contract.descriptor() instanceof UserContract user) user.nameIfAnonymous(name);
-                env.initialize(name, value);
-                if (exported) exports.put(name, value);
+                UserContract placeholder = contractPlaceholders.get(statement);
+                if (placeholder != null && value instanceof Value.ContractValue contract
+                        && contract.descriptor() instanceof UserContract constructed) {
+                    placeholder.configureFrom(constructed);
+                    placeholder.nameIfAnonymous(name);
+                    rejectContractCycle(placeholder, statement.span());
+                    value = new Value.ContractValue(placeholder);
+                    env.replace(name, value);
+                } else {
+                    if (value instanceof Value.ContractValue contract
+                            && contract.descriptor() instanceof UserContract user) user.nameIfAnonymous(name);
+                    if (value instanceof Value.ContractValue contract
+                            && contract.descriptor() instanceof TemplateContract template) {
+                        template.nameIfAnonymous(name);
+                    }
+                    ownership.share(value);
+                    env.initialize(name, value);
+                }
+                if (exported) {
+                    ownership.share(value);
+                    exports.put(name, value);
+                }
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
                 last = eval(expression, env, null, resolution);
@@ -169,7 +207,53 @@ final class Interpreter {
             }
         }
 
-        return exports.isEmpty() ? last : new Value.Dictionary(exports);
+        return exports.isEmpty() ? last : ownership.fresh(new Value.Dictionary(exports));
+    }
+
+    private IdentityHashMap<Assign, UserContract> prepareContractDeclarations(List<Stmt> statements,
+                                                                               Environment env) {
+        IdentityHashMap<Assign, UserContract> result = new IdentityHashMap<>();
+        for (Stmt statement : statements) {
+            if (!(statement instanceof Assign assign) || !isContractConstruction(assign.value())) continue;
+            UserContract placeholder = new UserContract(assign.span());
+            placeholder.nameIfAnonymous(assign.name());
+            env.initialize(assign.name(), new Value.ContractValue(placeholder));
+            result.put(assign, placeholder);
+        }
+        return result;
+    }
+
+    private static boolean isContractConstruction(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
+        return expression instanceof Apply apply && apply.function() instanceof Name name
+                && name.name().equals("contract");
+    }
+
+    private static void rejectContractCycle(UserContract root, SourceSpan span) {
+        Set<ContractDescriptor> visiting = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<ContractDescriptor> visited = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+        ArrayList<UserContract> path = new ArrayList<>();
+        if (!findContractCycle(root, visiting, visited, path)) return;
+        List<Diagnostic.Related> related = path.stream().map(contract -> new Diagnostic.Related(
+                "Contract in derivation cycle: " + contract.publicName(), contract.declarationSpan()))
+                .filter(item -> item.span() != null).toList();
+        throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.CONTRACT_DERIVATION_CYCLE,
+                "Contract derivation cycle: " + root.publicName(), span, related));
+    }
+
+    private static boolean findContractCycle(ContractDescriptor current, Set<ContractDescriptor> visiting,
+                                             Set<ContractDescriptor> visited, List<UserContract> path) {
+        if (visiting.contains(current)) return true;
+        if (!visited.add(current)) return false;
+        visiting.add(current);
+        if (current instanceof UserContract user) path.add(user);
+        for (ContractDescriptor base : current.bases()) {
+            if (findContractCycle(base, visiting, visited, path)) return true;
+        }
+        visiting.remove(current);
+        if (current instanceof UserContract) path.removeLast();
+        return false;
     }
 
     private IdentityHashMap<FunctionDef, Value.Callable> prepareDeclarations(List<Stmt> statements,
@@ -233,7 +317,9 @@ final class Interpreter {
         return new Value.FunctionValue(function.name(), parameterNames, (arguments, ignoredCallSpan) -> {
             Environment parameters = new Environment(env, captures);
             for (int i = 0; i < function.params().size(); i++) {
-                parameters.define(function.params().get(i).name(), arguments.get(i).value());
+                Value value = arguments.get(i).value();
+                ownership.share(value);
+                parameters.define(function.params().get(i).name(), value);
             }
             Value result = executeBlock(function.body(), new Environment(parameters), resolution);
             return validateContracts(result, function.body().getLast().span(),
@@ -244,6 +330,94 @@ final class Interpreter {
     private record OverloadVariant(FunctionDef definition, Value.Callable function) {}
     private record ApplicabilityKey(Object requirement, int position) {}
     private record RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) {}
+
+    private final class BuiltinOperatorCallable implements Value.Callable {
+        private final String operator;
+        private final List<Value.Argument> arguments;
+
+        private BuiltinOperatorCallable(String operator) { this(operator, List.of()); }
+
+        private BuiltinOperatorCallable(String operator, List<Value.Argument> arguments) {
+            this.operator = operator;
+            this.arguments = List.copyOf(arguments);
+        }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            ArrayList<Value.Argument> next = new ArrayList<>(arguments);
+            next.add(argument);
+            if (next.size() == 2) return binaryOperation(operator, next, callSpan);
+            if (next.size() > 2) throw new LangException(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.TOO_MANY_ARGUMENTS, "Too many arguments for " + operator, callSpan);
+            return new BuiltinOperatorCallable(operator, next);
+        }
+
+        @Override public int remainingArity() { return 2 - arguments.size(); }
+
+        @Override public String publicName() { return operator; }
+
+        @Override public CallableSignature signature() {
+            return CallableSignature.summarize(variantSignatures());
+        }
+
+        @Override public List<CallableSignature> variantSignatures() {
+            return operatorSignatures(operator).stream().map(signature -> arguments.isEmpty()
+                    ? signature : signature.specializeFirst(arguments.getFirst().value())).toList();
+        }
+        @Override public List<Value> retainedValues() {
+            return arguments.stream().map(Value.Argument::value).toList();
+        }
+    }
+
+    /** Higher-order map exposes the selected transform's invocation bound after partial application. */
+    private final class MapCallable implements Value.Callable {
+        private final Value.Callable transform;
+
+        private MapCallable() { this(null); }
+        private MapCallable(Value.Callable transform) { this.transform = transform; }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            if (transform == null) return new MapCallable(unaryMapTransform(argument));
+            Value.Seq values = sequence(argument);
+            ArrayList<Value> mapped = new ArrayList<>(values.size());
+            for (Value value : values) {
+                mapped.add(invoke(transform, new Value.Argument(value, argument.span()), callSpan));
+            }
+            return ownership.fresh(new Value.Seq(mapped));
+        }
+
+        @Override public int remainingArity() { return transform == null ? 2 : 1; }
+
+        @Override public CallableSignature signature() {
+            if (transform == null) return CallableSignature.unknown(List.of("transform", "values"));
+            CallableSignature.Effects effects = transform.signature().effects();
+            return new CallableSignature(
+                    List.of(new CallableSignature.Parameter("values", List.of(), null, null)),
+                    new CallableSignature.Result(List.of(), null, null),
+                    new CallableSignature.Effects(effects.upperBound(), null, effects.inferred()), List.of());
+        }
+
+        @Override public String publicName() { return "map"; }
+        @Override public List<Value> retainedValues() {
+            return transform == null ? List.of() : List.of(transform);
+        }
+        @Override public String toString() { return "<fn map/" + remainingArity() + ">"; }
+    }
+
+    private static List<CallableSignature> operatorSignatures(String operator) {
+        if (operator.equals("+")) return List.of(
+                CallableSignature.operator(List.of("Number", "Number"), "Number"),
+                CallableSignature.operator(List.of("String", "String"), "String"),
+                CallableSignature.operator(List.of("String", "Any"), "String"),
+                CallableSignature.operator(List.of("Any", "String"), "String"));
+        if (operator.equals("==") || operator.equals("!=")) {
+            return List.of(CallableSignature.operator(List.of("Eq", "Eq"), "Boolean"));
+        }
+        String result = switch (operator) {
+            case ">", ">=", "<", "<=" -> "Boolean";
+            default -> "Number";
+        };
+        return List.of(CallableSignature.operator(List.of("Number", "Number"), result));
+    }
 
     private final class OverloadCallable implements Value.Callable {
         private final String name;
@@ -313,6 +487,9 @@ final class Interpreter {
 
         @Override public int remainingArity() {
             return variantArity(all.getFirst()) - arguments.size();
+        }
+        @Override public List<Value> retainedValues() {
+            return arguments.values().stream().map(Value.Argument::value).toList();
         }
 
         @Override public CallableSignature signature() {
@@ -601,6 +778,20 @@ final class Interpreter {
 
     private Value eval(Expr expr, Environment env, List<Value.Argument> holeArgs, Resolution resolution) {
         try {
+            if (holeArgs == null && expr instanceof CollectionLiteral collection) {
+                HoleAnalysis collectionHoles = analyzeCollectionHoles(collection);
+                if (!collectionHoles.indexes().isEmpty()) {
+                    int arity = holeArity(expr, collectionHoles.indexes());
+                    CollectionConstructorDescriptor descriptor = collectionConstructor(
+                            collection, env, resolution, collectionHoles.indexes());
+                    if (descriptor != null) return new CollectionConstructorCallable(descriptor, List.of());
+                    Expr captured = captureNonHoleParts(expr, env,
+                            collectionHoles.containsHole(), resolution);
+                    return new Value.HoleFunction(expr.toString(), arity,
+                            supplied -> eval(captured, env, supplied, resolution),
+                            holeSignature(captured, arity));
+                }
+            }
             if (holeArgs == null && !(expr instanceof Compose)) {
                 HoleAnalysis analysis = analyzeHoles(expr);
                 if (!analysis.indexes().isEmpty()) {
@@ -618,6 +809,91 @@ final class Interpreter {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALL_DEPTH_EXCEEDED,
                     "Maximum Caret evaluation depth exceeded", expr.span());
         }
+    }
+
+    private final class CollectionConstructorCallable implements Value.Callable {
+        private final CollectionConstructorDescriptor descriptor;
+        private final List<Value.Argument> arguments;
+
+        private CollectionConstructorCallable(CollectionConstructorDescriptor descriptor,
+                                              List<Value.Argument> arguments) {
+            this.descriptor = descriptor;
+            this.arguments = List.copyOf(arguments);
+        }
+
+        CollectionConstructorDescriptor descriptor() { return descriptor; }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            int parameter = arguments.size();
+            argument = validateConstructorArgument(parameter, argument,
+                    descriptor.parameterRequirements().get(parameter));
+            ArrayList<Value.Argument> next = new ArrayList<>(arguments);
+            next.add(argument);
+            if (next.size() == descriptor.arity()) return materialize(descriptor.root(), next);
+            return new CollectionConstructorCallable(descriptor, next);
+        }
+
+        @Override public List<Value> retainedValues() {
+            return arguments.stream().map(Value.Argument::value).toList();
+        }
+
+        @Override public int remainingArity() { return descriptor.arity() - arguments.size(); }
+        @Override public String publicName() { return "<collection-constructor>"; }
+        @Override public CallableSignature signature() {
+            CallableSignature signature = CallableSignature.collectionConstructor(
+                    descriptor.parameterRequirements());
+            for (Value.Argument argument : arguments) signature = signature.specializeFirst(argument.value());
+            return signature;
+        }
+        @Override public String toString() {
+            return "<collection-constructor/" + remainingArity() + ">";
+        }
+    }
+
+    private Value.Argument validateConstructorArgument(int parameter, Value.Argument argument,
+                                                       List<Object> requirements) {
+        LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
+        for (Object requirement : requirements) {
+            boolean accepted;
+            if (requirement instanceof ContractDescriptor contract) {
+                ContractDescriptor nominal = contract instanceof ModifiedContract modified
+                        ? modified.base() : contract;
+                if (nominal instanceof UserContract user
+                        && user.canAcquire(argument.value(), argument.span())) {
+                    acquired.add(nominal);
+                    accepted = true;
+                } else accepted = contract.accepts(argument.value());
+            } else {
+                accepted = truth(invoke((Value.Callable) requirement, argument, argument.span()));
+            }
+            if (!accepted) throw new LangException(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.CONTRACT_VIOLATION,
+                    "Contract violation for collection constructor parameter _" + (parameter + 1),
+                    argument.span());
+        }
+        if (acquired.isEmpty()) return argument;
+        Value value = argument.value();
+        if (value instanceof Value.Attributed(Value raw, Set<ContractDescriptor> existing)) {
+            acquired.addAll(existing);
+            value = new Value.Attributed(raw, acquired);
+        } else value = new Value.Attributed(value, acquired);
+        return new Value.Argument(value, argument.span());
+    }
+
+    private Value materialize(CollectionConstructorDescriptor.Node node, List<Value.Argument> arguments) {
+        if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) return fixed.value();
+        if (node instanceof CollectionConstructorDescriptor.HoleNode hole) {
+            return arguments.get(hole.parameter()).value();
+        }
+        CollectionConstructorDescriptor.CollectionNode collection =
+                (CollectionConstructorDescriptor.CollectionNode) node;
+        if (collection.elements().isEmpty()) return Value.EmptyCollection.INSTANCE;
+        if (!collection.named()) return ownership.fresh(new Value.Seq(collection.elements().stream()
+                .map(element -> materialize(element.value(), arguments)).toList()));
+        LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+        collection.elements().forEach(element -> fields.put(element.name(),
+                materialize(element.value(), arguments)));
+        return ownership.fresh(new Value.Dictionary(fields));
     }
 
     private Value evalInner(Expr expr, Environment env, Resolution resolution) {
@@ -713,6 +989,11 @@ final class Interpreter {
         @Override public List<CallableSignature> variantSignatures() {
             return overload.fullVariantSignatures().stream().map(signature ->
                     projectHoleSignature(signature, pending, arity, arguments.size())).toList();
+        }
+        @Override public List<Value> retainedValues() {
+            ArrayList<Value> retained = new ArrayList<>(overload.retainedValues());
+            retained.addAll(arguments.stream().map(Value.Argument::value).toList());
+            return List.copyOf(retained);
         }
         @Override public String toString() { return "<overload-partial " + display + "/" + remainingArity() + ">"; }
     }
@@ -820,7 +1101,8 @@ final class Interpreter {
         }
         if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
             Value fn = underlying(evalInner(function, env, resolution));
-            Value argument = evalInner(argument1, env, resolution);
+            Value argument = argument1 instanceof CollectionLiteral
+                    ? eval(argument1, env, null, resolution) : evalInner(argument1, env, resolution);
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
@@ -897,7 +1179,7 @@ final class Interpreter {
                         "A collection cannot mix Field values and positional elements",
                         elements.get(mixed).span());
             }
-            if (ordinary) return new Value.Seq(values);
+            if (ordinary) return ownership.fresh(new Value.Seq(values));
             LinkedHashMap<String, Value> dictionary = new LinkedHashMap<>();
             LinkedHashMap<String, SourceSpan> locations = new LinkedHashMap<>();
             for (int i = 0; i < values.size(); i++) {
@@ -912,7 +1194,7 @@ final class Interpreter {
                 }
                 dictionary.put(field.key(), field.value());
             }
-            return new Value.Dictionary(dictionary);
+            return ownership.fresh(new Value.Dictionary(dictionary));
         }
         if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                                           boolean explicitPure, SourceSpan ignored)) {
@@ -1013,8 +1295,13 @@ final class Interpreter {
         Value right = underlying(rightArgument.value());
         return switch (op) {
             case "+" -> {
-                if (left instanceof Value.Str || right instanceof Value.Str)
-                    yield new Value.Str(left.toString() + right);
+                if (left instanceof Value.Str || right instanceof Value.Str) {
+                    String leftText = left instanceof Value.Str(String text) ? text
+                            : concatenateText(leftArgument, callSpan);
+                    String rightText = right instanceof Value.Str(String text) ? text
+                            : concatenateText(rightArgument, callSpan);
+                    yield new Value.Str(leftText + rightText);
+                }
                 yield finiteNumber(number(leftArgument) + number(rightArgument),
                         "Numeric result is not finite", callSpan);
             }
@@ -1044,6 +1331,14 @@ final class Interpreter {
             case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right, reflectionContext));
             default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
         };
+    }
+
+    private String concatenateText(Value.Argument argument, SourceSpan span) {
+        Value.Callable renderer = (Value.Callable) globals.get("toString");
+        Value rendered = underlying(invoke(renderer, argument, span));
+        if (rendered instanceof Value.Str(String text)) return text;
+        throw runtime(Diagnostic.Codes.EXPECTED_STRING,
+                "toString specialization must return a String", span);
     }
 
     private double number(Value value) {
@@ -1117,10 +1412,30 @@ final class Interpreter {
                     (callable, refinementArgument) -> invoke(callable, refinementArgument,
                             refinementArgument.span())));
         }));
+        globals.define("template", locatedFunction("template", List.of("specimen"), (args, span) -> {
+            Value specimen = underlying(args.getFirst().value());
+            CollectionConstructorDescriptor descriptor;
+            if (specimen instanceof CollectionConstructorCallable constructor) {
+                if (!constructor.arguments.isEmpty()) {
+                    throw runtime(Diagnostic.Codes.TEMPLATE_INVALID_CONSTRUCTOR,
+                            "template requires an unbound collection constructor", args.getFirst().span());
+                }
+                descriptor = constructor.descriptor();
+            } else {
+                descriptor = concreteTemplateDescriptor(specimen, args.getFirst().span());
+                if (descriptor == null) {
+                    throw runtime(Diagnostic.Codes.TEMPLATE_INVALID_CONSTRUCTOR,
+                            "template requires a Collection or reifiable collection constructor",
+                            args.getFirst().span());
+                }
+            }
+            validateTemplateFixedValues(descriptor.root());
+            return new Value.ContractValue(new TemplateContract(descriptor,
+                    (callable, argument) -> invoke(callable, argument, argument.span())));
+        }));
         for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
             String operator = descriptor.spelling();
-            globals.define(operator, locatedFunction(operator, List.of("left", "right"),
-                    (args, span) -> binaryOperation(operator, args, span)));
+            globals.define(operator, new BuiltinOperatorCallable(operator));
         }
 
         globals.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {
@@ -1186,9 +1501,9 @@ final class Interpreter {
         globals.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
                 new Value.Field(requiredDictionaryKey(args.getFirst()), args.get(1).value())));
 
-        globals.define("seqEmpty", function("seqEmpty", List.of(), args -> new Value.Seq(List.of())));
+        globals.define("seqEmpty", function("seqEmpty", List.of(), args -> ownership.fresh(new Value.Seq(List.of()))));
         globals.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) ->
-                sequence(args.getFirst()).appended(args.get(1).value())));
+                ownership.append(sequence(args.getFirst()), args.get(1).value())));
         globals.define("seqGet", locatedFunction("seqGet", List.of("sequence", "index"), (args, ignored) -> {
             Value.Seq values = sequence(args.get(0));
             OptionalInt index = index(args.get(1));
@@ -1197,20 +1512,12 @@ final class Interpreter {
         }));
         globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
-        List<String> mapParameters = List.of("transform", "values");
-        globals.define("map", new Value.FunctionValue("map", mapParameters, (args, span) -> {
-            Value.Callable transform = unaryMapTransform(args.getFirst());
-            Value.Seq values = sequence(args.get(1));
-            ArrayList<Value> mapped = new ArrayList<>(values.size());
-            for (Value value : values) {
-                mapped.add(invoke(transform, new Value.Argument(value, args.get(1).span()), span));
-            }
-            return new Value.Seq(mapped);
-        }, false, CallableSignature.unknown(mapParameters)));
+        globals.define("map", new MapCallable());
 
-        globals.define("dictEmpty", function("dictEmpty", List.of(), args -> new Value.Dictionary(Map.of())));
+        globals.define("dictEmpty", function("dictEmpty", List.of(), args ->
+                ownership.fresh(new Value.Dictionary(Map.of()))));
         globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
-                dictionary(args.getFirst()).put(requiredDictionaryKey(args.get(1)), args.get(2).value())));
+                ownership.put(dictionary(args.getFirst()), requiredDictionaryKey(args.get(1)), args.get(2).value())));
         globals.define("dictGet", locatedFunction("dictGet", List.of("dictionary", "key"), (args, ignored) -> {
             String key = dictionaryKey(args.get(1));
             return key == null ? Value.Missing.INSTANCE
@@ -1220,8 +1527,8 @@ final class Interpreter {
             String key = dictionaryKey(args.get(1));
             return new Value.Bool(key != null && dictionary(args.get(0)).containsKey(key));
         }));
-        globals.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> new Value.Seq(
-                dictionary(args.getFirst()).entries().keySet().stream().map(Value.Str::new).toList())));
+        globals.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> ownership.fresh(
+                new Value.Seq(dictionary(args.getFirst()).entries().keySet().stream().map(Value.Str::new).toList()))));
     }
 
     private void installTestBuiltins(TestReporter reporter) {
@@ -1254,6 +1561,51 @@ final class Interpreter {
         return new Value.FunctionValue(name, parameters, implementation);
     }
 
+    private CollectionConstructorDescriptor concreteTemplateDescriptor(Value value, SourceSpan span) {
+        CollectionConstructorDescriptor.CollectionNode root = concreteTemplateCollection(value, span);
+        return root == null ? null : new CollectionConstructorDescriptor(root, List.of());
+    }
+
+    private CollectionConstructorDescriptor.CollectionNode concreteTemplateCollection(Value value,
+                                                                                       SourceSpan span) {
+        value = underlying(value);
+        if (value instanceof Value.EmptyCollection) {
+            return new CollectionConstructorDescriptor.CollectionNode(false, List.of(), span);
+        }
+        if (value instanceof Value.Seq sequence) {
+            ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
+            for (Value member : sequence.values()) elements.add(new CollectionConstructorDescriptor.Element(
+                    null, concreteTemplateNode(member, span), span));
+            return new CollectionConstructorDescriptor.CollectionNode(false, elements, span);
+        }
+        Map<String, Value> fields;
+        if (value instanceof Value.Dictionary dictionary) fields = dictionary.entries();
+        else if (value instanceof Value.ProjectedDictionary dictionary) {
+            fields = dictionary.fields(reflectionContext);
+        } else return null;
+        ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
+        fields.forEach((name, member) -> elements.add(new CollectionConstructorDescriptor.Element(
+                name, concreteTemplateNode(member, span), span)));
+        return new CollectionConstructorDescriptor.CollectionNode(true, elements, span);
+    }
+
+    private CollectionConstructorDescriptor.Node concreteTemplateNode(Value value, SourceSpan span) {
+        CollectionConstructorDescriptor.CollectionNode nested = concreteTemplateCollection(value, span);
+        return nested == null ? new CollectionConstructorDescriptor.FixedNode(value, span) : nested;
+    }
+
+    private void validateTemplateFixedValues(CollectionConstructorDescriptor.Node node) {
+        if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) {
+            if (!ValueSemantics.equalityEligible(fixed.value())) {
+                throw runtime(Diagnostic.Codes.TEMPLATE_NONCOMPARABLE_FIXED_VALUE,
+                        "Template fixed value does not support equality: "
+                                + ValueSemantics.kind(fixed.value()), fixed.span());
+            }
+        } else if (node instanceof CollectionConstructorDescriptor.CollectionNode collection) {
+            collection.elements().forEach(element -> validateTemplateFixedValues(element.value()));
+        }
+    }
+
     private Value.FunctionValue locatedFunction(String name, List<String> parameters,
             java.util.function.BiFunction<List<Value.Argument>, SourceSpan, Value> implementation) {
         return new Value.FunctionValue(name, parameters, implementation);
@@ -1268,7 +1620,7 @@ final class Interpreter {
 
     private Value.Seq sequence(Value.Argument argument) {
         Value raw = underlying(argument.value());
-        if (raw instanceof Value.EmptyCollection) return new Value.Seq(List.of());
+        if (raw instanceof Value.EmptyCollection) return ownership.fresh(new Value.Seq(List.of()));
         if (raw instanceof Value.Seq sequence) return sequence;
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
@@ -1283,10 +1635,10 @@ final class Interpreter {
 
     private Value.Dictionary dictionary(Value.Argument argument) {
         Value raw = underlying(argument.value());
-        if (raw instanceof Value.EmptyCollection) return new Value.Dictionary(Map.of());
+        if (raw instanceof Value.EmptyCollection) return ownership.fresh(new Value.Dictionary(Map.of()));
         if (raw instanceof Value.Dictionary dictionary) return dictionary;
         if (raw instanceof Value.ProjectedDictionary dictionary) {
-            return new Value.Dictionary(dictionary.fields(reflectionContext));
+            return ownership.fresh(new Value.Dictionary(dictionary.fields(reflectionContext)));
         }
         throw runtime(Diagnostic.Codes.EXPECTED_DICTIONARY,
                 "Expected dictionary, got: " + argument.value(), argument.span());
@@ -1332,6 +1684,7 @@ final class Interpreter {
     }
 
     private Value reflect(Value value) {
+        ownership.share(value);
         Value reflected = underlying(value);
         if (reflected instanceof Value.Callable callable && !(reflected instanceof Value.Reflective)) {
             return Value.CallableMetadata.reflection(callable, reflectionContext);
@@ -1361,6 +1714,163 @@ final class Interpreter {
         return ValueSemantics.underlying(value);
     }
 
+    private CollectionConstructorDescriptor collectionConstructor(CollectionLiteral literal,
+                                                                  Environment env,
+                                                                  Resolution resolution,
+                                                                  List<Integer> indexes) {
+        ConstructorBuild build = new ConstructorBuild(indexes.stream().anyMatch(index -> index > 0));
+        CollectionConstructorDescriptor.CollectionNode root = constructorCollection(
+                literal, env, resolution, build);
+        if (root == null) return null;
+        int arity = build.numbered
+                ? indexes.stream().mapToInt(Integer::intValue).max().orElseThrow()
+                : indexes.size();
+        ArrayList<List<Object>> requirements = new ArrayList<>();
+        for (int index = 0; index < arity; index++) requirements.add(List.of());
+        for (CollectionConstructorDescriptor.HoleNode hole : build.holes) {
+            ArrayList<Object> combined = new ArrayList<>(requirements.get(hole.parameter()));
+            for (Object requirement : hole.requirements()) {
+                if (combined.stream().noneMatch(existing -> existing == requirement)) combined.add(requirement);
+            }
+            requirements.set(hole.parameter(), List.copyOf(combined));
+        }
+        return new CollectionConstructorDescriptor(root, requirements);
+    }
+
+    private static final class ConstructorBuild {
+        private final boolean numbered;
+        private int ordinary;
+        private final ArrayList<CollectionConstructorDescriptor.HoleNode> holes = new ArrayList<>();
+        private ConstructorBuild(boolean numbered) { this.numbered = numbered; }
+        private int parameter(Hole hole) { return numbered ? hole.index() - 1 : ordinary++; }
+    }
+
+    private CollectionConstructorDescriptor.CollectionNode constructorCollection(CollectionLiteral literal,
+                                                                                  Environment env,
+                                                                                  Resolution resolution,
+                                                                                  ConstructorBuild build) {
+        ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
+        for (CollectionElement element : literal.elements()) {
+            CollectionConstructorDescriptor.Element dynamic = element instanceof PositionalElement
+                    ? dynamicConstructorField(element.value(), env, resolution, build) : null;
+            if (dynamic != null) {
+                elements.add(dynamic);
+                continue;
+            }
+            CollectionConstructorDescriptor.Node node = constructorNode(
+                    element.value(), env, resolution, build);
+            if (node == null) return null;
+            elements.add(new CollectionConstructorDescriptor.Element(
+                    element instanceof NamedElement field ? field.name() : null, node, element.span()));
+        }
+        boolean named = !elements.isEmpty() && elements.stream().allMatch(element -> element.name() != null);
+        boolean positional = elements.stream().noneMatch(element -> element.name() != null);
+        if (!named && !positional) return null;
+        LinkedHashMap<String, SourceSpan> names = new LinkedHashMap<>();
+        for (CollectionConstructorDescriptor.Element element : elements) {
+            if (element.name() == null) continue;
+            SourceSpan first = names.putIfAbsent(element.name(), element.span());
+            if (first != null) throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                    Diagnostic.Codes.DUPLICATE_FIELD, "Duplicate field: " + element.name(), element.span(),
+                    List.of(new Diagnostic.Related("First field named " + element.name(), first))));
+        }
+        return new CollectionConstructorDescriptor.CollectionNode(named, elements, literal.span());
+    }
+
+    private CollectionConstructorDescriptor.Element dynamicConstructorField(Expr expression, Environment env,
+                                                                             Resolution resolution,
+                                                                             ConstructorBuild build) {
+        Expr raw = expression;
+        while (raw instanceof Group group) raw = group.expression();
+        if (raw instanceof AmbiguousCall call && call.first() instanceof Name name
+                && name.name().equals("field")) {
+            return resolvedDynamicConstructorField(call.middle(), call.last(), expression.span(),
+                    env, resolution, build);
+        }
+        if (raw instanceof Apply outer && outer.function() instanceof AmbiguousCall call
+                && call.first() instanceof Name name && name.name().equals("field")) {
+            Expr contracted = new Apply(call.last(), outer.argument(),
+                    SourceSpan.cover(call.last().span(), outer.argument().span()));
+            return resolvedDynamicConstructorField(call.middle(), contracted, expression.span(),
+                    env, resolution, build);
+        }
+        if (!(raw instanceof Apply outer) || !(outer.function() instanceof Apply inner)) return null;
+        Expr target = inner.function();
+        while (target instanceof Group group) target = group.expression();
+        if (!(target instanceof Name name) || !name.name().equals("field")) return null;
+        return resolvedDynamicConstructorField(inner.argument(), outer.argument(), expression.span(),
+                env, resolution, build);
+    }
+
+    private CollectionConstructorDescriptor.Element resolvedDynamicConstructorField(
+            Expr keyExpression, Expr valueExpression, SourceSpan span, Environment env,
+            Resolution resolution, ConstructorBuild build) {
+        Value key = underlying(eval(keyExpression, env, null, resolution));
+        if (!(key instanceof Value.Str(String fieldName))) {
+            throw runtime(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME,
+                    "Dynamic field name must be a string, got: " + key, keyExpression.span());
+        }
+        CollectionConstructorDescriptor.Node value = constructorNode(
+                valueExpression, env, resolution, build);
+        if (value == null) return null;
+        return new CollectionConstructorDescriptor.Element(fieldName, value, span);
+    }
+
+    private CollectionConstructorDescriptor.Node constructorNode(Expr expression, Environment env,
+                                                                 Resolution resolution,
+                                                                 ConstructorBuild build) {
+        Expr unwrapped = expression;
+        while (unwrapped instanceof Group group) unwrapped = group.expression();
+        if (unwrapped instanceof Hole hole) return constructorHole(hole, List.of(), build);
+        if (unwrapped instanceof Apply apply && apply.argument() instanceof Hole hole) {
+            List<Object> requirements = constructorRequirements(apply.function(), env, resolution);
+            if (requirements != null) return constructorHole(hole, requirements, build);
+        }
+        if (unwrapped instanceof CollectionLiteral nested) {
+            return constructorCollection(nested, env, resolution, build);
+        }
+        HoleAnalysis nestedHoles = analyzeCollectionHoles(expression);
+        if (!nestedHoles.indexes().isEmpty()) return null;
+        return new CollectionConstructorDescriptor.FixedNode(
+                eval(expression, env, null, resolution), expression.span());
+    }
+
+    private CollectionConstructorDescriptor.HoleNode constructorHole(Hole hole, List<Object> requirements,
+                                                                      ConstructorBuild build) {
+        CollectionConstructorDescriptor.HoleNode node = new CollectionConstructorDescriptor.HoleNode(
+                build.parameter(hole), requirements, hole.span());
+        build.holes.add(node);
+        return node;
+    }
+
+    private List<Object> constructorRequirements(Expr expression, Environment env,
+                                                 Resolution resolution) {
+        ArrayList<Expr> expressions = new ArrayList<>();
+        if (!flattenConstructorRequirements(expression, expressions)) return null;
+        ArrayList<Object> requirements = new ArrayList<>();
+        for (Expr requirement : expressions) {
+            Value value = underlying(evalInner(requirement, env, resolution));
+            if (value instanceof Value.ContractValue contract) requirements.add(contract.descriptor());
+            else if (value instanceof Value.Callable callable && callable.refinementEligible()) {
+                requirements.add(callable);
+            } else return null;
+        }
+        return List.copyOf(requirements);
+    }
+
+    private boolean flattenConstructorRequirements(Expr expression, List<Expr> result) {
+        while (expression instanceof Group group) expression = group.expression();
+        if (expression instanceof Apply apply) {
+            return flattenConstructorRequirements(apply.function(), result)
+                    && flattenConstructorRequirements(apply.argument(), result);
+        }
+        if (expression instanceof Name || expression instanceof ContractModifier) {
+            result.add(expression);
+            return true;
+        }
+        return false;
+    }
+
     private record HoleAnalysis(List<Integer> indexes, IdentityHashMap<Expr, Boolean> containsHole) {}
 
     private int holeArity(Expr expr, List<Integer> indexes) {
@@ -1375,18 +1885,31 @@ final class Interpreter {
     }
 
     private HoleAnalysis analyzeHoles(Expr expr) {
+        return analyzeHoles(expr, false);
+    }
+
+    private HoleAnalysis analyzeCollectionHoles(Expr expr) {
+        return analyzeHoles(expr, true);
+    }
+
+    private HoleAnalysis analyzeHoles(Expr expr, boolean traverseCollections) {
         ArrayList<Integer> indexes = new ArrayList<>();
         IdentityHashMap<Expr, Boolean> containsHole = new IdentityHashMap<>();
-        markHoles(expr, indexes, containsHole);
+        markHoles(expr, indexes, containsHole, traverseCollections, true);
         return new HoleAnalysis(List.copyOf(indexes), containsHole);
     }
 
     private boolean markHoles(Expr expr, List<Integer> indexes,
-                              IdentityHashMap<Expr, Boolean> containsHole) {
+                              IdentityHashMap<Expr, Boolean> containsHole,
+                              boolean traverseCollections, boolean root) {
+        if (!root && expr instanceof CollectionLiteral && !traverseCollections) {
+            containsHole.put(expr, false);
+            return false;
+        }
         boolean found = expr instanceof Hole;
         if (expr instanceof Hole hole) indexes.add(hole.index());
         for (Expr child : AstTraversal.children(expr)) {
-            found |= markHoles(child, indexes, containsHole);
+            found |= markHoles(child, indexes, containsHole, traverseCollections, false);
         }
         containsHole.put(expr, found);
         return found;
@@ -1394,10 +1917,15 @@ final class Interpreter {
 
     private Expr captureNonHoleParts(Expr expr, Environment env,
                                      IdentityHashMap<Expr, Boolean> containsHole, Resolution resolution) {
-        return AstRewriter.rewrite(expr, candidate -> !containsHole.get(candidate)
-                ? Optional.of(new Literal(evalInner(candidate, env, resolution), candidate.span()))
-                : Optional.empty());
+        return AstRewriter.rewrite(expr, candidate -> {
+            if (containsHole.get(candidate)) return Optional.empty();
+            Value captured = evalInner(candidate, env, resolution);
+            ownership.share(captured);
+            return Optional.of(new Literal(captured, candidate.span()));
+        });
     }
+
+    int ownershipReuseCount() { return ownership.reuseCount(); }
 
     private Expr bindHoles(Expr expr, HoleBinder holes) {
         return AstRewriter.rewrite(expr, candidate -> candidate instanceof Hole hole
@@ -1413,7 +1941,7 @@ final class Interpreter {
             target = apply.function();
         }
         if (!(target instanceof Literal literal) || !(underlying(literal.value()) instanceof Value.Callable callable)) {
-            return CallableSignature.unknown(Collections.nCopies(arity, null));
+            return structuralHoleSignature(expression, arity);
         }
         CallableSignature specialized = callable.signature();
         for (int index = 0; index < arguments.size() && index < specialized.parameters().size(); index++) {
@@ -1433,11 +1961,32 @@ final class Interpreter {
                 projected.set(index, List.copyOf(positions));
             } else {
                 if (!(argument instanceof Literal)) {
-                    return CallableSignature.unknown(Collections.nCopies(arity, null));
+                    return structuralHoleSignature(expression, arity);
                 }
             }
         }
         return specialized.projectParameters(projected);
+    }
+
+    private CallableSignature structuralHoleSignature(Expr expression, int arity) {
+        ArrayList<CallableSignature.EffectRef> effects = new ArrayList<>();
+        boolean[] unknown = {false};
+        AstTraversal.walkPreOrder(expression, candidate -> {
+            if (!(candidate instanceof Literal literal)
+                    || !(underlying(literal.value()) instanceof Value.Callable callable)) return;
+            List<CallableSignature.EffectRef> upper = callable.signature().effects().upperBound();
+            if (upper == null) unknown[0] = true;
+            else for (CallableSignature.EffectRef effect : upper) {
+                if (effects.stream().noneMatch(existing -> existing.identity() == effect.identity())) {
+                    effects.add(effect);
+                }
+            }
+        });
+        List<CallableSignature.Parameter> parameters = Collections.nCopies(arity,
+                new CallableSignature.Parameter(null, List.of(), null, null));
+        List<CallableSignature.EffectRef> upper = unknown[0] ? null : List.copyOf(effects);
+        return new CallableSignature(parameters, new CallableSignature.Result(List.of(), null, null),
+                new CallableSignature.Effects(upper, null, upper), List.of());
     }
 
     private CallableSignature projectHoleSignature(CallableSignature signature,

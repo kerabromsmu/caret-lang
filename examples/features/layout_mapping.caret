@@ -1,6 +1,13 @@
-main = \\
+wrapped = \\
 value = 40
-^result = value + 2
+inner = \\
+  ^increment = 2
+\*
+^result = value + inner.increment
 \*
 
-print main.result
+print wrapped.result
+
+// An active mapping may remain through EOF.
+eofValue = \\
+^result = 7

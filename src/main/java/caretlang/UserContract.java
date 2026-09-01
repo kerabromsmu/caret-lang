@@ -10,9 +10,11 @@ import java.util.function.BiFunction;
 
 final class UserContract implements ContractDescriptor {
     private String name;
-    private final List<ContractDescriptor> bases;
-    private final List<Value.Callable> refinements;
-    private final BiFunction<Value.Callable, Value.Argument, Value> refinementInvoker;
+    private List<ContractDescriptor> bases;
+    private List<Value.Callable> refinements;
+    private BiFunction<Value.Callable, Value.Argument, Value> refinementInvoker;
+    private final SourceSpan declarationSpan;
+    private boolean configured;
 
     UserContract(List<ContractDescriptor> bases) {
         this(bases, List.of(), (callable, argument) -> callable.apply(argument, argument.span()));
@@ -20,10 +22,33 @@ final class UserContract implements ContractDescriptor {
 
     UserContract(List<ContractDescriptor> bases, List<Value.Callable> refinements,
                  BiFunction<Value.Callable, Value.Argument, Value> refinementInvoker) {
+        this(bases, refinements, refinementInvoker, null, true);
+    }
+
+    UserContract(SourceSpan declarationSpan) {
+        this(List.of(), List.of(), (callable, argument) -> callable.apply(argument, argument.span()),
+                declarationSpan, false);
+    }
+
+    private UserContract(List<ContractDescriptor> bases, List<Value.Callable> refinements,
+                         BiFunction<Value.Callable, Value.Argument, Value> refinementInvoker,
+                         SourceSpan declarationSpan, boolean configured) {
         this.bases = List.copyOf(bases);
         this.refinements = List.copyOf(refinements);
         this.refinementInvoker = Objects.requireNonNull(refinementInvoker);
+        this.declarationSpan = declarationSpan;
+        this.configured = configured;
     }
+
+    void configureFrom(UserContract source) {
+        if (configured) throw new IllegalStateException("Contract descriptor is already configured");
+        bases = source.bases;
+        refinements = source.refinements;
+        refinementInvoker = source.refinementInvoker;
+        configured = true;
+    }
+
+    SourceSpan declarationSpan() { return declarationSpan; }
 
     void nameIfAnonymous(String candidate) {
         if (name == null) name = Objects.requireNonNull(candidate);

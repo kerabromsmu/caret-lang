@@ -258,6 +258,26 @@ broader scope.
 * If required work or verification remains incomplete, leave the issue open and do not move the
   card to `Done`; report the blocker and remaining work.
 
+### Repeated `next step`
+
+* An explicit request to repeat `next step` through a named roadmap phase authorizes a durable loop
+  over only that phase's project cards, in project order. It does not include unrelated `Todo`
+  cards.
+* Treat each card's implementation plan as approved when repository evidence determines all
+  observable behavior. Pause and ask the project owner before unresolved syntax or semantics,
+  conflicting specifications or project state, authority-boundary changes, destructive actions, or
+  materially broader scope.
+* For each card, complete the ordinary `next step` workflow and full verification, then commit all
+  changes produced for that card with a concise card-specific message. Preserve unrelated user
+  changes outside the commit. Do not commit incomplete work merely to advance the loop.
+* After a successful card commit, comment with completion and test evidence, close the issue, move
+  its card to `Done`, and continue with the next card. If verification or acceptance remains
+  incomplete, leave the issue open and out of `Done` and pause with the blocker.
+* Finish the loop only after every card in the named phase is `Done`, the roadmap and conformance
+  corpus record the completed phase, and final verification passes.
+* Repetition does not authorize changing `VERSION`, pushing a branch, or creating, reopening, or
+  updating a pull request. Those actions retain their separate explicit authorization rules.
+
 ### `code review`
 
 * Review committed branch changes from the merge base with current `origin/main`, together with
@@ -300,14 +320,44 @@ broader scope.
 * Run documentation and corpus checks, plus the full baseline suites when the affected documentation
   is covered by them.
 
+### `test coverage`
+
+* Compare every `implemented` conformance requirement and every documented diagnostic with the
+  canonical specification, actual implementation behavior, Gradle/JUnit tests, and Caret examples.
+* Verify that cited Java tests genuinely exercise the claimed success paths, boundaries, failure
+  modes, source locations, reflection/security invariants, and regressions; an existing test name
+  alone is not sufficient evidence.
+* Require every implemented feature to have a representative runnable `.caret` example with golden
+  output and integration execution through `test.sh`. Require every public error or diagnostic to
+  have Java-test or `.caret` fixture evidence, exact expected output, stable phase/code/location
+  coverage where applicable, and no leaked Java exception.
+* Repair unambiguous gaps by adding or strengthening Java tests, Caret feature/error fixtures,
+  golden files, integration-harness entries, and conformance or diagnostic evidence. Preserve
+  unrelated user changes and do not substitute an arbitrary line-coverage percentage for behavioral
+  completeness.
+* Treat discovered interpreter or specification defects as findings rather than silently changing
+  observable language behavior. Ask before resolving conflicting semantics. This alias does not
+  authorize interpreter behavior changes, `VERSION` changes, commits, pushes, pull-request changes,
+  or GitHub issue/project mutations.
+* Run `./gradlew test`, `./test.sh`, `bash scripts/check-example-coverage.sh`, and `git diff --check`.
+  Report gaps found and repaired, tests run, remaining limitations, and any GitHub state changes.
+
 ### `new PR`
 
+* Create, reopen, or update a pull request only when the current user request explicitly invokes
+  `new PR` or directly asks for that pull-request action. An implementation request, approved plan,
+  commit, push, completed phase, or earlier PR discussion does not independently authorize PR
+  activity.
 * Require a cleanly understood change set and preserve unrelated user changes. Fetch current
   `main`, inspect the complete diff, and run the full baseline suites before creating or updating
   the pull request.
-* Update `VERSION` according to the existing policy: increment `UPDATE` normally; increment `MINOR`
-  and reset `UPDATE` only when a roadmap phase is completed; never increment `MAJOR` without
-  explicit project-owner authorization. Validate the transition with the repository script.
+* Before selecting the version transition, inspect `PLAN.md`, the complete GitHub project, every
+  card relevant to the current roadmap phase, and the current version documentation. Increment
+  `MINOR` and reset `UPDATE` only when those sources consistently establish that the phase is
+  complete; otherwise increment `UPDATE`. If roadmap text, project status, or completion evidence
+  conflicts, ask the project owner before changing `VERSION` or creating or updating the pull
+  request. Never increment `MAJOR` without explicit project-owner authorization. Validate the
+  transition with the repository script.
 * If currently on `main`, create a concise feature branch derived from the changes.
 * Commit the intended pending changes with a concise summary, push the branch, and create a
   ready-for-review pull request targeting `main`.

@@ -218,14 +218,42 @@ the same literal describe a list, set, dictionary, packed buffer, or heterogeneo
 surrounding contracts select behavior and representation. Dynamic fields will become ordinary
 first-class collection elements rather than a separate object or JSON notation.
 
+A collection literal containing holes now produces a reifiable collection constructor before a
+surrounding call receives it. These constructors retain positional or named shape, direct nesting,
+fixed captures, numbered-hole reuse, and hole contracts as language-owned metadata; applying one
+always yields a complete Collection. Their internal structure and captured values are not exposed
+through reflection.
+
+The ordinary `template` callable turns a concrete Collection or a reifiable constructor into an
+exact structural contract. Templates combine positional or named shape, fixed values, contracted
+holes, direct nesting, repeated-hole equality, and one-time dynamic field names. They remain normal
+contracts for aliases, modifiers, parameterization, reflection, and most-specific overload
+dispatch; malformed or opaque constructors receive located template diagnostics.
+
+Caret uses one exact `ErrorTemplate` contract for structured expected failures and the descriptors
+behind aborting diagnostics. It carries stable code, phase, message, one-based location, related
+locations, an optional recursive cause, and Collection-valued subsystem details. Aborting failures
+remain control flow, while APIs that specify recoverable failure return the corresponding ordinary
+Caret value without exposing host exceptions or stack traces.
+
+Built-in operators expose pure language-owned signatures. Arithmetic and ordering are numeric;
+`+` has closed numeric and string-concatenation variants, with non-string values rendered through
+Caret's extensible `toString` path. Equality is recursive and structural but rejects live callables
+at any depth. Boolean operations accept Boolean, null, and missing, normalize to Boolean, and retain
+their lazy evaluation rules.
+
 Caret likewise plans to use contracts as one common model for types, interfaces, refinements, and
 capabilities. Contracts form derivation graphs and work as predicates. Behavior remains in ordinary
 functions, with the most-specific applicable implementation selected from contract-specialized
-definitions.
+definitions. Overload domains are normalized by contract identity and declared derivation before
+execution; redundant bases and `Any` do not create distinct variants, and refinement predicates are
+never run merely to order definitions.
 
 The prototype includes built-in predicates plus unary user-defined contract construction. Use
 `Tag = contract ~` for a nominal base, `Numeric = contract Number` for one base, and
-`AB = contract [A B]` for multiple bases. Clauses can constrain bindings, parameters, and function
+`AB = contract [A B]` for multiple bases. Contract declarations may refer forward within their
+block; multiple-base diamonds imply every transitive base, while direct and indirect derivation
+cycles are rejected with their declaration locations. Clauses can constrain bindings, parameters, and function
 results. An internal analysis also propagates known effects and conservatively rejects unknown
 dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
 fixed operands are captured into partial applications. Proven unary Boolean functions
@@ -254,12 +282,17 @@ print (describe 42)
 Overloads retain generic fallbacks and narrow through prefix, infix, and direct hole partials.
 No-match and incomparable-match calls have distinct located diagnostics; a single function keeps
 the ordinary parameter contract behavior.
+Arrow contracts accept an overload only when one variant covers the complete requested domain and
+every variant that might also be selected has compatible results and effects. Proven-disjoint
+variants do not interfere; unknown overlap remains conservatively possible.
 Contract equality follows descriptor identity: aliases compare equal, but separate constructions
 remain unequal even with identical requirements. Contract reflection exposes public base and
 refinement-requirement names without exposing implementation callables.
 The prototype infers initial built-in constraints for unannotated named functions and uses
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
-each call instantiates those variables independently.
+each call instantiates those variables independently. Explicit callable declarations remain stable
+interfaces: implementation inference may retain stronger local result facts, but it cannot silently
+narrow a declared parameter domain, and external observation does not expose those stronger facts.
 
 The prototype can state a pure higher-order callable contract directly. A bracketed parameter
 list followed by `->` describes exact arity, result guarantees, and an optional maximum effect set:
@@ -286,9 +319,10 @@ clause once, so callable reflection reports `Number` only as a result requiremen
 as an effect; source order does not change that meaning.
 
 The prototype implements the runtime `map transform values` operation for Sequences and current
-named, partial, and composed callable values. Declaration-wide variable schemes retain their
-substitutions through prefix and hole partials; lambdas and precise transform-effect propagation
-remain planned.
+named, partial, and composed callable values. Once its transform is supplied, the resulting partial
+exposes that transform's invocation-effect bound; invoking a callable whose bound remains
+unavailable fails before its body executes. Declaration-wide variable schemes retain their
+substitutions through prefix and hole partials; lambdas remain planned.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
@@ -297,21 +331,22 @@ lambda because its left side is a bracketed requirement list. Exact arity, pure 
 contravariant parameters, covariant results, inline clauses, and standalone variables are
 implemented, including explicit allowances and variables shared across a complete declaration header.
 
-The planned static operator model preserves the prototype's compact behavior without adding hidden
+The implemented Phase 2 operator model preserves the prototype's compact behavior without adding hidden
 numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
 closed overload set: it adds two numbers or concatenates when either operand is a string, rendering
 the other value through Caret's own deterministic formatter. Equality uses a recursive structural
 `Eq` capability and continues to reject live callables even when nested. Boolean operations retain
 the existing Boolean/null/missing truth domain and lazy evaluation. An unresolved numeric-versus-
-string `+` is a compile-time ambiguity rather than silently defaulting to Number. This complete
-static matrix is specified but not implemented by the current inference pass.
+string `+` is a compile-time ambiguity rather than silently defaulting to Number. The current
+inference pass implements this matrix while retaining conservative results through unsupported
+nested or future callable forms.
 
 Contracts also have first-class null/missing unions. `Number?` accepts numbers or null, `Number~`
 accepts numbers or missing, and `Number?~` accepts all three while keeping null and missing
 observably distinct. The modified contracts remain unary predicates, work in clauses and aliases,
 and expose canonical names and their wrapped base through reflection.
 
-In the planned collection model, an expression such as `[fixed _]` is an ordinary function whose
+In the implemented collection-constructor model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable
 constructor—or a concrete fixed collection—to the ordinary `template` function derives an exact
 structural contract. Contracted holes constrain variable positions, ordinary values require
@@ -324,19 +359,22 @@ duplicate fields, contract requirements, and mixed hole styles. Only failures un
 derivation—an ineligible constructor or a non-comparable captured value—use template-specific
 codes, with stable locations in both static and dynamic discovery.
 
-Caret also plans a standard `ErrorTemplate` carrying a stable code, phase, message, locations,
+Caret implements a standard `ErrorTemplate` carrying a stable code, phase, message, locations,
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return
 values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
-operations share one explicit envelope. Structural templates, general parameterized contracts
-beyond `Sequence T`, universal literals, `ErrorTemplate`, and `Result` remain planned;
-the unary contract, refinement, and initial sequence-parameterization foundation described above
-is implemented.
+operations share one explicit envelope. Structural templates and `ErrorTemplate` are implemented;
+general parameterized contracts beyond `Sequence T`, contextual universal-literal selection, and
+`Result` remain planned.
 
-The planned effect system likewise assigns distinct stable codes to malformed mixed
+The implemented Phase 2 effect foundation assigns distinct stable codes to malformed mixed
 contract/effect clauses, non-callable effect constraints, unavailable callable effect bounds, and
 effects outside an allowance. A failure keeps the same behavioral code whether static analysis or
 a dynamic boundary discovers it, while its phase and source locations record where it was found.
+
+Plain-text tooling can inspect the same analysis without running the program. `caret inspect FILE`
+reports named callable parameters, results, generalized variables, and declared/inferred/effective
+effect facts in stable source order; `~` means that a fact is unavailable rather than known empty.
 
 ## Contained mutability
 
@@ -395,13 +433,16 @@ environment and is not implemented by the current interpreter.
 
 Caret is currently a Java 21 tree-walking interpreter, not a production compiler. It already
 supports lexical closures, direct and mutual recursion, partial application, named Collections,
-left-to-right function composition, language-owned reflection, persistent collections,
+left-to-right function composition, language-owned reflection, observably persistent collections,
 source-located diagnostics, a REPL, and native test assertions. Execution remains fail-fast, while
 compiler-oriented parsing can recover at declaration boundaries and collect independent failures
 without losing physical spans from valid later declarations.
 Closure analysis records deterministic, source-spanned upvalues by stable binding identity; runtime
 closures use those same internal descriptors without exposing captures or lexical environments
 through reflection.
+An internal conservative ownership tracker may reuse ephemeral Sequence or Dictionary storage, but
+bindings, calls, captures, exports, nesting, and reflection force persistent updates. Ownership is
+not visible to Caret, and an optimization-disabled reference mode is covered by differential tests.
 
 General parameterized contracts, structural templates, contextual collection representations,
 modules, root reification, sandboxing,

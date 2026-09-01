@@ -1,0 +1,18 @@
+Point = template [(Number) _ (Number) _]
+Diagonal = template [_1 _1]
+Person = template [^name = (String) _ ^active = true]
+
+dynamicName = "score"
+Scored = template [
+  field dynamicName (Number) _
+]
+
+print Point [1 2]
+print Point [1 "two"]
+print Diagonal [3 3]
+print Diagonal [3 4]
+print Person [^name = "Caret" ^active = true]
+print Scored [^score = 9]
+print (@Person).shape
+print (@Person).size
+print (seqGet (@Person).elements 0).constraint

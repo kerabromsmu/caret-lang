@@ -1,0 +1,12 @@
+(String) toString (Number) value = "number:" + numberText value
+
+print 1 + 2
+print "value=" + 7
+print [1 2] + "!"
+print 2 < 3
+print [1 [2]] == [1 [2]]
+print not ?
+print ~ or true
+print false and unknownRightOperand
+print seqSize @(+).variants
+print (seqGet (seqGet @(+).variants 0).result.guarantees 0).name

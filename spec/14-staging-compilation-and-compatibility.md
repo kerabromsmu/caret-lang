@@ -1314,15 +1314,17 @@ Their later implementation must not weaken root substitution or permit authority
 ## Not implemented
 
 - trailing lambdas
-- general parameterized contracts beyond the implemented `Sequence T` foundation, complete static
-  dispatch/type proof, complete higher-order effect propagation, and ownership analysis; overload
-  dispatch, initial public effect declarations/enforcement/reflection, named-function inference,
-  result clauses, and predicate refinements are implemented
+- general parameterized contracts beyond the implemented `Sequence T` foundation and complete static
+  dispatch/type proof; current named, aliased, partial, composed, overloaded, closure, and recursive
+  callable forms have higher-order effect propagation, while later value kinds extend that analysis
+- storage ownership as public language state; conservative internal ownership analysis is implemented
+  solely as an optimization with persistent behavior as the reference
 - first-class dynamic fields, context-selected collection representations, and persistent updates;
   positional/static-named literals and exported named Collections are implemented
 - mutability containers, container reads/writes, and field reification
 - `with`, resolver-only `outer` paths, and scoped member lookup
-- `\\` and `\*` physical-to-logical layout baseline modifiers
+- formatter support for `\\` and `\*`; physical-to-logical layout baseline mapping is implemented
+  for the prototype's currently supported indentation-opening headers
 - lambdas and higher-order standard collection operations
 - cycles and transactional previous/next state views
 - SIMD values and required vectorized application

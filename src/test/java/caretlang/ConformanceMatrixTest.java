@@ -16,7 +16,7 @@ final class ConformanceMatrixTest {
     private static final Set<String> STATUSES = Set.of("implemented", "planned", "deferred", "unresolved");
     private static final Pattern TEST_REFERENCE = Pattern.compile("([A-Za-z][A-Za-z0-9]*Test)#([A-Za-z][A-Za-z0-9]*)");
     private static final Pattern EXAMPLE_REFERENCE = Pattern.compile(
-            "examples/(?:features/)?[A-Za-z0-9_.-]+\\.caret");
+            "examples/(?:(?:features|errors)/)?[A-Za-z0-9_.-]+\\.caret");
 
     @Test
     void requirementIdsStatusesAndImplementedEvidenceAreValid() throws IOException {

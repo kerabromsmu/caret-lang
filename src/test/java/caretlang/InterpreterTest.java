@@ -59,6 +59,45 @@ final class InterpreterTest {
     }
 
     @Test
+    void arrowContractsRequireWholeOverloadCoverageAndSafeOverlappingVariants() {
+        assertEquals("true\nfalse\nfalse\nfalse\ntrue\nfalse\n", execute("""
+                NumberTransform = [Number] -> Number
+                AnyTransform = [Any] -> Any
+
+                (Number) safe (Any) value = 1
+                (String) safe (String) value = "text"
+
+                (Number) unsafe (Any) value = 1
+                (String) unsafe (Number) value = "text"
+
+                (Number) partial (Number) value = value
+                (String) partial (String) value = value
+
+                explode value = value / 0 > 0
+                Positive = contract [Number explode]
+                (Number) uncertain (Any) value = 1
+                (String) uncertain (Positive) value = "text"
+
+                (Number) safeEffects (Any) value = 1
+                (Output String) safeEffects (String) value =
+                  print value
+                  "text"
+
+                (Number) unsafeEffects (Any) value = 1
+                (Output Number) unsafeEffects (Number) value =
+                  print value
+                  value
+
+                print NumberTransform safe
+                print NumberTransform unsafe
+                print AnyTransform partial
+                print NumberTransform uncertain
+                print NumberTransform safeEffects
+                print NumberTransform unsafeEffects
+                """));
+    }
+
+    @Test
     void effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced() {
         assertEquals("3\n3\ntrue\n2\n", execute("""
                 (Output Number) noisy (Number) value =
@@ -79,6 +118,9 @@ final class InterpreterTest {
                 use noisy
                 """));
         assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, exceeded.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, exceeded.diagnostic().phase());
+        assertEquals(5, exceeded.span().start().line());
+        assertEquals(5, exceeded.span().start().column());
         assertEquals(Diagnostic.Codes.CONFLICTING_EFFECT_ALLOWANCE,
                 assertThrows(LangException.class, () -> execute("(pure Output) value = 1"))
                         .diagnostic().code());
@@ -100,6 +142,59 @@ final class InterpreterTest {
                         Output = contract
                         (Output) value = 1
                         """)).diagnostic().code());
+    }
+
+    @Test
+    void effectCatalogAliasesPreserveIdentityAndRemainSeparateFromBindings() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        EffectCatalog catalog = EffectCatalog.standard(false).alias("console", "Output");
+        Interpreter interpreter = new Interpreter(
+                new PrintStream(bytes, true, StandardCharsets.UTF_8), null, catalog);
+        interpreter.execute(new Parser("""
+                console = 42
+                (console Number) announce (Number) value =
+                  print value
+                  value
+                print announce 7
+                """).parseProgram());
+        assertEquals("7\n7\n", bytes.toString(StandardCharsets.UTF_8));
+
+        Interpreter isolated = new Interpreter(new PrintStream(new ByteArrayOutputStream()), null, catalog);
+        LangException unavailable = assertThrows(LangException.class, () -> isolated.execute(new Parser("""
+                (console) permitted value = value
+                print console
+                """).parseProgram()));
+        assertEquals(Diagnostic.Codes.UNKNOWN_NAME, unavailable.diagnostic().code());
+    }
+
+    @Test
+    void invocationRejectsUnavailableEffectBoundsBeforeExecutingTheCallable() {
+        LangException error = expectDiagnostic("""
+                invoke callback value = callback value
+                invoke print "not printed"
+                """, "no known effect upper bound", 2, 1);
+        assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, error.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
+
+        LangException mixed = expectDiagnostic("""
+                invokeBoth (pure) known unknown value = known (unknown value)
+                identity value = value
+                invokeBoth identity identity 1
+                """, "no known effect upper bound", 3, 1);
+        assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, mixed.diagnostic().code());
+    }
+
+    @Test
+    void inferredAllowanceViolationsAbortBeforeAnyProgramEffects() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        LangException error = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                (pure) invalid value = print value
+                print "must not execute"
+                """).parseProgram()));
+
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, error.diagnostic().code());
+        assertEquals("", bytes.toString(StandardCharsets.UTF_8));
     }
 
     @Test
@@ -198,6 +293,61 @@ final class InterpreterTest {
                 print (@AB).bases
                 print [1 "two" true]
                 """));
+    }
+
+    @Test
+    void contractDerivationSupportsForwardDiamondsAndRejectsCycles() {
+        assertEquals("true\ntrue\ntrue\n", execute("""
+                Diamond = contract [Left Right Root]
+                Right = contract Root
+                Left = contract Root
+                Root = contract ~
+
+                (Diamond) value = 1
+                print Diamond value
+                print Left value
+                print Root value
+                """));
+
+        LangException direct = assertThrows(LangException.class,
+                () -> execute("Self = contract Self"));
+        assertEquals(Diagnostic.Codes.CONTRACT_DERIVATION_CYCLE, direct.diagnostic().code());
+        assertEquals(1, direct.diagnostic().primarySpan().start().line());
+        assertFalse(direct.diagnostic().related().isEmpty());
+
+        LangException indirect = assertThrows(LangException.class, () -> execute("""
+                First = contract Second
+                Second = contract Third
+                Third = contract First
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_DERIVATION_CYCLE, indirect.diagnostic().code());
+        assertEquals(3, indirect.diagnostic().primarySpan().start().line());
+        assertEquals(3, indirect.diagnostic().related().size());
+    }
+
+    @Test
+    void operatorsUseLanguageRenderingTruthAndStructuralEqualityPolicies() {
+        assertEquals("value:7\n[ value:1 value:2 ]!\ntrue\ntrue\ntrue\n", execute("""
+                (String) toString (Number) value = "value:" + numberText value
+                print ("" + 7)
+                print ([1 2] + "!")
+                print (not ?)
+                print (~ or true)
+                print (? & (1 / 0) ! false) == false
+                """));
+
+        LangException nestedCallable = assertThrows(LangException.class,
+                () -> execute("print [print] == [print]"));
+        assertEquals(Diagnostic.Codes.CALLABLE_EQUALITY, nestedCallable.diagnostic().code());
+
+        LangException zero = assertThrows(LangException.class, () -> execute("print 1 / 0"));
+        assertEquals(Diagnostic.Codes.DIVISION_BY_ZERO, zero.diagnostic().code());
+        assertEquals(1, zero.diagnostic().primarySpan().start().line());
+
+        String huge = "9".repeat(200);
+        LangException nonFinite = assertThrows(LangException.class,
+                () -> execute("print " + huge + " * " + huge));
+        assertEquals(Diagnostic.Codes.NON_FINITE_RESULT, nonFinite.diagnostic().code());
     }
 
     @Test
@@ -619,8 +769,8 @@ final class InterpreterTest {
     void resolvesCallableParametersAsPrefixOrInfixFromRuntimeArity() {
         assertEquals("5\n5\n", execute("""
                 add left right = left + right
-                applyInfix left operation right = left operation right
-                applyPrefix operation left right = operation left right
+                applyInfix left (pure) operation right = left operation right
+                applyPrefix (pure) operation left right = operation left right
                 print applyInfix 2 add 3
                 print applyPrefix add 2 3
                 """));
@@ -834,19 +984,41 @@ final class InterpreterTest {
         interpreter.execute(new Parser("""
                 definingParameter = seqGet metadata.signature.parameters 0
                 print metadata.name
-                print (seqGet definingParameter.inferred 0).name
+                print seqSize definingParameter.inferred
                 print parameter.inferred
                 print sandboxMetadata.name
                 print (seqGet sandboxMetadata.signature.parameters 0).inferred
                 """).parseProgram());
 
-        assertEquals("~\n~\n~\n~\n~\n0\ntransform\nNumber\n~\n~\n~\n",
+        assertEquals("~\n~\n~\n~\n~\n0\ntransform\n0\n~\n~\n~\n",
                 bytes.toString(StandardCharsets.UTF_8));
 
         LangException denied = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
                 callable = sandboxMetadata:
                 """).parseProgram()));
         assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, denied.diagnostic().code());
+    }
+
+    @Test
+    void callableReflectionSeparatesStableDeclarationsFromStrongerLocalInference() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("""
+                (Collection) makeSequence =
+                  [1]
+                metadata = @makeSequence
+                print seqSize metadata.signature.result.guarantees
+                print (seqGet metadata.signature.result.inferred 0).name
+                """).parseProgram());
+
+        interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
+        interpreter.execute(new Parser("""
+                print seqSize metadata.signature.result.guarantees
+                print (seqGet metadata.signature.result.guarantees 0).name
+                print metadata.signature.result.inferred
+                """).parseProgram());
+
+        assertEquals("2\nSequence\n1\n~\n~\n", bytes.toString(StandardCharsets.UTF_8));
     }
 
     @Test
@@ -1106,6 +1278,7 @@ final class InterpreterTest {
 
         LangException ordinary = assertThrows(LangException.class, () -> execute("value = 1\nprint value:\n"));
         assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, ordinary.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, ordinary.diagnostic().phase());
         assertEquals(7, ordinary.span().start().column());
 
         LangException reflectedFunctionApplied = assertThrows(LangException.class,
@@ -1212,7 +1385,10 @@ final class InterpreterTest {
         assertDiagnostic("print (1).absent~", "Field access requires a named collection", 1, 7);
         assertDiagnostic("print 1 + true", "Expected number", 1, 11);
         assertDiagnostic("print 1 2", "Value is not callable", 1, 7);
-        assertDiagnostic("print 1 & true ! false", "Condition must be Boolean", 1, 7);
+        LangException invalidCondition = assertThrows(LangException.class,
+                () -> execute("print 1 & true ! false"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, invalidCondition.diagnostic().code());
+        assertEquals(1, invalidCondition.diagnostic().primarySpan().start().line());
     }
 
     @Test
@@ -1726,6 +1902,142 @@ final class InterpreterTest {
     }
 
     @Test
+    void overloadSpecificityUsesNormalizedStaticContractDomains() {
+        assertEquals("both\nleft\nfallback\n", execute("""
+                Root = contract ~
+                Left = contract Root
+                Right = contract Root
+                Both = contract [Left Right Root]
+
+                select (Any) value = "fallback"
+                select (Left) value = "left"
+                select (Both) value = "both"
+
+                (Both) both = 1
+                (Left) left = 1
+                print select both
+                print select left
+                print select 1
+                """));
+
+        LangException redundant = expectDiagnostic("""
+                Root = contract ~
+                Child = contract Root
+                choose (Child Root) value = value
+                choose (Child) value = value
+                """, "Duplicate definition: choose", 4, 1);
+        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, redundant.diagnostic().code());
+
+        LangException anyFallback = expectDiagnostic("""
+                choose value = value
+                choose (Any) value = value
+                """, "Duplicate definition: choose", 2, 1);
+        assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, anyFallback.diagnostic().code());
+    }
+
+    @Test
+    void collectionLiteralsOwnReifiableStructuralHoles() {
+        assertEquals("capture\n[ \"capture\" 1 ]\n[ \"capture\" 3 ]\n[ 2 1 1 ]\n[\n  [ 4 ]\n  5\n]\n[\n  \"fixed\" = 7\n  \"name\" = 6\n]\n1\nNumber\ntrue\n[ 8 ]\n", execute("""
+                identity value = value
+                constructor = [
+                  print "capture"
+                  _
+                ]
+                print constructor 1
+                print constructor 3
+
+                repeated = [_2 _1 _1]
+                print repeated 1 2
+
+                nested = [[_] _]
+                print nested 4 5
+
+                named = [^name = _ ^fixed = 7]
+                print named 6
+
+                numeric = [(Number) _]
+                print @numeric.remaining
+                print (seqGet (seqGet @numeric.signature.parameters 0).requirements 0).name
+
+                Tagged = contract Number
+                taggedConstructor = [(Tagged) _]
+                tagged = taggedConstructor 7
+                print Tagged (seqGet tagged 0)
+
+                passedThrough = identity [_]
+                print passedThrough 8
+                """));
+
+        LangException violation = assertThrows(LangException.class,
+                () -> execute("numeric = [(Number) _]\nnumeric \"wrong\""));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, violation.diagnostic().code());
+
+        LangException mixed = assertThrows(LangException.class,
+                () -> execute("invalid = [_ _1]"));
+        assertEquals(Diagnostic.Codes.MIXED_HOLE_STYLES, mixed.diagnostic().code());
+    }
+
+    @Test
+    void structuralTemplatesAreOrdinaryExactCollectionContracts() {
+        assertEquals("true\nfalse\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\npoint\ncollection\ntrue\npositional\n2\nhole\n", execute("""
+                Point = template [(Number) _ (Number) _]
+                PointAlias = Point
+                print Point [1 2]
+                print Point [1 "two"]
+                print Point [1 2 3]
+
+                Diagonal = template [_1 _1]
+                print Diagonal [3 3]
+                print Diagonal [3 4]
+
+                Named = template [^name = (String) _ ^active = true]
+                print Named [^name = "Caret" ^active = true]
+                print Named [^name = "Caret" ^active = false]
+
+                Fixed = template [1 [2 3]]
+                print Fixed [1 [2 3]]
+                print PointAlias [4 5]
+
+                dynamicName = "score"
+                Dynamic = template [
+                  field dynamicName (Number) _
+                ]
+                print Dynamic [^score = 9]
+
+                describe (Collection) value = "collection"
+                describe (Point) value = "point"
+                print describe [6 7]
+                print describe [6 "seven"]
+
+                NullablePoint = Point?
+                print NullablePoint ?
+                print (@Point).shape
+                print (@Point).size
+                print (seqGet (@Point).elements 0).constraint
+                """));
+
+        LangException opaque = assertThrows(LangException.class,
+                () -> execute("""
+                        invalid = template [
+                          numberText _
+                        ]
+                        """));
+        assertEquals(Diagnostic.Codes.TEMPLATE_INVALID_CONSTRUCTOR, opaque.diagnostic().code());
+
+        LangException callableFixed = assertThrows(LangException.class,
+                () -> execute("invalid = template [@print:]"));
+        assertEquals(Diagnostic.Codes.TEMPLATE_NONCOMPARABLE_FIXED_VALUE,
+                callableFixed.diagnostic().code());
+
+        LangException dynamicKey = assertThrows(LangException.class, () -> execute("""
+                invalid = template [
+                  field 1 _
+                ]
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME, dynamicKey.diagnostic().code());
+    }
+
+    @Test
     void explicitNullAndMissingVariantsOutrankModifiedContractAlternatives() {
         assertEquals("null\nnullable\nmissing\noptional\nnull\nmissing\n", execute("""
                 nullable (Number?) value = "nullable"
@@ -1850,6 +2162,7 @@ final class InterpreterTest {
     void mapRejectsInvalidInputsAndRetainsLocatedElementFailures() {
         LangException transform = expectDiagnostic("map 1 [2]", "exactly one argument", 1, 5);
         assertEquals(Diagnostic.Codes.INVALID_MAP_TRANSFORM, transform.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, transform.diagnostic().phase());
         assertDiagnostic("add left right = left\nmap add [1]", "exactly one argument", 2, 5);
         assertDiagnostic("map numberText [^value = 1]", "Expected sequence", 1, 16);
 
@@ -1858,6 +2171,96 @@ final class InterpreterTest {
 
         LangException effects = expectDiagnostic("(pure) mapper = map", "known effect upper bound", 1, 17);
         assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, effects.diagnostic().code());
+    }
+
+    @Test
+    void ownershipOptimizationMatchesPersistentReferenceSemantics() {
+        List<String> programs = List.of("""
+                        print (seqAdd (seqAdd (seqEmpty) 1) 2)
+                        """, """
+                        source = [1]
+                        updated = seqAdd source 2
+                        print source
+                        print updated
+                        """, """
+                        source = dictPut (dictEmpty) "a" 1
+                        updated = dictPut source "b" 2
+                        print source
+                        print updated
+                        print @source
+                        """);
+
+        for (String program : programs) {
+            ModeExecution enabled = execute(program, OwnershipTracker.Mode.ENABLED);
+            ModeExecution disabled = execute(program, OwnershipTracker.Mode.DISABLED);
+            assertEquals(disabled.output(), enabled.output());
+        }
+        assertTrue(execute(programs.getFirst(), OwnershipTracker.Mode.ENABLED).reuseCount() > 0);
+        assertEquals(0, execute(programs.getFirst(), OwnershipTracker.Mode.DISABLED).reuseCount());
+        assertEquals(0, execute(programs.get(1), OwnershipTracker.Mode.ENABLED).reuseCount(),
+                "a bound collection must conservatively use persistent allocation");
+    }
+
+    @Test
+    void capturedAndReflectedCollectionsAreNeverTreatedAsUniqueStorage() {
+        ModeExecution captured = execute("""
+                source = [1]
+                appendLater value = seqAdd source value
+                print appendLater 2
+                print source
+                """, OwnershipTracker.Mode.ENABLED);
+        ModeExecution reflected = execute("""
+                source = [^a = 1]
+                metadata = @source
+                print (dictPut source "b" 2)
+                print source
+                """, OwnershipTracker.Mode.ENABLED);
+        ModeExecution partial = execute("""
+                source = [1]
+                append = seqAdd source _
+                print append 2
+                print source
+                """, OwnershipTracker.Mode.ENABLED);
+
+        assertEquals(0, captured.reuseCount());
+        assertEquals(0, reflected.reuseCount());
+        assertEquals(0, partial.reuseCount());
+    }
+
+    @Test
+    void ownershipOptimizationDoesNotChangeFailureOrRollbackBehavior() {
+        ModeFailure enabled = executeFailure(OwnershipTracker.Mode.ENABLED);
+        ModeFailure disabled = executeFailure(OwnershipTracker.Mode.DISABLED);
+
+        assertEquals(disabled.output(), enabled.output());
+        assertEquals(disabled.code(), enabled.code());
+        assertEquals(disabled.line(), enabled.line());
+        assertTrue(enabled.reuseCount() > 0);
+    }
+
+    private record ModeExecution(String output, int reuseCount) {}
+    private record ModeFailure(String output, String code, int line, int reuseCount) {}
+
+    private ModeExecution execute(String source, OwnershipTracker.Mode mode) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8), null,
+                EffectCatalog.standard(false), mode);
+        interpreter.execute(new Parser(source).parseProgram());
+        return new ModeExecution(bytes.toString(StandardCharsets.UTF_8), interpreter.ownershipReuseCount());
+    }
+
+    private ModeFailure executeFailure(OwnershipTracker.Mode mode) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8), null,
+                EffectCatalog.standard(false), mode);
+        interpreter.execute(new Parser("base = [1]\n").parseProgram());
+        LangException failure = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                temporary = seqAdd (seqAdd (seqEmpty) 2) 3
+                print (1 / 0)
+                """).parseProgram()));
+        interpreter.execute(new Parser("print base\n").parseProgram());
+        return new ModeFailure(bytes.toString(StandardCharsets.UTF_8), failure.diagnostic().code(),
+                failure.span().start().line(), interpreter.ownershipReuseCount());
     }
 
     private String execute(String source) {

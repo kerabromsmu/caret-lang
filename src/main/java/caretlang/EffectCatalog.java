@@ -25,6 +25,36 @@ final class EffectCatalog {
         return new EffectCatalog(entries);
     }
 
+    EffectCatalog with(String name, EffectDescriptor effect) {
+        if (name == null || name.isBlank()) throw new IllegalArgumentException("Effect name must not be blank");
+        if (effect == null) throw new IllegalArgumentException("Effect descriptor must not be null");
+        EffectDescriptor portable = portable(name);
+        if (portable != null && portable != effect) {
+            throw new IllegalArgumentException("Effect catalog cannot replace portable identity: " + name);
+        }
+        LinkedHashMap<String, EffectDescriptor> updated = new LinkedHashMap<>(entries);
+        EffectDescriptor existing = updated.putIfAbsent(name, effect);
+        if (existing != null && existing != effect) {
+            throw new IllegalArgumentException("Effect catalog name already denotes another identity: " + name);
+        }
+        return new EffectCatalog(updated);
+    }
+
+    EffectCatalog alias(String alias, String target) {
+        EffectDescriptor effect = resolve(target).orElseThrow(() ->
+                new IllegalArgumentException("Unknown effect alias target: " + target));
+        return with(alias, effect);
+    }
+
     Optional<EffectDescriptor> resolve(String name) { return Optional.ofNullable(entries.get(name)); }
     boolean visible(EffectDescriptor effect) { return entries.get(effect.canonicalName()) == effect; }
+
+    private static EffectDescriptor portable(String name) {
+        return switch (name) {
+            case "Output" -> OUTPUT;
+            case "StateRead" -> STATE_READ;
+            case "StateWrite" -> STATE_WRITE;
+            default -> null;
+        };
+    }
 }

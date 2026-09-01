@@ -1111,6 +1111,19 @@ constructor is not invoked during membership testing.
 
 The resulting value may be used anywhere an ordinary contract may be used.
 
+The prototype implements this exact structural template model for concrete Collections and
+reifiable collection constructors. Positional and named shape, comparable fixed values,
+unconstrained and contracted holes, repeated numbered-hole equality, direct nesting, and dynamic
+field keys participate in membership. Dynamic keys and fixed expressions are evaluated once during
+constructor creation. Template contracts compose with aliases, null/missing modifiers,
+parameterized collection contracts, conservative implication, overload dispatch, and ordinary
+contract reflection. The unresolved optional-member surface spelling remains unimplemented.
+
+Reflection retains kind `Contract` and adds language-owned `shape`, `size`, and `elements` metadata.
+Element metadata identifies its public name, constraint kind, zero-based repeated-hole parameter,
+and public requirement names without exposing captures, source spans, Java objects, or executable
+descriptor internals.
+
 For example:
 
 ```caret
@@ -1906,6 +1919,19 @@ descriptor. A nested literal used as the operand of an inner call materializes i
 that call first. A collection expression never evaluates to a collection containing hole values and
 does not automatically become a template.
 
+The prototype implements collection-owned structural constructors for positional and named shapes,
+direct nested literals, eagerly captured fixed members, contracted holes, and ordinary or numbered
+holes. Repeated numbered holes share one constructor parameter and therefore one supplied value.
+Computed-hole members remain ordinary opaque partial callables rather than falsely claiming a
+reifiable structural descriptor.
+
+The descriptor is immutable language-owned data and retains source provenance internally for later
+template diagnostics. It is not exposed as Java AST or runtime implementation state. The constructor
+itself follows ordinary callable equality rules, so direct equality is invalid; reflection retains
+ordinary callable target identity and exposes only its public parameter/result contracts, never
+fixed captures or descriptor internals. Applying the constructor always produces a complete
+Collection and can never materialize a hole value.
+
 Template construction is explicit:
 
 ```caret
@@ -2397,3 +2423,15 @@ failures.
 `ErrorTemplate` defines failure payloads, while `Result` defines the common enclosing protocol.
 Public APIs that must return either success or failure still require a separately specified result
 envelope; no union, exception-catching, or propagation syntax is implied here.
+
+The prototype implements `ErrorTemplate` as the standard recursive structural contract with the
+seven fields above. `phase` uses the lowercase language-owned phase names; `location` is `~` or an
+exact Collection containing one-based `line`, `column`, `endLine`, and `endColumn`; each `related`
+entry contains `message` and `location`. `cause` is `~` or another `ErrorTemplate`, and `details` is
+always a Collection. Every field remains present even when its value is missing or empty.
+
+Aborting diagnostics retain the same immutable descriptor and can be projected to this value shape,
+but remain `LangException` control flow rather than catchable Caret values. Cause chains contain only
+language diagnostic descriptors, have a bounded projection depth, and never retain or reveal Java
+exceptions, stack traces, implementation objects, or host serialization identities. Structural
+equality and reflection operate solely on the projected Caret Collections.

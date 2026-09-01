@@ -40,22 +40,53 @@ final class DiagnosticCoverageTest {
         evidence.forEach((id, row) -> {
             Matcher example = EXAMPLE.matcher(row.evidence());
             Matcher test = TEST.matcher(row.evidence());
-            assertTrue(example.find() || test.find(), "Missing evidence for " + id);
-            if (example.find(0)) {
+            boolean found = false;
+            while (example.find()) {
+                found = true;
                 Path source = Path.of(example.group());
                 Path expected = Path.of(example.group().replace(".caret", ".expected"));
                 assertTrue(Files.isRegularFile(source), "Missing fixture for " + id);
                 assertTrue(Files.isRegularFile(expected), "Missing golden stderr for " + id);
                 assertTrue(integration.contains(source.toString()), "Fixture is not executed for " + id);
+                DiagnosticCatalog catalog = Set.of(DiagnosticCatalog.values()).stream()
+                        .filter(entry -> entry.id().equals(id)).findFirst().orElseThrow();
+                String firstLine;
+                try {
+                    firstLine = Files.readAllLines(expected).getFirst();
+                } catch (IOException error) {
+                    throw new AssertionError("Cannot read golden stderr for " + id, error);
+                }
+                String message = firstLine.replaceFirst("^Error: Line \\d+, column \\d+: ", "");
+                assertSame(catalog, DiagnosticCatalog.identify(catalog.phase(), catalog.code(), message),
+                        "Golden stderr does not identify " + id);
             }
-            if (test.find(0)) validateTest(id, test.group(1), test.group(2));
+            while (test.find()) {
+                found = true;
+                validateTest(id, test.group(1), test.group(2));
+            }
+            assertTrue(found, "Missing evidence for " + id);
         });
     }
 
     @Test
-    void internalCatalogVariantsAreConstructible() {
-        assertTrue(Set.of(DiagnosticCatalog.values()).stream()
-                .filter(entry -> entry.category().equals(DiagnosticCategory.INTERNAL)).count() >= 5);
+    void everyInternalCatalogVariantIsIndividuallyIdentifiable() {
+        Map<DiagnosticCatalog, String> messages = Map.of(
+                DiagnosticCatalog.PARSE_INVALID_NUMBER, "Invalid number literal",
+                DiagnosticCatalog.RUNTIME_DUPLICATE_DEFINITION, "Duplicate definition: value",
+                DiagnosticCatalog.RUNTIME_PREMATURE_READ, "Binding read before initialization: value",
+                DiagnosticCatalog.TOO_MANY_FUNCTION_ARGUMENTS, "Too many arguments for function",
+                DiagnosticCatalog.TOO_MANY_PARTIAL_ARGUMENTS, "Too many arguments for partial expression",
+                DiagnosticCatalog.EVALUATION_DEPTH, "Maximum Caret evaluation depth exceeded",
+                DiagnosticCatalog.UNKNOWN_UNARY_OPERATOR, "Unknown unary operator: token",
+                DiagnosticCatalog.UNKNOWN_BINARY_OPERATOR, "Unknown operator: token",
+                DiagnosticCatalog.INTERNAL_INVARIANT, "Internal invariant failure");
+
+        Set<DiagnosticCatalog> internal = Set.of(DiagnosticCatalog.values()).stream()
+                .filter(entry -> entry.category().equals(DiagnosticCategory.INTERNAL))
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(internal, messages.keySet());
+        messages.forEach((entry, message) ->
+                assertSame(entry, DiagnosticCatalog.identify(entry.phase(), entry.code(), message), entry.id()));
     }
 
     private static Map<String, Row> rows(String markdown) {

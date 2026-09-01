@@ -78,6 +78,18 @@ diff -u examples/features/contracts.expected "$CARET_TEST_TMP/contracts-output.t
 "$CARET_LAUNCHER" examples/features/contract_inference.caret > "$CARET_TEST_TMP/contract-inference-output.txt"
 diff -u examples/features/contract_inference.expected "$CARET_TEST_TMP/contract-inference-output.txt"
 
+"$CARET_LAUNCHER" examples/features/operators.caret > "$CARET_TEST_TMP/operators-output.txt"
+diff -u examples/features/operators.expected "$CARET_TEST_TMP/operators-output.txt"
+
+"$CARET_LAUNCHER" examples/features/collection_constructors.caret > "$CARET_TEST_TMP/collection-constructors-output.txt"
+diff -u examples/features/collection_constructors.expected "$CARET_TEST_TMP/collection-constructors-output.txt"
+
+"$CARET_LAUNCHER" examples/features/templates.caret > "$CARET_TEST_TMP/templates-output.txt"
+diff -u examples/features/templates.expected "$CARET_TEST_TMP/templates-output.txt"
+
+"$CARET_LAUNCHER" examples/features/error_template.caret > "$CARET_TEST_TMP/error-template-output.txt"
+diff -u examples/features/error_template.expected "$CARET_TEST_TMP/error-template-output.txt"
+
 "$CARET_LAUNCHER" examples/features/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
 diff -u examples/features/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
 
@@ -92,6 +104,9 @@ diff -u examples/features/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contra
 
 "$CARET_LAUNCHER" examples/features/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
 diff -u examples/features/effects.expected "$CARET_TEST_TMP/effects-output.txt"
+
+"$CARET_LAUNCHER" inspect examples/features/inference.caret > "$CARET_TEST_TMP/inference-output.txt"
+diff -u examples/features/inference.expected "$CARET_TEST_TMP/inference-output.txt"
 
 "$CARET_LAUNCHER" examples/features/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
 diff -u examples/features/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
@@ -207,6 +222,7 @@ expect_failure examples/errors/division_by_zero.caret 'Line 1, column 11: Divisi
 expect_failure examples/errors/remainder_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/non_finite_result.caret 'Line 1, column 7: Numeric result is not finite'
 expect_failure examples/errors/invalid_escape.caret 'Line 1, column 17: Unknown string escape: \q'
+expect_failure examples/errors/invalid_layout_marker.caret unused
 expect_failure examples/errors/mixed_holes.caret 'Line 2, column 11: Cannot mix numbered and unnumbered holes'
 expect_failure examples/errors/callable_equality.caret 'Line 2, column 7: Callable values cannot be compared for equality'
 expect_failure examples/errors/non_callable_infix.caret 'Line 2, column 9: Named infix target is not callable: value'
@@ -233,6 +249,7 @@ expect_failure examples/errors/invalid_contract.caret unused
 expect_failure examples/errors/duplicate_parameter.caret unused
 expect_failure examples/errors/not_callable.caret unused
 expect_failure examples/errors/invalid_condition.caret unused
+expect_failure examples/errors/runtime_invalid_condition.caret unused
 expect_failure examples/errors/expected_number.caret unused
 expect_failure examples/errors/expected_string.caret unused
 expect_failure examples/errors/expected_sequence.caret unused
@@ -251,6 +268,10 @@ expect_failure examples/errors/not_a_contract.caret unused
 expect_failure examples/errors/dynamic_not_a_contract.caret unused
 expect_failure examples/errors/contract_violation.caret unused
 expect_failure examples/errors/incompatible_inferred_contracts.caret unused
+expect_failure examples/errors/incompatible_declared_inference.caret unused
+expect_failure examples/errors/contract_derivation_cycle.caret unused
+expect_failure examples/errors/template_invalid_constructor.caret unused
+expect_failure examples/errors/template_noncomparable_fixed.caret unused
 expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
 expect_failure examples/errors/invalid_refinement.caret unused

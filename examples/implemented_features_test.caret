@@ -30,6 +30,29 @@ assertEqual "multiline function body" (scale base) 20
 increment = + _ 1
 assertEqual "prefix symbolic operator" (+ 2 3) 5
 assertEqual "prefix and infix operators agree" (+ 2 3) (2 + 3)
+assertEqual "plus exposes four closed variants" (seqSize @(+).variants) 4
+
+coverageConstructor = [_2 _1 _1]
+assertEqual "collection literals own numbered holes" (coverageConstructor "same" 2) [2 "same" "same"]
+coverageContractedConstructor = [[(Number) _] _]
+assertEqual "nested collection holes share one constructor" (coverageContractedConstructor 3 "tail") [[3] "tail"]
+
+CoveragePoint = template [(Number) _ (Number) _]
+assert "structural template accepts exact matching shape" (CoveragePoint [1 2])
+assert "structural template rejects wrong members" (not CoveragePoint [1 "two"])
+CoverageDiagonal = template [_1 _1]
+assert "repeated template holes impose equality" (CoverageDiagonal [3 3])
+
+coverageError = [
+  ^code = "TEST"
+  ^phase = "runtime"
+  ^message = "example"
+  ^location = ~
+  ^related = []
+  ^cause = ~
+  ^details = []
+]
+assert "ErrorTemplate accepts the shared seven-field shape" (ErrorTemplate coverageError)
 assertEqual "symbolic operator partial" (increment 5) 6
 assertEqual "grouped prefix subtraction" ((-) 7 2) 5
 assertEqual "zero-argument function invocation" answer 42
@@ -145,8 +168,8 @@ assertEqual "named infix is left associative" (1 joinDigits 2 joinDigits 3) 123
 assertEqual "named infix binds below addition" (2 joinDigits 3 + 4) 27
 assert "named infix binds above comparison" (2 joinDigits 3 < 30)
 
-applyInfix left operation right = left operation right
-applyPrefix operation left right = operation left right
+applyInfix left (pure) operation right = left operation right
+applyPrefix (pure) operation left right = operation left right
 assertEqual "callable parameter in infix position" (applyInfix 2 add 3) 5
 assertEqual "callable parameter in prefix position" (applyPrefix add 2 3) 5
 
@@ -229,6 +252,14 @@ assert "separate contracts have distinct identity" (Positive != OtherPositive)
 assert "identical requirement lists do not imply equality" (CompositeOne != CompositeTwo)
 assertEqual "contract reflection lists refinements" (@Positive).requirements ["positive"]
 
+Diamond = contract [Left Right Root]
+Right = contract Root
+Left = contract Root
+Root = contract ~
+(Diamond) diamondValue = "diamond"
+assert "forward diamond retains left membership" (Left diamondValue)
+assert "forward diamond retains transitive root membership" (Root diamondValue)
+
 NumberOrNull = Number?
 NumberOrMissing = Number~
 NumberOrAbsent = Number?~
@@ -282,12 +313,14 @@ coverageIncrement value = coverageInferIdentity value * 1 + 1
 coverageSuffix value = value + "!"
 coverageNegate value = not value
 coverageChooseNumber condition = condition & coverageIncrement 4 ! coverageIncrement 8
+(Number) coverageDeclaredConstant (Number) ignored = 1
 assertEqual "inferred generic identity accepts text" (coverageInferIdentity "generic") "generic"
 assertEqual "inferred generic identity accepts numbers" (coverageInferIdentity 42) 42
 assertEqual "inferred numeric result survives a conditional" (coverageChooseNumber true) 5
 assertEqual "inferred truth accepts null" (coverageChooseNumber ?) 9
 assertEqual "inferred string plus" (coverageSuffix "works") "works!"
 assert "inferred Boolean negation" (coverageNegate false)
+assertEqual "declared and inferred parameters stay separate" (seqSize (seqGet (@coverageDeclaredConstant).signature.parameters 0).inferred) 0
 
 // Pure predicates are first-class refinements and retain eligibility through aliases.
 coveragePositive value = value > 0
@@ -319,6 +352,16 @@ assertEqual "overload selects Number" (coverageDescribe 42) "number"
 assertEqual "overload selects String" (coverageDescribe "hello") "text"
 assertEqual "overload retains generic fallback" (coverageDescribe true) "fallback"
 assertEqual "overload partial narrows survivors" (coverageNumberPair 1) "numbers"
+
+CoverageRoot = contract ~
+CoverageLeft = contract CoverageRoot
+CoverageRight = contract CoverageRoot
+CoverageBoth = contract [CoverageLeft CoverageRight CoverageRoot]
+coverageSpecific (Any) value = "fallback"
+coverageSpecific (CoverageLeft) value = "left"
+coverageSpecific (CoverageBoth) value = "both"
+(CoverageBoth) coverageBothValue = 1
+assertEqual "normalized diamond overload is most specific" (coverageSpecific coverageBothValue) "both"
 assertEqual "overload reflection exposes exact variants" (seqSize (@coverageDescribe).variants) 3
 
 // Arrow contracts inspect signatures without invocation and preserve generalized relationships.
@@ -331,6 +374,13 @@ assert "exact arrow contract accepts a matching callable" (CoverageNumberTransfo
 assertEqual "arrow parameter rejects a callable with a narrower domain" (CoverageBroadTransform coverageArrowDouble) false
 assert "covariant arrow result accepts a stronger guarantee" (CoverageLooseResult coverageArrowDouble)
 assertEqual "arrow-constrained higher-order call" (coverageApply coverageArrowDouble 21) 42
+
+(Number) coverageArrowSafe (Any) value = 1
+(String) coverageArrowSafe (String) value = "text"
+(Number) coverageArrowUnsafe (Any) value = 1
+(String) coverageArrowUnsafe (Number) value = "text"
+assert "whole-domain fallback with disjoint variant satisfies arrow contract" (CoverageNumberTransform coverageArrowSafe)
+assertEqual "overlapping incompatible result rejects overload arrow contract" (CoverageNumberTransform coverageArrowUnsafe) false
 
 (_1) coverageChoose (_1) left (_1) right = left
 coverageNumberChoice = coverageChoose 1

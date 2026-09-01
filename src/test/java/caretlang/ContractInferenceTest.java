@@ -43,10 +43,13 @@ final class ContractInferenceTest {
         ContractInference inference = ContractInference.analyze(program);
         Ast.FunctionDef identity = (Ast.FunctionDef) program.get(0);
         Ast.FunctionDef increment = (Ast.FunctionDef) program.get(1);
-        assertEquals(new ContractInference.FunctionContract(List.of(Set.of()), Set.of(), 0, false),
+        assertEquals(new ContractInference.FunctionContract(List.of(Set.of()), List.of(Set.of()),
+                Set.of(), Set.of(), 0, false),
                 inference.contract(identity));
         assertEquals(new ContractInference.FunctionContract(List.of(Set.of(BuiltinContract.NUMBER)),
-                Set.of(BuiltinContract.NUMBER), null, false), inference.contract(increment));
+                List.of(Set.of(BuiltinContract.NUMBER)), Set.of(BuiltinContract.NUMBER),
+                Set.of(BuiltinContract.NUMBER), null, false),
+                inference.contract(increment));
     }
 
     @Test
@@ -89,6 +92,48 @@ final class ContractInferenceTest {
                 """).parseProgram()));
         assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, error.diagnostic().code());
         assertEquals(2, error.diagnostic().primarySpan().start().line());
+    }
+
+    @Test
+    void validatesInferredNeedsAndGuaranteesAgainstExplicitInterfaces() {
+        LangException strengthening = assertThrows(LangException.class,
+                () -> ContractInference.analyze(new Parser("""
+                        numeric (Any) value =
+                          value * 2
+                        """).parseProgram()));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, strengthening.diagnostic().code());
+        assertEquals(2, strengthening.diagnostic().primarySpan().start().line());
+
+        LangException guarantee = assertThrows(LangException.class,
+                () -> ContractInference.analyze(new Parser("""
+                        (Number) invalid =
+                          "text"
+                        """).parseProgram()));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, guarantee.diagnostic().code());
+        assertEquals(1, guarantee.diagnostic().primarySpan().start().line());
+
+        List<Ast.Stmt> program = new Parser("""
+                numeric (Number) value =
+                  value * 2
+                """).parseProgram();
+        ContractInference.FunctionContract contract = ContractInference.analyze(program)
+                .contract((Ast.FunctionDef) program.getFirst());
+        assertEquals(List.of(Set.of(BuiltinContract.NUMBER)), contract.parameterRequirements());
+        assertEquals(List.of(Set.of(BuiltinContract.NUMBER)), contract.inferredParameterRequirements());
+        assertEquals(Set.of(BuiltinContract.NUMBER), contract.resultGuarantees());
+    }
+
+    @Test
+    void preservesDeclaredDomainsWithoutInventingImplementationNeeds() {
+        List<Ast.Stmt> program = new Parser("""
+                (Number) constant (Number) ignored =
+                  1
+                """).parseProgram();
+        ContractInference.FunctionContract contract = ContractInference.analyze(program)
+                .contract((Ast.FunctionDef) program.getFirst());
+        assertEquals(List.of(Set.of(BuiltinContract.NUMBER)), contract.parameterRequirements());
+        assertEquals(List.of(Set.of()), contract.inferredParameterRequirements());
+        assertEquals(Set.of(BuiltinContract.NUMBER), contract.resultGuarantees());
     }
 
     @Test
@@ -169,6 +214,46 @@ final class ContractInferenceTest {
                   local = mixed condition
                   local * 1
                 """).parseProgram());
+    }
+
+    @Test
+    void retainsClosedPlusChoicesUntilLaterBlockContext() {
+        ContractInference.analyze(new Parser("""
+                choose condition =
+                  condition & 1 ! "text"
+
+                unresolved = choose true + 1
+                (Number) resolved = unresolved
+                """).parseProgram());
+
+        ContractInference.analyze(new Parser("""
+                choose condition =
+                  condition & 1 ! "text"
+
+                unresolved = 1 + choose true
+                (String) resolved = unresolved
+                """).parseProgram());
+
+        LangException ambiguous = assertThrows(LangException.class,
+                () -> ContractInference.analyze(new Parser("""
+                        choose condition =
+                          condition & 1 ! "text"
+
+                        unresolved = choose true + 1
+                        """).parseProgram()));
+        assertEquals(Diagnostic.Codes.AMBIGUOUS_CONTRACT, ambiguous.diagnostic().code());
+        assertEquals(4, ambiguous.diagnostic().primarySpan().start().line());
+    }
+
+    @Test
+    void rejectsStaticallyKnownValuesOutsideOperatorDomains() {
+        for (String source : List.of("value = -\"text\"", "value = 1 < \"text\"",
+                "value = not 1", "value = 1 and true", "value = false or 1",
+                "value = 1 & true ! false")) {
+            LangException error = assertThrows(LangException.class,
+                    () -> ContractInference.analyze(new Parser(source).parseProgram()), source);
+            assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, error.diagnostic().code(), source);
+        }
     }
 
     @Test
@@ -358,5 +443,47 @@ final class ContractInferenceTest {
         LangException error = assertThrows(LangException.class, () -> inference.validateRefinement(candidate));
         assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
         assertTrue(error.getMessage().contains("observable effects"));
+    }
+
+    @Test
+    void callableBindingsPartialsAndCompositionsPropagateInvocationEffects() {
+        List<Ast.Stmt> program = new Parser("""
+                (Output) emit value = print value
+                identity value = value
+                (Output) emitSecond first second = print second
+
+                (Output) throughAlias value =
+                  alias = emit
+                  alias value
+
+                (Output) throughPrefix value =
+                  partial = emitSecond "fixed"
+                  partial value
+
+                (Output) throughHole value =
+                  partial = emitSecond _ value
+                  partial "fixed"
+
+                (Output) throughComposition value =
+                  pipeline = identity >> emit
+                  pipeline value
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        for (int index : List.of(3, 4, 5, 6)) {
+            ContractInference.EffectSummary effects = inference.effects((Ast.FunctionDef) program.get(index));
+            assertEquals(Set.of(ContractInference.BuiltinEffect.OUTPUT), effects.effects());
+            assertFalse(effects.unknownDynamicCall());
+        }
+    }
+
+    @Test
+    void oneConstrainedCallbackDoesNotHideAnotherUnknownCallback() {
+        List<Ast.Stmt> program = new Parser("""
+                invokeBoth (pure) known unknown value = known (unknown value)
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        assertTrue(inference.effects((Ast.FunctionDef) program.getFirst()).unknownDynamicCall());
     }
 }

@@ -1,0 +1,15 @@
+location = [^line = 1 ^column = 7 ^endLine = 1 ^endColumn = 12]
+error = [
+  ^code = "CONTRACT_VIOLATION"
+  ^phase = "runtime"
+  ^message = "Rejected value"
+  ^location = location
+  ^related = []
+  ^cause = ~
+  ^details = [^contract = "Positive"]
+]
+
+print ErrorTemplate error
+print (@ErrorTemplate).name
+print error.code
+print error.location.column

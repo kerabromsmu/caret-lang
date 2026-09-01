@@ -276,6 +276,13 @@ group is analyzed. Each external use instantiates them freshly, while ordinary a
 scheme and all parameter/result relationships. Once a callable use is partially applied, that
 instance retains its substitutions and is not generalized again.
 
+Implementation status: the prototype separately records effective, declared, and inferred
+parameter and result components. It rejects proven declaration/inference conflicts, generalizes
+undeclared parameter/result flow after monomorphic recursive-group analysis, instantiates external
+uses independently, and retains substitutions through aliases and partial callables. The internal
+external-module observation context verifies stable-interface projection until modules are
+implemented.
+
 <a id="arrow-signature-contracts"></a>
 ### Arrow-signature contracts
 
@@ -285,8 +292,9 @@ covariant results, explicit visible effect allowances, and contiguous numbered v
 across complete declaration headers. Prefix and hole partials retain substitutions in their derived
 signatures. Derived signatures project repeated and reordered holes, composition specializes
 compatible parameter/result variables and unions invocation effects, and overload partials retain
-projected survivor signatures with conservative summaries. The full conservative overlap proof for
-arrow-contract satisfaction across overload domains remains planned.
+projected survivor signatures with conservative summaries. Overload satisfaction requires one
+whole-domain covering variant and compatible results and effects from every potentially selectable
+overlapping variant; unknown overlap is treated as possible and partial domains are not combined.
 
 A callable signature is an ordinary first-class structural contract written with a bracketed
 parameter-requirement list and a right-associative arrow:
@@ -345,11 +353,11 @@ For example:
   ...
 ```
 
-The prototype currently implements the runtime `map transform values` callable for Sequences.
-Until higher-order effect substitution is implemented, its public callable metadata deliberately
-reports an unknown effect upper bound rather than incorrectly
-claiming purity or a fixed effect set. Runtime application still uses the ordinary guarded callable
-path and preserves element order.
+The prototype implements the runtime `map transform values` callable for Sequences. Before its
+transform is supplied, its invocation-effect bound is deliberately unavailable. Supplying the
+transform produces a partial callable whose bound is that transform's descriptor-identity effect
+set. Completing `map` therefore uses the ordinary guarded callable path without claiming purity or
+a fixed effect set, and preserves element order.
 
 This declaration generalizes one input-element contract and one output-element contract, then instantiates both
 freshly at every use of `map`. Variables may appear as ordinary constructor arguments and within
@@ -560,6 +568,12 @@ An omitted declaration and explicit `pure` both provide the empty allowed set. T
 computed independently and never enlarged merely because a broader allowance was written. Catalog
 aliases are compared by descriptor identity during this subset check.
 
+The prototype propagates current-phase effects through resolver-identified aliases, constrained
+higher-order parameters, nested named closures, composition, prefix and hole partials, overload
+narrowing, and recursive fixed points. Eager fixed operands contribute to callable construction;
+the target callable's bound describes later invocation. An unresolved dynamic call keeps the bound
+unavailable, and allowance failures are diagnosed before top-level program effects execute.
+
 IDE tooling should expose inferred effects directly at function declarations.
 
 For example, the source:
@@ -585,6 +599,11 @@ For a pure function, tooling may display:
 
 Such annotations are IDE presentation only and are not part of Caret source syntax.
 
-The compiler should also provide a way to inspect fully inferred contracts and effects in plain-text environments.
+The prototype provides `caret inspect FILE` for plain-text environments. It analyzes without
+executing top-level program code and prints named callable declarations in deterministic semantic
+source order. Each entry distinguishes effective, declared, and inferred parameter/result facts;
+the effective, declared, and inferred effect sets; generalized variables; and unavailable facts as
+`~`. Names are language-owned and environment-relative. A diagnostic suppresses the complete report,
+uses the ordinary stderr rendering, and returns a nonzero process status.
 
 ---

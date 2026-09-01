@@ -53,17 +53,17 @@ shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-reso
 environments. The planned contextual contract model will determine whether a positional value is a
 list, set, dictionary, packed buffer, or another representation; first-class dynamic fields also
 remain planned. A non-empty Collection is entirely positional or
-entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes will be an
+entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes is an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
-or a concrete fixed collection, to the planned `template` function creates an exact structural
-contract. The same mechanism defines a standard structured error payload, while a generic
-three-field `Result` contract supplies the planned public success/failure envelope.
+or a concrete fixed collection, to the implemented `template` function creates an exact structural
+contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
+generic three-field `Result` contract remains the planned public success/failure envelope.
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
 application, partial application, aliasing, dispatch, effects, reflection, and compile-time
-execution rules, even though they may consume or produce specialized semantic values. These
-planned facilities are not thereby implemented by the current prototype.
+execution rules, even though they may consume or produce specialized semantic values. The
+prototype implements `contract` and `template`; the other listed facilities remain planned.
 
 Explicit mutability is planned through stable-identity containers rather than mutable bindings or
 deeply mutable objects. `{ (Int) 100 }` constructs a container, `container{}` reads its current
@@ -150,8 +150,8 @@ this README, `LICENSE`, `NOTICE`, and the runnable `examples/` tree.
 ### Release versions
 
 The tracked [`VERSION`](VERSION) file is the source of the release version in
-`MAJOR.MINOR.UPDATE` form. The project starts at `0.1.0`, with `0.1.x` representing the Phase 1
-development line from [`PLAN.md`](PLAN.md).
+`MAJOR.MINOR.UPDATE` form. The completed `0.1.x` line represents Phase 1, and `0.2.x` represents the
+current Phase 2 development line from [`PLAN.md`](PLAN.md).
 
 - Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
 - Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
@@ -193,6 +193,15 @@ With Gradle:
 
 Language errors are written to standard error and return a nonzero process status.
 Missing or unreadable source files are reported as ordinary CLI errors without Java stack traces.
+
+Inspect inferred callable contracts and effects without executing the program:
+
+```bash
+build/install/caret/bin/caret inspect examples/features/inference.caret
+```
+
+The report uses deterministic source order and distinguishes declared, inferred, effective, empty,
+and unavailable (`~`) facts. A diagnostic produces no partial report and returns a nonzero status.
 
 ## REPL
 
@@ -291,22 +300,23 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
   Trailing callable blocks remain unavailable until lambda syntax is implemented.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
-  dynamically. Initial named-function constraint inference and the internal purity analysis needed
-  to validate refinement predicates are implemented;
+  dynamically. Named-function constraint inference and Phase 2 transitive/higher-order effect
+  analysis are implemented, including the read-only `caret inspect` report;
   nullable/optional contract unions and the initial `Sequence T` parameterized contract are
-  implemented, while general parameterized contracts, complete static dispatch proof, and complete
-  higher-order effect propagation are not implemented.
+  implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
 - Contract-selected collection representations, first-class dynamic fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- Arrow contracts support explicit visible effect allowances and declaration-wide contract variables.
-  Complete overload-domain proofs remain planned.
+- Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
+  and whole-domain overload coverage. Complete static dispatch/type proof remains planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
-- `map` supports current unary callable values at runtime, but generalized element/result variables,
-  lambdas, and precise higher-order effect propagation remain planned.
+- `map` supports current unary callable values and propagates the supplied transform's known effect
+  bound, but generalized element/result variables and lambdas remain planned.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
-  is no object model, module system, compiler backend, bytecode, or optimizer.
+  is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
+  conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
+  observable persistent semantics.
 - Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
   base/requirement metadata.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical

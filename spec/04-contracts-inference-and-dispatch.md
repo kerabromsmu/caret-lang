@@ -36,13 +36,21 @@ generalized and each external use receives a fresh instantiation. Ordinary non-c
 must instead resolve from their initializer or context. An actual use that still leaves a required
 contract variable unresolved is a located compile-time ambiguity error.
 
+Explicit callable declarations remain distinct from implementation inference. An implementation
+need must be guaranteed by the declared parameter domain; it cannot silently narrow that public
+domain. Inferred results incompatible with an explicit result clause are rejected with a located
+`INCOMPATIBLE_CONTRACTS` diagnostic.
+
 The semantic analyzer also computes an initial effect summary for named functions. It propagates
 known effects through direct named calls, includes effects from the fixed subexpressions captured
 eagerly while constructing partials, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
 prove that a prospective refinement is unary, Boolean-returning, and pure. Environment-relative
 effect identities, declaration allowances, callable constraints, and effectful arrow contracts are
-implemented. Complete higher-order propagation and broader effect tooling remain planned. Proven
+implemented. Higher-order propagation covers the current named, aliased, partial, composed,
+overloaded, closure, and recursive callable forms, and `caret inspect` exposes the resulting facts
+without executing the program. Later lambdas, cycles, codecs, rules, and containers extend this
+same analysis as those value kinds arrive. Proven
 predicates are implemented as first-class refinement
 requirements in `contract` construction and direct clauses, including through ordinary aliases.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
@@ -377,12 +385,21 @@ operator variants specifying accepted pairs, result contracts, overflow, divisio
 rules before those combinations are implemented. This initial matrix defines no implicit widening,
 signedness conversion, or mixed-representation promotion.
 
+The prototype implements this initial operator matrix, including four reflected closed `+`
+variants, language-owned recursive rendering for concatenation, recursive `Eq` eligibility,
+normalized lazy truth results, and relational `+` results retained through direct named-function
+calls and later ordinary-binding constraints. More general relational propagation through nested
+compositions remains conservative rather than selecting a numeric default.
+
 <a id="contract-declaration-and-identity"></a>
 #### Contract binding and identity
 
 Bindings whose values are contracts are predeclared throughout their lexical block where the
 ordinary declaration rules require it, so their bases may use forward references. Direct and
 indirect contract-derivation cycles are compile-time errors.
+The prototype implements this as a checked identity graph: multiple and redundant bases are
+accepted, diamond derivation retains transitive implication, and a rejected cycle reports the
+participating declaration locations. Graph construction never evaluates refinement predicates.
 `contract` always takes exactly one ordinary argument: `~`, one contract or predicate, or one
 collection of requirements.
 
@@ -417,6 +434,12 @@ parameter and an explicit `Any` requirement are the same generic fallback and ca
 two overload variants. A statically empty constraint is an invalid declaration rather than a
 dispatch variant that wins by accepting no values.
 
+The prototype normalizes overload declaration domains by canonical binding identity and the
+statically declared nominal derivation graph. It removes `Any`, duplicates, and base requirements
+already implied by a stricter term before comparing declarations; this includes forward multiple-
+base diamonds without executing refinements. Runtime specificity uses the same conservative
+implication rules and keeps incomparable variants unordered.
+
 Null and missing alternatives are normalized separately from the conjunction for ordinary present
 values. Their implication follows accepted-set inclusion: `T` implies both `T?` and `T~`; each of
 those implies `T?~`; and `T?` and `T~` are incomparable. Base implication must also hold, so `Int?`
@@ -432,6 +455,12 @@ parameter, so `Sequence Int` implies `Sequence Number` when `Int` implies `Numbe
 `Container` parameters are invariant by default: `Container Int` and `Container Number` do not
 imply one another unless their argument descriptors are identical. No constructor is assumed
 covariant merely because its current implementation appears read-only.
+
+The prototype's static implication foundation implements descriptor identity, transitive nominal
+derivation, null/missing accepted-set inclusion, and covariance for the implemented immutable
+`Sequence` constructor. Parameter conjunction ordering uses those proofs, normalizes duplicate and
+`Any` requirements, and keeps null and missing alternatives distinct. Unknown relationships remain
+incomparable. Mutable `Container` variance remains tied to that later value-kind implementation.
 
 ---
 
