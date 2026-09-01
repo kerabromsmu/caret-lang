@@ -331,21 +331,22 @@ lambda because its left side is a bracketed requirement list. Exact arity, pure 
 contravariant parameters, covariant results, inline clauses, and standalone variables are
 implemented, including explicit allowances and variables shared across a complete declaration header.
 
-The planned static operator model preserves the prototype's compact behavior without adding hidden
+The implemented Phase 2 operator model preserves the prototype's compact behavior without adding hidden
 numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
 closed overload set: it adds two numbers or concatenates when either operand is a string, rendering
 the other value through Caret's own deterministic formatter. Equality uses a recursive structural
 `Eq` capability and continues to reject live callables even when nested. Boolean operations retain
 the existing Boolean/null/missing truth domain and lazy evaluation. An unresolved numeric-versus-
-string `+` is a compile-time ambiguity rather than silently defaulting to Number. This complete
-static matrix is specified but not implemented by the current inference pass.
+string `+` is a compile-time ambiguity rather than silently defaulting to Number. The current
+inference pass implements this matrix while retaining conservative results through unsupported
+nested or future callable forms.
 
 Contracts also have first-class null/missing unions. `Number?` accepts numbers or null, `Number~`
 accepts numbers or missing, and `Number?~` accepts all three while keeping null and missing
 observably distinct. The modified contracts remain unary predicates, work in clauses and aliases,
 and expose canonical names and their wrapped base through reflection.
 
-In the planned collection model, an expression such as `[fixed _]` is an ordinary function whose
+In the implemented collection-constructor model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable
 constructor—or a concrete fixed collection—to the ordinary `template` function derives an exact
 structural contract. Contracted holes constrain variable positions, ordinary values require
@@ -358,14 +359,13 @@ duplicate fields, contract requirements, and mixed hole styles. Only failures un
 derivation—an ineligible constructor or a non-comparable captured value—use template-specific
 codes, with stable locations in both static and dynamic discovery.
 
-Caret also plans a standard `ErrorTemplate` carrying a stable code, phase, message, locations,
+Caret implements a standard `ErrorTemplate` carrying a stable code, phase, message, locations,
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return
 values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
-operations share one explicit envelope. Structural templates, general parameterized contracts
-beyond `Sequence T`, universal literals, `ErrorTemplate`, and `Result` remain planned;
-the unary contract, refinement, and initial sequence-parameterization foundation described above
-is implemented.
+operations share one explicit envelope. Structural templates and `ErrorTemplate` are implemented;
+general parameterized contracts beyond `Sequence T`, contextual universal-literal selection, and
+`Result` remain planned.
 
 The implemented Phase 2 effect foundation assigns distinct stable codes to malformed mixed
 contract/effect clauses, non-callable effect constraints, unavailable callable effect bounds, and

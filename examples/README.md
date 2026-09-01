@@ -45,7 +45,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `CALL-REFLECT-VIS-001` | `features/callable_reflection.caret` demonstrates defining-environment projection; `InterpreterTest#callableReflectionProjectsLazilyWithoutAmplifyingVisibilityOrAuthority` covers external/sandbox projection because observation contexts are intentionally not Caret values |
 | `DISPATCH-001`, `DISPATCH-SPEC-001`, `DISPATCH-DECL-001`, `DISPATCH-APPLY-001`, `DISPATCH-APPLY-003`, `DISPATCH-DIAG-001` | `features/overloads.caret` plus inconsistent, missing, and ambiguous overload error fixtures |
 | `DISPATCH-PART-001`, `DISPATCH-PART-002`, `DISPATCH-PART-003`, `DISPATCH-SIG-001` | Overload partial narrowing in `features/overloads.caret` and survivor metadata in `features/callable_reflection.caret` |
-| `EFFECT-002` foundation | Focused Java tests cover transitive named-call effects, eager partial captures, lexical identity, reflection, and conservative dynamic calls; the full public effect requirement remains planned |
+| `EFFECT-002` foundation | Focused Java tests cover the completed Phase 2 propagation through named, aliased, partial, composed, overloaded, closure, and recursive callable forms; later lambdas, cycles, codecs, rules, and containers extend the still-planned full requirement |
 | `CORE-TEXT-002` | Unicode code-point indexing/slicing and conversion section |
 | `CORE-COLL-001`, `CORE-COLL-002` | Persistent sequence/dictionary, safe lookup, replacement-order, and nested equality sections |
 | `CORE-MAP-001` | `features/map.caret`; empty, named, partial, composed, and identity transforms |

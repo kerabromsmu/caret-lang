@@ -47,7 +47,10 @@ eagerly while constructing partials, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
 prove that a prospective refinement is unary, Boolean-returning, and pure. Environment-relative
 effect identities, declaration allowances, callable constraints, and effectful arrow contracts are
-implemented. Complete higher-order propagation and broader effect tooling remain planned. Proven
+implemented. Higher-order propagation covers the current named, aliased, partial, composed,
+overloaded, closure, and recursive callable forms, and `caret inspect` exposes the resulting facts
+without executing the program. Later lambdas, cycles, codecs, rules, and containers extend this
+same analysis as those value kinds arrive. Proven
 predicates are implemented as first-class refinement
 requirements in `contract` construction and direct clauses, including through ordinary aliases.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate

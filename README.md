@@ -53,17 +53,17 @@ shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-reso
 environments. The planned contextual contract model will determine whether a positional value is a
 list, set, dictionary, packed buffer, or another representation; first-class dynamic fields also
 remain planned. A non-empty Collection is entirely positional or
-entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes will be an
+entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes is an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
-or a concrete fixed collection, to the planned `template` function creates an exact structural
-contract. The same mechanism defines a standard structured error payload, while a generic
-three-field `Result` contract supplies the planned public success/failure envelope.
+or a concrete fixed collection, to the implemented `template` function creates an exact structural
+contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
+generic three-field `Result` contract remains the planned public success/failure envelope.
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
 application, partial application, aliasing, dispatch, effects, reflection, and compile-time
-execution rules, even though they may consume or produce specialized semantic values. These
-planned facilities are not thereby implemented by the current prototype.
+execution rules, even though they may consume or produce specialized semantic values. The
+prototype implements `contract` and `template`; the other listed facilities remain planned.
 
 Explicit mutability is planned through stable-identity containers rather than mutable bindings or
 deeply mutable objects. `{ (Int) 100 }` constructs a container, `container{}` reads its current
@@ -307,8 +307,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Contract-selected collection representations, first-class dynamic fields, formats,
   lambdas, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- Arrow contracts support explicit visible effect allowances and declaration-wide contract variables.
-  Complete overload-domain proofs remain planned.
+- Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
+  and whole-domain overload coverage. Complete static dispatch/type proof remains planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
 - `map` supports current unary callable values and propagates the supplied transform's known effect
