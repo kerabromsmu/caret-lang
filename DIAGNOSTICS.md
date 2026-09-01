@@ -102,4 +102,4 @@ from ordinary Caret source use focused Java evidence.
 | HOST-INSPECT-READ-FAILURE | host | — | `MainTest#inspectReportsUnreadableFilesWithoutAStackTrace` |
 | HOST-REPL-TERMINAL-REQUIRED | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-REPL-HISTORY-READ | host | — | `JLineReplTest#unreadableHistoryFallsBackToMemoryWithAClearWarning` |
-| HOST-REPL-HISTORY-WRITE | host | — | `JLineReplTest#unwritableHistoryReportsTheExactWarning` |
+| HOST-REPL-HISTORY-WRITE | host | — | `JLineReplTest#unwritableHistoryReportsOneCataloguedWarning` |
