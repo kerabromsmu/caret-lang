@@ -16,13 +16,14 @@ public final class CaretSandbox implements AutoCloseable {
     private boolean loaded;
     private String sourceName = "<embedded>";
     private Map<String, CaretCallable> callbacks = Map.of();
-    private final Map<String, Integer> callbackArities = new HashMap<>();
+    private Set<String> knownValueNames;
+    private Map<String, CallbackSchema> knownCallbacks;
     private Map<String, CaretCallable> pendingCallbacks;
 
     private CaretSandbox(CaretEnvironment environment, PrintStream output) {
         this.environment = new AtomicReference<>(environment);
         this.output = output;
-        environment.callbacks().forEach((name, callback) -> callbackArities.put(name, callback.arity()));
+        rememberSchema(environment);
         bridge = new EmbeddingBridge(this, this.environment, output, this::stageCallbacks, this::newCallable);
     }
 
@@ -38,7 +39,7 @@ public final class CaretSandbox implements AutoCloseable {
             try {
                 return CaretLoadResult.success(new LoadedProgram(this, bridge.load(source.text())));
             } catch (RuntimeException failure) {
-                return CaretLoadResult.failure(List.of(EmbeddingBridge.diagnostic(failure, sourceName)));
+                return CaretLoadResult.failure(List.of(expectedDiagnostic(failure)));
             }
         } finally {
             leave();
@@ -58,7 +59,7 @@ public final class CaretSandbox implements AutoCloseable {
                 return CaretExecutionResult.success(value);
             } catch (RuntimeException failure) {
                 pendingCallbacks = null;
-                return CaretExecutionResult.failure(List.of(EmbeddingBridge.diagnostic(failure, sourceName)));
+                return CaretExecutionResult.failure(List.of(expectedDiagnostic(failure)));
             } catch (Error fatal) {
                 closed = true;
                 pendingCallbacks = null;
@@ -84,6 +85,7 @@ public final class CaretSandbox implements AutoCloseable {
                 throw misuse(CaretEmbeddingException.Code.INVALID_ARITY,
                         "Expected " + callable.arity() + " arguments, got " + arguments.size());
             }
+            arguments.forEach(this::requireOwnedCallables);
             pendingCallbacks = null;
             try {
                 CaretValue value = bridge.invoke(callable.implementationHandle(), List.copyOf(arguments));
@@ -91,7 +93,7 @@ public final class CaretSandbox implements AutoCloseable {
                 return CaretInvocationResult.success(value);
             } catch (RuntimeException failure) {
                 pendingCallbacks = null;
-                return CaretInvocationResult.failure(List.of(EmbeddingBridge.diagnostic(failure, sourceName)));
+                return CaretInvocationResult.failure(List.of(expectedDiagnostic(failure)));
             } catch (Error fatal) {
                 closed = true;
                 pendingCallbacks = null;
@@ -106,22 +108,23 @@ public final class CaretSandbox implements AutoCloseable {
         enter();
         try {
             if (replacement == null) throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT, "environment must not be null");
-            for (var entry : replacement.callbacks().entrySet()) {
-                Integer knownArity = callbackArities.get(entry.getKey());
-                if (knownArity != null && knownArity != entry.getValue().arity()) {
-                    throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT,
-                            "A rebound callback must preserve arity: " + entry.getKey());
+            if (loaded) {
+                validateLoadedReplacement(replacement);
+                bridge.swapped();
+                environment.set(replacement);
+            } else {
+                CaretEnvironment previous = environment.getAndSet(replacement);
+                try {
+                    EmbeddingBridge replacementBridge = new EmbeddingBridge(
+                            this, environment, output, this::stageCallbacks, this::newCallable);
+                    bridge = replacementBridge;
+                    rememberSchema(replacement);
+                } catch (RuntimeException failure) {
+                    environment.set(previous);
+                    if (!EmbeddingBridge.isExpectedFailure(failure)) throw failure;
+                    throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT, "Invalid replacement environment");
                 }
             }
-            CaretEnvironment previous = environment.getAndSet(replacement);
-            try {
-                if (loaded) bridge.swapped();
-                else bridge = new EmbeddingBridge(this, environment, output, this::stageCallbacks, this::newCallable);
-            } catch (RuntimeException failure) {
-                environment.set(previous);
-                throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT, "Invalid replacement environment");
-            }
-            replacement.callbacks().forEach((name, callback) -> callbackArities.putIfAbsent(name, callback.arity()));
         } finally {
             leave();
         }
@@ -164,6 +167,60 @@ public final class CaretSandbox implements AutoCloseable {
         return new CaretEmbeddingException(code, message);
     }
 
+    private void rememberSchema(CaretEnvironment environment) {
+        knownValueNames = environment.values().keySet();
+        LinkedHashMap<String, CallbackSchema> schemas = new LinkedHashMap<>();
+        environment.callbacks().forEach((name, callback) -> schemas.put(name, CallbackSchema.of(callback)));
+        knownCallbacks = Collections.unmodifiableMap(schemas);
+    }
+
+    private void validateLoadedReplacement(CaretEnvironment replacement) {
+        if (!knownValueNames.containsAll(replacement.values().keySet())) {
+            throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    "A loaded sandbox cannot introduce new host value names");
+        }
+        if (!knownCallbacks.keySet().containsAll(replacement.callbacks().keySet())) {
+            throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    "A loaded sandbox cannot introduce new host callback names");
+        }
+        replacement.callbacks().forEach((name, callback) -> {
+            if (!knownCallbacks.get(name).equals(CallbackSchema.of(callback))) {
+                throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                        "A rebound callback must preserve arity and effects: " + name);
+            }
+        });
+    }
+
+    private void requireOwnedCallables(CaretValue value) {
+        switch (value) {
+            case CaretCallable callable -> {
+                if (!callable.isOwnedBy(this)) {
+                    throw misuse(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                            "Callable argument belongs to another sandbox");
+                }
+            }
+            case CaretValue.FieldValue field -> requireOwnedCallables(field.value());
+            case CaretValue.SequenceValue sequence -> sequence.values().forEach(this::requireOwnedCallables);
+            case CaretValue.CollectionValue collection -> collection.fields().values().forEach(this::requireOwnedCallables);
+            default -> { }
+        }
+    }
+
+    private CaretDiagnostic expectedDiagnostic(RuntimeException failure) {
+        Optional<CaretDiagnostic> diagnostic = EmbeddingBridge.diagnostic(failure, sourceName);
+        if (diagnostic.isPresent()) return diagnostic.get();
+        closed = true;
+        pendingCallbacks = null;
+        throw failure;
+    }
+
+    private record CallbackSchema(int arity, Set<CaretEffect> effects) {
+        private CallbackSchema { effects = Set.copyOf(effects); }
+        private static CallbackSchema of(CaretEnvironment.Callback callback) {
+            return new CallbackSchema(callback.arity(), callback.effects());
+        }
+    }
+
     public static final class Builder {
         private CaretEnvironment environment;
         private PrintStream output;
@@ -175,6 +232,7 @@ public final class CaretSandbox implements AutoCloseable {
             try {
                 return new CaretSandbox(environment, output);
             } catch (RuntimeException failure) {
+                if (!EmbeddingBridge.isExpectedFailure(failure)) throw failure;
                 throw new CaretEmbeddingException(CaretEmbeddingException.Code.INVALID_ARGUMENT,
                         "Invalid initial environment");
             }

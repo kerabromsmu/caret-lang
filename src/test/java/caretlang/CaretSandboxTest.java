@@ -89,6 +89,9 @@ class CaretSandboxTest {
             sandbox.swapEnvironment(CaretEnvironment.builder().build());
             CaretInvocationResult unavailable = read.invoke(List.of(CaretValue.missing()));
             assertEquals(CaretOperationResult.Code.FAILURE, unavailable.code());
+
+            sandbox.swapEnvironment(CaretEnvironment.builder().value("hostValue", () -> CaretValue.number(7)).build());
+            assertEquals(CaretValue.number(14), read.invoke(List.of(CaretValue.missing())).value().orElseThrow());
         }
     }
 
@@ -178,8 +181,14 @@ class CaretSandboxTest {
                     "absence", CaretValue.missing())))).value().orElseThrow();
 
             assertEquals(fromFirst, secondIdentity.invoke(List.of(fromFirst)).value().orElseThrow());
-            assertEquals(CaretOperationResult.Code.FAILURE,
-                    secondIdentity.invoke(List.of(firstIdentity)).code());
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                    () -> secondIdentity.invoke(List.of(firstIdentity)));
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                    () -> secondIdentity.invoke(List.of(CaretValue.sequence(List.of(firstIdentity)))));
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                    () -> secondIdentity.invoke(List.of(CaretValue.collection(Map.of("nested", firstIdentity)))));
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                    () -> secondIdentity.invoke(List.of(new CaretValue.FieldValue("nested", firstIdentity))));
             assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
                     () -> second.invoke(firstIdentity, List.of(CaretValue.missing())));
         }
@@ -304,11 +313,68 @@ class CaretSandboxTest {
                     () -> sandbox.swapEnvironment(invalid));
             assertEquals(CaretValue.text("first"), call.invoke(List.of(CaretValue.missing())).value().orElseThrow());
 
+            CaretEnvironment changedEffects = CaretEnvironment.builder().allowEffect(CaretEffect.STATE_WRITE)
+                    .callback("host", 1, Set.of(CaretEffect.STATE_WRITE), values -> CaretValue.text("effectful"))
+                    .build();
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> sandbox.swapEnvironment(changedEffects));
+            assertEquals(CaretValue.text("first"), call.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+
+            CaretEnvironment newName = CaretEnvironment.builder()
+                    .callback("host", 1, Set.of(), values -> CaretValue.text("second"))
+                    .value("late", CaretValue::missing).build();
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> sandbox.swapEnvironment(newName));
+            assertEquals(CaretValue.text("first"), call.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+
+            CaretEnvironment newCallback = CaretEnvironment.builder()
+                    .callback("host", 1, Set.of(), values -> CaretValue.text("second"))
+                    .callback("late", 1, Set.of(), List::getFirst).build();
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> sandbox.swapEnvironment(newCallback));
+
             CaretEnvironment replacement = CaretEnvironment.builder()
                     .callback("host", 1, Set.of(), values -> CaretValue.text("second")).build();
             sandbox.swapEnvironment(replacement);
             assertEquals(CaretValue.text("second"), call.invoke(List.of(CaretValue.missing())).value().orElseThrow());
         }
+    }
+
+    @Test
+    void effectfulCallbacksCannotBeReboundAsPure() {
+        CaretEnvironment effectful = CaretEnvironment.builder().allowEffect(CaretEffect.STATE_WRITE)
+                .callback("host", 1, Set.of(CaretEffect.STATE_WRITE), List::getFirst).build();
+        try (CaretSandbox sandbox = sandbox(effectful)) {
+            sandbox.load(CaretSource.text("effect-schema.caret", "value = 1")).value().orElseThrow();
+            CaretEnvironment pure = CaretEnvironment.builder()
+                    .callback("host", 1, Set.of(), List::getFirst).build();
+            assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    () -> sandbox.swapEnvironment(pure));
+        }
+    }
+
+    @Test
+    void replacementBeforeLoadMayChangeTheCompleteBindingSchema() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().value("old", CaretValue::missing).build())) {
+            CaretEnvironment replacement = CaretEnvironment.builder()
+                    .value("newValue", () -> CaretValue.number(4))
+                    .callback("newCallback", 1, Set.of(), List::getFirst)
+                    .build();
+            sandbox.swapEnvironment(replacement);
+            LoadedProgram program = sandbox.load(CaretSource.text("before-load.caret", """
+                    ^value = newValue
+                    ^called = newCallback 5
+                    """)).value().orElseThrow();
+            CaretValue.CollectionValue result = sandbox.execute(program).value().orElseThrow();
+            assertEquals(CaretValue.number(4), result.find("value").orElseThrow());
+            assertEquals(CaretValue.number(5), result.find("called").orElseThrow());
+        }
+    }
+
+    @Test
+    void unexpectedRuntimeFailuresAreNotMislabeledAsCaretDiagnostics() {
+        assertTrue(EmbeddingBridge.diagnostic(new IllegalStateException("implementation defect"), "source.caret")
+                .isEmpty());
     }
 
     @Test

@@ -18,7 +18,6 @@ public final class EmbeddingBridge {
     private final BiFunction<Object, Integer, CaretCallable> callableFactory;
     private final Interpreter interpreter;
     private final Set<String> lazyNames = new LinkedHashSet<>();
-    private final Set<String> callbackNames = new LinkedHashSet<>();
     private final IdentityHashMap<CaretCallable, Value.Callable> callableHandles = new IdentityHashMap<>();
 
     public EmbeddingBridge(CaretSandbox owner, AtomicReference<CaretEnvironment> environment,
@@ -50,36 +49,31 @@ public final class EmbeddingBridge {
 
     @SuppressWarnings("unchecked")
     public CaretValue.CollectionValue execute(Prepared prepared) {
-        List<Ast.Stmt> program = (List<Ast.Stmt>) prepared.program();
-        interpreter.execute(program);
-        return (CaretValue.CollectionValue) external(interpreter.topLevelBindings(program));
+        return interpreter.embeddingTransaction(() -> {
+            List<Ast.Stmt> program = (List<Ast.Stmt>) prepared.program();
+            interpreter.execute(program);
+            return (CaretValue.CollectionValue) external(interpreter.topLevelBindings(program));
+        });
     }
 
     public CaretValue invoke(Object callable, List<CaretValue> arguments) {
         if (!(callable instanceof Value.Callable function)) throw new IllegalArgumentException("Invalid callable handle");
-        return external(interpreter.invokeEmbedding(function, arguments.stream().map(this::internal).toList()));
+        return interpreter.embeddingTransaction(() ->
+                external(interpreter.invokeEmbedding(function, arguments.stream().map(this::internal).toList())));
     }
 
     public static boolean isCallableHandle(Object handle) { return handle instanceof Value.Callable; }
 
     public void swapped() {
-        for (String name : environment.get().values().keySet()) {
-            if (lazyNames.add(name)) interpreter.defineEmbeddingValue(name, () -> resolveValue(name));
-        }
         for (String name : lazyNames) interpreter.resetEmbeddingValue(name, () -> resolveValue(name));
-        for (CaretEnvironment.Callback callback : environment.get().callbacks().values()) {
-            if (!callbackNames.contains(callback.name())) installCallback(callback);
-        }
     }
 
-    public static CaretDiagnostic diagnostic(Throwable failure, String sourceName) {
+    public static Optional<CaretDiagnostic> diagnostic(Throwable failure, String sourceName) {
         Diagnostic diagnostic = failure instanceof LangException language ? language.diagnostic() : null;
-        if (diagnostic == null) {
-            return new CaretDiagnostic(Diagnostic.Codes.INTERNAL_ERROR, CaretDiagnostic.Phase.RUNTIME,
-                    "Host callback failed", null, List.of());
-        }
-        return externalDiagnostic(diagnostic, sourceName);
+        return diagnostic == null ? Optional.empty() : Optional.of(externalDiagnostic(diagnostic, sourceName));
     }
+
+    public static boolean isExpectedFailure(Throwable failure) { return failure instanceof LangException; }
 
     private static CaretDiagnostic externalDiagnostic(Diagnostic diagnostic, String sourceName) {
         CaretDiagnostic.Location location = location(sourceName, diagnostic.primarySpan());
@@ -109,7 +103,6 @@ public final class EmbeddingBridge {
     }
 
     private void installCallback(CaretEnvironment.Callback declaration) {
-        callbackNames.add(declaration.name());
         interpreter.defineEmbeddingCallable(declaration.name(), declaration.arity(), values -> {
             CaretEnvironment.Callback current = environment.get().callbacks().get(declaration.name());
             if (current == null) throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,

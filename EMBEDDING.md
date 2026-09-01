@@ -8,7 +8,7 @@ exposing interpreter, parser, AST, lexical-scope, or Java-reflection implementat
 
 Download `caret-java-sdk-<version>.zip` from the
 [Caret releases page](https://github.com/kerabromsmu/caret-lang/releases) and extract it. The SDK
-contains the embedding library and its runtime dependencies under `lib/`, this guide, generated API
+contains the named `caret.embedding` module under `lib/`, this guide, generated API
 documentation, and the Java and Caret sources for a runnable example.
 
 Java 21 is required. No Gradle installation or Caret repository checkout is needed.
@@ -18,9 +18,12 @@ To use the downloaded JARs from a Gradle project, copy them into the project's `
 ```kotlin
 dependencies {
     implementation(files("libs/caret-embedding-<version>.jar"))
-    implementation(files("libs/jline-3.30.0.jar"))
 }
 ```
+
+The SDK module exports only `caretlang.embedding`; interpreter, parser, AST, CLI, and bridge
+implementation packages are not exported. Modular applications should declare
+`requires caret.embedding;` in their `module-info.java`.
 
 Registry publication is not available yet, so there are no supported Maven coordinates.
 
@@ -29,15 +32,15 @@ Registry publication is not available yet, so there are no supported Maven coord
 From the extracted SDK directory on Linux or macOS:
 
 ```bash
-javac -cp "lib/*" -d classes examples/EmbeddingExample.java
-java -cp "classes:lib/*" caretlang.examples.EmbeddingExample examples/embedding.caret
+javac --module-path lib --add-modules caret.embedding -d classes examples/EmbeddingExample.java
+java --module-path lib --add-modules caret.embedding -cp classes caretlang.examples.EmbeddingExample examples/embedding.caret
 ```
 
 On Windows, use `;` as the runtime classpath separator:
 
 ```powershell
-javac -cp "lib/*" -d classes examples/EmbeddingExample.java
-java -cp "classes;lib/*" caretlang.examples.EmbeddingExample examples/embedding.caret
+javac --module-path lib --add-modules caret.embedding -d classes examples/EmbeddingExample.java
+java --module-path lib --add-modules caret.embedding -cp classes caretlang.examples.EmbeddingExample examples/embedding.caret
 ```
 
 Both commands print:
@@ -134,8 +137,9 @@ atomically replaces the complete registry; a failed operation preserves the prev
 `sandbox.swapEnvironment(replacement)` atomically replaces host values and callbacks for later
 calls, discards the previous value cache, and preserves sandbox and callable identity. Existing
 returned Caret callables resolve the replacement environment lazily. Removed bindings fail instead
-of retaining their previous authority. A replacement callback with an existing name must preserve
-its arity.
+of retaining their previous authority. Before loading, a replacement may change the complete host
+schema. After loading, it may replace, remove, or reintroduce only known names, and rebound callbacks
+must preserve both arity and effects.
 
 ## Handle failures
 
@@ -160,8 +164,10 @@ Invalid Java-side lifecycle or argument use throws `CaretEmbeddingException` wit
 Current sandbox operations emit `ALREADY_LOADED`, `HANDLE_CONSUMED`, `BUSY`, `CLOSED`,
 `FOREIGN_HANDLE`, `INVALID_ARGUMENT`, and `INVALID_ARITY`. The public `STALE_HANDLE` member is not
 emitted by the current single-script sandbox.
+Foreign callable handles are Java misuse even when nested in a field, Sequence, or Collection.
 An ordinary Java callback exception becomes a sanitized Caret runtime diagnostic; its Java cause
-does not become a Caret value. A fatal JVM `Error` escapes and invalidates the sandbox.
+does not become a Caret value. Unexpected implementation failures and fatal JVM `Error`s propagate
+to the host and invalidate the sandbox rather than being mislabeled as callback failures.
 
 ## Lifecycle and concurrency
 

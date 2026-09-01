@@ -147,10 +147,10 @@ jobs:
           On Windows, use \`bin\\caret.bat\` instead. README, LICENSE, NOTICE, and runnable examples are included in the archive.
 
           Java hosts can download \`caret-java-sdk-$VERSION.zip\`. It contains the embedding library,
-          runtime dependencies, generated API documentation, and a standalone example. After extraction:
+          generated API documentation, and a standalone example. After extraction:
 
-          \`javac -cp "lib/*" -d classes examples/EmbeddingExample.java\`
-          \`java -cp "classes:lib/*" caretlang.examples.EmbeddingExample examples/embedding.caret\`
+          \`javac --module-path lib --add-modules caret.embedding -d classes examples/EmbeddingExample.java\`
+          \`java --module-path lib --add-modules caret.embedding -cp classes caretlang.examples.EmbeddingExample examples/embedding.caret\`
           EOF
       - name: Publish immutable version and update snapshot alias
         env:

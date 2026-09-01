@@ -153,7 +153,7 @@ caret-<version>/bin/caret test tests.caret
 On Windows, use `caret-<version>\bin\caret.bat` with the same arguments. Each archive also contains
 this README, the [Java embedding guide](EMBEDDING.md), `LICENSE`, `NOTICE`, and the runnable
 `examples/` tree. Java hosts can instead download `caret-java-sdk-<version>.zip`; it contains the
-embedding library, runtime dependencies, generated API documentation, and a standalone example.
+named embedding module, generated API documentation, and a standalone example.
 
 ### Release versions
 

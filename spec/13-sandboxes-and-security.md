@@ -923,6 +923,12 @@ environment swap preserves sandbox and callable identity but discards the old va
 callables resolve host values and callbacks against the current snapshot; removed authority causes
 a Caret failure and never preserves the prior authority.
 
+Before loading, the host may replace the complete environment schema. Loading fixes the names and
+callable metadata visible to that script. Later swaps may replace, remove, or reintroduce those
+known values and callbacks but cannot introduce new names. A rebound callback preserves both arity
+and declared effects; changing either would invalidate the analyzed callable contract and is
+rejected before the active environment or its caches change.
+
 `print` and the reserved `registerCallbacks` bridge are available only when explicitly enabled.
 The output destination belongs to the sandbox builder and cannot be redirected by a swap.
 `registerCallbacks` accepts a named Collection of functions. Its last call in a successful operation
@@ -932,10 +938,16 @@ lifetime and authority rules.
 
 All Caret-originated lexer, parser, semantic, authority, callback, and runtime failures cross the
 boundary as result diagnostics. Invalid Java use instead throws one coded `CaretEmbeddingException`.
+This includes a foreign callable anywhere inside a Java-supplied field, Sequence, or Collection.
 An uncaught Java callback `Exception` becomes a sanitized Caret internal-error result; a JVM `Error`
 escapes after best-effort rollback and invalidates the sandbox. Same-sandbox overlap and re-entry
 fail immediately, while independent sandboxes may run concurrently. Closing is idempotent and
 invalidates all sandbox-owned handles.
+
+Unexpected Java implementation failures are not mislabeled as Caret or host-callback failures: they
+invalidate the sandbox and propagate to the host. The downloadable embedding JAR is the named
+`caret.embedding` Java module and exports only `caretlang.embedding`; interpreter, parser, AST,
+bridge, CLI, and runtime implementation packages are not exported.
 
 The public sealed value model preserves null versus missing and uses explicit conversions. It never
 exposes interpreter values, AST nodes, lexical scopes, Java reflection, implementation descriptors,

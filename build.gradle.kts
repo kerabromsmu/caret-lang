@@ -14,11 +14,28 @@ java {
     }
 }
 
+val embeddingModuleInfo = tasks.register<JavaCompile>("embeddingModuleInfo") {
+    group = "build"
+    description = "Compiles the Java embedding SDK module descriptor."
+    source = fileTree("src/embeddingModule/java")
+    classpath = files()
+    destinationDirectory.set(layout.buildDirectory.dir("classes/java/embeddingModule"))
+    options.compilerArgs.addAll(listOf(
+        "--patch-module", "caret.embedding=${sourceSets.main.get().output.classesDirs.asPath}"
+    ))
+}
+
 val embeddingJar = tasks.register<Jar>("embeddingJar") {
     group = "distribution"
     description = "Builds the Java embedding library JAR."
+    dependsOn(embeddingModuleInfo)
     archiveBaseName.set("caret-embedding")
-    from(sourceSets.main.get().output)
+    from(sourceSets.main.get().output) {
+        exclude("caretlang/Main.class")
+        exclude("caretlang/JLineRepl*.class")
+        exclude("caretlang/examples/**")
+    }
+    from(embeddingModuleInfo.flatMap { it.destinationDirectory })
 }
 
 val embeddingJavadoc = tasks.register<Javadoc>("embeddingJavadoc") {
@@ -43,7 +60,6 @@ tasks.register<Zip>("embeddingSdkZip") {
         from("LICENSE", "NOTICE")
         into("lib") {
             from(embeddingJar.flatMap { it.archiveFile })
-            from(configurations.runtimeClasspath)
         }
         into("examples") {
             from("src/main/java/caretlang/examples/EmbeddingExample.java")

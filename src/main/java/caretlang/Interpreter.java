@@ -109,6 +109,16 @@ final class Interpreter {
         }
     }
 
+    <T> T embeddingTransaction(java.util.function.Supplier<T> operation) {
+        Environment.Checkpoint checkpoint = globals.checkpoint();
+        try {
+            return operation.get();
+        } catch (RuntimeException | Error failure) {
+            globals.rollbackTo(checkpoint);
+            throw failure;
+        }
+    }
+
     Value.Dictionary topLevelBindings(List<Stmt> program) {
         LinkedHashMap<String, Value> bindings = new LinkedHashMap<>();
         for (Stmt statement : program) {
