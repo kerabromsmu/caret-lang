@@ -230,6 +230,72 @@ class CaretSandboxTest {
     }
 
     @Test
+    void failedHostValueResolutionIsCachedUntilEnvironmentSwap() {
+        AtomicInteger firstReads = new AtomicInteger();
+        CaretEnvironment first = CaretEnvironment.builder()
+                .value("hostValue", () -> {
+                    firstReads.incrementAndGet();
+                    throw new IllegalStateException("first secret");
+                }).build();
+        try (CaretSandbox sandbox = sandbox(first)) {
+            LoadedProgram program = sandbox.load(CaretSource.text("failed-cache.caret",
+                    "read ignored = hostValue")).value().orElseThrow();
+            CaretCallable read = (CaretCallable) sandbox.execute(program).value().orElseThrow()
+                    .find("read").orElseThrow();
+
+            assertEquals(CaretOperationResult.Code.FAILURE,
+                    read.invoke(List.of(CaretValue.missing())).code());
+            assertEquals(CaretOperationResult.Code.FAILURE,
+                    read.invoke(List.of(CaretValue.missing())).code());
+            assertEquals(1, firstReads.get());
+
+            AtomicInteger secondReads = new AtomicInteger();
+            sandbox.swapEnvironment(CaretEnvironment.builder()
+                    .value("hostValue", () -> {
+                        secondReads.incrementAndGet();
+                        throw new IllegalStateException("second secret");
+                    }).build());
+            assertEquals(CaretOperationResult.Code.FAILURE,
+                    read.invoke(List.of(CaretValue.missing())).code());
+            assertEquals(CaretOperationResult.Code.FAILURE,
+                    read.invoke(List.of(CaretValue.missing())).code());
+            assertEquals(1, secondReads.get());
+        }
+    }
+
+    @Test
+    void foreignCallablesFromHostValuesAndCallbacksAreCodedMisuseWithoutInvalidation() {
+        try (CaretSandbox owner = sandbox(CaretEnvironment.builder().build())) {
+            CaretCallable foreign = identity(owner, "owner.caret");
+
+            CaretEnvironment environment = CaretEnvironment.builder()
+                    .value("hostValue", () -> CaretValue.collection(Map.of(
+                            "nested", CaretValue.sequence(List.of(new CaretValue.FieldValue("callable", foreign))))))
+                    .callback("hostCallback", 1, Set.of(), ignored -> CaretValue.collection(Map.of(
+                            "nested", CaretValue.sequence(List.of(new CaretValue.FieldValue("callable", foreign))))))
+                    .build();
+            try (CaretSandbox sandbox = sandbox(environment)) {
+                LoadedProgram program = sandbox.load(CaretSource.text("foreign-results.caret", """
+                        readValue ignored = hostValue
+                        callHost ignored = hostCallback ignored
+                        safe value = value
+                        """)).value().orElseThrow();
+                CaretValue.CollectionValue exports = sandbox.execute(program).value().orElseThrow();
+                CaretCallable readValue = (CaretCallable) exports.find("readValue").orElseThrow();
+                CaretCallable callHost = (CaretCallable) exports.find("callHost").orElseThrow();
+                CaretCallable safe = (CaretCallable) exports.find("safe").orElseThrow();
+
+                assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                        () -> readValue.invoke(List.of(CaretValue.missing())));
+                assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                        () -> callHost.invoke(List.of(CaretValue.missing())));
+                assertEquals(CaretValue.number(3),
+                        safe.invoke(List.of(CaretValue.number(3))).value().orElseThrow());
+            }
+        }
+    }
+
+    @Test
     void diagnosticsPreserveStablePhaseLocationsAndRelatedNotes() {
         try (CaretSandbox parserSandbox = sandbox(CaretEnvironment.builder().build())) {
             CaretDiagnostic parser = parserSandbox.load(CaretSource.text("parser.caret", "value ="))

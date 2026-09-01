@@ -109,7 +109,8 @@ remain owned by the sandbox that created them.
 ## Supply host values and callbacks
 
 `CaretEnvironment` is immutable. Environment values are evaluated lazily at most once per
-environment snapshot and remain cached even when the Caret operation that first reads them fails.
+environment snapshot. Successful values and sanitized provider failures both remain cached even
+when the Caret operation that first reads them fails.
 Callbacks have fixed arity and explicit observable effects:
 
 ```java
@@ -164,10 +165,12 @@ Invalid Java-side lifecycle or argument use throws `CaretEmbeddingException` wit
 Current sandbox operations emit `ALREADY_LOADED`, `HANDLE_CONSUMED`, `BUSY`, `CLOSED`,
 `FOREIGN_HANDLE`, `INVALID_ARGUMENT`, and `INVALID_ARITY`. The public `STALE_HANDLE` member is not
 emitted by the current single-script sandbox.
-Foreign callable handles are Java misuse even when nested in a field, Sequence, or Collection.
+Foreign callable handles are Java misuse even when nested in a field, Sequence, or Collection,
+including values returned by host providers and callbacks.
 An ordinary Java callback exception becomes a sanitized Caret runtime diagnostic; its Java cause
-does not become a Caret value. Unexpected implementation failures and fatal JVM `Error`s propagate
-to the host and invalidate the sandbox rather than being mislabeled as callback failures.
+does not become a Caret value. Unexpected implementation failures and fatal JVM `Error`s during
+loading, execution, or invocation propagate to the host and invalidate the sandbox rather than
+being mislabeled as callback failures.
 
 ## Lifecycle and concurrency
 

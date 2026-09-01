@@ -13,6 +13,7 @@ final class Environment {
     private static final class Binding {
         private Value value;
         private Supplier<Value> supplier;
+        private RuntimeException lazyFailure;
         private boolean initialized;
 
         private Value read() {
@@ -21,7 +22,15 @@ final class Environment {
                         Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
                         "Binding read before initialization", null);
             }
-            if (supplier != null && value == null) value = java.util.Objects.requireNonNull(supplier.get());
+            if (supplier != null && value == null) {
+                if (lazyFailure != null) throw lazyFailure;
+                try {
+                    value = java.util.Objects.requireNonNull(supplier.get());
+                } catch (RuntimeException failure) {
+                    lazyFailure = failure;
+                    throw failure;
+                }
+            }
             return value;
         }
     }
@@ -73,6 +82,7 @@ final class Environment {
         if (binding == null || binding.supplier == null) throw new IllegalArgumentException("Not a lazy binding: " + name);
         binding.supplier = java.util.Objects.requireNonNull(supplier);
         binding.value = null;
+        binding.lazyFailure = null;
     }
 
     void declare(String name) {

@@ -918,7 +918,8 @@ same commit rule. Output and completed host callback work are observable effects
 rolled back.
 
 The host supplies an immutable `CaretEnvironment`. Named host values are lazy, resolve at most once
-per environment snapshot, and remain cached even when a Caret transaction fails. An atomic
+per environment snapshot, and cache either their successful value or sanitized provider failure
+even when a Caret transaction fails. An atomic
 environment swap preserves sandbox and callable identity but discards the old value cache. Existing
 callables resolve host values and callbacks against the current snapshot; removed authority causes
 a Caret failure and never preserves the prior authority.
@@ -938,9 +939,11 @@ lifetime and authority rules.
 
 All Caret-originated lexer, parser, semantic, authority, callback, and runtime failures cross the
 boundary as result diagnostics. Invalid Java use instead throws one coded `CaretEmbeddingException`.
-This includes a foreign callable anywhere inside a Java-supplied field, Sequence, or Collection.
+This includes a foreign callable anywhere inside a Java-supplied field, Sequence, or Collection,
+whether passed as an invocation argument or returned by a host value provider or callback.
 An uncaught Java callback `Exception` becomes a sanitized Caret internal-error result; a JVM `Error`
-escapes after best-effort rollback and invalidates the sandbox. Same-sandbox overlap and re-entry
+during loading, execution, or invocation escapes after best-effort rollback and invalidates the
+sandbox. Same-sandbox overlap and re-entry
 fail immediately, while independent sandboxes may run concurrently. Closing is idempotent and
 invalidates all sandbox-owned handles.
 

@@ -40,6 +40,10 @@ public final class CaretSandbox implements AutoCloseable {
                 return CaretLoadResult.success(new LoadedProgram(this, bridge.load(source.text())));
             } catch (RuntimeException failure) {
                 return CaretLoadResult.failure(List.of(expectedDiagnostic(failure)));
+            } catch (Error fatal) {
+                closed = true;
+                pendingCallbacks = null;
+                throw fatal;
             }
         } finally {
             leave();
@@ -57,6 +61,9 @@ public final class CaretSandbox implements AutoCloseable {
                 CaretValue.CollectionValue value = bridge.execute((EmbeddingBridge.Prepared) handle.program);
                 commitCallbacks();
                 return CaretExecutionResult.success(value);
+            } catch (CaretEmbeddingException misuse) {
+                pendingCallbacks = null;
+                throw misuse;
             } catch (RuntimeException failure) {
                 pendingCallbacks = null;
                 return CaretExecutionResult.failure(List.of(expectedDiagnostic(failure)));
@@ -91,6 +98,9 @@ public final class CaretSandbox implements AutoCloseable {
                 CaretValue value = bridge.invoke(callable.implementationHandle(), List.copyOf(arguments));
                 commitCallbacks();
                 return CaretInvocationResult.success(value);
+            } catch (CaretEmbeddingException misuse) {
+                pendingCallbacks = null;
+                throw misuse;
             } catch (RuntimeException failure) {
                 pendingCallbacks = null;
                 return CaretInvocationResult.failure(List.of(expectedDiagnostic(failure)));

@@ -96,6 +96,8 @@ public final class EmbeddingBridge {
             return internal(supplier.get());
         } catch (Error error) {
             throw error;
+        } catch (CaretEmbeddingException misuse) {
+            throw misuse;
         } catch (Exception exception) {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                     "Host value provider failed", null);
@@ -111,6 +113,8 @@ public final class EmbeddingBridge {
                 return internal(current.implementation().invoke(values.stream().map(this::external).toList()));
             } catch (Error error) {
                 throw error;
+            } catch (CaretEmbeddingException misuse) {
+                throw misuse;
             } catch (Exception exception) {
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                         "Host callback failed: " + declaration.name(), null);
@@ -184,7 +188,8 @@ public final class EmbeddingBridge {
             case CaretCallable callable -> {
                 Value.Callable internal = callableHandles.get(callable);
                 if (internal == null) {
-                    throw new IllegalArgumentException("Foreign callable");
+                    throw new CaretEmbeddingException(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                            "Callable value belongs to another sandbox");
                 }
                 yield internal;
             }
