@@ -35,10 +35,6 @@ final class LanguageSyntax {
     private static final Set<String> MULTI_CHARACTER_SYMBOLS = Set.of("==", "!=", ">=", "<=", ">>", "->");
     private static final String SINGLE_CHARACTER_SYMBOLS = "()[]@:+-*/%^=<>.&!?~$";
 
-    static int contractParameterArity(String name) {
-        return name.equals("Sequence") ? 1 : 0;
-    }
-
     private LanguageSyntax() {}
 
     static List<BinaryOperator> binaryOperators() { return BINARY_OPERATORS; }

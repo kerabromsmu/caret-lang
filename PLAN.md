@@ -149,8 +149,8 @@ effects, preserves unknown dynamic calls, and proves refinement
 eligibility without exposing effect syntax. Proven unary Boolean callables now participate as
 first-class predicate requirements in derived contracts and direct clauses, including through
 aliases. Nullable/optional contract modifiers are implemented as first-class, identity-stable
-contract unions without collapsing null into missing. The initial parameterized-contract slice is
-also implemented as `Sequence T`, with constructor metadata preserved through aliases, recursive
+contract unions without collapsing null into missing. The initial parameterized-contract slice uses
+callable `Sequence T`, `Field K V`, and `Dictionary K V` constructors, with constructor metadata preserved through aliases, recursive
 element validation, nesting, modifiers, identity semantics, reflection, and conservative outer-kind
 inference. Environment-relative public effect identities, catalog aliases, declaration allowances,
 callable constraints, guarded invocation bounds, and effectful arrow contracts are implemented.
@@ -194,8 +194,8 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   and context, and report `AMBIGUOUS_CONTRACT` rather than generalizing an operator constraint or
   defaulting to Number. Use `INCOMPATIBLE_CONTRACTS` for statically impossible operands while
   preserving established runtime operand, zero-divisor, non-finite, and callable-equality errors.
-- Extend the implemented ordinary contract/function parameterization beyond `Sequence T` as later
-  value kinds arrive; keep general `Collection T` and mutable `Container T` aligned with Phase 4
+- Extend the implemented ordinary contract/function parameterization as later value kinds arrive;
+  keep `Collection` unparameterized and mutable `Container T` aligned with Phase 4
   rather than introducing a separate generic-type subsystem.
 - Preserve implemented same-named overload sets and static normalization of parameter conjunctions,
   aliases, redundant nominal bases, `Any`, and absence alternatives, then order variants with the
@@ -624,7 +624,8 @@ The steps below describe the remaining contextual, template, and representation 
 
 Low-precedence application, runtime user-contract derivation, generalized contract inference, the
 minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
-are complete. Initial parameterized contracts are also complete through `Sequence T`. The shared
+are complete. Initial parameterized contracts are complete through callable `Sequence T`,
+`Field K V`, and `Dictionary K V` constructors. The shared
 callable-signature scheme and safe callable reflection are now implemented for the current callable
 kinds. Exact-arity higher-order arrow contracts are now parsed and analyzed over that metadata,
 including inline clauses, variance checks, declaration-wide variables, explicit effects, and runnable examples.

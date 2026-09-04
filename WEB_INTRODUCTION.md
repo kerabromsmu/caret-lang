@@ -258,10 +258,13 @@ results. An internal analysis also propagates known effects and conservatively r
 dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
 fixed operands are captured into partial applications. Proven unary Boolean functions
 are first-class refinement requirements in derived contracts and direct clauses, and retain that
-eligibility through aliases. The initial parameterized-contract slice implements `Sequence T` as
-ordinary contract application: it validates every sequence element, composes through aliases,
-nesting, and null/missing modifiers, and exposes its base and requirement through reflection.
-General parameterized contracts and complete static proof remain
+eligibility through aliases. Parameterized `Sequence T`, `Field K V`, and `Dictionary K V`
+contracts use ordinary callable contract application. Contract arguments construct contracts,
+multi-parameter constructors curry, and non-contract arguments retain raw-kind predicate behavior.
+`Collection` itself takes no contract parameters. Element conjunctions are constructed before
+application, for example `Sequence (contract [Number positive])`. Constructors compose through
+aliases, nesting, and null/missing modifiers and expose their bases and requirements through
+reflection. General parameterized contracts and complete static proof remain
 planned. Callable reflection now exposes immutable language-owned signature metadata for remaining
 parameters, result facts, known invocation effects, and surviving overload variants without exposing
 captures, partial values, implementation objects, or authority. Derived metadata specializes

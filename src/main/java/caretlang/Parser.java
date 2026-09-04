@@ -262,32 +262,23 @@ final class Parser {
 
     private ContractNameParse contractName(List<Token> tokens, int start) {
         Token token = tokens.get(start);
+        if (token.text().equals("(")) {
+            ContractParse grouped = Objects.requireNonNull(contractClause(tokens, start));
+            return modifiedContractName(new ContractName("<group>", grouped.clause().names(),
+                    false, false, grouped.clause().span()), tokens, grouped.next());
+        }
         if (token.kind() != Kind.IDENT) {
             throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
                     "Contract clause requires contract names", token.span());
         }
-        int current = start + 1;
-        ArrayList<ContractName> arguments = new ArrayList<>();
-        int arity = LanguageSyntax.contractParameterArity(token.text());
-        for (int index = 0; index < arity && current < tokens.size()
-                && !tokens.get(current).text().equals(")"); index++) {
-            if (tokens.get(current).text().equals("(")) {
-                ContractParse grouped = contractClause(tokens, current);
-                if (Objects.requireNonNull(grouped).clause().names().size() != 1) {
-                    throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
-                            "A contract parameter must be one contract", grouped.clause().span());
-                }
-                arguments.add(grouped.clause().names().getFirst());
-                current = grouped.next();
-            } else {
-                ContractNameParse argument = contractName(tokens, current);
-                arguments.add(argument.name());
-                current = argument.next();
-            }
-        }
+        return modifiedContractName(new ContractName(token.text(), token.span()), tokens, start + 1);
+    }
+
+    private ContractNameParse modifiedContractName(ContractName base, List<Token> tokens, int start) {
+        int current = start;
         boolean nullable = false;
         boolean optional = false;
-        SourceSpan end = arguments.isEmpty() ? token.span() : arguments.getLast().span();
+        SourceSpan end = base.span();
         if (current < tokens.size() && adjacent(end, tokens.get(current))
                 && tokens.get(current).text().equals("?")) {
             nullable = true;
@@ -303,8 +294,8 @@ final class Parser {
             throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
                     "Contract clause modifiers must use canonical form T, T?, T~, or T?~", tokens.get(current).span());
         }
-        return new ContractNameParse(new ContractName(token.text(), List.copyOf(arguments), nullable, optional,
-                SourceSpan.cover(token.span(), end)), current);
+        return new ContractNameParse(new ContractName(base.name(), base.arguments(), nullable, optional,
+                base.inline(), SourceSpan.cover(base.span(), end)), current);
     }
 
     private static boolean adjacent(Token left, Token right) {
@@ -463,7 +454,8 @@ final class Parser {
             Token name = tokens.get(current++);
             Expr requirement = name.text().matches("_[1-9][0-9]*")
                     ? numberedContractVariable(name) : new Name(name.text(), name.span());
-            int arity = name.text().startsWith("_") ? 0 : LanguageSyntax.contractParameterArity(name.text());
+            int arity = name.text().startsWith("_") ? 0 : BuiltinContract.named(name.text())
+                    .map(ContractDescriptor::parameterArity).orElse(0);
             for (int index = 0; index < arity; index++) {
                 Expr argument = contractRequirement();
                 requirement = new Apply(requirement, argument,

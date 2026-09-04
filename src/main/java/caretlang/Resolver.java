@@ -352,13 +352,13 @@ final class Resolver {
                         name.inline(), name.span()));
                 continue;
             }
-            Resolution.ContractBinding binding = resolveContract(name, scope);
+            Resolution.ContractBinding binding = resolveContractTerm(name, scope);
             if (name.arguments().isEmpty()) {
                 Integer arity = knownContractParameterArity(name.name(), scope);
                 if (arity != null && arity > 0 && index + arity < clause.names().size()) {
                     java.util.ArrayList<Resolution.ContractBinding> arguments = new java.util.ArrayList<>();
                     for (int argument = 0; argument < arity; argument++) {
-                        arguments.add(resolveContract(clause.names().get(++index), scope));
+                        arguments.add(resolveContractTerm(clause.names().get(++index), scope));
                     }
                     binding = new Resolution.ContractBinding(binding.name(), binding.binding(),
                             List.copyOf(arguments), binding.nullable(), binding.optional(),
@@ -369,6 +369,35 @@ final class Resolver {
         }
         clauses.put(clause, new Resolution.AnalyzedClause(List.copyOf(resolved),
                 pure != null || !effects.isEmpty() ? List.copyOf(effects) : null, clause.span()));
+    }
+
+    private Resolution.ContractBinding resolveContractTerm(Ast.ContractName name, Scope scope) {
+        if (!name.name().equals("<group>")) return resolveContract(name, scope);
+        java.util.ArrayList<Resolution.ContractBinding> grouped = new java.util.ArrayList<>();
+        for (int index = 0; index < name.arguments().size(); index++) {
+            Ast.ContractName nested = name.arguments().get(index);
+            Resolution.ContractBinding binding = resolveContractTerm(nested, scope);
+            Integer arity = nested.name().equals("<group>")
+                    ? 0 : knownContractParameterArity(nested.name(), scope);
+            if (nested.arguments().isEmpty() && arity != null && arity > 0
+                    && index + arity < name.arguments().size()) {
+                java.util.ArrayList<Resolution.ContractBinding> arguments = new java.util.ArrayList<>();
+                for (int argument = 0; argument < arity; argument++) {
+                    arguments.add(resolveContractTerm(name.arguments().get(++index), scope));
+                }
+                binding = new Resolution.ContractBinding(binding.name(), binding.binding(), List.copyOf(arguments),
+                        binding.nullable(), binding.optional(),
+                        SourceSpan.cover(binding.span(), arguments.getLast().span()));
+            }
+            grouped.add(binding);
+        }
+        if (grouped.size() != 1) {
+            throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                    "A grouped contract parameter must produce one contract", name.span());
+        }
+        Resolution.ContractBinding binding = grouped.getFirst();
+        return new Resolution.ContractBinding(binding.name(), binding.binding(), binding.arguments(),
+                name.nullable() || binding.nullable(), name.optional() || binding.optional(), name.span());
     }
 
     private boolean isKnownContractName(String name, Scope scope) {
@@ -398,6 +427,9 @@ final class Resolver {
     }
 
     private Resolution.ContractBinding resolveContract(Ast.ContractName name, Scope scope) {
+            if (name.name().equals("pure") || effectCatalog.resolve(name.name()).isPresent()) {
+                effectAsContractArgument(name);
+            }
             if (isContractVariable(name.name())) {
                 return new Resolution.ContractBinding(name.name(), null, resolveContractArguments(name, scope),
                         name.nullable(), name.optional(), name.span());

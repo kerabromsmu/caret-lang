@@ -102,20 +102,24 @@ final class ParserTest {
     }
 
     @Test
-    void parsesParameterizedSequenceContractsWithoutChangingConjunctions() {
+    void parsesContractTermsWithoutKnowingConstructorNamesOrChangingConjunctions() {
         List<Stmt> program = new Parser("""
                 (Sequence Number positive) values = []
                 (Sequence (Sequence String)) nested = []
                 """).parseProgram();
         ContractClause first = ((Assign) program.getFirst()).contracts();
-        assertEquals(2, first.names().size());
+        assertEquals(3, first.names().size());
         ContractName sequence = first.names().getFirst();
         assertEquals("Sequence", sequence.name());
-        assertEquals(List.of("Number"), sequence.arguments().stream().map(ContractName::name).toList());
-        assertEquals("positive", first.names().get(1).name());
+        assertTrue(sequence.arguments().isEmpty());
+        assertEquals("Number", first.names().get(1).name());
+        assertEquals("positive", first.names().get(2).name());
         ContractName nested = ((Assign) program.get(1)).contracts().names().getFirst();
-        assertEquals("Sequence", nested.arguments().getFirst().name());
-        assertEquals("String", nested.arguments().getFirst().arguments().getFirst().name());
+        assertEquals("Sequence", nested.name());
+        ContractName group = ((Assign) program.get(1)).contracts().names().get(1);
+        assertEquals("<group>", group.name());
+        assertEquals(List.of("Sequence", "String"),
+                group.arguments().stream().map(ContractName::name).toList());
     }
 
     @Test

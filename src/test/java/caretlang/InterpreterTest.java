@@ -380,6 +380,32 @@ final class InterpreterTest {
     }
 
     @Test
+    void contractConstructorsAreCurriedFirstClassFunctionsWithRawPredicateFallbacks() {
+        assertEquals("true\nfalse\ntrue\ntrue\ntrue\nfalse\nfalse\n", execute("""
+                (Boolean) positive value = Number value & value > 0
+                SequenceConstructor = Sequence
+                PositiveNumbers = SequenceConstructor (contract [Number positive])
+                FieldConstructor = Field
+                TextNumberField = FieldConstructor String Number
+                DictionaryConstructor = Dictionary
+                TextNumberDictionary = DictionaryConstructor String Number
+                print PositiveNumbers [1 2 3]
+                print PositiveNumbers [1 (0 - 2) 3]
+                print TextNumberField (field "age" 42)
+                print TextNumberDictionary [(field "age" 42)]
+                print Sequence [1 "two"]
+                print Sequence 1
+                print Collection Number
+                """));
+
+        LangException outerRefinement = assertThrows(LangException.class, () -> execute("""
+                (Boolean) positive value = Number value & value > 0
+                (Sequence Number positive) values = [1 2 3]
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, outerRefinement.diagnostic().code());
+    }
+
+    @Test
     void parameterizedContractsHaveFreshIdentityAndComposeWithAbsenceModifiers() {
         assertEquals("false\ntrue\ntrue\ntrue\nfalse\n", execute("""
                 First = Sequence Number

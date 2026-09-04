@@ -764,7 +764,7 @@ final class Interpreter {
                 acquired.add(nominal);
                 continue;
             }
-            if (contract.accepts(value)) continue;
+            if (contract.test(value, valueSpan)) continue;
             List<Diagnostic.Related> related = analyzed == null ? List.of()
                     : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), analyzed.span()));
             throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,

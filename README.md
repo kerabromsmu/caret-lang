@@ -30,7 +30,7 @@ The current prototype supports:
   and direct clauses; and
 - first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
   distinction between null and missing; and
-- initial parameterized contracts through `Sequence T`, including direct and aliased clauses,
+- callable parameterized contracts through `Sequence T`, `Field K V`, and `Dictionary K V`, including direct and aliased clauses,
   nesting, modifiers, predicates, and reflection; and
 - closed same-name function overload sets with contract-based most-specific dispatch, generic
   fallbacks, prefix/infix calls, and persistent hole partials.
@@ -310,7 +310,7 @@ shadows this builtin-only grouping and follows ordinary application rules.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
   dynamically. Named-function constraint inference and Phase 2 transitive/higher-order effect
   analysis are implemented, including the read-only `caret inspect` report;
-  nullable/optional contract unions and the initial `Sequence T` parameterized contract are
+  nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
   implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
 - Contract-selected collection representations, first-class dynamic fields, formats,
   lambdas, cycles, SIMD, rules,

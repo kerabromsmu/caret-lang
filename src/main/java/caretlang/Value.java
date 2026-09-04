@@ -432,7 +432,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             if (contract.parameterArity() > 0 && raw instanceof ContractValue parameter) {
                 return new ContractValue(contract.parameterize(List.of(parameter.descriptor())));
             }
-            return new Bool(contract.accepts(argument.value()));
+            return new Bool(contract.test(argument.value(), callSpan));
         }
 
         @Override public int remainingArity() { return 1; }

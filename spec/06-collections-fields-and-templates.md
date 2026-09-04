@@ -142,16 +142,16 @@ For example, conceptually:
 
 ```text
 Array T
-    -> Collection T
+    -> Collection
     -> Ordered
     -> Indexed
 
 Set T
-    -> Collection T
+    -> Collection
     -> Unique
 
 Packed T
-    -> Collection T
+    -> Collection
     -> Contiguous
     -> Packed
 ```
@@ -161,12 +161,12 @@ Packed T
 <a id="parameterized-collection-contracts"></a>
 ##### Parameterized collection contracts
 
-Collection contracts may be parameterized.
+Concrete collection contracts may be parameterized. The common `Collection` contract itself has no
+contract parameters: it is the ordinary unary predicate for membership in any collection kind.
 
 Examples:
 
 ```caret
-Collection Int
 List String
 Array Float
 Set String
@@ -174,35 +174,29 @@ Dictionary String Int
 Packed Byte
 ```
 
-Conceptually:
-
-```caret
-Collection element
-```
-
-produces a contract requiring every collection element to satisfy `element`.
-
-Thus:
-
-```caret
-(Collection Number) values
-```
-
-means:
-
-> `values` is a collection whose elements all satisfy `Number`.
-
 Parameterized collection types should use the normal Caret contract/function model rather than requiring a separate generic-type language.
 
-The current prototype implements the first instance of this model as `Sequence T`. Applying the
-raw `Sequence` contract to another contract constructs a fresh contract descriptor; applying it to
-an ordinary value remains a Boolean raw-sequence membership test. `Sequence T` accepts empty
-sequences and sequences whose every element satisfies `T`, supports nesting and ordinary
-null/missing modifiers, and reflects `Sequence` as its base and `T` as its requirement. Initial
-inference retains the outer `Sequence` constraint while element proof remains a runtime check.
+The current prototype implements this callable-constructor model for `Sequence T`, `Field K V`, and
+`Dictionary K V`. Applying a raw constructor to a contract returns a contract; constructors with
+several parameters curry one contract at a time. Applying the same raw constructor to a non-contract
+value instead performs its raw-kind membership test. Constructors are ordinary first-class Caret
+callables: aliases preserve both behavior and remaining constructor arity. `Collection` remains an
+unparameterized contract predicate.
+
+`Sequence T` accepts empty sequences and sequences whose every element satisfies `T`, supports
+derived element contracts, nesting, ordinary null/missing modifiers, and reflection of its base and
+requirement. Combine element requirements before applying the constructor:
+
+```caret
+positive value = Number value & value > 0
+PositiveNumbers = Sequence (contract [Number positive])
+```
+
+Initial inference retains the outer `Sequence` constraint while element proof remains a runtime check.
 
 Within a contract clause, a known parameterizable constructor consumes its declared number of
-following contract terms. Remaining terms are the existing anonymous conjunction. Thus
+following contract terms. This association uses resolved binding metadata rather than constructor
+spellings in the grammar. Remaining terms are the existing anonymous conjunction. Thus
 `(Sequence Number positive)` requires both `Sequence Number` and `positive`; constructor aliases
 retain this metadata. Parenthesized nested terms allow `Sequence (Sequence Number)` without adding
 a generic-type grammar.
@@ -563,7 +557,7 @@ These are related but not identical.
 For example:
 
 ```caret
-(Collection Number) values
+(Sequence Number) values
 ```
 
 guarantees that every element satisfies `Number`.
@@ -656,7 +650,7 @@ A common contract does not necessarily provide enough information to remove all 
 For example:
 
 ```caret
-(Collection Number) values =
+(Sequence Number) values =
   [1 2.5 3 4.5]
 ```
 
@@ -716,7 +710,7 @@ A homogeneous semantic contract is weaker than a packed representation.
 For example:
 
 ```caret
-(Collection Number) values
+(Sequence Number) values
 ```
 
 does not imply packed storage.
@@ -740,13 +734,13 @@ requires a concrete uniform representation.
 Conceptually:
 
 ```text
-Packed T => Collection T
+Packed T => Collection
 ```
 
 but:
 
 ```text
-Collection T !=> Packed T
+Collection !=> Packed T
 ```
 
 ---
@@ -1677,7 +1671,7 @@ A template may describe more precise structural metadata than a broad element co
 For example:
 
 ```caret
-(Collection Number) values
+(Sequence Number) values
 ```
 
 only establishes that every element satisfies `Number`.

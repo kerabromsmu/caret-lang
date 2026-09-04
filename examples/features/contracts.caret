@@ -48,6 +48,20 @@ print NestedNumbers nestedNumbers
 print (@Numbers).name
 print (@Numbers).requirements
 
+(Boolean) positive value = Number value & value > 0
+PositiveNumbers = Sequence (contract [Number positive])
+SequenceConstructor = Sequence
+TextNumberField = Field String Number
+DictionaryConstructor = Dictionary
+TextNumberDictionary = DictionaryConstructor String Number
+print PositiveNumbers [1 2 3]
+print PositiveNumbers [1 (0 - 2) 3]
+print SequenceConstructor [1 "two"]
+print TextNumberField (field "age" 42)
+print TextNumberDictionary [(field "age" 42)]
+print SequenceConstructor 1
+print Collection Number
+
 Diamond = contract [Left Right Root]
 Right = contract Root
 Left = contract Root

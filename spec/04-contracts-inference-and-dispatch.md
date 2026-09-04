@@ -98,7 +98,8 @@ A modifier target known not to be a contract is rejected during semantic analysi
 When the target's contract status depends on runtime evaluation, failure is instead a located runtime
 `NOT_A_CONTRACT` diagnostic. It never reports Java AST or implementation details.
 
-The general unary `Collection` contract and the initial `Sequence T` parameterized-contract form are
+The unparameterized unary `Collection` predicate and the callable `Sequence T`, `Field K V`, and
+`Dictionary K V` parameterized-contract constructors are
 implemented as described in the collection section below. General parameterization, complete static
 inference/proof, and contextual collection representation selection remain planned.
 
