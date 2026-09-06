@@ -629,13 +629,15 @@ are complete. Initial parameterized contracts are complete through callable `Seq
 callable-signature scheme and safe callable reflection are now implemented for the current callable
 kinds. Exact-arity higher-order arrow contracts are now parsed and analyzed over that metadata,
 including inline clauses, variance checks, declaration-wide variables, explicit effects, and runnable examples.
-The environment-relative effect catalog and mixed-clause analysis now enforce public declaration
-allowances and callable-value constraints. Next complete unknown higher-order invocation rejection,
-catalog aliases, and complete higher-order effect propagation. Callable signatures, reflection, explicit higher-order arrow contracts,
-and the initial static operator matrix are settled. Mixed-clause and callable-effect diagnostic
-codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
-unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather
-than introducing a separate exported Scope value model.
+The environment-relative effect catalog and mixed-clause analysis enforce public declaration
+allowances and callable-value constraints; unknown higher-order invocation rejection, catalog
+aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
+explicit higher-order arrow contracts, and the initial static operator matrix are settled.
+Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
+item in Phases 1 or 2 remains formally unresolved. Next implement the settled Phase 3 lambda syntax
+and unify lambdas with the ordinary callable representation before extending partial application,
+higher-order collection operations, and lambda inference. `with`/`outer` wait for the Phase 4 public
+named-member protocol rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals
 

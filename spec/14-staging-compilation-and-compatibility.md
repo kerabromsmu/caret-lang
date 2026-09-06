@@ -1314,9 +1314,10 @@ Their later implementation must not weaken root substitution or permit authority
 ## Not implemented
 
 - trailing lambdas
-- general parameterized contracts beyond the implemented `Sequence T` foundation and complete static
-  dispatch/type proof; current named, aliased, partial, composed, overloaded, closure, and recursive
-  callable forms have higher-order effect propagation, while later value kinds extend that analysis
+- parameterized contracts beyond the implemented callable `Sequence T`, `Field K V`, and
+  `Dictionary K V` constructors, and complete static dispatch/type proof; current named, aliased,
+  partial, composed, overloaded, closure, and recursive callable forms have higher-order effect
+  propagation, while later value kinds extend that analysis
 - storage ownership as public language state; conservative internal ownership analysis is implemented
   solely as an optimization with persistent behavior as the reference
 - first-class dynamic fields, context-selected collection representations, and persistent updates;

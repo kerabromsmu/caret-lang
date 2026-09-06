@@ -159,7 +159,7 @@ named embedding module, generated API documentation, and a standalone example.
 
 The tracked [`VERSION`](VERSION) file is the source of the release version in
 `MAJOR.MINOR.UPDATE` form. The completed `0.1.x` line represents Phase 1, and `0.2.x` represents the
-current Phase 2 development line from [`PLAN.md`](PLAN.md).
+Phase 2 release line from [`PLAN.md`](PLAN.md).
 
 - Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
 - Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
@@ -325,8 +325,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
   is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
   observable persistent semantics.
-- Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
-  base/requirement metadata.
+- Reflection is intentionally limited to language-owned metadata for value kind and collection
+  shape, callable signatures and surviving overload variants, and contract bases and requirements.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
   quines, and `sandbox source environment` execution are specified but not implemented.
 - Stable module-ID declarations, catalog discovery, and path/`ModuleId` import overloads are

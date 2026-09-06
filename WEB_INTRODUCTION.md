@@ -366,9 +366,9 @@ Caret implements a standard `ErrorTemplate` carrying a stable code, phase, messa
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return
 values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
-operations share one explicit envelope. Structural templates and `ErrorTemplate` are implemented;
-general parameterized contracts beyond `Sequence T`, contextual universal-literal selection, and
-`Result` remain planned.
+operations share one explicit envelope. Structural templates and `ErrorTemplate` are implemented.
+Parameterized contracts for later value kinds, contextual universal-literal selection, and `Result`
+remain planned.
 
 The implemented Phase 2 effect foundation assigns distinct stable codes to malformed mixed
 contract/effect clauses, non-callable effect constraints, unavailable callable effect bounds, and
@@ -452,8 +452,8 @@ An internal conservative ownership tracker may reuse ephemeral Sequence or Dicti
 bindings, calls, captures, exports, nesting, and reflection force persistent updates. Ownership is
 not visible to Caret, and an optimization-disabled reference mode is covered by differential tests.
 
-General parameterized contracts, structural templates, contextual collection representations,
-modules, root reification, sandboxing,
+Parameterized contracts for later value kinds, contextual collection representations, modules,
+root reification, sandboxing,
 compile-time execution, separate compilation roots,
 lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
