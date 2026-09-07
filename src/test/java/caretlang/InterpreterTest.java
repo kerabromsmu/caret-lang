@@ -2474,6 +2474,32 @@ final class InterpreterTest {
         assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, undeclared.diagnostic().code());
     }
 
+    @Test
+    void multilineLambdasRemainCompleteRightOperandsOfDollar() {
+        assertEquals("""
+                8
+                9
+                7
+                [ 2 3 ]
+                """, execute("""
+                identity value = value
+                functions = seqAdd [] $ (Number) value ->
+                  value * 2
+                print (seqGet functions 0) 4
+
+                chained = identity $ seqAdd [] $ left right ->
+                  left + right
+                print (seqGet chained 0) 4 5
+
+                nested = first -> second ->
+                  first + second
+                print (nested 3) 4
+
+                print filter [1 2 3] $ value ->
+                  value > 1
+                """));
+    }
+
     private record ModeExecution(String output, int reuseCount) {}
     private record ModeFailure(String output, String code, int line, int reuseCount) {}
 

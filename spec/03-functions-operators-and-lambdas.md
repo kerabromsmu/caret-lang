@@ -168,8 +168,9 @@ From lower to higher precedence:
 14. field lookup and adjacent dereference `:`
 
 Lambda construction binds more tightly than `$`. The parser accepts an ungrouped lambda as the
-complete right operand of `$`; callable construction and execution are introduced in the following
-runtime implementation stage.
+complete right operand of `$`, including a contracted or multi-parameter header followed by an
+indented body. Chained `$` remains right-associative, and a nested lambda owns the remainder of its
+expression or its deeper indentation block. Evaluation lowers through ordinary callable application.
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.

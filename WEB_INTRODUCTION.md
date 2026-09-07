@@ -335,6 +335,9 @@ Prefix application and ordinary or numbered holes derive lambda partials with th
 reuse, arity, contract specialization, and reflection rules as named-function partials.
 Their parameter/result facts and effect bounds are inferred from lambda bodies, captured callables,
 higher-order calls, composition, and partials; effects describe behavior and grant no authority.
+Lambda construction binds above right-associative `$`, so `consumer $ value -> expression` passes
+the complete lambda. Contracted, multi-parameter, nested, and indentation-bodied lambdas follow the
+same rule without a special runtime operator.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects

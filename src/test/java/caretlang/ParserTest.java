@@ -67,6 +67,30 @@ final class ParserTest {
                 """).parseProgram().getFirst());
         Apply applied = assertInstanceOf(Apply.class, call.expression());
         assertInstanceOf(Lambda.class, applied.argument());
+
+        Assign lowApplication = assertInstanceOf(Assign.class, new Parser("""
+                functions = seqAdd [] $ (Number) value ->
+                  value * 2
+                """).parseProgram().getFirst());
+        Apply lowCall = assertInstanceOf(Apply.class, lowApplication.value());
+        Lambda lowLambda = assertInstanceOf(Lambda.class, lowCall.argument());
+        assertNotNull(lowLambda.params().getFirst().contracts());
+
+        Assign chained = assertInstanceOf(Assign.class, new Parser("""
+                result = identity $ seqAdd [] $ left right ->
+                  left + right
+                """).parseProgram().getFirst());
+        Apply outer = assertInstanceOf(Apply.class, chained.value());
+        Apply inner = assertInstanceOf(Apply.class, outer.argument());
+        assertInstanceOf(Lambda.class, inner.argument());
+
+        Assign nestedLambda = assertInstanceOf(Assign.class, new Parser("""
+                nested = first -> second ->
+                  first + second
+                """).parseProgram().getFirst());
+        Lambda first = assertInstanceOf(Lambda.class, nestedLambda.value());
+        assertInstanceOf(Lambda.class,
+                assertInstanceOf(ExprStmt.class, first.body().getFirst()).expression());
     }
 
     @Test

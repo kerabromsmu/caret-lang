@@ -8,7 +8,8 @@ answer = -> 42
 
 trailingFunctions = seqAdd []
   value -> value * 2
-dollarFunctions = seqAdd [] $ value -> value + 1
+dollarFunctions = seqAdd [] $ value ->
+  value + 1
 pipeline = (value -> value + 1) >> (value -> value * 2)
 noisy = value ->
   print value

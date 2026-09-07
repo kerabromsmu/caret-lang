@@ -166,19 +166,61 @@ final class Parser {
     }
 
     private Expr parseExpression(List<Token> tokens, SourcePosition end, int baseIndent) {
-        int lambdaArrow = topLevelLambdaArrow(tokens);
+        int lambdaArrow = lastTopLevelLambdaArrow(tokens);
         if (lambdaArrow == tokens.size() - 1) {
-            List<Parameter> parameters = lambdaParameters(tokens.subList(0, lambdaArrow), tokens.get(lambdaArrow));
             if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= baseIndent) {
                 throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
                         "Lambda body must follow '->' or be indented", tokens.get(lambdaArrow).span());
             }
             List<Stmt> body = parseBlock(lines.get(lineIndex).indent());
-            return new Lambda(parameters, body,
-                    SourceSpan.cover(tokens.isEmpty() ? tokens.get(lambdaArrow).span() : tokens.getFirst().span(),
-                            body.getLast().span()));
+            return blockLambdaExpression(tokens, body);
         }
         return new ExprParser(tokens, end, continuationArguments(baseIndent)).parse();
+    }
+
+    private static Expr blockLambdaExpression(List<Token> tokens, List<Stmt> body) {
+        int arrow = tokens.size() - 1;
+        Token marker = tokens.get(arrow);
+        List<Token> prefix = tokens.subList(0, arrow);
+        if (isLambdaParameterPrefix(prefix, marker)) {
+            List<Parameter> parameters = lambdaParameters(prefix, marker);
+            return new Lambda(parameters, body, SourceSpan.cover(
+                    parameters.isEmpty() ? marker.span() : parameters.getFirst().span(), body.getLast().span()));
+        }
+        int dollar = topLevelToken(prefix, "$");
+        if (dollar >= 0) {
+            if (dollar == 0) return invalidLambdaHeader(prefix, marker);
+            Expr function = new ExprParser(prefix.subList(0, dollar), prefix.get(dollar).span().start()).parse();
+            Expr argument = blockLambdaExpression(tokens.subList(dollar + 1, tokens.size()), body);
+            return new Apply(function, argument, SourceSpan.cover(function.span(), argument.span()));
+        }
+        int nestedArrow = topLevelLambdaArrow(prefix);
+        if (nestedArrow >= 0 && isLambdaParameterPrefix(prefix.subList(0, nestedArrow),
+                prefix.get(nestedArrow))) {
+            List<Parameter> parameters = lambdaParameters(prefix.subList(0, nestedArrow), prefix.get(nestedArrow));
+            Expr nested = blockLambdaExpression(tokens.subList(nestedArrow + 1, tokens.size()), body);
+            ExprStmt nestedBody = new ExprStmt(nested, nested.span());
+            return new Lambda(parameters, List.of(nestedBody), SourceSpan.cover(
+                    parameters.isEmpty() ? prefix.get(nestedArrow).span() : parameters.getFirst().span(),
+                    nested.span()));
+        }
+        return invalidLambdaHeader(prefix, marker);
+    }
+
+    private static Expr invalidLambdaHeader(List<Token> prefix, Token marker) {
+        lambdaParameters(prefix, marker);
+        throw new AssertionError("Invalid lambda header unexpectedly parsed");
+    }
+
+    private static int topLevelToken(List<Token> tokens, String spelling) {
+        int depth = 0;
+        for (int index = 0; index < tokens.size(); index++) {
+            String text = tokens.get(index).text();
+            if (text.equals("(") || text.equals("[")) depth++;
+            else if (text.equals(")") || text.equals("]")) depth--;
+            else if (text.equals(spelling) && depth == 0) return index;
+        }
+        return -1;
     }
 
     private static int topLevelLambdaArrow(List<Token> tokens) {
@@ -190,6 +232,18 @@ final class Parser {
             else if (text.equals("->") && depth == 0) return index;
         }
         return -1;
+    }
+
+    private static int lastTopLevelLambdaArrow(List<Token> tokens) {
+        int depth = 0;
+        int result = -1;
+        for (int index = 0; index < tokens.size(); index++) {
+            String text = tokens.get(index).text();
+            if (text.equals("(") || text.equals("[")) depth++;
+            else if (text.equals(")") || text.equals("]")) depth--;
+            else if (text.equals("->") && depth == 0) result = index;
+        }
+        return result;
     }
 
     private static List<Parameter> lambdaParameters(List<Token> tokens, Token arrow) {
