@@ -124,6 +124,7 @@ final class ContractInference {
 
     private final IdentityHashMap<FunctionDef, FunctionContract> contracts = new IdentityHashMap<>();
     private final IdentityHashMap<FunctionDef, EffectSummary> effects = new IdentityHashMap<>();
+    private final IdentityHashMap<Lambda, FunctionDef> lambdaFunctions = new IdentityHashMap<>();
     private final IdentityHashMap<List<EnumSet<BuiltinContract>>, DeclaredParameters>
             declaredParameterDomains = new IdentityHashMap<>();
     private final Resolution resolution;
@@ -160,6 +161,15 @@ final class ContractInference {
 
     FunctionContract contract(FunctionDef function) { return contracts.get(function); }
     EffectSummary effects(FunctionDef function) { return effects.get(function); }
+    CallableSignature signature(Lambda lambda) {
+        FunctionDef function = lambdaFunctions.get(lambda);
+        if (function == null) throw new IllegalArgumentException("Lambda was not analyzed");
+        CallableSignature signature = CallableSignature.inferred(function, this, resolution);
+        CallableSignature.Effects lambdaEffects = signature.effects();
+        return new CallableSignature(signature.parameters(), signature.result(),
+                new CallableSignature.Effects(lambdaEffects.inferred(), null, lambdaEffects.inferred()),
+                signature.variables());
+    }
 
     boolean isRefinementEligible(FunctionDef function) {
         FunctionContract contract = contracts.get(function);
@@ -251,9 +261,37 @@ final class ContractInference {
             EffectSummary inferredEffects = inferEffects(function.body(),
                     withConstrainedParameters(function, visibleEffects));
             effects.put(function, inferredEffects);
-            analyzeBlock(function.body(), visible, visibleEffects, false);
+            analyzeBlock(function.body(), visible, withConstrainedParameters(function, visibleEffects), false);
         }
+        analyzeLambdas(statements, visible, visibleEffects);
         if (analyzeOrdinaryBindings) analyzeOrdinaryBindings(statements, visible);
+    }
+
+    private void analyzeLambdas(List<Stmt> statements, Map<String, FunctionContract> visible,
+                                Map<String, CallableEffects> visibleEffects) {
+        for (Stmt statement : statements) {
+            Expr expression = switch (statement) {
+                case Assign assign -> assign.value();
+                case ExprStmt expressionStatement -> expressionStatement.expression();
+                case PrintLine line -> printExpression(line);
+                case FunctionDef ignored -> null;
+            };
+            if (expression != null) analyzeLambdas(expression, visible, visibleEffects);
+        }
+    }
+
+    private void analyzeLambdas(Expr expression, Map<String, FunctionContract> visible,
+                                Map<String, CallableEffects> visibleEffects) {
+        if (expression instanceof Lambda lambda) {
+            if (lambdaFunctions.containsKey(lambda)) return;
+            FunctionDef function = new FunctionDef("<lambda>", null, lambda.params(), lambda.body(), lambda.span());
+            lambdaFunctions.put(lambda, function);
+            contracts.put(function, infer(function, visible));
+            effects.put(function, inferEffects(lambda.body(), withConstrainedParameters(function, visibleEffects)));
+            analyzeBlock(lambda.body(), visible, visibleEffects, false);
+            return;
+        }
+        for (Expr child : AstTraversal.children(expression)) analyzeLambdas(child, visible, visibleEffects);
     }
 
     private static FunctionContract empty(FunctionDef function) {
@@ -725,6 +763,14 @@ final class ContractInference {
 
     private CallableEffects callableValueEffects(Expr expression, Map<String, CallableEffects> visible) {
         while (expression instanceof Group group) expression = group.expression();
+        if (expression instanceof Lambda lambda) {
+            FunctionDef function = lambdaFunctions.get(lambda);
+            EffectSummary summary = function == null
+                    ? inferEffects(lambda.body(), withConstrainedParameters(
+                    new FunctionDef("<lambda>", null, lambda.params(), lambda.body(), lambda.span()), visible))
+                    : effects.get(function);
+            return new CallableEffects(lambda.params().size(), summary, null);
+        }
         if (expression instanceof Name name) return resolvedCallable(name, visible);
         if (expression instanceof Compose compose) {
             CallableEffects left = callableValueEffects(compose.left(), visible);
@@ -812,8 +858,8 @@ final class ContractInference {
         if (arguments.stream().anyMatch(ContractInference::containsHole)) {
             return captureEffects(application, visible);
         }
-        if (target instanceof Name name) {
-            CallableEffects callable = resolvedCallable(name, visible);
+        CallableEffects callable = callableValueEffects(target, visible);
+        if (callable != null) {
             if (callable == null) return result.plus(EffectSummary.UNKNOWN);
             if (arguments.size() < callable.arity()) return result;
             result = result.plus(callable.summary());

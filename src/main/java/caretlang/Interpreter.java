@@ -415,8 +415,7 @@ final class Interpreter {
                 parameters.define(lambda.params().get(index).name(), value);
             }
             return executeBlock(lambda.body(), new Environment(parameters), resolution);
-        }, false, CallableSignature.declared(lambda, resolution,
-                List.of("Output", "StateRead", "StateWrite", "TestReport")));
+        }, false, Objects.requireNonNull(inference).signature(lambda));
         if (lambda.params().stream().noneMatch(parameter -> parameter.contracts() != null)) return raw;
         return new Value.ContractedCallable(raw, (index, argument) -> {
             Parameter parameter = lambda.params().get(index);

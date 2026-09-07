@@ -325,13 +325,15 @@ The prototype implements the runtime `map transform values` operation for Sequen
 named, partial, and composed callable values. Once its transform is supplied, the resulting partial
 exposes that transform's invocation-effect bound; invoking a callable whose bound remains
 unavailable fails before its body executes. Declaration-wide variable schemes retain their
-substitutions through prefix and hole partials; executable lambdas remain planned.
+substitutions through prefix and hole partials, including executable lambdas.
 
 Lambdas now support unary, multi-parameter, contracted, nullary, expression-bodied, and
 indentation-bodied forms. They are ordinary callable values: they capture lexical bindings, can be
 passed, returned, or stored, and expose anonymous callable metadata without exposing captures.
 Prefix application and ordinary or numbered holes derive lambda partials with the same ordering,
 reuse, arity, contract specialization, and reflection rules as named-function partials.
+Their parameter/result facts and effect bounds are inferred from lambda bodies, captured callables,
+higher-order calls, composition, and partials; effects describe behavior and grant no authority.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
@@ -461,7 +463,7 @@ not visible to Caret, and an optimization-disabled reference mode is covered by 
 Parameterized contracts for later value kinds, contextual collection representations, modules,
 root reification, sandboxing,
 compile-time execution, separate compilation roots,
-lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
+mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 
 To explore the implementation, syntax reference, and runnable examples, see the project

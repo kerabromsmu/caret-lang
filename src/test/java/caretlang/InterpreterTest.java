@@ -2371,6 +2371,43 @@ final class InterpreterTest {
         assertEquals(Diagnostic.Codes.MIXED_HOLE_STYLES, mixed.diagnostic().code());
     }
 
+    @Test
+    void lambdaSignaturesInferContractsEffectsAndGenericRelationships() {
+        assertEquals("""
+                6
+                hello
+                0
+                1
+                Output
+                """, execute("""
+                ([Number] -> Number) double = value -> value * 2
+                ([_1] -> _1) same = value -> value
+
+                noisy = value ->
+                  print value
+                  value
+
+                print double 3
+                print same "hello"
+                print (seqSize (@double).signature.effects.upperBound)
+                print (seqSize (@noisy).signature.effects.upperBound)
+                print (seqGet (@noisy).signature.effects.upperBound 0).id
+                """));
+
+        LangException effectful = assertThrows(LangException.class, () -> execute("""
+                ([Number] -> Number) bad = value ->
+                  print value
+                  value
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, effectful.diagnostic().code());
+
+        LangException unknown = assertThrows(LangException.class, () -> execute("""
+                make transform = value -> transform value
+                ([Number] -> Number) bad = make print
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, unknown.diagnostic().code());
+    }
+
     private record ModeExecution(String output, int reuseCount) {}
     private record ModeFailure(String output, String code, int line, int reuseCount) {}
 

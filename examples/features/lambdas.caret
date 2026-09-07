@@ -9,6 +9,10 @@ answer = -> 42
 trailingFunctions = seqAdd []
   value -> value * 2
 dollarFunctions = seqAdd [] $ value -> value + 1
+pipeline = (value -> value + 1) >> (value -> value * 2)
+noisy = value ->
+  print value
+  value
 
 print double 4
 print add 2 5
@@ -18,6 +22,10 @@ print reverseSubtract 3 10
 print answer
 print (seqGet trailingFunctions 0) 5
 print (seqGet dollarFunctions 0) 6
+print pipeline 3
+print (seqSize (@double).signature.effects.upperBound)
+print (seqSize (@noisy).signature.effects.upperBound)
+print (seqGet (@noisy).signature.effects.upperBound 0).id
 print (@double).kind
 print (@double).id
 print (@double).remaining
