@@ -317,18 +317,27 @@ final class ContractInferenceTest {
                 positive value = value > 0
                 wrongArity left right = left == right
                 wrongResult value = value + 1
-                emitting value = print (value > 0)
-                dynamic predicate value = predicate value
+                (Boolean Output) emitting value = print (value > 0)
+                (Boolean) dynamic value = predicate value
                 """).parseProgram();
         ContractInference inference = ContractInference.analyze(program);
 
         inference.validateRefinement((Ast.FunctionDef) program.getFirst());
+        String[] details = {
+                "must take exactly one parameter",
+                "must guarantee a Boolean result",
+                "has observable effects",
+                "contains a call whose purity cannot be proved"
+        };
         for (int index = 1; index < program.size(); index++) {
             Ast.FunctionDef candidate = (Ast.FunctionDef) program.get(index);
             LangException error = assertThrows(LangException.class,
                     () -> inference.validateRefinement(candidate));
+            assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
             assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
             assertEquals(index + 1, error.diagnostic().primarySpan().start().line());
+            assertEquals(1, error.diagnostic().primarySpan().start().column());
+            assertTrue(error.getMessage().contains(details[index - 1]), error::getMessage);
         }
     }
 

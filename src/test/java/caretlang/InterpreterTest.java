@@ -465,13 +465,29 @@ final class InterpreterTest {
                 PositiveNumber = contract [Number positive]
                 (PositiveNumber) count = -1
                 """));
+        assertEquals(Diagnostic.Phase.RUNTIME, derived.diagnostic().phase());
         assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, derived.diagnostic().code());
+        assertEquals(3, derived.diagnostic().primarySpan().start().line());
+        assertEquals(26, derived.diagnostic().primarySpan().start().column());
 
         LangException direct = assertThrows(LangException.class, () -> execute("""
                 positive value = value > 0
                 (positive) count = 0
                 """));
+        assertEquals(Diagnostic.Phase.RUNTIME, direct.diagnostic().phase());
         assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, direct.diagnostic().code());
+        assertEquals(2, direct.diagnostic().primarySpan().start().line());
+        assertEquals(20, direct.diagnostic().primarySpan().start().column());
+
+        LangException result = assertThrows(LangException.class, () -> execute("""
+                positive value = value > 0
+                (Number positive) invalidResult value = -1
+                print invalidResult 1
+                """));
+        assertEquals(Diagnostic.Phase.RUNTIME, result.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, result.diagnostic().code());
+        assertEquals(2, result.diagnostic().primarySpan().start().line());
+        assertEquals(41, result.diagnostic().primarySpan().start().column());
     }
 
     @Test
@@ -480,13 +496,19 @@ final class InterpreterTest {
                 same left right = left == right
                 Invalid = contract same
                 """));
+        assertEquals(Diagnostic.Phase.SEMANTIC, wrongArity.diagnostic().phase());
         assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, wrongArity.diagnostic().code());
+        assertEquals(2, wrongArity.diagnostic().primarySpan().start().line());
+        assertEquals(20, wrongArity.diagnostic().primarySpan().start().column());
 
         LangException effectful = assertThrows(LangException.class, () -> execute("""
                 emitting value = print (value > 0)
                 (emitting) count = 1
                 """));
+        assertEquals(Diagnostic.Phase.SEMANTIC, effectful.diagnostic().phase());
         assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, effectful.diagnostic().code());
+        assertEquals(1, effectful.diagnostic().primarySpan().start().line());
+        assertEquals(1, effectful.diagnostic().primarySpan().start().column());
     }
 
     @Test
@@ -501,6 +523,8 @@ final class InterpreterTest {
                 """).parseProgram()));
         assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
         assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+        assertEquals(1, error.diagnostic().primarySpan().start().line());
+        assertEquals(1, error.diagnostic().primarySpan().start().column());
         assertEquals("", bytes.toString(StandardCharsets.UTF_8));
     }
 
@@ -516,6 +540,8 @@ final class InterpreterTest {
                 """).parseProgram()));
         assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase());
         assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code());
+        assertEquals(2, error.diagnostic().primarySpan().start().line());
+        assertEquals(9, error.diagnostic().primarySpan().start().column());
         assertEquals("", bytes.toString(StandardCharsets.UTF_8));
     }
 
