@@ -1,6 +1,7 @@
 package caretlang;
 
 import caretlang.Ast.FunctionDef;
+import caretlang.Ast.Lambda;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -163,6 +164,17 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                 new Result(union(declaredResult, inferredResult),
                         function.resultContracts() == null ? null : declaredResult, inferredResult),
                 new Effects(effects == null ? null : declaredEffects, declaredEffects, effects), variables);
+    }
+
+    static CallableSignature declared(Lambda lambda, Resolution resolution, List<String> conservativeEffects) {
+        List<Parameter> parameters = lambda.params().stream().map(parameter -> {
+            List<ContractTerm> declared = terms(resolution.clause(parameter.contracts()), resolution);
+            return new Parameter(parameter.name(), declared,
+                    parameter.contracts() == null ? null : declared, List.of());
+        }).toList();
+        List<EffectRef> effects = effectRefs(conservativeEffects);
+        return new CallableSignature(parameters, new Result(List.of(), null, List.of()),
+                new Effects(effects, null, effects), List.of());
     }
 
     CallableSignature dropFirst() {

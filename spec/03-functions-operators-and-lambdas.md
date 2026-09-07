@@ -257,8 +257,9 @@ planned contract/effect system.
 
 The prototype implements the syntax, layout, precedence, source spans, closure construction,
 lexical capture, ordinary invocation, parameter-contract boundaries, nullary invocation, storage,
-return, and environment-filtered callable reflection described in this section. Lambda-specific
-partial application and static contract/effect inference are completed by later Phase 3 stages.
+return, prefix and arbitrary-hole partial application, and environment-filtered callable reflection
+described in this section. Static lambda contract/effect inference is completed by a later Phase 3
+stage.
 
 <a id="overview"></a>
 ### Overview

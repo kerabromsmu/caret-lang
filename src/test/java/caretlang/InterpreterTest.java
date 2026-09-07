@@ -2321,6 +2321,56 @@ final class InterpreterTest {
                 "Contract violation for parameter x", 2, 14);
     }
 
+    @Test
+    void lambdaPartialsPreserveHoleOrderingCapturesAndReflection() {
+        assertEquals("""
+                13
+                7
+                7
+                8
+                10
+                15
+                1
+                right
+                Number
+                """, execute("""
+                add = left right -> left + right
+                addTen = add 10
+                print addTen 3
+
+                before = add _ 5
+                print before 2
+
+                subtract = left right -> left - right
+                reverse = subtract _2 _1
+                print reverse 3 10
+
+                duplicate = (left right -> left + right) _1 _1
+                print duplicate 4
+
+                factory amount = value extra -> value + extra + amount
+                returned = factory 5
+                fixed = returned _ 3
+                print fixed 2
+
+                capturedBase = 10
+                captured = (left right -> left + right + capturedBase) _ 2
+                print captured 3
+
+                contracted = (Number) left (Number) right -> left + right
+                partial = contracted 2
+                print (@partial).remaining
+                print (seqGet (@partial).signature.parameters 0).id
+                print (seqGet (seqGet (@partial).signature.parameters 0).declared 0).id
+                """));
+
+        LangException mixed = assertThrows(LangException.class, () -> execute("""
+                add = left right -> left + right
+                invalid = add _ _1
+                """));
+        assertEquals(Diagnostic.Codes.MIXED_HOLE_STYLES, mixed.diagnostic().code());
+    }
+
     private record ModeExecution(String output, int reuseCount) {}
     private record ModeFailure(String output, String code, int line, int reuseCount) {}
 

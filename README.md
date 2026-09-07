@@ -315,7 +315,7 @@ shadows this builtin-only grouping and follows ordinary application rules.
   nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
   implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
 - Contract-selected collection representations, first-class dynamic fields, formats,
-  lambda-specific partial and inference refinements, cycles, SIMD, rules,
+  lambda-specific inference refinements, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
   and whole-domain overload coverage. Complete static dispatch/type proof remains planned.

@@ -2,6 +2,8 @@ double = x -> x * 2
 add = left right -> left + right
 makeAdder amount = value -> value + amount
 addThree = makeAdder 3
+addTen = add 10
+reverseSubtract = (left right -> left - right) _2 _1
 answer = -> 42
 
 trailingFunctions = seqAdd []
@@ -11,6 +13,8 @@ dollarFunctions = seqAdd [] $ value -> value + 1
 print double 4
 print add 2 5
 print addThree 4
+print addTen 5
+print reverseSubtract 3 10
 print answer
 print (seqGet trailingFunctions 0) 5
 print (seqGet dollarFunctions 0) 6
