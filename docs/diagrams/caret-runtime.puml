@@ -1,0 +1,79 @@
+@startuml Caret runtime
+title Caret prototype — runtime values and execution
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Value hierarchy" {
+  interface Value <<sealed>>
+  class Attributed <<record>>
+  class Num <<record>>
+  class Str <<record>>
+  class Bool <<record>>
+  enum Null
+  enum Missing
+  class FieldValue <<record>>
+  enum EmptyCollection
+  interface Reflective
+  class ProjectedDictionary
+  class Seq
+  class Dictionary
+  interface Callable
+  class ContractValue
+  class ContractedCallable
+  class ComposedFunction
+  class FunctionValue
+  class HoleFunction
+}
+
+Value <|-- Attributed
+Value <|-- Num
+Value <|-- Str
+Value <|-- Bool
+Value <|-- Null
+Value <|-- Missing
+Value <|-- FieldValue
+Value <|-- Seq
+Value <|-- Callable
+Value <|-- Reflective
+Reflective <|-- EmptyCollection
+Reflective <|-- ProjectedDictionary
+Reflective <|-- Dictionary
+Callable <|-- ContractValue
+Callable <|-- ContractedCallable
+Callable <|-- ComposedFunction
+Callable <|-- FunctionValue
+Callable <|-- HoleFunction
+
+Seq *-- "0..*" Value
+Dictionary *-- "0..*" Value : fields
+Attributed *-- Value
+ContractedCallable *-- Callable : target
+ComposedFunction *-- Callable : stages
+HoleFunction *-- Callable : target
+
+package "Execution services" {
+  class Interpreter
+  class Environment
+  class CallableDispatcher
+  class OwnershipTracker
+  class CollectionRuntime
+  class ValueSemantics
+  class ReflectionContext
+  class TestReporter
+}
+
+Interpreter *-- Environment : globals
+Interpreter *-- CallableDispatcher
+Interpreter *-- OwnershipTracker
+Interpreter o-- ReflectionContext
+Interpreter o-- TestReporter
+Environment o-- "0..*" Value : bindings
+CallableDispatcher ..> Callable : invokes
+OwnershipTracker ..> Value
+CollectionRuntime ..> Dictionary
+ValueSemantics ..> Value : equality/rendering
+ProjectedDictionary o-- ReflectionContext
+@enduml
