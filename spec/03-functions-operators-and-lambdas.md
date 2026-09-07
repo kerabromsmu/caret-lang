@@ -255,10 +255,10 @@ planned contract/effect system.
 <a id="lambda-functions"></a>
 ## Lambda Functions
 
-The prototype parser implements the syntax, layout, precedence, source spans, and located malformed
-lambda diagnostics described in this section. Runtime closure construction and invocation remain
-planned until Phase 3.2, so the examples below are specification examples rather than executable
-feature examples for the current parser-only stage.
+The prototype implements the syntax, layout, precedence, source spans, closure construction,
+lexical capture, ordinary invocation, parameter-contract boundaries, nullary invocation, storage,
+return, and environment-filtered callable reflection described in this section. Lambda-specific
+partial application and static contract/effect inference are completed by later Phase 3 stages.
 
 <a id="overview"></a>
 ### Overview

@@ -60,9 +60,11 @@ final class Resolver {
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines = new IdentityHashMap<>();
     private final IdentityHashMap<FunctionDef, LinkedHashMap<Integer, Resolution.Upvalue>> upvalues =
             new IdentityHashMap<>();
+    private final IdentityHashMap<Lambda, LinkedHashMap<Integer, Resolution.Upvalue>> lambdaUpvalues =
+            new IdentityHashMap<>();
     private final java.util.Set<ArrowContract> headerArrows =
             java.util.Collections.newSetFromMap(new IdentityHashMap<>());
-    private final ArrayDeque<FunctionDef> functions = new ArrayDeque<>();
+    private final ArrayDeque<Object> callableContexts = new ArrayDeque<>();
     private final java.util.Map<SourceSpan, Integer> declarations = new java.util.HashMap<>();
     private final java.util.Map<Integer, Integer> directAliases = new java.util.HashMap<>();
     private final java.util.Map<Integer, java.util.Set<Integer>> staticContractBases = new java.util.HashMap<>();
@@ -87,7 +89,8 @@ final class Resolver {
         }
         resolver.resolveBlock(program, root, false);
         return new Resolution(resolver.names, resolver.clauses, resolver.calls,
-                resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.declarations);
+                resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.resolvedLambdaUpvalues(),
+                resolver.declarations);
     }
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
@@ -131,7 +134,9 @@ final class Resolver {
             if (name == null) continue;
             Symbol original = scope.symbols.get(name);
             boolean function = statement instanceof FunctionDef;
-            Integer arity = statement instanceof FunctionDef definition ? definition.params().size() : null;
+            Integer arity = statement instanceof FunctionDef definition ? definition.params().size()
+                    : statement instanceof Assign assign && assign.value() instanceof Lambda lambda
+                    ? lambda.params().size() : null;
             if (original != null) {
                 if (function && original.declaration() == null && original.callableArity() != null
                         && original.contractState() != ContractState.CONTRACT) {
@@ -297,7 +302,7 @@ final class Resolver {
     }
 
     private void resolveFunction(FunctionDef function, Scope enclosing) {
-        functions.push(function);
+        callableContexts.push(function);
         upvalues.put(function, new LinkedHashMap<>());
         try {
             validateHeaderVariables(function);
@@ -316,7 +321,7 @@ final class Resolver {
             }
             resolveBlock(function.body(), new Scope(parameters), true);
         } finally {
-            functions.pop();
+            callableContexts.pop();
         }
     }
 
@@ -484,7 +489,7 @@ final class Resolver {
         if (expression instanceof ArrowContract) return ContractState.CONTRACT;
         if (expression instanceof Apply apply && apply.function() instanceof Name name
                 && name.name().equals("contract")) return ContractState.CONTRACT;
-        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral) {
+        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral || expression instanceof Lambda) {
             return ContractState.NON_CONTRACT;
         }
         return ContractState.UNKNOWN;
@@ -591,9 +596,7 @@ final class Resolver {
                     }
                 }
             }
-            case Lambda ignored -> {
-                // Lambda scopes and capture resolution are introduced in Phase 3.2.
-            }
+            case Lambda lambda -> resolveLambda(lambda, scope);
         }
     }
 
@@ -789,16 +792,50 @@ final class Resolver {
     }
 
     private void recordUpvalue(Symbol symbol, int lexicalDepth, SourceSpan firstUseSpan) {
-        FunctionDef function = functions.peek();
+        Object callable = callableContexts.peek();
+        if (callable instanceof Lambda lambda) {
+            LinkedHashMap<Integer, Resolution.Upvalue> captures = lambdaUpvalues.get(lambda);
+            captures.computeIfAbsent(symbol.id(), ignored -> new Resolution.Upvalue(captures.size(), symbol.id(),
+                    lexicalDepth, symbol.slot(), symbol.declaration(), firstUseSpan));
+            return;
+        }
+        FunctionDef function = callable instanceof FunctionDef definition ? definition : null;
         if (function == null) throw new IllegalStateException("Captured binding outside a function");
         LinkedHashMap<Integer, Resolution.Upvalue> captures = upvalues.get(function);
         captures.computeIfAbsent(symbol.id(), ignored -> new Resolution.Upvalue(captures.size(), symbol.id(),
                 lexicalDepth, symbol.slot(), symbol.declaration(), firstUseSpan));
     }
 
+    private void resolveLambda(Lambda lambda, Scope enclosing) {
+        callableContexts.push(lambda);
+        lambdaUpvalues.put(lambda, new LinkedHashMap<>());
+        try {
+            Scope parameters = new Scope(enclosing);
+            HashSet<String> seen = new HashSet<>();
+            for (Ast.Parameter parameter : lambda.params()) {
+                resolverContracts(parameter.contracts(), enclosing);
+                if (!seen.add(parameter.name())) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.DUPLICATE_PARAMETER,
+                            "Duplicate parameter: " + parameter.name(), parameter.span());
+                }
+                parameters.symbols.put(parameter.name(), new Symbol(parameters.nextSlot++, nextSymbolId++,
+                        parameter.span(), true, null, ContractState.UNKNOWN, null, null, false));
+            }
+            resolveBlock(lambda.body(), new Scope(parameters), true);
+        } finally {
+            callableContexts.pop();
+        }
+    }
+
     private IdentityHashMap<FunctionDef, List<Resolution.Upvalue>> resolvedUpvalues() {
         IdentityHashMap<FunctionDef, List<Resolution.Upvalue>> result = new IdentityHashMap<>();
         upvalues.forEach((function, captures) -> result.put(function, List.copyOf(captures.values())));
+        return result;
+    }
+
+    private IdentityHashMap<Lambda, List<Resolution.Upvalue>> resolvedLambdaUpvalues() {
+        IdentityHashMap<Lambda, List<Resolution.Upvalue>> result = new IdentityHashMap<>();
+        lambdaUpvalues.forEach((lambda, captures) -> result.put(lambda, List.copyOf(captures.values())));
         return result;
     }
 

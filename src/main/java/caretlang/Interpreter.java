@@ -401,6 +401,31 @@ final class Interpreter {
         }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
     }
 
+    private Value.Callable lambdaFunction(Lambda lambda, Environment env, Resolution resolution) {
+        List<String> parameterNames = lambda.params().stream().map(Parameter::name).toList();
+        LinkedHashMap<Integer, Environment.BindingReference> captures = new LinkedHashMap<>();
+        for (Resolution.Upvalue upvalue : resolution.upvalues(lambda)) {
+            captures.put(upvalue.symbolId(), env.referenceAt(upvalue.lexicalDepth(), upvalue.slot()));
+        }
+        Value.Callable raw = new Value.FunctionValue("<anonymous>", parameterNames, (arguments, ignoredCallSpan) -> {
+            Environment parameters = new Environment(env, captures);
+            for (int index = 0; index < lambda.params().size(); index++) {
+                Value value = arguments.get(index).value();
+                ownership.share(value);
+                parameters.define(lambda.params().get(index).name(), value);
+            }
+            return executeBlock(lambda.body(), new Environment(parameters), resolution);
+        }, false, CallableSignature.builtin(parameterNames,
+                List.of("Output", "StateRead", "StateWrite", "TestReport")));
+        if (lambda.params().stream().noneMatch(parameter -> parameter.contracts() != null)) return raw;
+        return new Value.ContractedCallable(raw, (index, argument) -> {
+            Parameter parameter = lambda.params().get(index);
+            Value checked = validateContracts(argument.value(), argument.span(), parameter.contracts(),
+                    resolution, env, "parameter " + parameter.name());
+            return new Value.Argument(checked, argument.span());
+        });
+    }
+
     private record OverloadVariant(FunctionDef definition, Value.Callable function) {}
     private record ApplicabilityKey(Object requirement, int position) {}
     private record RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) {}
@@ -1282,10 +1307,7 @@ final class Interpreter {
                     List.copyOf(parameterDescriptors), resultDescriptor, effectTerms.stream()
                     .map(effect -> effectCatalog.resolve(effect.name()).orElseThrow()).toList()));
         }
-        if (expr instanceof Lambda) {
-            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
-                    "Lambda execution is not available until Phase 3.2", expr.span());
-        }
+        if (expr instanceof Lambda lambda) return lambdaFunction(lambda, env, resolution);
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }
 

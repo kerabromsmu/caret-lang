@@ -125,6 +125,9 @@ diff -u examples/features/layout_mapping.expected "$CARET_TEST_TMP/layout-mappin
 "$CARET_LAUNCHER" examples/features/map.caret > "$CARET_TEST_TMP/map-output.txt"
 diff -u examples/features/map.expected "$CARET_TEST_TMP/map-output.txt"
 
+"$CARET_LAUNCHER" examples/features/lambdas.caret > "$CARET_TEST_TMP/lambdas-output.txt"
+diff -u examples/features/lambdas.expected "$CARET_TEST_TMP/lambdas-output.txt"
+
 run_test_file examples/testing.caret "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value

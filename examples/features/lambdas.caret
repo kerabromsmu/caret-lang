@@ -1,0 +1,19 @@
+double = x -> x * 2
+add = left right -> left + right
+makeAdder amount = value -> value + amount
+addThree = makeAdder 3
+answer = -> 42
+
+trailingFunctions = seqAdd []
+  value -> value * 2
+dollarFunctions = seqAdd [] $ value -> value + 1
+
+print double 4
+print add 2 5
+print addThree 4
+print answer
+print (seqGet trailingFunctions 0) 5
+print (seqGet dollarFunctions 0) 6
+print (@double).kind
+print (@double).id
+print (@double).remaining

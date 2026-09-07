@@ -2268,6 +2268,59 @@ final class InterpreterTest {
         assertTrue(enabled.reuseCount() > 0);
     }
 
+    @Test
+    void lambdasShareOrdinaryCallableExecutionCaptureAndReflection() {
+        assertEquals("""
+                6
+                7
+                9
+                42
+                5
+                8
+                Function
+                ~
+                2
+                12
+                """, execute("""
+                add = x y -> x + y
+                print add 2 4
+
+                makeAdder amount = x -> x + amount
+                addThree = makeAdder 3
+                print addThree 4
+
+                nested = x -> y -> x + y
+                print (nested 4) 5
+
+                answer = -> 42
+                print answer
+
+                functions = [(x -> x + 1)]
+                print (seqGet functions 0) 4
+
+                holder = [^transform = (x -> x * 2)]
+                print holder.transform 4
+
+                print (@add).kind
+                print (@add).id
+                print (@add).remaining
+
+                factory value =
+                  create value = x -> x + value
+                  create 2
+                addTen = factory 10
+                print addTen 10
+                """));
+    }
+
+    @Test
+    void lambdaParametersUseOrdinaryContractAndDuplicateDiagnostics() {
+        assertEquals("4\n", execute("double = (Number) x -> x * 2\nprint double 2\n"));
+        assertDiagnostic("bad = x x -> x\n", "Duplicate parameter: x", 1, 9);
+        assertDiagnostic("double = (Number) x -> x * 2\nprint double \"no\"\n",
+                "Contract violation for parameter x", 2, 14);
+    }
+
     private record ModeExecution(String output, int reuseCount) {}
     private record ModeFailure(String output, String code, int line, int reuseCount) {}
 

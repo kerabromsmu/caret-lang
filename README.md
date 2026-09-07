@@ -12,6 +12,8 @@ The current prototype supports:
 - finite numbers, strings, Booleans, null (`?`), and missing (`~`);
 - indentation-delimited functions, lexical closures with resolver-owned upvalue metadata, and
   direct and mutual recursion;
+- unary, multi-parameter, contracted, nullary, expression-bodied, and indentation-bodied lambdas
+  using the same callable and lexical-capture runtime path;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
@@ -305,22 +307,22 @@ shadows this builtin-only grouping and follows ordinary application rules.
 ## Current limitations
 
 - A function definition must start at the beginning of a logical line.
-- Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
-  Trailing callable blocks remain unavailable until lambda syntax is implemented.
+- Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines;
+  an indented trailing lambda is the final call argument and owns its deeper body.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
   dynamically. Named-function constraint inference and Phase 2 transitive/higher-order effect
   analysis are implemented, including the read-only `caret inspect` report;
   nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
   implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
 - Contract-selected collection representations, first-class dynamic fields, formats,
-  lambdas, cycles, SIMD, rules,
+  lambda-specific partial and inference refinements, cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
   and whole-domain overload coverage. Complete static dispatch/type proof remains planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
 - `map` supports current unary callable values and propagates the supplied transform's known effect
-  bound, but generalized element/result variables and lambdas remain planned.
+  bound, but generalized element/result variables and the complete lambda collection-operation set remain planned.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing

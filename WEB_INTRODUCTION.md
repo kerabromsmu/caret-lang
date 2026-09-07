@@ -327,9 +327,9 @@ exposes that transform's invocation-effect bound; invoking a callable whose boun
 unavailable fails before its body executes. Declaration-wide variable schemes retain their
 substitutions through prefix and hole partials; executable lambdas remain planned.
 
-Lambda grammar is now parsed in unary, multi-parameter, contracted, nullary, expression-bodied,
-and indentation-bodied forms. Closure construction and invocation remain planned for the next
-Phase 3 implementation step, so runnable examples continue to use named and partial functions.
+Lambdas now support unary, multi-parameter, contracted, nullary, expression-bodied, and
+indentation-bodied forms. They are ordinary callable values: they capture lexical bindings, can be
+passed, returned, or stored, and expose anonymous callable metadata without exposing captures.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
