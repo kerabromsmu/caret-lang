@@ -371,19 +371,19 @@ value is `~`.
 fieldName = "count"
 print source[fieldName]~
 print (@source).kind
-print (@source).names
+print (@source).ids
 ```
 
-Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `names`. Field keys are
+Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `ids`. Field keys are
 ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
 or update order; their value expressions are still evaluated in source order. Identifier shorthand
 `^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
 Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
 non-callable metadata Dictionary exposing `kind`, visible
-declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
+declaration `id`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
 the known invocation-effect bound. Metadata fields are lazily filtered for the observing execution
-environment, retain descriptor identity behind hidden names, and cannot gain visibility when moved
+environment, retain descriptor identity behind hidden identifiers, and cannot gain visibility when moved
 between environments. The internal observation policy is not a Caret value. Prefix and hole partials specialize variables and project their
 remaining parameters; repeated holes conjoin requirements. Compositions specialize compatible
 parameter/result relationships and union known invocation effects. Narrowed overloads preserve

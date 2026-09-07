@@ -270,9 +270,9 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   calls.
 - Support ordinary partial application and hole-based partial application around lambdas without
   conflating holes with parameter declarations.
+- Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 - Implement composition and standard higher-order collection functions (`map`, `filter`, `fold`,
   `any`, `all`) using the unified callable/effect model.
-- Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 - Complete `LAMBDA-LOWAPP-001`: lambda construction binds above `$`, with parser and runtime
   coverage for ungrouped lambdas used as complete low-precedence arguments.
 
@@ -635,8 +635,8 @@ aliases, and Phase 2 higher-order effect propagation are complete. Callable sign
 explicit higher-order arrow contracts, and the initial static operator matrix are settled.
 Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
 item in Phases 1 or 2 remains formally unresolved. Next implement the settled Phase 3 lambda syntax
-and unify lambdas with the ordinary callable representation before extending partial application,
-higher-order collection operations, and lambda inference. `with`/`outer` wait for the Phase 4 public
+and unify lambdas with the ordinary callable representation before extending partial application
+and lambda inference, then complete the higher-order collection operations. `with`/`outer` wait for the Phase 4 public
 named-member protocol rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals

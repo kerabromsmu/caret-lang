@@ -1114,8 +1114,8 @@ parameterized collection contracts, conservative implication, overload dispatch,
 contract reflection. The unresolved optional-member surface spelling remains unimplemented.
 
 Reflection retains kind `Contract` and adds language-owned `shape`, `size`, and `elements` metadata.
-Element metadata identifies its public name, constraint kind, zero-based repeated-hole parameter,
-and public requirement names without exposing captures, source spans, Java objects, or executable
+Element metadata identifies its public `id`, constraint kind, zero-based repeated-hole parameter,
+and public requirement identifiers without exposing captures, source spans, Java objects, or executable
 descriptor internals.
 
 For example:

@@ -32,5 +32,5 @@ print missing
 fieldName = "count"
 print source[fieldName]~
 print (@source).kind
-print (@source).names
+print (@source).ids
 print (@inside).remaining

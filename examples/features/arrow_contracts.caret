@@ -19,7 +19,7 @@ holeChoice = choose _ 2
 print numberChoice 2
 print holeChoice 1
 print (seqGet (seqGet (@choose).signature.parameters 0).requirements 0).index
-print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).name
+print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).id
 
 (Number) covered (Any) value = 1
 (String) covered (String) value = "text"

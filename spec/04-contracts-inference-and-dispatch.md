@@ -24,7 +24,7 @@ add (Number) left (Number) right = left + right
 
 Arguments are checked as they fill parameters, including during partial application. Contracted
 initializers are checked before their bindings commit. `type Number` and `(@Number).kind` report
-`"Contract"`, and `(@Number).name` reports `"Number"`.
+`"Contract"`, and `(@Number).id` reports `"Number"`.
 
 The unary `contract` function constructs nominal contracts. `contract ~` creates a base contract,
 `contract A` derives from one contract, and `contract [A B]` derives from several contracts packaged
@@ -55,7 +55,7 @@ predicates are implemented as first-class refinement
 requirements in `contract` construction and direct clauses, including through ordinary aliases.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
 evaluation of `contract` creates an unequal descriptor even when its requirements are identical.
-Names and reflective metadata do not participate in equality. Contract reflection exposes `name`,
+Identifiers and reflective metadata do not participate in equality. Contract reflection exposes `id`,
 `bases`, and language-owned refinement
 `requirements`.
 

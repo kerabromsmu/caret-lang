@@ -183,7 +183,7 @@ print (@inside).kind
 print (@inside).remaining
 print (@made).kind
 print (@made).size
-print (@made).names
+print (@made).ids
 CARET
 
 "$CARET_LAUNCHER" "$CARET_TEST_TMP/language.caret" > "$CARET_TEST_TMP/language-output.txt"

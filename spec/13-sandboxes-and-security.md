@@ -62,7 +62,7 @@ installed. Success changes neither sandbox identity nor generation, plugin state
 plugin-export references. The new snapshot is visible at the next environment-boundary lookup; an
 in-progress host operation finishes against the target resolved when it began. Consequently a host
 function called by the plugin may itself invoke `swapEnv`, and the plugin observes the replacement
-after that boundary call returns. `@root.names` and related environment metadata change atomically
+after that boundary call returns. `@root.ids` and related environment metadata change atomically
 with the snapshot; `@root.code` does not, because exposed host bindings are not sandbox code.
 
 Environment-derived callable references are mediated named references. Calling one after a swap
@@ -78,7 +78,7 @@ plugin.function arguments
 plugin["dynamic"]~
 @plugin.kind
 @plugin.state
-@plugin.names
+@plugin.ids
 @plugin.code
 ```
 
@@ -463,7 +463,7 @@ For example, if the host exposes:
 the sandbox may be permitted to inspect metadata such as:
 
 ```caret
-@log.name
+@log.id
 @log.parameters
 @log.result
 ```

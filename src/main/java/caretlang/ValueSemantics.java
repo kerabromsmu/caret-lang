@@ -33,13 +33,13 @@ final class ValueSemantics {
             case Value.Dictionary dictionary -> {
                 fields.put("shape", new Value.Str("named"));
                 fields.put("size", new Value.Num(dictionary.size()));
-                fields.put("names", new Value.Str(String.join(",", dictionary.entries().keySet())));
+                fields.put("ids", new Value.Str(String.join(",", dictionary.entries().keySet())));
             }
             case Value.ProjectedDictionary dictionary -> {
                 Map<String, Value> projected = dictionary.fields(context);
                 fields.put("shape", new Value.Str("named"));
                 fields.put("size", new Value.Num(projected.size()));
-                fields.put("names", new Value.Str(String.join(",", projected.keySet())));
+                fields.put("ids", new Value.Str(String.join(",", projected.keySet())));
             }
             case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
             case Value.Reflective reflective -> fields.putAll(reflective instanceof Value.ProjectedDictionary projected

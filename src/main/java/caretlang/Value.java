@@ -443,7 +443,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public Map<String, Value> fields() {
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
             fields.put("kind", new Str("Contract"));
-            fields.put("name", new Str(contract.publicName()));
+            fields.put("id", new Str(contract.publicName()));
             fields.put("bases", new Seq(contract.bases().stream()
                     .map(base -> (Value) new Str(base.publicName())).toList()));
             fields.put("requirements", new Seq(contract.requirements().stream()
@@ -664,7 +664,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private static Map<String, Value> fields(Callable target, ReflectionContext context) {
             LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
             fields.put("kind", new Str("Function"));
-            fields.put("name", target.publicName().equals("<anonymous>") || !context.callableNames()
+            fields.put("id", target.publicName().equals("<anonymous>") || !context.callableNames()
                     ? Missing.INSTANCE : new Str(target.publicName()));
             fields.put("remaining", new Num(target.remainingArity()));
             fields.put("signature", signatureValue(target.signature(), context));
@@ -687,7 +687,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                                             ReflectionContext captured) {
             return projected(captured, context -> Map.of(
                     "position", new Num(position),
-                    "name", parameter.name() == null ? Missing.INSTANCE : new Str(parameter.name()),
+                    "id", parameter.name() == null ? Missing.INSTANCE : new Str(parameter.name()),
                     "requirements", refs(effective(parameter.requirements(), parameter.declared(), context), context),
                     "declared", nullableRefs(parameter.declared(), context),
                     "inferred", inferredRefs(parameter.inferred(), parameter.declared(), context)), null, "Parameter");
@@ -728,7 +728,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 case CallableSignature.VariableRef variable -> metadata("VariableRef", captured,
                         Map.of("index", new Num(variable.index())));
                 case CallableSignature.NamedRef named -> projected(captured, context -> Map.of(
-                        "name", context.names(named.identity()) ? new Str(named.name()) : Missing.INSTANCE),
+                        "id", context.names(named.identity()) ? new Str(named.name()) : Missing.INSTANCE),
                         null, named.identity(), "ContractRef");
                 case CallableSignature.AppliedRef applied -> metadata("ContractApplication", captured, Map.of(
                         "constructor", termValue(applied.constructor(), captured),
@@ -746,7 +746,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
         private static Value nullableEffects(List<CallableSignature.EffectRef> effects, ReflectionContext context) {
             return effects == null ? Missing.INSTANCE : new Seq(effects.stream().map(effect ->
-                    projected(context, observer -> Map.of("name", observer.names(effect.identity())
+                    projected(context, observer -> Map.of("id", observer.names(effect.identity())
                             ? new Str(effect.name()) : Missing.INSTANCE), null, effect.identity(), "Effect")).toList());
         }
         private static Value inferredEffects(List<CallableSignature.EffectRef> inferred,

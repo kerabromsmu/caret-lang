@@ -208,11 +208,11 @@ final class InterpreterTest {
                 noisySignature = (@noisy).signature
                 quietSignature = (@quiet).signature
                 print seqSize noisySignature.result.declared
-                print (seqGet noisySignature.result.declared 0).name
+                print (seqGet noisySignature.result.declared 0).id
                 print seqSize noisySignature.effects.declared
-                print (seqGet noisySignature.effects.declared 0).name
+                print (seqGet noisySignature.effects.declared 0).id
                 print seqSize quietSignature.result.declared
-                print (seqGet quietSignature.result.declared 0).name
+                print (seqGet quietSignature.result.declared 0).id
                 print seqSize quietSignature.effects.declared
                 """));
     }
@@ -247,9 +247,9 @@ final class InterpreterTest {
                 print seqSize scheme.variables
                 print parameterVariable.index
                 print resultVariable.index
-                print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).name
-                print (seqGet (seqGet (@textChoice).signature.parameters 0).requirements 0).name
-                print (seqGet (seqGet (@holeChoice).signature.parameters 0).requirements 0).name
+                print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).id
+                print (seqGet (seqGet (@textChoice).signature.parameters 0).requirements 0).id
+                print (seqGet (seqGet (@holeChoice).signature.parameters 0).requirements 0).id
                 print seqSize (@numberChoice).signature.variables
                 print seqSize (@holeChoice).signature.variables
                 print seqSize (@alias).signature.variables
@@ -289,7 +289,7 @@ final class InterpreterTest {
                 AB = contract [Tag Numeric]
                 print Tag "anything"
                 print Numeric "not a number"
-                print (@AB).name
+                print (@AB).id
                 print (@AB).bases
                 print [1 "two" true]
                 """));
@@ -365,7 +365,7 @@ final class InterpreterTest {
                 print Numbers [1 "two"]
                 print Nested nested
                 print Numbers == Alias
-                print (@Numbers).name
+                print (@Numbers).id
                 print (@Numbers).bases
                 print (@Numbers).requirements
                 """));
@@ -590,7 +590,7 @@ final class InterpreterTest {
                 print Dictionary dictEmpty
                 print Any Number
                 print type Number
-                print (@Number).name
+                print (@Number).id
                 """));
     }
 
@@ -627,7 +627,7 @@ final class InterpreterTest {
                 print accepts 1
                 print Number? "wrong"
                 print Number~ ?
-                print (@accepts).name
+                print (@accepts).id
                 print (@accepts).bases
                 """));
 
@@ -769,7 +769,7 @@ final class InterpreterTest {
                 print value.second
                 print value.absent~
                 print value["first"]~
-                print (@value).names
+                print (@value).ids
                 """;
 
         assertEquals("5\nyes\n~\ntrue\n?\n~\n~\n?\nfirst,second\n", execute(source));
@@ -885,7 +885,7 @@ final class InterpreterTest {
                 value = make
                 print value.private~
                 print (@value).size
-                print (@value).names
+                print (@value).ids
                 """);
         assertEquals("~\n1\npublic\n", output);
     }
@@ -965,20 +965,20 @@ final class InterpreterTest {
                 first = seqGet signature.parameters 0
                 firstRequirement = seqGet first.requirements 0
                 resultGuarantee = seqGet signature.result.guarantees 0
-                print (@add).name
+                print (@add).id
                 print (@add).remaining
                 print first.kind
                 print first.position
-                print first.name
-                print firstRequirement.name
-                print (seqGet first.declared 0).name
+                print first.id
+                print firstRequirement.id
+                print (seqGet first.declared 0).id
                 print signature.result.kind
-                print resultGuarantee.name
+                print resultGuarantee.id
                 print signature.effects.kind
                 print seqSize signature.effects.upperBound
-                print (@addOne).name
+                print (@addOne).id
                 print (@addOne).remaining
-                print (seqGet (@addOne).signature.parameters 0).name
+                print (seqGet (@addOne).signature.parameters 0).id
                 print seqSize (@addOne).variants
                 """));
     }
@@ -995,10 +995,10 @@ final class InterpreterTest {
         interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
         interpreter.execute(new Parser("""
                 parameter = seqGet metadata.signature.parameters 0
-                print metadata.name
-                print (seqGet parameter.requirements 0).name
+                print metadata.id
+                print (seqGet parameter.requirements 0).id
                 print parameter.inferred
-                print (seqGet metadata.signature.result.guarantees 0).name
+                print (seqGet metadata.signature.result.guarantees 0).id
                 print metadata.signature.result.inferred
                 print seqSize metadata.signature.effects.upperBound
                 """).parseProgram());
@@ -1009,10 +1009,10 @@ final class InterpreterTest {
         interpreter.reflectionContext(ReflectionContext.defining());
         interpreter.execute(new Parser("""
                 definingParameter = seqGet metadata.signature.parameters 0
-                print metadata.name
+                print metadata.id
                 print seqSize definingParameter.inferred
                 print parameter.inferred
-                print sandboxMetadata.name
+                print sandboxMetadata.id
                 print (seqGet sandboxMetadata.signature.parameters 0).inferred
                 """).parseProgram());
 
@@ -1034,13 +1034,13 @@ final class InterpreterTest {
                   [1]
                 metadata = @makeSequence
                 print seqSize metadata.signature.result.guarantees
-                print (seqGet metadata.signature.result.inferred 0).name
+                print (seqGet metadata.signature.result.inferred 0).id
                 """).parseProgram());
 
         interpreter.reflectionContext(ReflectionContext.externalModule(false, false, Set.of()));
         interpreter.execute(new Parser("""
                 print seqSize metadata.signature.result.guarantees
-                print (seqGet metadata.signature.result.guarantees 0).name
+                print (seqGet metadata.signature.result.guarantees 0).id
                 print metadata.signature.result.inferred
                 """).parseProgram());
 
@@ -1122,7 +1122,9 @@ final class InterpreterTest {
         Value firstRef = reflectedRequirement(firstMetadata, ReflectionContext.defining());
         Value secondRef = reflectedRequirement(secondMetadata, ReflectionContext.defining());
         assertEquals(Value.Missing.INSTANCE, ((Value.ProjectedDictionary) firstRef)
-                .find("name", ReflectionContext.defining()).orElseThrow());
+                .find("id", ReflectionContext.defining()).orElseThrow());
+        assertTrue(((Value.ProjectedDictionary) firstRef)
+                .find("name", ReflectionContext.defining()).isEmpty());
         assertFalse(ValueSemantics.equal(firstRef, secondRef, ReflectionContext.defining()));
     }
 
@@ -1155,10 +1157,10 @@ final class InterpreterTest {
                 meta = @show
                 print seqSize meta.variants
                 print seqSize meta.signature.parameters
-                print (seqGet meta.signature.effects.upperBound 0).name
+                print (seqGet meta.signature.effects.upperBound 0).id
                 narrowed = show 1
                 print seqSize (@narrowed).variants
-                print (@pipeline).name
+                print (@pipeline).id
                 print seqSize (@pipeline).signature.effects.upperBound
                 """));
     }
@@ -1172,10 +1174,10 @@ final class InterpreterTest {
 
                 repeatedParameter = seqGet (@repeated).signature.parameters 0
                 print seqSize repeatedParameter.requirements
-                print (seqGet repeatedParameter.requirements 0).name
-                print (seqGet repeatedParameter.requirements 1).name
-                print (seqGet (@reordered).signature.parameters 0).name
-                print (seqGet (@reordered).signature.parameters 1).name
+                print (seqGet repeatedParameter.requirements 0).id
+                print (seqGet repeatedParameter.requirements 1).id
+                print (seqGet (@reordered).signature.parameters 0).id
+                print (seqGet (@reordered).signature.parameters 1).id
                 print seqSize (@repeated).signature.parameters
                 print seqSize (@repeated).signature.variables
                 """));
@@ -1187,8 +1189,8 @@ final class InterpreterTest {
                 identity value = value
                 (String) text (String) value = value
                 pipeline = identity >> text
-                print (seqGet (seqGet (@pipeline).signature.parameters 0).requirements 0).name
-                print (seqGet (@pipeline).signature.result.guarantees 0).name
+                print (seqGet (seqGet (@pipeline).signature.parameters 0).requirements 0).id
+                print (seqGet (@pipeline).signature.result.guarantees 0).id
                 print seqSize (@pipeline).signature.variables
 
                 dynamic dictionary key = dictionary[key]~
@@ -1230,10 +1232,10 @@ final class InterpreterTest {
                 print seqSize metadata.signature.parameters
                 print seqSize (seqGet firstVariant.parameters 0).requirements
                 print seqSize (seqGet (seqGet metadata.variants 1).parameters 0).requirements
-                print (seqGet (seqGet firstVariant.parameters 0).requirements 0).name
-                print (seqGet (seqGet firstVariant.parameters 0).requirements 1).name
+                print (seqGet (seqGet firstVariant.parameters 0).requirements 0).id
+                print (seqGet (seqGet firstVariant.parameters 0).requirements 1).id
                 print seqSize (@numberFirst).variants
-                print (seqGet (seqGet (seqGet (@numberFirst).variants 0).parameters 0).requirements 0).name
+                print (seqGet (seqGet (seqGet (@numberFirst).variants 0).parameters 0).requirements 0).id
                 """));
     }
 
@@ -1506,7 +1508,7 @@ final class InterpreterTest {
                 print (@literal).kind
                 print (@literal).shape
                 print (@literal).size
-                print (@literal).names
+                print (@literal).ids
                 print literal.name
                 print literal.absent~
                 """));
@@ -1523,7 +1525,7 @@ final class InterpreterTest {
                 print (@empty).size
                 print Sequence empty
                 print Dictionary empty
-                print (@first).names
+                print (@first).ids
                 print first.with
                 print first == second
                 """));
@@ -1636,7 +1638,7 @@ final class InterpreterTest {
                 print dictHas complete "missing"
                 print dictGet complete "missing"
                 print dictGet complete "first"
-                print (@complete).names
+                print (@complete).ids
                 """));
     }
 
@@ -1983,7 +1985,7 @@ final class InterpreterTest {
 
                 numeric = [(Number) _]
                 print @numeric.remaining
-                print (seqGet (seqGet @numeric.signature.parameters 0).requirements 0).name
+                print (seqGet (seqGet @numeric.signature.parameters 0).requirements 0).id
 
                 Tagged = contract Number
                 taggedConstructor = [(Tagged) _]
@@ -2005,7 +2007,7 @@ final class InterpreterTest {
 
     @Test
     void structuralTemplatesAreOrdinaryExactCollectionContracts() {
-        assertEquals("true\nfalse\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\npoint\ncollection\ntrue\npositional\n2\nhole\n", execute("""
+        assertEquals("true\nfalse\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\ntrue\ntrue\npoint\ncollection\ntrue\npositional\n2\nhole\nname\n~\n", execute("""
                 Point = template [(Number) _ (Number) _]
                 PointAlias = Point
                 print Point [1 2]
@@ -2040,6 +2042,8 @@ final class InterpreterTest {
                 print (@Point).shape
                 print (@Point).size
                 print (seqGet (@Point).elements 0).constraint
+                print (seqGet (@Named).elements 0).id
+                print (seqGet (@Named).elements 0).name~
                 """));
 
         LangException opaque = assertThrows(LangException.class,

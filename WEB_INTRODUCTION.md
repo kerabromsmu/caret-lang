@@ -168,7 +168,7 @@ strings, while `@` produces a reflective view:
 fieldName = "name"
 print person[fieldName]~
 print (@person).kind
-print (@person).names
+print (@person).ids
 ```
 
 Reflection exposes only public or explicitly exported information. Expected failures, such as a
@@ -271,7 +271,7 @@ captures, partial values, implementation objects, or authority. Derived metadata
 generic prefix and hole partials, conjoins repeated-hole requirements, projects reordered holes,
 and carries compatible substitutions and effect unions through composition. The metadata is lazily
 filtered through interpreter-owned environment state that is never exposed as a Caret value.
-Contract and effect references preserve identity even when their visible name is `~`. Closed
+Contract and effect references preserve identity even when their visible `id` is `~`. Closed
 same-name overload sets are implemented: applicability observes existing contract
 membership without acquiring it, and the unique most-specific applicable variant wins.
 
@@ -290,7 +290,7 @@ every variant that might also be selected has compatible results and effects. Pr
 variants do not interfere; unknown overlap remains conservatively possible.
 Contract equality follows descriptor identity: aliases compare equal, but separate constructions
 remain unequal even with identical requirements. Contract reflection exposes public base and
-refinement-requirement names without exposing implementation callables.
+refinement-requirement identifiers without exposing implementation callables.
 The prototype infers initial built-in constraints for unannotated named functions and uses
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
 each call instantiates those variables independently. Explicit callable declarations remain stable
@@ -347,7 +347,7 @@ nested or future callable forms.
 Contracts also have first-class null/missing unions. `Number?` accepts numbers or null, `Number~`
 accepts numbers or missing, and `Number?~` accepts all three while keeping null and missing
 observably distinct. The modified contracts remain unary predicates, work in clauses and aliases,
-and expose canonical names and their wrapped base through reflection.
+and expose canonical identifiers and their wrapped base through reflection.
 
 In the implemented collection-constructor model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable

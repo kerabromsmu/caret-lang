@@ -9,4 +9,4 @@ print not ?
 print ~ or true
 print false and unknownRightOperand
 print seqSize @(+).variants
-print (seqGet (seqGet @(+).variants 0).result.guarantees 0).name
+print (seqGet (seqGet @(+).variants 0).result.guarantees 0).id
