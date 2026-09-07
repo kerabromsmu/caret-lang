@@ -256,9 +256,11 @@ block; multiple-base diamonds imply every transitive base, while direct and indi
 cycles are rejected with their declaration locations. Clauses can constrain bindings, parameters, and function
 results. An internal analysis also propagates known effects and conservatively rejects unknown
 dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
-fixed operands are captured into partial applications. Proven unary Boolean functions
-are first-class refinement requirements in derived contracts and direct clauses, and retain that
-eligibility through aliases. Parameterized `Sequence T`, `Field K V`, and `Dictionary K V`
+fixed operands are captured into partial applications. Proven unary Boolean functions are
+first-class refinement requirements in derived contracts and direct clauses. The prototype currently
+supports named predicates and retains their eligibility through aliases; canonical callable parity
+also admits suitable anonymous lambdas, whose refinement-eligibility flag remains to be implemented.
+Parameterized `Sequence T`, `Field K V`, and `Dictionary K V`
 contracts use ordinary callable contract application. Contract arguments construct contracts,
 multi-parameter constructors curry, and non-contract arguments retain raw-kind predicate behavior.
 `Collection` itself takes no contract parameters. Element conjunctions are constructed before

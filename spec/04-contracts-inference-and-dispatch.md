@@ -30,7 +30,7 @@ The unary `contract` function constructs nominal contracts. `contract ~` creates
 `contract A` derives from one contract, and `contract [A B]` derives from several contracts packaged
 in one ordinary collection argument. Explicit binding and parameter clauses acquire nominal
 membership while checking built-in base constraints; leading function clauses check and attribute
-results. Unannotated named functions infer parameter and result contracts from their values,
+results. Unannotated named functions and lambdas infer parameter and result contracts from their values,
 operations, calls, and surrounding context. When callable contracts remain unresolved, they are
 generalized and each external use receives a fresh instantiation. Ordinary non-callable bindings
 must instead resolve from their initializer or context. An actual use that still leaves a required
@@ -41,18 +41,18 @@ need must be guaranteed by the declared parameter domain; it cannot silently nar
 domain. Inferred results incompatible with an explicit result clause are rejected with a located
 `INCOMPATIBLE_CONTRACTS` diagnostic.
 
-The semantic analyzer also computes an initial effect summary for named functions. It propagates
+The semantic analyzer also computes effect summaries for named functions and lambdas. It propagates
 known effects through direct named calls, includes effects from the fixed subexpressions captured
 eagerly while constructing partials, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
 prove that a prospective refinement is unary, Boolean-returning, and pure. Environment-relative
 effect identities, declaration allowances, callable constraints, and effectful arrow contracts are
-implemented. Higher-order propagation covers the current named, aliased, partial, composed,
+implemented. Higher-order propagation covers the current named, anonymous, aliased, partial, composed,
 overloaded, closure, and recursive callable forms, and `caret inspect` exposes the resulting facts
-without executing the program. Later lambdas, cycles, codecs, rules, and containers extend this
-same analysis as those value kinds arrive. Proven
-predicates are implemented as first-class refinement
-requirements in `contract` construction and direct clauses, including through ordinary aliases.
+without executing the program. Later cycles, codecs, rules, and containers extend this same analysis
+as those value kinds arrive. Proven predicates are first-class refinement requirements in `contract`
+construction and direct clauses. Named predicates and their ordinary aliases are implemented; the
+same eligibility for otherwise suitable anonymous lambdas remains an interpreter gap.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
 evaluation of `contract` creates an unequal descriptor even when its requirements are identical.
 Identifiers and reflective metadata do not participate in equality. Contract reflection exposes `id`,

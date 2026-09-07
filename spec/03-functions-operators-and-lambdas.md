@@ -823,6 +823,10 @@ map (person -> person.name) people
 
 Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.
 
+This is the canonical callable-parity rule. The current interpreter infers a lambda's parameter,
+result, and effect signature but does not yet mark an anonymous lambda as refinement-eligible;
+named predicates and their aliases provide the implemented form until that gap is closed.
+
 The implemented Sequence operations use `map transform values`, `filter values predicate`,
 `fold values initial combine`, `any values predicate`, and `all values predicate`. Fold supplies the
 accumulator before the element. Predicate null and missing results count as false, while other

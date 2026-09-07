@@ -29,8 +29,8 @@ The current prototype supports:
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
-- proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
-  and direct clauses; and
+- proven-pure named unary Boolean functions and their aliases as first-class refinement requirements
+  in derived contracts and direct clauses (anonymous-lambda refinement eligibility remains planned); and
 - first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
   distinction between null and missing; and
 - callable parameterized contracts through `Sequence T`, `Field K V`, and `Dictionary K V`, including direct and aliased clauses,

@@ -67,7 +67,7 @@ expressions form nested calls. Potential named prefix/infix calls are parsed neu
 from lexical callable facts, with runtime fallback only when arity is genuinely dynamic. Callable
 partial arguments use persistent O(1) accumulation, and language-owned value descriptors now
 centralize public kinds, basic reflection, structural equality, and stack-safe rendering. Trailing
-lambdas remain deferred to Phase 3. Right-associative low-precedence `$` application now lowers to
+lambdas and right-associative low-precedence `$` application now lower to
 the ordinary callable path. Language-owned callable signature metadata and its safe reflective
 projection are implemented for named functions, built-ins, prefix partials, compositions, and
 closed overload sets. Exact-arity arrow contracts now work as named or inline structural
@@ -266,7 +266,9 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
 Current status: Phase 3 is complete. Lambdas share the ordinary callable representation, lexical
 capture metadata, contracts, effects, partial application, composition, reflection, and guarded
 higher-order execution. Sequence map/filter/fold/any/all and lambda precedence above `$` have full
-runtime and corpus evidence.
+runtime and corpus evidence. Anonymous lambdas do not yet receive the refinement-eligibility flag
+already supported by suitable named predicates and aliases; canonical callable parity still requires
+that remaining interpreter correction.
 
 - Parse unary/multi-parameter lambdas, contracted parameters, expression bodies, and indented bodies
   with the precedence/extent rules settled in Phase 0.
