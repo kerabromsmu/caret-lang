@@ -197,6 +197,9 @@ several parameters curry one contract at a time. Applying the same raw construct
 value instead performs its raw-kind membership test. Constructors are ordinary first-class Caret
 callables: aliases preserve both behavior and remaining constructor arity. `Collection` remains an
 unparameterized contract predicate.
+Resolver-owned constructor arity also applies inside arrow-contract parameter and result requirements,
+so an alias such as `Seq = Sequence` retains the meaning of `[Seq Number] -> Number` without parser
+special-casing the alias spelling.
 
 `Sequence T` accepts empty sequences and sequences whose every element satisfies `T`, supports
 derived element contracts, nesting, ordinary null/missing modifiers, and reflection of its base and

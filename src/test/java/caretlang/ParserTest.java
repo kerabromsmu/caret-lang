@@ -116,6 +116,10 @@ final class ParserTest {
                 expression("[Number] -> [String] -> Boolean"));
         assertInstanceOf(ArrowContract.class, nested.result());
 
+        ArrowContract unresolvedResult = assertInstanceOf(ArrowContract.class,
+                expression("[] -> Seq Number"));
+        assertEquals(2, assertInstanceOf(ContractTerms.class, unresolvedResult.result()).terms().size());
+
         ArrowContract conjunction = assertInstanceOf(ArrowContract.class,
                 expression("[(Number Any) String] -> Boolean"));
         assertEquals(2, conjunction.parameters().size());

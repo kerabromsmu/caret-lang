@@ -28,3 +28,9 @@ print (seqGet (seqGet (@numberChoice).signature.parameters 0).requirements 0).id
 
 print NumberTransform covered
 print NumberTransform unsafeOverlap
+
+Seq = Sequence
+SequenceConsumer = [Seq Number] -> Number
+SequenceProducer = [] -> Seq Number
+print (@SequenceConsumer).id
+print (@SequenceProducer).id

@@ -534,12 +534,20 @@ final class Parser {
                             else effectTerms.add(new Name(effect.text(), effect.span()));
                         } else resultRequirements.add(contractRequirement());
                     }
+                    Token close = peek();
                     consume(")", "Expected ')'");
-                    if (resultRequirements.size() != 1) throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                    if (resultRequirements.isEmpty()) throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
                             "Arrow contract requires exactly one result contract");
-                    result = resultRequirements.getFirst();
+                    result = resultRequirements.size() == 1 ? resultRequirements.getFirst()
+                            : new ContractTerms(resultRequirements, SourceSpan.cover(
+                            resultRequirements.getFirst().span(), close.span()));
                 } else {
-                    result = contractRequirement();
+                    ArrayList<Expr> resultTerms = new ArrayList<>();
+                    do resultTerms.add(contractRequirement());
+                    while (!atEnd() && (peek().kind() == Kind.IDENT || peek().text().equals("(")));
+                    result = resultTerms.size() == 1 ? resultTerms.getFirst()
+                            : new ContractTerms(resultTerms,
+                            SourceSpan.cover(resultTerms.getFirst().span(), resultTerms.getLast().span()));
                 }
                 return new ArrowContract(List.copyOf(parameters), result, effectTerms, explicitPure,
                         SourceSpan.cover(open.span(), result.span()));
@@ -570,6 +578,21 @@ final class Parser {
         }
 
         private Expr contractRequirement() {
+            if (match("(")) {
+                Token open = previous();
+                ArrayList<Expr> terms = new ArrayList<>();
+                while (!peek().text().equals(")")) {
+                    if (atEnd()) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected ')'");
+                    terms.add(contractRequirement());
+                }
+                Token close = peek();
+                consume(")", "Expected ')'");
+                if (terms.isEmpty()) throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "A contract parameter must be one contract");
+                Expr grouped = terms.size() == 1 ? terms.getFirst()
+                        : new ContractTerms(terms, SourceSpan.cover(open.span(), close.span()));
+                return new Group(grouped, SourceSpan.cover(open.span(), close.span()));
+            }
             if (peek().text().equals("_")) {
                 throw error(Diagnostic.Codes.PARSE_INVALID_CONTRACT,
                         "Unnumbered contract variable is invalid");

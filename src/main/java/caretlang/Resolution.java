@@ -36,6 +36,7 @@ final class Resolution {
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines;
     private final IdentityHashMap<FunctionDef, List<Upvalue>> upvalues;
     private final IdentityHashMap<Lambda, List<Upvalue>> lambdaUpvalues;
+    private final IdentityHashMap<Ast.ArrowContract, Ast.ArrowContract> analyzedArrows;
     private final java.util.Map<SourceSpan, Integer> declarations;
 
     Resolution(IdentityHashMap<Name, Binding> names,
@@ -44,6 +45,7 @@ final class Resolution {
                IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines,
                IdentityHashMap<FunctionDef, List<Upvalue>> upvalues,
                IdentityHashMap<Lambda, List<Upvalue>> lambdaUpvalues,
+               IdentityHashMap<Ast.ArrowContract, Ast.ArrowContract> analyzedArrows,
                java.util.Map<SourceSpan, Integer> declarations) {
         this.names = new IdentityHashMap<>(names);
         this.clauses = new IdentityHashMap<>(clauses);
@@ -53,6 +55,7 @@ final class Resolution {
         upvalues.forEach((function, captures) -> this.upvalues.put(function, List.copyOf(captures)));
         this.lambdaUpvalues = new IdentityHashMap<>();
         lambdaUpvalues.forEach((lambda, captures) -> this.lambdaUpvalues.put(lambda, List.copyOf(captures)));
+        this.analyzedArrows = new IdentityHashMap<>(analyzedArrows);
         this.declarations = java.util.Map.copyOf(declarations);
     }
 
@@ -68,5 +71,6 @@ final class Resolution {
     boolean usesBuiltinPrint(Ast.PrintLine line) { return builtinPrintLines.getOrDefault(line, false); }
     List<Upvalue> upvalues(FunctionDef function) { return upvalues.getOrDefault(function, List.of()); }
     List<Upvalue> upvalues(Lambda lambda) { return lambdaUpvalues.getOrDefault(lambda, List.of()); }
+    Ast.ArrowContract arrow(Ast.ArrowContract arrow) { return analyzedArrows.getOrDefault(arrow, arrow); }
     Integer symbolId(SourceSpan declaration) { return declarations.get(declaration); }
 }

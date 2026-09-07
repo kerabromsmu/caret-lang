@@ -2501,6 +2501,94 @@ final class InterpreterTest {
     }
 
     @Test
+    void higherOrderAliasesAndPrefixPartialsPreserveCallbackEffects() {
+        assertEquals("1\n[ 1 ]\n2\n[ true ]\n3\n[ 3 ]\n", execute("""
+                (Output Boolean) emit value =
+                  print value
+                  true
+                select = filter
+                (Output) throughAlias values = select values emit
+                print throughAlias [1]
+
+                mapped = map emit
+                (Output) throughPartial values = mapped values
+                print throughPartial [2]
+
+                selected = filter _ emit
+                (Output) throughHole values = selected values
+                print throughHole [3]
+
+                (Output) combine accumulator value =
+                  print value
+                  accumulator
+                reduce = fold
+                exists = any
+                every = all
+                transform = map
+                (Output) throughFold values = reduce values 0 combine
+                (Output) throughAny values = exists values emit
+                (Output) throughAll values = every values emit
+                (Output) throughMap values = transform emit values
+                """));
+
+        LangException alias = assertThrows(LangException.class, () -> execute("""
+                (Output Boolean) emit value =
+                  print value
+                  true
+                select = filter
+                invalid values = select values emit
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, alias.diagnostic().code());
+
+        LangException partial = assertThrows(LangException.class, () -> execute("""
+                (Output Boolean) emit value =
+                  print value
+                  true
+                mapped = map emit
+                invalid values = mapped values
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, partial.diagnostic().code());
+
+        LangException hole = assertThrows(LangException.class, () -> execute("""
+                (Output Boolean) emit value =
+                  print value
+                  true
+                selected = filter _ emit
+                invalid values = selected values
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, hole.diagnostic().code());
+    }
+
+    @Test
+    void parameterizedContractAliasesWorkInsideArrowContracts() {
+        assertEquals("1\n[] -> Sequence Number\n[] -> Sequence Number\n[] -> Sequence (Sequence Number)\n[] -> Field String Number\n",
+                execute("""
+                Seq = Sequence
+                Pair = Field
+                (Number) unary (Sequence Number) values = seqGet values 0
+                accepts ([Seq Number] -> Number) transform = transform [1]
+                print accepts unary
+
+                SequenceResult = [] -> Seq Number
+                GroupedResult = [] -> (Seq Number)
+                NestedResult = [] -> Seq (Seq Number)
+                FieldResult = [] -> Pair String Number
+                print (@SequenceResult).id
+                print (@GroupedResult).id
+                print (@NestedResult).id
+                print (@FieldResult).id
+                """));
+
+        LangException wrongArity = assertThrows(LangException.class, () -> execute("""
+                Seq = Sequence
+                binary left right = left
+                accepts ([Seq Number] -> Number) transform = transform [1]
+                accepts binary
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, wrongArity.diagnostic().code());
+    }
+
+    @Test
     void multilineLambdasRemainCompleteRightOperandsOfDollar() {
         assertEquals("""
                 8

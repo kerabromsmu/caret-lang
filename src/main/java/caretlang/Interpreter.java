@@ -1345,6 +1345,10 @@ final class Interpreter {
             }
             return new Value.ContractValue(modifiedContract(contract.descriptor(), nullable, optional));
         }
+        if (expr instanceof ContractTerms) {
+            throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                    "Unanalyzed arrow contract terms reached evaluation", expr.span());
+        }
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
             return evalInner(expression, env, resolution);
         }
@@ -1386,6 +1390,9 @@ final class Interpreter {
         }
         if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                                           boolean explicitPure, SourceSpan ignored)) {
+            ArrowContract analyzed = resolution.arrow((ArrowContract) expr);
+            parameters = analyzed.parameters();
+            result = analyzed.result();
             ArrayList<List<ContractDescriptor>> parameterDescriptors = new ArrayList<>();
             for (List<Expr> parameter : parameters) {
                 parameterDescriptors.add(parameter.stream()
@@ -1840,7 +1847,7 @@ final class Interpreter {
 
     private boolean predicateResult(Value value, String operation, SourceSpan span) {
         Value raw = underlying(value);
-        if (raw instanceof Value.Bool result) return result.value();
+        if (raw instanceof Value.Bool(boolean value1)) return value1;
         if (raw instanceof Value.Null || raw instanceof Value.Missing) return false;
         throw runtime(Diagnostic.Codes.INVALID_PREDICATE_RESULT,
                 operation + " predicate must return Boolean, null, or missing", span);

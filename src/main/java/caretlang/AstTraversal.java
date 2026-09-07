@@ -28,6 +28,7 @@ final class AstTraversal {
             case Reflect reflect -> List.of(reflect.target());
             case Dereference dereference -> List.of(dereference.target());
             case ContractModifier modifier -> List.of(modifier.target());
+            case ContractTerms terms -> terms.terms();
             case Group group -> List.of(group.expression());
             case CollectionLiteral collection -> collection.elements().stream()
                     .map(CollectionElement::value).toList();
@@ -68,6 +69,7 @@ final class AstTraversal {
             case Dereference dereference -> new Dereference(children.getFirst(), dereference.span());
             case ContractModifier modifier -> new ContractModifier(children.getFirst(), modifier.nullable(),
                     modifier.optional(), modifier.span());
+            case ContractTerms terms -> new ContractTerms(children, terms.span());
             case Group group -> new Group(children.getFirst(), group.span());
             case CollectionLiteral collection -> {
                 java.util.ArrayList<CollectionElement> elements = new java.util.ArrayList<>();

@@ -573,6 +573,9 @@ higher-order parameters, nested named and lambda closures, composition, prefix a
 narrowing, and recursive fixed points. Eager fixed operands contribute to callable construction;
 the target callable's bound describes later invocation. An unresolved dynamic call keeps the bound
 unavailable, and allowance failures are diagnosed before top-level program effects execute.
+Higher-order standard callables retain their callback position and callback-derived invocation bound
+through ordinary aliases and partials; analysis does not depend on the source spelling of `map`,
+`filter`, `fold`, `any`, or `all`.
 
 IDE tooling should expose inferred effects directly at function declarations.
 
