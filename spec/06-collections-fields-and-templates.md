@@ -29,6 +29,21 @@ an absent key from a present key whose value is
 Positional and String-keyed Dictionary literal syntax is implemented, including static `^name`
 shorthand and dynamic first-class Field construction. Context-selected representations remain planned.
 
+### Higher-order Sequence operations
+
+The standard operations are `map transform values`, `filter values predicate`,
+`fold values initial combine`, `any values predicate`, and `all values predicate`. `map` preserves
+its established callable-first order; the others are collection-first and can read naturally in
+named-infix form. `filter` retains source order. `fold` is a strict scalar left fold that calls
+`combine accumulator element`. Empty results are respectively `[]`, the supplied initial value,
+`false`, and `true` for filter, fold, any, and all.
+
+Predicates may return Boolean, null, or missing. Null and missing count as false; other result kinds
+produce a located `INVALID_PREDICATE_RESULT`. All elements are passed unchanged. `any` stops after
+its first true result and `all` after its first false result. Callbacks use ordinary callable arity,
+contract, call-depth, and effect checks. The operations accept named functions, lambdas, partials,
+and compositions, return persistent values, and do not traverse Dictionaries.
+
 <a id="collections-and-lexical-scopes"></a>
 ## Collections and lexical scopes
 

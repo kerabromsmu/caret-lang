@@ -321,11 +321,12 @@ constrains the result while `Output` is the callable's effect allowance. The ana
 clause once, so callable reflection reports `Number` only as a result requirement and `Output` only
 as an effect; source order does not change that meaning.
 
-The prototype implements the runtime `map transform values` operation for Sequences and current
-named, partial, and composed callable values. Once its transform is supplied, the resulting partial
-exposes that transform's invocation-effect bound; invoking a callable whose bound remains
-unavailable fails before its body executes. Declaration-wide variable schemes retain their
-substitutions through prefix and hole partials, including executable lambdas.
+The prototype implements `map transform values`, `filter values predicate`,
+`fold values initial combine`, `any values predicate`, and `all values predicate` for Sequences.
+They accept named, partial, composed, and lambda callables through the guarded call path and preserve
+callback effect bounds. Fold is a strict left fold; `any` and `all` short-circuit. Null and missing
+predicate results count as false. Declaration-wide variable schemes retain their substitutions
+through prefix and hole partials, including executable lambdas.
 
 Lambdas now support unary, multi-parameter, contracted, nullary, expression-bodied, and
 indentation-bodied forms. They are ordinary callable values: they capture lexical bindings, can be

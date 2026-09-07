@@ -23,7 +23,8 @@ The current prototype supports:
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
 - persistent sequences and canonically ordered Dictionaries with structural equality;
-- higher-order Sequence mapping through `map transform values` for current callable forms;
+- higher-order Sequence `map`, `filter`, strict left `fold`, `any`, and `all` through named,
+  partial, composed, and lambda callables;
 - polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
@@ -321,8 +322,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
   and whole-domain overload coverage. Complete static dispatch/type proof remains planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
-- `map` supports current unary callable values and propagates the supplied transform's known effect
-  bound, but generalized element/result variables and the complete lambda collection-operation set remain planned.
+- Higher-order Sequence operations propagate known callback effects; generalized collection
+  element/result variables remain planned.
 - Mutability containers and immutable collection-update syntax are specified but not implemented. There
   is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing

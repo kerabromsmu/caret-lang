@@ -501,6 +501,96 @@ final class Interpreter {
         @Override public String toString() { return "<fn map/" + remainingArity() + ">"; }
     }
 
+    private enum SequenceOperation { FILTER, FOLD, ANY, ALL }
+
+    private final class SequenceOperationCallable implements Value.Callable {
+        private static final List<String> ALL_EFFECTS =
+                List.of("Output", "StateRead", "StateWrite", "TestReport");
+        private final SequenceOperation operation;
+        private final List<Value.Argument> arguments;
+
+        private SequenceOperationCallable(SequenceOperation operation) { this(operation, List.of()); }
+        private SequenceOperationCallable(SequenceOperation operation, List<Value.Argument> arguments) {
+            this.operation = operation;
+            this.arguments = List.copyOf(arguments);
+        }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            ArrayList<Value.Argument> next = new ArrayList<>(arguments);
+            next.add(argument);
+            if (next.size() == 1) sequence(argument);
+            if (next.size() < arity()) return new SequenceOperationCallable(operation, next);
+            if (next.size() > arity()) throw runtime(Diagnostic.Codes.TOO_MANY_ARGUMENTS,
+                    "Too many arguments for " + id(), callSpan);
+            return executeSequenceOperation(next, callSpan);
+        }
+
+        private Value executeSequenceOperation(List<Value.Argument> supplied, SourceSpan callSpan) {
+            Value.Seq values = sequence(supplied.getFirst());
+            int callbackIndex = operation == SequenceOperation.FOLD ? 2 : 1;
+            int callbackArity = operation == SequenceOperation.FOLD ? 2 : 1;
+            Value.Callable callback = collectionCallback(supplied.get(callbackIndex), callbackArity, id(),
+                    operation == SequenceOperation.FOLD ? "combine" : "predicate");
+            return switch (operation) {
+                case FILTER -> {
+                    ArrayList<Value> selected = new ArrayList<>();
+                    for (Value value : values) {
+                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                        if (predicateResult(result, id(), supplied.get(callbackIndex).span())) selected.add(value);
+                    }
+                    yield ownership.fresh(new Value.Seq(selected));
+                }
+                case FOLD -> {
+                    Value accumulator = supplied.get(1).value();
+                    for (Value value : values) {
+                        Value partial = invoke(callback,
+                                new Value.Argument(accumulator, supplied.get(1).span()), callSpan);
+                        if (!(underlying(partial) instanceof Value.Callable remaining)) {
+                            throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                                    "fold combine lost its second parameter", callSpan);
+                        }
+                        accumulator = invoke(remaining,
+                                new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                    }
+                    yield accumulator;
+                }
+                case ANY -> {
+                    boolean matched = false;
+                    for (Value value : values) {
+                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                        if (predicateResult(result, id(), supplied.get(callbackIndex).span())) { matched = true; break; }
+                    }
+                    yield new Value.Bool(matched);
+                }
+                case ALL -> {
+                    boolean matched = true;
+                    for (Value value : values) {
+                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                        if (!predicateResult(result, id(), supplied.get(callbackIndex).span())) { matched = false; break; }
+                    }
+                    yield new Value.Bool(matched);
+                }
+            };
+        }
+
+        private int arity() { return operation == SequenceOperation.FOLD ? 3 : 2; }
+        private String id() { return operation.name().toLowerCase(Locale.ROOT); }
+        @Override public int remainingArity() { return arity() - arguments.size(); }
+        @Override public String publicName() { return id(); }
+        @Override public CallableSignature signature() {
+            List<String> parameters = operation == SequenceOperation.FOLD
+                    ? List.of("values", "initial", "combine") : List.of("values", "predicate");
+            CallableSignature signature = CallableSignature.builtin(parameters, ALL_EFFECTS);
+            for (int index = 0; index < arguments.size(); index++) {
+                signature = signature.specializeFirst(arguments.get(index).value());
+            }
+            return signature;
+        }
+        @Override public List<Value> retainedValues() {
+            return arguments.stream().map(Value.Argument::value).toList();
+        }
+    }
+
     private static List<CallableSignature> operatorSignatures(String operator) {
         if (operator.equals("+")) return List.of(
                 CallableSignature.operator(List.of("Number", "Number"), "Number"),
@@ -1615,6 +1705,10 @@ final class Interpreter {
         globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
         globals.define("map", new MapCallable());
+        globals.define("filter", new SequenceOperationCallable(SequenceOperation.FILTER));
+        globals.define("fold", new SequenceOperationCallable(SequenceOperation.FOLD));
+        globals.define("any", new SequenceOperationCallable(SequenceOperation.ANY));
+        globals.define("all", new SequenceOperationCallable(SequenceOperation.ALL));
 
         globals.define("dictEmpty", function("dictEmpty", List.of(), args ->
                 ownership.fresh(new Value.Dictionary(Map.of()))));
@@ -1733,6 +1827,23 @@ final class Interpreter {
         if (raw instanceof Value.Callable callable && callable.remainingArity() == 1) return callable;
         throw runtime(Diagnostic.Codes.INVALID_MAP_TRANSFORM,
                 "map transform must be a callable requiring exactly one argument", argument.span());
+    }
+
+    private Value.Callable collectionCallback(Value.Argument argument, int arity,
+                                              String operation, String role) {
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Callable callable && callable.remainingArity() == arity) return callable;
+        throw runtime(Diagnostic.Codes.INVALID_COLLECTION_CALLBACK,
+                operation + " " + role + " must be a callable requiring exactly "
+                        + (arity == 1 ? "one argument" : "two arguments"), argument.span());
+    }
+
+    private boolean predicateResult(Value value, String operation, SourceSpan span) {
+        Value raw = underlying(value);
+        if (raw instanceof Value.Bool result) return result.value();
+        if (raw instanceof Value.Null || raw instanceof Value.Missing) return false;
+        throw runtime(Diagnostic.Codes.INVALID_PREDICATE_RESULT,
+                operation + " predicate must return Boolean, null, or missing", span);
     }
 
     private Value.Dictionary dictionary(Value.Argument argument) {

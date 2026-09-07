@@ -2408,6 +2408,72 @@ final class InterpreterTest {
         assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, unknown.diagnostic().code());
     }
 
+    @Test
+    void higherOrderSequenceOperationsPreserveOrderFoldsAndShortCircuit() {
+        assertEquals("""
+                [ 2 4 ]
+                10
+                10
+                false
+                true
+                true
+                true
+                [ true ]
+                true
+                false
+                true
+                false
+                """, execute("""
+                numbers = [1 2 3 4]
+                even value = value % 2 == 0
+                print filter numbers even
+                print fold numbers 0 (acc value -> acc + value)
+                print fold [] 10 (acc value -> acc + value)
+                print any [] (value -> true)
+                print all [] (value -> false)
+                print any numbers (value -> value == 3)
+                print all numbers (value -> value > 0)
+
+                mixed = [true ? ~ false]
+                print filter mixed (value -> value)
+                print any mixed (value -> value)
+                print all mixed (value -> value)
+
+                print any [true 0] (value -> value == true & true ! 1 / 0 > 0)
+                print all [false 0] (value -> value == false & false ! 1 / 0 > 0)
+                """));
+    }
+
+    @Test
+    void higherOrderSequenceOperationsValidateCallbacksResultsAndElements() {
+        LangException arity = assertThrows(LangException.class,
+                () -> execute("filter [1] (left right -> true)"));
+        assertEquals(Diagnostic.Codes.INVALID_COLLECTION_CALLBACK, arity.diagnostic().code());
+
+        LangException result = assertThrows(LangException.class,
+                () -> execute("any [1] (value -> \"yes\")"));
+        assertEquals(Diagnostic.Codes.INVALID_PREDICATE_RESULT, result.diagnostic().code());
+
+        LangException contract = assertThrows(LangException.class,
+                () -> execute("filter [1 ?] ((Number) value -> true)"));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, contract.diagnostic().code());
+
+        assertEquals("1\n2\n[ 1 2 ]\n", execute("""
+                (Output Boolean) emit value =
+                  print value
+                  true
+                (Output) emitting values = filter values emit
+                print emitting [1 2]
+                """));
+        LangException undeclared = assertThrows(LangException.class, () -> execute("""
+                (Output Boolean) emit value =
+                  print value
+                  true
+                invalid values = filter values emit
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, undeclared.diagnostic().code());
+    }
+
     private record ModeExecution(String output, int reuseCount) {}
     private record ModeFailure(String output, String code, int line, int reuseCount) {}
 

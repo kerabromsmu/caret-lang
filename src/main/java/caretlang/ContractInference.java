@@ -670,6 +670,11 @@ final class ContractInference {
         result.put("seqAdd", builtin(2, EffectSummary.PURE));
         result.put("seqGet", builtin(2, EffectSummary.PURE));
         result.put("seqSize", builtin(1, EffectSummary.PURE));
+        result.put("map", builtin(2, EffectSummary.PURE));
+        result.put("filter", builtin(2, EffectSummary.PURE));
+        result.put("fold", builtin(3, EffectSummary.PURE));
+        result.put("any", builtin(2, EffectSummary.PURE));
+        result.put("all", builtin(2, EffectSummary.PURE));
         result.put("dictEmpty", builtin(0, EffectSummary.PURE));
         result.put("dictPut", builtin(3, EffectSummary.PURE));
         result.put("dictGet", builtin(2, EffectSummary.PURE));
@@ -863,9 +868,25 @@ final class ContractInference {
             if (callable == null) return result.plus(EffectSummary.UNKNOWN);
             if (arguments.size() < callable.arity()) return result;
             result = result.plus(callable.summary());
+            if (target instanceof Name name) {
+                result = result.plus(higherOrderCallbackEffects(name.name(), arguments, visible));
+            }
             return arguments.size() > callable.arity() ? result.plus(EffectSummary.UNKNOWN) : result;
         }
         return result.plus(expressionEffects(target, visible)).plus(EffectSummary.UNKNOWN);
+    }
+
+    private EffectSummary higherOrderCallbackEffects(String name, List<Expr> arguments,
+                                                     Map<String, CallableEffects> visible) {
+        int callback = switch (name) {
+            case "map" -> 0;
+            case "filter", "any", "all" -> 1;
+            case "fold" -> 2;
+            default -> -1;
+        };
+        if (callback < 0 || arguments.size() <= callback) return EffectSummary.PURE;
+        CallableEffects callable = callableValueEffects(arguments.get(callback), visible);
+        return callable == null ? EffectSummary.UNKNOWN : callable.summary();
     }
 
     private EffectSummary ambiguousCallEffects(AmbiguousCall call, Map<String, CallableEffects> visible) {

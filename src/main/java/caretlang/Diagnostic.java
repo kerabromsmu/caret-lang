@@ -51,6 +51,8 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String INVALID_COMPOSITION_LEFT = "INVALID_COMPOSITION_LEFT";
         static final String INVALID_COMPOSITION_RIGHT = "INVALID_COMPOSITION_RIGHT";
         static final String INVALID_MAP_TRANSFORM = "INVALID_MAP_TRANSFORM";
+        static final String INVALID_COLLECTION_CALLBACK = "INVALID_COLLECTION_CALLBACK";
+        static final String INVALID_PREDICATE_RESULT = "INVALID_PREDICATE_RESULT";
         static final String TOO_MANY_ARGUMENTS = "TOO_MANY_ARGUMENTS";
         static final String CALL_DEPTH_EXCEEDED = "CALL_DEPTH_EXCEEDED";
         static final String INVALID_CONDITION = "INVALID_CONDITION";

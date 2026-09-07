@@ -822,6 +822,11 @@ map (person -> person.name) people
 
 Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.
 
+The implemented Sequence operations use `map transform values`, `filter values predicate`,
+`fold values initial combine`, `any values predicate`, and `all values predicate`. Fold supplies the
+accumulator before the element. Predicate null and missing results count as false, while other
+non-Boolean results are invalid; `any` and `all` short-circuit.
+
 For example:
 
 ```caret
