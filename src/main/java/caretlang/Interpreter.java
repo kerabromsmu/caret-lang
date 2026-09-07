@@ -1282,6 +1282,10 @@ final class Interpreter {
                     List.copyOf(parameterDescriptors), resultDescriptor, effectTerms.stream()
                     .map(effect -> effectCatalog.resolve(effect.name()).orElseThrow()).toList()));
         }
+        if (expr instanceof Lambda) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
+                    "Lambda execution is not available until Phase 3.2", expr.span());
+        }
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }
 

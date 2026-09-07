@@ -26,6 +26,8 @@ enum DiagnosticCatalog {
     PARSE_FUNCTION_BODY("PARSE-FUNCTION-BODY", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Function body must be indented.*", PUBLIC),
     PARSE_INVALID_DEFINITION("PARSE-INVALID-DEFINITION", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Invalid assignment or function definition.*", PUBLIC),
     PARSE_CONTINUATION_DEFINITION("PARSE-CONTINUATION-DEFINITION", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Continuation argument must be an expression.*", PUBLIC),
+    PARSE_LAMBDA_HEADER("PARSE-LAMBDA-HEADER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Lambda parameters must be binding names", PUBLIC),
+    PARSE_LAMBDA_BODY("PARSE-LAMBDA-BODY", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX, "Lambda body must follow '->' or be indented", PUBLIC),
     PARSE_RESERVED_BINDING("PARSE-RESERVED-BINDING", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_RESERVED_BINDING, "Reserved spelling cannot be used as a binding name: .*", PUBLIC),
     PARSE_INVALID_CONTRACT("PARSE-INVALID-CONTRACT", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT, ".*[Cc]ontract.*", PUBLIC),
     PARSE_UNCLOSED_DELIMITER("PARSE-UNCLOSED-DELIMITER", Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected .*", PUBLIC),

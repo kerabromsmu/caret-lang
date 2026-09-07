@@ -21,6 +21,8 @@ from ordinary Caret source use focused Java evidence.
 | PARSE-FUNCTION-BODY | public | PARSE_INVALID_SYNTAX | `examples/errors/missing_function_body.caret` |
 | PARSE-INVALID-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/invalid_definition.caret` |
 | PARSE-CONTINUATION-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/definition_in_continuation.caret` |
+| PARSE-LAMBDA-HEADER | public | PARSE_INVALID_SYNTAX | `ParserTest#requiresACompleteAndUnambiguousLambdaHeaderAndBody` |
+| PARSE-LAMBDA-BODY | public | PARSE_INVALID_SYNTAX | `examples/errors/missing_lambda_body.caret` |
 | PARSE-RESERVED-BINDING | public | PARSE_RESERVED_BINDING | `examples/errors/reserved_binding.caret` |
 | PARSE-INVALID-CONTRACT | public | PARSE_INVALID_CONTRACT | `examples/errors/invalid_contract.caret` |
 | PARSE-UNCLOSED-DELIMITER | public | PARSE_UNCLOSED_DELIMITER | `examples/errors/unclosed_delimiter.caret` |

@@ -18,6 +18,7 @@ import caretlang.Ast.Field;
 import caretlang.Ast.FunctionDef;
 import caretlang.Ast.Group;
 import caretlang.Ast.Hole;
+import caretlang.Ast.Lambda;
 import caretlang.Ast.Literal;
 import caretlang.Ast.Name;
 import caretlang.Ast.NamedInfix;
@@ -589,6 +590,9 @@ final class Resolver {
                                 "Unknown clause name: " + effect.name(), effect.span());
                     }
                 }
+            }
+            case Lambda ignored -> {
+                // Lambda scopes and capture resolution are introduced in Phase 3.2.
             }
         }
     }

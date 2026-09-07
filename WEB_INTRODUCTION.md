@@ -325,7 +325,11 @@ The prototype implements the runtime `map transform values` operation for Sequen
 named, partial, and composed callable values. Once its transform is supplied, the resulting partial
 exposes that transform's invocation-effect bound; invoking a callable whose bound remains
 unavailable fails before its body executes. Declaration-wide variable schemes retain their
-substitutions through prefix and hole partials; lambdas remain planned.
+substitutions through prefix and hole partials; executable lambdas remain planned.
+
+Lambda grammar is now parsed in unary, multi-parameter, contracted, nullary, expression-bodied,
+and indentation-bodied forms. Closure construction and invocation remain planned for the next
+Phase 3 implementation step, so runnable examples continue to use named and partial functions.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects

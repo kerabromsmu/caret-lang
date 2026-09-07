@@ -167,7 +167,9 @@ From lower to higher precedence:
 13. reflection primary `@`
 14. field lookup and adjacent dereference `:`
 
-Lambda construction will also bind more tightly than `$` once lambdas are implemented.
+Lambda construction binds more tightly than `$`. The parser accepts an ungrouped lambda as the
+complete right operand of `$`; callable construction and execution are introduced in the following
+runtime implementation stage.
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
@@ -252,6 +254,11 @@ planned contract/effect system.
 
 <a id="lambda-functions"></a>
 ## Lambda Functions
+
+The prototype parser implements the syntax, layout, precedence, source spans, and located malformed
+lambda diagnostics described in this section. Runtime closure construction and invocation remain
+planned until Phase 3.2, so the examples below are specification examples rather than executable
+feature examples for the current parser-only stage.
 
 <a id="overview"></a>
 ### Overview

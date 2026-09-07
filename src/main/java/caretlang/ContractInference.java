@@ -364,6 +364,7 @@ final class ContractInference {
                     ? Shape.concrete(BuiltinContract.DICTIONARY)
                     : Shape.concrete(BuiltinContract.SEQUENCE);
             case ArrowContract ignored -> Shape.unknown();
+            case Lambda ignored -> Shape.unknown();
         };
     }
 
@@ -795,6 +796,7 @@ final class ContractInference {
                     .map(element -> expressionEffects(element.value(), visible))
                     .reduce(EffectSummary.PURE, EffectSummary::plus);
             case ArrowContract ignored -> EffectSummary.PURE;
+            case Lambda ignored -> EffectSummary.PURE;
         };
     }
 
@@ -981,6 +983,7 @@ final class ContractInference {
             case CollectionLiteral collection -> collection.elements().stream()
                     .map(CollectionElement::value).anyMatch(ContractInference::containsHole);
             case ArrowContract ignored -> false;
+            case Lambda ignored -> false;
             case Literal ignored -> false;
             case Name ignored -> false;
         };

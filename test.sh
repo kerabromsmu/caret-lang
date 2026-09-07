@@ -266,6 +266,7 @@ expect_test_failure examples/errors/invalid_assertion.caret
 expect_failure examples/errors/incomplete_escape.caret unused
 expect_failure examples/errors/inconsistent_continuation_indent.caret unused
 expect_failure examples/errors/definition_in_continuation.caret unused
+expect_failure examples/errors/missing_lambda_body.caret unused
 expect_failure examples/errors/invalid_numbered_hole.caret unused
 expect_failure examples/errors/ambiguous_call_arity.caret unused
 expect_failure examples/errors/unknown_contract.caret unused

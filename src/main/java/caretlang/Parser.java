@@ -166,7 +166,67 @@ final class Parser {
     }
 
     private Expr parseExpression(List<Token> tokens, SourcePosition end, int baseIndent) {
+        int lambdaArrow = topLevelLambdaArrow(tokens);
+        if (lambdaArrow == tokens.size() - 1) {
+            List<Parameter> parameters = lambdaParameters(tokens.subList(0, lambdaArrow), tokens.get(lambdaArrow));
+            if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= baseIndent) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                        "Lambda body must follow '->' or be indented", tokens.get(lambdaArrow).span());
+            }
+            List<Stmt> body = parseBlock(lines.get(lineIndex).indent());
+            return new Lambda(parameters, body,
+                    SourceSpan.cover(tokens.isEmpty() ? tokens.get(lambdaArrow).span() : tokens.getFirst().span(),
+                            body.getLast().span()));
+        }
         return new ExprParser(tokens, end, continuationArguments(baseIndent)).parse();
+    }
+
+    private static int topLevelLambdaArrow(List<Token> tokens) {
+        int depth = 0;
+        for (int index = 0; index < tokens.size(); index++) {
+            String text = tokens.get(index).text();
+            if (text.equals("(") || text.equals("[")) depth++;
+            else if (text.equals(")") || text.equals("]")) depth--;
+            else if (text.equals("->") && depth == 0) return index;
+        }
+        return -1;
+    }
+
+    private static List<Parameter> lambdaParameters(List<Token> tokens, Token arrow) {
+        ArrayList<Parameter> parameters = new ArrayList<>();
+        int current = 0;
+        while (current < tokens.size()) {
+            ContractParse clause = contractClause(tokens, current);
+            ContractClause contracts = clause == null ? null : clause.clause();
+            if (clause != null) current = clause.next();
+            if (contracts != null && contracts.names().stream().anyMatch(Parser::containsHoleContractName)) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_CONTRACT,
+                        "Lambda parameter contracts cannot contain expression holes", contracts.span());
+            }
+            if (current >= tokens.size() || tokens.get(current).kind() != Kind.IDENT) {
+                Token problem = current < tokens.size() ? tokens.get(current) : arrow;
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                        "Lambda parameters must be binding names", problem.span());
+            }
+            Token parameter = tokens.get(current++);
+            requireBindable(parameter);
+            parameters.add(new Parameter(parameter.text(), contracts,
+                    contracts == null ? parameter.span() : SourceSpan.cover(contracts.span(), parameter.span())));
+        }
+        return List.copyOf(parameters);
+    }
+
+    private static boolean containsHoleContractName(ContractName name) {
+        return name.name().equals("_") || name.arguments().stream().anyMatch(Parser::containsHoleContractName);
+    }
+
+    private static boolean isLambdaParameterPrefix(List<Token> tokens, Token arrow) {
+        try {
+            lambdaParameters(tokens, arrow);
+            return true;
+        } catch (LangException ignored) {
+            return false;
+        }
     }
 
     private List<Expr> continuationArguments(int baseIndent) {
@@ -221,7 +281,7 @@ final class Parser {
     private record ContractParse(ContractClause clause, int next) {}
     private record ContractNameParse(ContractName name, int next) {}
 
-    private ContractParse contractClause(List<Token> tokens, int start) {
+    private static ContractParse contractClause(List<Token> tokens, int start) {
         if (start >= tokens.size() || !tokens.get(start).text().equals("(")) return null;
         if (start + 1 < tokens.size() && tokens.get(start + 1).text().equals("[")) {
             int depth = 1;
@@ -260,7 +320,7 @@ final class Parser {
                 SourceSpan.cover(tokens.get(start).span(), close.span())), current);
     }
 
-    private ContractNameParse contractName(List<Token> tokens, int start) {
+    private static ContractNameParse contractName(List<Token> tokens, int start) {
         Token token = tokens.get(start);
         if (token.text().equals("(")) {
             ContractParse grouped = Objects.requireNonNull(contractClause(tokens, start));
@@ -274,7 +334,7 @@ final class Parser {
         return modifiedContractName(new ContractName(token.text(), token.span()), tokens, start + 1);
     }
 
-    private ContractNameParse modifiedContractName(ContractName base, List<Token> tokens, int start) {
+    private static ContractNameParse modifiedContractName(ContractName base, List<Token> tokens, int start) {
         int current = start;
         boolean nullable = false;
         boolean optional = false;
@@ -316,10 +376,10 @@ final class Parser {
     }
 
     private void requireBindable(List<Token> names) {
-        names.forEach(this::requireBindable);
+        names.forEach(Parser::requireBindable);
     }
 
-    private void requireBindable(Token token) {
+    private static void requireBindable(Token token) {
         String name = token.text();
         if (LanguageSyntax.isReservedBinding(name)) {
             throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_RESERVED_BINDING,
@@ -371,6 +431,19 @@ final class Parser {
         }
 
         private Expr arrow() {
+            int lambdaArrow = topLevelLambdaArrow(tokens.subList(current, tokens.size() - 1));
+            if (lambdaArrow >= 0 && isLambdaParameterPrefix(
+                    tokens.subList(current, current + lambdaArrow), tokens.get(current + lambdaArrow))) {
+                int absoluteArrow = current + lambdaArrow;
+                Token marker = tokens.get(absoluteArrow);
+                List<Parameter> parameters = lambdaParameters(tokens.subList(current, absoluteArrow), marker);
+                current = absoluteArrow + 1;
+                if (atEnd()) throw error(Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                        "Lambda body must follow '->' or be indented");
+                Expr body = arrow();
+                return new Lambda(parameters, List.of(new ExprStmt(body, body.span())),
+                        SourceSpan.cover(parameters.isEmpty() ? marker.span() : parameters.getFirst().span(), body.span()));
+            }
             if (peek().text().equals("[") && arrowClose(current) >= 0) {
                 Token open = tokens.get(current++);
                 ArrayList<List<Expr>> parameters = new ArrayList<>();
@@ -488,7 +561,7 @@ final class Parser {
         private Expr lowPrecedenceApplication() {
             Expr function = composition();
             if (!match("$")) return function;
-            Expr argument = lowPrecedenceApplication();
+            Expr argument = arrow();
             return new Apply(function, argument, SourceSpan.cover(function.span(), argument.span()));
         }
 
