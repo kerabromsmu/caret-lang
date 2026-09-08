@@ -168,7 +168,7 @@ strings, while `@` produces a reflective view:
 fieldName = "name"
 print person[fieldName]~
 print (@person).kind
-print (@person).names
+print (@person).ids
 ```
 
 Reflection exposes only public or explicitly exported information. Expected failures, such as a
@@ -256,19 +256,24 @@ block; multiple-base diamonds imply every transitive base, while direct and indi
 cycles are rejected with their declaration locations. Clauses can constrain bindings, parameters, and function
 results. An internal analysis also propagates known effects and conservatively rejects unknown
 dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
-fixed operands are captured into partial applications. Proven unary Boolean functions
-are first-class refinement requirements in derived contracts and direct clauses, and retain that
-eligibility through aliases. The initial parameterized-contract slice implements `Sequence T` as
-ordinary contract application: it validates every sequence element, composes through aliases,
-nesting, and null/missing modifiers, and exposes its base and requirement through reflection.
-General parameterized contracts and complete static proof remain
+fixed operands are captured into partial applications. Proven unary Boolean functions are
+first-class refinement requirements in derived contracts and direct clauses. The prototype currently
+supports named predicates and retains their eligibility through aliases; canonical callable parity
+also admits suitable anonymous lambdas, whose refinement-eligibility flag remains to be implemented.
+Parameterized `Sequence T`, `Field K V`, and `Dictionary K V`
+contracts use ordinary callable contract application. Contract arguments construct contracts,
+multi-parameter constructors curry, and non-contract arguments retain raw-kind predicate behavior.
+`Collection` itself takes no contract parameters. Element conjunctions are constructed before
+application, for example `Sequence (contract [Number positive])`. Constructors compose through
+aliases, nesting, and null/missing modifiers and expose their bases and requirements through
+reflection. General parameterized contracts and complete static proof remain
 planned. Callable reflection now exposes immutable language-owned signature metadata for remaining
 parameters, result facts, known invocation effects, and surviving overload variants without exposing
 captures, partial values, implementation objects, or authority. Derived metadata specializes
 generic prefix and hole partials, conjoins repeated-hole requirements, projects reordered holes,
 and carries compatible substitutions and effect unions through composition. The metadata is lazily
 filtered through interpreter-owned environment state that is never exposed as a Caret value.
-Contract and effect references preserve identity even when their visible name is `~`. Closed
+Contract and effect references preserve identity even when their visible `id` is `~`. Closed
 same-name overload sets are implemented: applicability observes existing contract
 membership without acquiring it, and the unique most-specific applicable variant wins.
 
@@ -287,7 +292,7 @@ every variant that might also be selected has compatible results and effects. Pr
 variants do not interfere; unknown overlap remains conservatively possible.
 Contract equality follows descriptor identity: aliases compare equal, but separate constructions
 remain unequal even with identical requirements. Contract reflection exposes public base and
-refinement-requirement names without exposing implementation callables.
+refinement-requirement identifiers without exposing implementation callables.
 The prototype infers initial built-in constraints for unannotated named functions and uses
 generalized contract variables when parameter or result contracts cannot yet be made concrete;
 each call instantiates those variables independently. Explicit callable declarations remain stable
@@ -318,11 +323,23 @@ constrains the result while `Output` is the callable's effect allowance. The ana
 clause once, so callable reflection reports `Number` only as a result requirement and `Output` only
 as an effect; source order does not change that meaning.
 
-The prototype implements the runtime `map transform values` operation for Sequences and current
-named, partial, and composed callable values. Once its transform is supplied, the resulting partial
-exposes that transform's invocation-effect bound; invoking a callable whose bound remains
-unavailable fails before its body executes. Declaration-wide variable schemes retain their
-substitutions through prefix and hole partials; lambdas remain planned.
+The prototype implements `map transform values`, `filter values predicate`,
+`fold values initial combine`, `any values predicate`, and `all values predicate` for Sequences.
+They accept named, partial, composed, and lambda callables through the guarded call path and preserve
+callback effect bounds. Fold is a strict left fold; `any` and `all` short-circuit. Null and missing
+predicate results count as false. Declaration-wide variable schemes retain their substitutions
+through prefix and hole partials, including executable lambdas.
+
+Lambdas now support unary, multi-parameter, contracted, nullary, expression-bodied, and
+indentation-bodied forms. They are ordinary callable values: they capture lexical bindings, can be
+passed, returned, or stored, and expose anonymous callable metadata without exposing captures.
+Prefix application and ordinary or numbered holes derive lambda partials with the same ordering,
+reuse, arity, contract specialization, and reflection rules as named-function partials.
+Their parameter/result facts and effect bounds are inferred from lambda bodies, captured callables,
+higher-order calls, composition, and partials; effects describe behavior and grant no authority.
+Lambda construction binds above right-associative `$`, so `consumer $ value -> expression` passes
+the complete lambda. Contracted, multi-parameter, nested, and indentation-bodied lambdas follow the
+same rule without a special runtime operator.
 
 Numbered contract variables relate the callable parameter to surrounding parameters and results.
 Compatibility is substitution-safe: parameters are contravariant, results covariant, and effects
@@ -344,7 +361,7 @@ nested or future callable forms.
 Contracts also have first-class null/missing unions. `Number?` accepts numbers or null, `Number~`
 accepts numbers or missing, and `Number?~` accepts all three while keeping null and missing
 observably distinct. The modified contracts remain unary predicates, work in clauses and aliases,
-and expose canonical names and their wrapped base through reflection.
+and expose canonical identifiers and their wrapped base through reflection.
 
 In the implemented collection-constructor model, an expression such as `[fixed _]` is an ordinary function whose
 parameter fills the hole and whose result is the completed collection. Passing that reifiable
@@ -363,9 +380,9 @@ Caret implements a standard `ErrorTemplate` carrying a stable code, phase, messa
 cause, and subsystem details. Expected operation failures use values of that shape; aborting
 compiler and runtime diagnostics share the information model without becoming catchable return
 values. A generic `Result` contract uses `ok`, `value`, and `error` fields so format and sandbox
-operations share one explicit envelope. Structural templates and `ErrorTemplate` are implemented;
-general parameterized contracts beyond `Sequence T`, contextual universal-literal selection, and
-`Result` remain planned.
+operations share one explicit envelope. Structural templates and `ErrorTemplate` are implemented.
+Parameterized contracts for later value kinds, contextual universal-literal selection, and `Result`
+remain planned.
 
 The implemented Phase 2 effect foundation assigns distinct stable codes to malformed mixed
 contract/effect clauses, non-callable effect constraints, unavailable callable effect bounds, and
@@ -449,10 +466,10 @@ An internal conservative ownership tracker may reuse ephemeral Sequence or Dicti
 bindings, calls, captures, exports, nesting, and reflection force persistent updates. Ownership is
 not visible to Caret, and an optimization-disabled reference mode is covered by differential tests.
 
-General parameterized contracts, structural templates, contextual collection representations,
-modules, root reification, sandboxing,
+Parameterized contracts for later value kinds, contextual collection representations, modules,
+root reification, sandboxing,
 compile-time execution, separate compilation roots,
-lambdas, mutability containers, and a compiler backend remain future work. The prototype exists to
+mutability containers, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 
 To explore the implementation, syntax reference, and runnable examples, see the project

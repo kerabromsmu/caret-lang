@@ -13,8 +13,8 @@ print Number initial
 print String initial
 print addTen 5
 print type Number
-print (@Number).name
-print (@Both).name
+print (@Number).id
+print (@Both).id
 print (@Both).bases
 
 (Numeric) index = 1
@@ -30,7 +30,7 @@ print NumberOrAbsent 3
 print NumberOrAbsent ?
 print NumberOrAbsent ~
 print Number? ~
-print (@NumberOrAbsent).name
+print (@NumberOrAbsent).id
 print (@NumberOrAbsent).bases
 
 (Numeric?) nullableNumeric = 4
@@ -45,8 +45,22 @@ NestedNumbers = Sequence (Sequence Number)
 (NestedNumbers) nestedNumbers = [[1 2] [] [3]]
 print Numbers numbers
 print NestedNumbers nestedNumbers
-print (@Numbers).name
+print (@Numbers).id
 print (@Numbers).requirements
+
+(Boolean) positive value = Number value & value > 0
+PositiveNumbers = Sequence (contract [Number positive])
+SequenceConstructor = Sequence
+TextNumberField = Field String Number
+DictionaryConstructor = Dictionary
+TextNumberDictionary = DictionaryConstructor String Number
+print PositiveNumbers [1 2 3]
+print PositiveNumbers [1 (0 - 2) 3]
+print SequenceConstructor [1 "two"]
+print TextNumberField (field "age" 42)
+print TextNumberDictionary [(field "age" 42)]
+print SequenceConstructor 1
+print Collection Number
 
 Diamond = contract [Left Right Root]
 Right = contract Root

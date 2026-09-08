@@ -415,13 +415,13 @@ shape and an opaque dereference target:
 
 ```text
 kind        "Function"
-name        String or ~
+id          String or ~
 remaining   Number
 signature   Signature
 variants    Sequence Signature
 ```
 
-`name` is the original declaration name when that name is visible in the current environment;
+`id` is the original declaration identifier when that identifier is visible in the current environment;
 otherwise it is `~`. An alias does not rename the target in reflection. A direct prefix partial of
 a named function or overload retains that visible declaration name, while a hole-expression
 partial, composition, lambda, or other anonymous derived callable reports `~`. `remaining` is the
@@ -440,7 +440,7 @@ variables   Sequence SignatureVariable
 ```
 
 `parameters` contains only parameters still accepted by this callable, in application order. Each
-`Parameter` has `kind = "Parameter"`, a zero-based `position` in that current list, `name` or `~`,
+`Parameter` has `kind = "Parameter"`, a zero-based `position` in that current list, `id` or `~`,
 effective `requirements`, explicit `declared` requirements or `~`, and visible `inferred`
 requirements or `~`. A derived hole parameter has no declaration of its own, so `declared` is `~`
 even when its effective requirements were synthesized from declared target positions.
@@ -455,8 +455,8 @@ requirements or effects as appropriate; in particular, `upperBound = []` means p
 
 Requirement sequences contain immutable, non-callable `ContractRef` metadata rather than the live
 callable contract binding. Effect sequences likewise contain non-callable `Effect` descriptors.
-Both preserve their underlying language-owned descriptor identity and expose `name` only when that
-name is visible; a hidden name is `~`. Reflection therefore describes a hidden identity when it is
+Both preserve their underlying language-owned descriptor identity and expose `id` only when that
+identifier is visible; a hidden identifier is `~`. Reflection therefore describes a hidden identity when it is
 part of a visible signature without granting access to its private binding, predicate invocation,
 catalog entry, implementation, or authority.
 
@@ -569,10 +569,13 @@ computed independently and never enlarged merely because a broader allowance was
 aliases are compared by descriptor identity during this subset check.
 
 The prototype propagates current-phase effects through resolver-identified aliases, constrained
-higher-order parameters, nested named closures, composition, prefix and hole partials, overload
+higher-order parameters, nested named and lambda closures, composition, prefix and hole partials, overload
 narrowing, and recursive fixed points. Eager fixed operands contribute to callable construction;
 the target callable's bound describes later invocation. An unresolved dynamic call keeps the bound
 unavailable, and allowance failures are diagnosed before top-level program effects execute.
+Higher-order standard callables retain their callback position and callback-derived invocation bound
+through ordinary aliases and partials; analysis does not depend on the source spelling of `map`,
+`filter`, `fold`, `any`, or `all`.
 
 IDE tooling should expose inferred effects directly at function declarations.
 

@@ -21,6 +21,8 @@ from ordinary Caret source use focused Java evidence.
 | PARSE-FUNCTION-BODY | public | PARSE_INVALID_SYNTAX | `examples/errors/missing_function_body.caret` |
 | PARSE-INVALID-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/invalid_definition.caret` |
 | PARSE-CONTINUATION-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/definition_in_continuation.caret` |
+| PARSE-LAMBDA-HEADER | public | PARSE_INVALID_SYNTAX | `ParserTest#requiresACompleteAndUnambiguousLambdaHeaderAndBody` |
+| PARSE-LAMBDA-BODY | public | PARSE_INVALID_SYNTAX | `examples/errors/missing_lambda_body.caret` |
 | PARSE-RESERVED-BINDING | public | PARSE_RESERVED_BINDING | `examples/errors/reserved_binding.caret` |
 | PARSE-INVALID-CONTRACT | public | PARSE_INVALID_CONTRACT | `examples/errors/invalid_contract.caret` |
 | PARSE-UNCLOSED-DELIMITER | public | PARSE_UNCLOSED_DELIMITER | `examples/errors/unclosed_delimiter.caret` |
@@ -44,6 +46,8 @@ from ordinary Caret source use focused Java evidence.
 | RUNTIME-INVALID-COMPOSITION-LEFT | public | INVALID_COMPOSITION_LEFT | `examples/errors/non_callable_composition.caret` |
 | RUNTIME-INVALID-COMPOSITION-RIGHT | public | INVALID_COMPOSITION_RIGHT | `examples/errors/invalid_composition_arity.caret` |
 | RUNTIME-INVALID-MAP-TRANSFORM | public | INVALID_MAP_TRANSFORM | `InterpreterTest#mapRejectsInvalidInputsAndRetainsLocatedElementFailures` |
+| RUNTIME-INVALID-COLLECTION-CALLBACK | public | INVALID_COLLECTION_CALLBACK | `examples/errors/invalid_collection_callback.caret` |
+| RUNTIME-INVALID-PREDICATE-RESULT | public | INVALID_PREDICATE_RESULT | `examples/errors/invalid_predicate_result.caret` |
 | RUNTIME-AMBIGUOUS-CALL-ARITY | public | TOO_MANY_ARGUMENTS | `examples/errors/ambiguous_call_arity.caret` |
 | INTERNAL-TOO-MANY-FUNCTION-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |
 | INTERNAL-TOO-MANY-PARTIAL-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |

@@ -67,6 +67,10 @@ final class UserContract implements ContractDescriptor {
         return false;
     }
 
+    @Override public boolean acceptsRequirement(Value value, SourceSpan span) {
+        return accepts(value) || canAcquire(value, span);
+    }
+
     private boolean includes(ContractDescriptor candidate) {
         Set<ContractDescriptor> visited = Collections.newSetFromMap(new IdentityHashMap<>());
         ArrayDeque<ContractDescriptor> pending = new ArrayDeque<>();

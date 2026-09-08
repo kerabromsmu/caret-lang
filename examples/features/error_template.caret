@@ -10,6 +10,6 @@ error = [
 ]
 
 print ErrorTemplate error
-print (@ErrorTemplate).name
+print (@ErrorTemplate).id
 print error.code
 print error.location.column

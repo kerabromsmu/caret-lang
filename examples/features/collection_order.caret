@@ -15,7 +15,7 @@ print @empty.kind
 print @empty.shape
 print Sequence empty
 print Dictionary empty
-print @named.names
+print @named.ids
 print named.with
 print named == fromFields
 print fromFields == fromUpdates

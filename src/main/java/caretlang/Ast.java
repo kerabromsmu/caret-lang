@@ -22,7 +22,7 @@ final class Ast {
     record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
                        List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Dereference, ContractModifier, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract {
+    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Dereference, ContractModifier, ContractTerms, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract, Lambda {
         SourceSpan span();
     }
     record Literal(Value value, SourceSpan span) implements Expr {}
@@ -40,11 +40,21 @@ final class Ast {
     record Reflect(Expr target, SourceSpan span) implements Expr {}
     record Dereference(Expr target, SourceSpan span) implements Expr {}
     record ContractModifier(Expr target, boolean nullable, boolean optional, SourceSpan span) implements Expr {}
+    /** Parser-retained adjacent arrow-result terms; semantic resolution associates constructor arguments. */
+    record ContractTerms(List<Expr> terms, SourceSpan span) implements Expr {
+        ContractTerms { terms = List.copyOf(terms); }
+    }
     /** index is zero for an ordinary left-to-right hole, otherwise one-based. */
     record Hole(int index, SourceSpan span) implements Expr {}
     /** One-based source index; normalized to zero-based signature metadata. */
     record ContractVariable(int index, SourceSpan span) implements Expr {}
     record Group(Expr expression, SourceSpan span) implements Expr {}
+    record Lambda(List<Parameter> params, List<Stmt> body, SourceSpan span) implements Expr {
+        Lambda {
+            params = List.copyOf(params);
+            body = List.copyOf(body);
+        }
+    }
     sealed interface CollectionElement permits PositionalElement, NamedElement {
         Expr value();
         SourceSpan span();

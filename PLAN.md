@@ -67,7 +67,7 @@ expressions form nested calls. Potential named prefix/infix calls are parsed neu
 from lexical callable facts, with runtime fallback only when arity is genuinely dynamic. Callable
 partial arguments use persistent O(1) accumulation, and language-owned value descriptors now
 centralize public kinds, basic reflection, structural equality, and stack-safe rendering. Trailing
-lambdas remain deferred to Phase 3. Right-associative low-precedence `$` application now lowers to
+lambdas and right-associative low-precedence `$` application now lower to
 the ordinary callable path. Language-owned callable signature metadata and its safe reflective
 projection are implemented for named functions, built-ins, prefix partials, compositions, and
 closed overload sets. Exact-arity arrow contracts now work as named or inline structural
@@ -149,8 +149,8 @@ effects, preserves unknown dynamic calls, and proves refinement
 eligibility without exposing effect syntax. Proven unary Boolean callables now participate as
 first-class predicate requirements in derived contracts and direct clauses, including through
 aliases. Nullable/optional contract modifiers are implemented as first-class, identity-stable
-contract unions without collapsing null into missing. The initial parameterized-contract slice is
-also implemented as `Sequence T`, with constructor metadata preserved through aliases, recursive
+contract unions without collapsing null into missing. The initial parameterized-contract slice uses
+callable `Sequence T`, `Field K V`, and `Dictionary K V` constructors, with constructor metadata preserved through aliases, recursive
 element validation, nesting, modifiers, identity semantics, reflection, and conservative outer-kind
 inference. Environment-relative public effect identities, catalog aliases, declaration allowances,
 callable constraints, guarded invocation bounds, and effectful arrow contracts are implemented.
@@ -194,8 +194,8 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   and context, and report `AMBIGUOUS_CONTRACT` rather than generalizing an operator constraint or
   defaulting to Number. Use `INCOMPATIBLE_CONTRACTS` for statically impossible operands while
   preserving established runtime operand, zero-divisor, non-finite, and callable-equality errors.
-- Extend the implemented ordinary contract/function parameterization beyond `Sequence T` as later
-  value kinds arrive; keep general `Collection T` and mutable `Container T` aligned with Phase 4
+- Extend the implemented ordinary contract/function parameterization as later value kinds arrive;
+  keep `Collection` unparameterized and mutable `Container T` aligned with Phase 4
   rather than introducing a separate generic-type subsystem.
 - Preserve implemented same-named overload sets and static normalization of parameter conjunctions,
   aliases, redundant nominal bases, `Any`, and absence alternatives, then order variants with the
@@ -261,7 +261,14 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   matches the authoritative optimization-disabled persistent behavior. This foundation later supports
   efficient cycles, collection updates, SIMD memory, and compiled execution.
 
-## Phase 3 — Lambdas and higher-order programming
+## Phase 3 — Lambdas and higher-order programming (completed)
+
+Current status: Phase 3 is complete. Lambdas share the ordinary callable representation, lexical
+capture metadata, contracts, effects, partial application, composition, reflection, and guarded
+higher-order execution. Sequence map/filter/fold/any/all and lambda precedence above `$` have full
+runtime and corpus evidence. Anonymous lambdas do not yet receive the refinement-eligibility flag
+already supported by suitable named predicates and aliases; canonical callable parity still requires
+that remaining interpreter correction.
 
 - Parse unary/multi-parameter lambdas, contracted parameters, expression bodies, and indented bodies
   with the precedence/extent rules settled in Phase 0.
@@ -270,9 +277,9 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   calls.
 - Support ordinary partial application and hole-based partial application around lambdas without
   conflating holes with parameter declarations.
+- Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 - Implement composition and standard higher-order collection functions (`map`, `filter`, `fold`,
   `any`, `all`) using the unified callable/effect model.
-- Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 - Complete `LAMBDA-LOWAPP-001`: lambda construction binds above `$`, with parser and runtime
   coverage for ungrouped lambdas used as complete low-precedence arguments.
 
@@ -624,17 +631,19 @@ The steps below describe the remaining contextual, template, and representation 
 
 Low-precedence application, runtime user-contract derivation, generalized contract inference, the
 minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
-are complete. Initial parameterized contracts are also complete through `Sequence T`. The shared
+are complete. Initial parameterized contracts are complete through callable `Sequence T`,
+`Field K V`, and `Dictionary K V` constructors. The shared
 callable-signature scheme and safe callable reflection are now implemented for the current callable
 kinds. Exact-arity higher-order arrow contracts are now parsed and analyzed over that metadata,
 including inline clauses, variance checks, declaration-wide variables, explicit effects, and runnable examples.
-The environment-relative effect catalog and mixed-clause analysis now enforce public declaration
-allowances and callable-value constraints. Next complete unknown higher-order invocation rejection,
-catalog aliases, and complete higher-order effect propagation. Callable signatures, reflection, explicit higher-order arrow contracts,
-and the initial static operator matrix are settled. Mixed-clause and callable-effect diagnostic
-codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
-unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather
-than introducing a separate exported Scope value model.
+The environment-relative effect catalog and mixed-clause analysis enforce public declaration
+allowances and callable-value constraints; unknown higher-order invocation rejection, catalog
+aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
+explicit higher-order arrow contracts, and the initial static operator matrix are settled.
+Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
+item in Phases 1, 2, or 3 remains formally unresolved. Next implement the settled Phase 4 universal
+collection and field foundations. `with`/`outer` wait for the Phase 4 public named-member protocol
+rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals
 

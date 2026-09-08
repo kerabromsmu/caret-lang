@@ -125,6 +125,12 @@ diff -u examples/features/layout_mapping.expected "$CARET_TEST_TMP/layout-mappin
 "$CARET_LAUNCHER" examples/features/map.caret > "$CARET_TEST_TMP/map-output.txt"
 diff -u examples/features/map.expected "$CARET_TEST_TMP/map-output.txt"
 
+"$CARET_LAUNCHER" examples/features/lambdas.caret > "$CARET_TEST_TMP/lambdas-output.txt"
+diff -u examples/features/lambdas.expected "$CARET_TEST_TMP/lambdas-output.txt"
+
+"$CARET_LAUNCHER" examples/features/sequence_operations.caret > "$CARET_TEST_TMP/sequence-operations-output.txt"
+diff -u examples/features/sequence_operations.expected "$CARET_TEST_TMP/sequence-operations-output.txt"
+
 run_test_file examples/testing.caret "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
 PASS: addition produces the expected value
@@ -183,7 +189,7 @@ print (@inside).kind
 print (@inside).remaining
 print (@made).kind
 print (@made).size
-print (@made).names
+print (@made).ids
 CARET
 
 "$CARET_LAUNCHER" "$CARET_TEST_TMP/language.caret" > "$CARET_TEST_TMP/language-output.txt"
@@ -266,6 +272,9 @@ expect_test_failure examples/errors/invalid_assertion.caret
 expect_failure examples/errors/incomplete_escape.caret unused
 expect_failure examples/errors/inconsistent_continuation_indent.caret unused
 expect_failure examples/errors/definition_in_continuation.caret unused
+expect_failure examples/errors/missing_lambda_body.caret unused
+expect_failure examples/errors/invalid_collection_callback.caret unused
+expect_failure examples/errors/invalid_predicate_result.caret unused
 expect_failure examples/errors/invalid_numbered_hole.caret unused
 expect_failure examples/errors/ambiguous_call_arity.caret unused
 expect_failure examples/errors/unknown_contract.caret unused

@@ -29,6 +29,21 @@ an absent key from a present key whose value is
 Positional and String-keyed Dictionary literal syntax is implemented, including static `^name`
 shorthand and dynamic first-class Field construction. Context-selected representations remain planned.
 
+### Higher-order Sequence operations
+
+The standard operations are `map transform values`, `filter values predicate`,
+`fold values initial combine`, `any values predicate`, and `all values predicate`. `map` preserves
+its established callable-first order; the others are collection-first and can read naturally in
+named-infix form. `filter` retains source order. `fold` is a strict scalar left fold that calls
+`combine accumulator element`. Empty results are respectively `[]`, the supplied initial value,
+`false`, and `true` for filter, fold, any, and all.
+
+Predicates may return Boolean, null, or missing. Null and missing count as false; other result kinds
+produce a located `INVALID_PREDICATE_RESULT`. All elements are passed unchanged. `any` stops after
+its first true result and `all` after its first false result. Callbacks use ordinary callable arity,
+contract, call-depth, and effect checks. The operations accept named functions, lambdas, partials,
+and compositions, return persistent values, and do not traverse Dictionaries.
+
 <a id="collections-and-lexical-scopes"></a>
 ## Collections and lexical scopes
 
@@ -142,16 +157,16 @@ For example, conceptually:
 
 ```text
 Array T
-    -> Collection T
+    -> Collection
     -> Ordered
     -> Indexed
 
 Set T
-    -> Collection T
+    -> Collection
     -> Unique
 
 Packed T
-    -> Collection T
+    -> Collection
     -> Contiguous
     -> Packed
 ```
@@ -161,12 +176,12 @@ Packed T
 <a id="parameterized-collection-contracts"></a>
 ##### Parameterized collection contracts
 
-Collection contracts may be parameterized.
+Concrete collection contracts may be parameterized. The common `Collection` contract itself has no
+contract parameters: it is the ordinary unary predicate for membership in any collection kind.
 
 Examples:
 
 ```caret
-Collection Int
 List String
 Array Float
 Set String
@@ -174,35 +189,32 @@ Dictionary String Int
 Packed Byte
 ```
 
-Conceptually:
-
-```caret
-Collection element
-```
-
-produces a contract requiring every collection element to satisfy `element`.
-
-Thus:
-
-```caret
-(Collection Number) values
-```
-
-means:
-
-> `values` is a collection whose elements all satisfy `Number`.
-
 Parameterized collection types should use the normal Caret contract/function model rather than requiring a separate generic-type language.
 
-The current prototype implements the first instance of this model as `Sequence T`. Applying the
-raw `Sequence` contract to another contract constructs a fresh contract descriptor; applying it to
-an ordinary value remains a Boolean raw-sequence membership test. `Sequence T` accepts empty
-sequences and sequences whose every element satisfies `T`, supports nesting and ordinary
-null/missing modifiers, and reflects `Sequence` as its base and `T` as its requirement. Initial
-inference retains the outer `Sequence` constraint while element proof remains a runtime check.
+The current prototype implements this callable-constructor model for `Sequence T`, `Field K V`, and
+`Dictionary K V`. Applying a raw constructor to a contract returns a contract; constructors with
+several parameters curry one contract at a time. Applying the same raw constructor to a non-contract
+value instead performs its raw-kind membership test. Constructors are ordinary first-class Caret
+callables: aliases preserve both behavior and remaining constructor arity. `Collection` remains an
+unparameterized contract predicate.
+Resolver-owned constructor arity also applies inside arrow-contract parameter and result requirements,
+so an alias such as `Seq = Sequence` retains the meaning of `[Seq Number] -> Number` without parser
+special-casing the alias spelling.
+
+`Sequence T` accepts empty sequences and sequences whose every element satisfies `T`, supports
+derived element contracts, nesting, ordinary null/missing modifiers, and reflection of its base and
+requirement. Combine element requirements before applying the constructor:
+
+```caret
+positive value = Number value & value > 0
+PositiveNumbers = Sequence (contract [Number positive])
+```
+
+Initial inference retains the outer `Sequence` constraint while element proof remains a runtime check.
 
 Within a contract clause, a known parameterizable constructor consumes its declared number of
-following contract terms. Remaining terms are the existing anonymous conjunction. Thus
+following contract terms. This association uses resolved binding metadata rather than constructor
+spellings in the grammar. Remaining terms are the existing anonymous conjunction. Thus
 `(Sequence Number positive)` requires both `Sequence Number` and `positive`; constructor aliases
 retain this metadata. Parenthesized nested terms allow `Sequence (Sequence Number)` without adding
 a generic-type grammar.
@@ -563,7 +575,7 @@ These are related but not identical.
 For example:
 
 ```caret
-(Collection Number) values
+(Sequence Number) values
 ```
 
 guarantees that every element satisfies `Number`.
@@ -656,7 +668,7 @@ A common contract does not necessarily provide enough information to remove all 
 For example:
 
 ```caret
-(Collection Number) values =
+(Sequence Number) values =
   [1 2.5 3 4.5]
 ```
 
@@ -716,7 +728,7 @@ A homogeneous semantic contract is weaker than a packed representation.
 For example:
 
 ```caret
-(Collection Number) values
+(Sequence Number) values
 ```
 
 does not imply packed storage.
@@ -740,13 +752,13 @@ requires a concrete uniform representation.
 Conceptually:
 
 ```text
-Packed T => Collection T
+Packed T => Collection
 ```
 
 but:
 
 ```text
-Collection T !=> Packed T
+Collection !=> Packed T
 ```
 
 ---
@@ -1120,8 +1132,8 @@ parameterized collection contracts, conservative implication, overload dispatch,
 contract reflection. The unresolved optional-member surface spelling remains unimplemented.
 
 Reflection retains kind `Contract` and adds language-owned `shape`, `size`, and `elements` metadata.
-Element metadata identifies its public name, constraint kind, zero-based repeated-hole parameter,
-and public requirement names without exposing captures, source spans, Java objects, or executable
+Element metadata identifies its public `id`, constraint kind, zero-based repeated-hole parameter,
+and public requirement identifiers without exposing captures, source spans, Java objects, or executable
 descriptor internals.
 
 For example:
@@ -1677,7 +1689,7 @@ A template may describe more precise structural metadata than a broad element co
 For example:
 
 ```caret
-(Collection Number) values
+(Sequence Number) values
 ```
 
 only establishes that every element satisfies `Number`.

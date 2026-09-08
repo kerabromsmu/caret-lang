@@ -1,0 +1,77 @@
+@startuml Caret overview
+title Caret prototype — architectural overview
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+package "Command line" {
+  class Main
+  class JLineRepl
+  class InferenceReporter
+}
+
+package "Source pipeline" {
+  class Lexer
+  class Parser
+  class Resolver
+  class Resolution
+  class ContractInference
+  class Ast
+}
+
+package "Runtime" {
+  class Interpreter
+  class Environment
+  interface Value
+  class CallableDispatcher
+  interface ContractDescriptor
+  class EffectCatalog
+  class OwnershipTracker
+}
+
+package "Embedding facade" #EAF3FF {
+  class CaretSandbox <<public>>
+  class CaretEnvironment <<public>>
+  interface CaretValue <<public>>
+  class EmbeddingBridge
+}
+
+Main ..> Parser : loads source
+Main ..> Interpreter : executes
+Main ..> JLineRepl : interactive mode
+Main ..> InferenceReporter : inspect mode
+JLineRepl ..> Parser
+JLineRepl ..> Interpreter
+
+Lexer <-- Parser
+Parser ..> Ast : creates
+Resolver ..> Ast : resolves
+Resolver --> Resolution : produces
+ContractInference ..> Ast
+ContractInference --> Resolution
+Interpreter ..> Ast
+Interpreter --> Resolution
+Interpreter --> ContractInference
+
+Interpreter *-- Environment
+Interpreter *-- CallableDispatcher
+Interpreter *-- EffectCatalog
+Interpreter *-- OwnershipTracker
+Environment o-- Value
+Value ..> ContractDescriptor
+
+CaretSandbox *-- EmbeddingBridge
+CaretSandbox o-- CaretEnvironment
+EmbeddingBridge *-- Interpreter
+EmbeddingBridge ..> Value : converts
+EmbeddingBridge ..> CaretValue : converts
+
+legend bottom
+  |= Relationship |= Meaning |
+  | --> | retained reference / production |
+  | *-- | composition |
+  | o-- | aggregation |
+  | ..> | dependency |
+endlegend
+@enduml

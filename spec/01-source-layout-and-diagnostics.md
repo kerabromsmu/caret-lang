@@ -113,8 +113,8 @@ continues the immediately preceding argument; dedenting to a logical indentation
 established enclosing level is a located layout error. A continuation line is an expression and
 cannot contain a definition.
 
-More-indented application is implemented by the current parser. Once lambdas are implemented, an
-indented trailing lambda will be the final call argument; its body will be delimited by its own
+More-indented application and trailing-lambda parsing are implemented by the current parser. An
+indented trailing lambda is the final call argument; its body is delimited by its own
 effective logical indentation in the ordinary way.
 
 <a id="planned-layout-baseline-modifiers"></a>

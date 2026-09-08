@@ -15,16 +15,16 @@ identity value = value
 pipeline = identity >> text
 
 print @add.remaining
-print (seqGet first.requirements 0).name
+print (seqGet first.requirements 0).id
 print @addOne.remaining
-print (seqGet @addOne.signature.parameters 0).name
+print (seqGet @addOne.signature.parameters 0).id
 print seqSize signature.effects.upperBound
 print addAlias 2 3
 print seqSize (seqGet @repeated.signature.parameters 0).requirements
-print (seqGet @reordered.signature.parameters 0).name
-print (seqGet @reordered.signature.parameters 1).name
-print (seqGet (seqGet @pipeline.signature.parameters 0).requirements 0).name
-print (seqGet @pipeline.signature.result.guarantees 0).name
+print (seqGet @reordered.signature.parameters 0).id
+print (seqGet @reordered.signature.parameters 1).id
+print (seqGet (seqGet @pipeline.signature.parameters 0).requirements 0).id
+print (seqGet @pipeline.signature.result.guarantees 0).id
 savedMetadata = @add
 print savedMetadata == @add
 print savedMetadata: 3 4

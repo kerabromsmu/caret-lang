@@ -27,22 +27,42 @@ final class ParameterizedContract implements ContractDescriptor {
 
     @Override public boolean accepts(Value value) {
         value = ValueSemantics.underlying(value);
+        if (parameterArity() > 0 || !base.accepts(value)) return false;
+        if (value instanceof Value.EmptyCollection) return true;
+        if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
+            return sequence.values().stream().allMatch(arguments.getFirst()::accepts);
+        }
+        if (base == BuiltinContract.FIELD && value instanceof Value.Field(String key, Value fieldValue)) {
+            return arguments.get(0).accepts(new Value.Str(key)) && arguments.get(1).accepts(fieldValue);
+        }
+        if (base == BuiltinContract.DICTIONARY && value instanceof Value.Dictionary dictionary) {
+            return dictionary.entries().entrySet().stream().allMatch(entry ->
+                    arguments.getFirst().accepts(new Value.Str(entry.getKey()))
+                            && arguments.get(1).accepts(entry.getValue()));
+        }
+        return false;
+    }
+
+    @Override public boolean test(Value value, SourceSpan span) {
+        value = ValueSemantics.underlying(value);
         if (parameterArity() > 0) return false;
-        if (!base.accepts(value)) return false;
+        if (!base.test(value, span)) return false;
         if (value instanceof Value.EmptyCollection) return true;
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
             ContractDescriptor element = arguments.getFirst();
-            return sequence.values().stream().allMatch(element::accepts);
+            return sequence.values().stream().allMatch(
+                    elementValue -> element.acceptsRequirement(elementValue, span));
         }
         if (base == BuiltinContract.FIELD && value instanceof Value.Field(String key1, Value value1)) {
-            return arguments.get(0).accepts(new Value.Str(key1))
-                    && arguments.get(1).accepts(value1);
+            return arguments.get(0).acceptsRequirement(new Value.Str(key1), span)
+                    && arguments.get(1).acceptsRequirement(value1, span);
         }
         if (base == BuiltinContract.DICTIONARY && value instanceof Value.Dictionary dictionary) {
             ContractDescriptor key = arguments.get(0);
             ContractDescriptor element = arguments.get(1);
             return dictionary.entries().entrySet().stream().allMatch(entry ->
-                    key.accepts(new Value.Str(entry.getKey())) && element.accepts(entry.getValue()));
+                    key.acceptsRequirement(new Value.Str(entry.getKey()), span)
+                            && element.acceptsRequirement(entry.getValue(), span));
         }
         return false;
     }

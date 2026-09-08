@@ -117,7 +117,7 @@ print person["phone"]~
 print (@person).kind
 print (@person).shape
 print (@person).size
-print (@person).names
+print (@person).ids
 print (@factorial).kind
 print (@factorial).remaining
 factorialReference = @factorial
@@ -210,7 +210,7 @@ print dictKeys replacedDictionary
 print (dictPut dictEmpty "nested" sequence == dictPut dictEmpty "nested" sequence)
 print (@dictionary).kind
 print (@dictionary).size
-print (@dictionary).names
+print (@dictionary).ids
 
 // Composition is left-to-right, binds above $, and supports partial left callables.
 double value = value * 2

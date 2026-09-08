@@ -115,7 +115,7 @@ Dynamic names are strings. The `~` suffix makes a missing binding a normal resul
 meta = @a
 meta.kind
 meta.size
-meta.names
+meta.ids
 
 functionMeta = @function
 functionMeta.kind
@@ -127,8 +127,8 @@ functionMeta.variants
 Current metadata:
 
 - all values: `kind`
-- named Collections: `shape = "named"`, `size`, `names`
-- function metadata: `kind = "Function"`, visible declaration `name` or `~`, `remaining`,
+- named Collections: `shape = "named"`, `size`, `ids`
+- function metadata: `kind = "Function"`, visible declaration `id` or `~`, `remaining`,
   language-owned `signature`, and surviving overload `variants`
 
 Every reflection result is a named metadata Collection with runtime kind `Dictionary`. It retains
