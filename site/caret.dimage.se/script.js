@@ -10,7 +10,7 @@ const examples = {
     code: `<span class="cm">// functions are ordinary values</span>\nnumbers = [1 2 3 4]\neven = value -> value % 2 == 0\n\nprint filter numbers even\n<span class="op">// [ 2 4 ]</span>`
   },
   collections: {
-    token: '? / ~', title: 'Null is not missing',
+    token: '[?~]', title: 'Null is not missing',
     copy: 'Export markers name the public fields of a Collection. A present null field returns ?, while optional access to an absent field returns ~.',
     code: `<span class="cm">// exported Collection fields</span>\nperson = [\n  ^name = "Ada"\n  ^phone = ?\n]\n\nprint person.phone\nprint person.email~\n<span class="op">// ?, then ~</span>`
   },

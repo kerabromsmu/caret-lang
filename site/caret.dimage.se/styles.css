@@ -1,13 +1,13 @@
 :root {
-    --ink: #151512;
-    --paper: #f2f0e8;
-    --acid: #d9ff43;
-    --orange: #ff633e;
+    --ink: #2a1559;
+    --paper: #e3dce8;
+    --acid: #43ff4c;
+    --orange: #ad34e6;
     --blue: #95d9ff;
-    --muted: #77766e;
-    --line: rgba(21, 21, 18, .18);
-    --mono: "DM Mono", monospace;
-    --sans: "Manrope", sans-serif
+    --muted: #6f608f;
+    --line: rgb(174 87 230 / 0.18);
+    --mono: "JetBrains Mono", monospace;
+    --sans: "IBM Plex Sans Condensed", sans-serif
 }
 
 * {
@@ -404,6 +404,10 @@ h1, h2, h3, p {
 
 .syntax-tabs button[aria-selected=true]:before {
     content: "→"
+}
+
+.code {
+    font-family: var(--mono), monospace;
 }
 
 .code-stage {
