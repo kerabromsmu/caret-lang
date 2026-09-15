@@ -17,6 +17,32 @@ remaining predictable, statically analyzable, and pleasant to work with?
 
 ## Designed around expressions
 
+### Planned Collection evolution
+
+Phase 4's [Collection protocol](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+is specified but not implemented. Ordinary `keys`, `values`, `fields`, and `size` operations
+will work across Collection shapes, with reflective queries for ordering, sequentiality,
+uniqueness, finiteness, keyedness, and value support. `Natural` describes non-negative integer
+sizes; an unknown size is missing.
+
+Planned `map` and `filter` produce lazy results even from eager inputs. Values are obtained when
+demanded; their function contracts describe any effects. `eager` materializes enumerated content
+in order, recursively, leaving mutable containers and stored functions intact. It replaces
+reflection references with empty Collections and reports cyclic containment or known-infinite
+input. Unknown finiteness may mean it never completes.
+
+Keyed traversal uses `Field` tuples; keyless traversal uses plain values. A Set is keyed without
+associated values. Transforms can change Collection shape when contracts determine their output.
+Dot and bracket access will share `getElement` semantics: absent valid keys yield missing,
+invalid keys are errors, and keys may be composite values supporting equality.
+
+These are future semantics; the executable examples elsewhere in this introduction still describe
+the current interpreter. Custom provider construction, completely deferred computation syntax,
+resumable failure handling, template constructor/predicate disambiguation, and callable forms of
+`eager` are later work.
+
+### Ordinary functions
+
 In Caret, functions and calls use the same lightweight notation. A function lists its parameters
 before `=`, and passing arguments requires no commas or parentheses:
 

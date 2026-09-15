@@ -4,6 +4,30 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="planned-modules-and-compilation"></a>
+## Planned lazy reflection integration
+
+Reflection uses the general
+[lazy-value and lexical-context rules](02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts).
+A value is projected on first access and remains established in that context; reflection is not
+a special live-read exception. Provider access enforces the execution environment's visibility and
+authority. Specific captured argument values do not propagate through sandbox boundaries.
+
+For deferred computation reflection, arguments are ordinary reflective content, subject to those
+general boundaries. Any argument value available for inspection is already computed at invocation
+time; inspecting it does not perform argument evaluation. This is not permission to expose private
+lexical captures, host implementations, or inaccessible capabilities. Computation syntax and
+handler facilities remain deferred; the
+[effects specification](05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)
+owns their design.
+
+The [planned Collection protocol](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
+an ordinary protocol operation, not restricted to metadata access.
+
+Planned `eager` replaces a reflection reference with the empty Collection without traversing its
+metadata, including nested references. It does not snapshot the reflective target or recover
+anything hidden by an environment boundary. This behavior leaves ordinary reflection intact.
+
 ## Planned modules and compilation
 
 <a id="source-modules-and-stable-module-ids"></a>

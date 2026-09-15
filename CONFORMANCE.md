@@ -252,3 +252,34 @@ reused for another behavior.
 The initial Phase 0 decisions above resolve the blockers listed in `PLAN.md`. Further ambiguities
 found while implementing later phases must be added here as `unresolved` rows before implementation;
 syntax or semantics must never be inferred silently from an example.
+
+## Collection revision and deferred execution design
+
+The [Phase 4 revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+is a planned replacement for affected legacy behavior, not evidence that the runtime has changed.
+Existing implemented rows above describe the current prototype. New rows below require their own
+implementation, diagnostics, and runnable integration evidence. Dictionary order, paired-construction
+API, lazy with integration, and Field migration remain open. Equality forcing is provisional.
+
+| Requirement | Normative behavior | Status | Automated evidence | Runnable examples | Notes |
+|---|---|---|---|---|---|
+| COLL-PROTOCOL-001 | Common keys/values/fields/size and guarantee/reflection protocol, Natural~, shape-neutral empty facts. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-LAZY-001 | Lexical first-access establishment, inherited sharing, and sequential-provider stability. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-SHAPE-001 | Field-contract tuples, missing-part interpretation, Sets, and contract-selected output shapes. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-ACCESS-001 | Dot/bracket/getElement sugar, arbitrary equality-comparable non-missing keys, missing absent access. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-CONSTRUCT-001 | Unpublished editable construction, settlement, first-key retention, paired construction. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-TRANSFORM-001 | Lazy map/filter; fields-based consumers; shape, size, effect and guarantee propagation. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-EAGER-001 | Enumeration-first depth-first materialization, provider removal, keyless preservation, contract adaptation. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-EAGER-002 | Reflection-to-empty, preserved containers/functions and sharing, cycle and infinite-input errors. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-EQUALITY-001 | Contract/order-sensitive and provisional lazy equality, infinite false, contextual empty adaptation. | planned | — | — | Phase 4; no new runtime evidence yet. |
+| COLL-PROVIDER-001 | Public custom provider construction and registration protocol. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
+| COLL-TEMPLATE-CALL-001 | Arity/result-context template predicate versus constructor selection and ambiguity diagnostics. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
+| COLL-EAGER-CALL-001 | Same-arity eager callable wrappers and direct nullary invocation. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
+| COMPUTATION-LAZY-001 | Completely deferred expression construction; concrete syntax remains unresolved. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
+| FAILURE-HANDLER-001 | Effect-selected handlers, wrapped references, delegation, resolutions, retry histories and default policy. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
+| FAILURE-CONCURRENT-001 | Concurrent handler isolation, immediate stop with finishing child work, lexical status observations. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
+| LAZY-SYNC-001 | Shared first-access production and dependent reader suspension; cycle detection deferred. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
+| COLL-ORDER-OPEN | Default Dictionary enumeration for general non-sortable keys. | unresolved | — | — | Must be settled before dependent implementation. |
+| COLL-PAIR-OPEN | Public name and full contracts of paired key/value construction. | unresolved | — | — | Must be settled before dependent implementation. |
+| COLL-WITH-OPEN | Lazy member lookup, presence and shadowing under with. | unresolved | — | — | Must be settled before dependent implementation. |
+| COLL-FIELD-OPEN | Field tuple migration across literals, contracts and reflection. | unresolved | — | — | Must be settled before dependent implementation. |

@@ -307,6 +307,13 @@ shadows this builtin-only grouping and follows ordinary application rules.
 
 ## Current limitations
 
+The newly settled [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+is not implemented yet. It adds the common enumeration/guarantee protocol, lazy map/filter,
+Field tuples and Sets, unified missing-returning dot/bracket lookup, revised equality, and
+collection-value `eager`. The implementation descriptions and runnable examples below describe
+the existing prototype. General computations, custom providers, resumable failure handlers,
+contextual template constructors, and callable `eager` forms are deferred beyond Phase 4.
+
 - A function definition must start at the beginning of a logical line.
 - Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines;
   an indented trailing lambda is the final call argument and owns its deeper body.

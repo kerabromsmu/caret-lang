@@ -4,6 +4,119 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="purity-and-effects"></a>
+## Deferred failure handling and computations
+
+This section records settled design direction beyond Phase 4. It does not implement a new
+exception system or modify current diagnostics, ordinary missing results, or structured Result
+operations. Computation syntax, exact record schemas, public effect namespaces, and concurrency
+machinery remain deferred. The examples below are conceptual/planned.
+
+### Effectful lazy access
+
+Collection providers and deferred transformations may perform effects. Their function contracts
+describe those effects; demanding operations propagate them under the ordinary rules. Pure cases
+may use semantics-preserving optimizations. Effects never grant authority. The initial design does
+not restrict lazy production to pure functions and adds no implicit uniqueness/failure cache.
+
+### Handler installation and selection
+
+The proposed ordinary wrapper forms are:
+
+```caret
+handleFailures computation handler io
+handleFailures computation handler [io network]
+```
+
+The final argument selects one effect identity or any identity in a set. Each recoverable failure
+identifies the specific effect of the failed operation, not every effect allowed by the enclosing
+function. Stable error codes and structured details describe the particular failure for inspection;
+they are not the primary installation selector. The example identities are conceptual, not new
+implemented builtins.
+
+The wrapper executes its supplied computation and returns that computation's result. Its handler
+has two parameters: the reflection reference to this wrapper's computation, and a failure record.
+The reference is not silently narrowed to the failed inner operation. It grants no extra authority
+and permits visible execution-status inspection through ordinary lazy reflection.
+
+The nearest enclosing applicable installation gets the failure. The handler chooses whether to
+resolve it, explicitly delegate to the previous applicable handler (ultimately the default), or
+stop its own wrapped computation. On delegation, the failure record and history remain unchanged;
+the previous handler receives its own wrapper's computation reference.
+
+A handler installation covers the wrapped computation, not that handler's own execution.
+Handlers may perform other effects using ordinary contracts/authority. Failures in that work are
+separate failures governed by surrounding applicable/default handlers and any installations made
+inside the handler. A handler may wrap its own computation in `handleFailures`.
+This is not an automatic recursive invocation of the same installation for its own failures.
+
+### Resolution values and retries
+
+A handler returns `FailureResolution~`:
+
+| Resolution | Meaning |
+|---|---|
+| `~` | Supply missing as the failed operation's result, if its contract permits it. |
+| `resume value` | Construct a FailureResolution supplying a contract-compatible replacement result and continue. |
+| `retry` | Retry the failed operation; another failure invokes its handler again. |
+| `defaultHandler` | Delegate to the previous applicable handler, ultimately the default. |
+| `stop` | Stop this installation's wrapped computation and make its wrapper return `~`. |
+
+Ordinary non-missing replacement values are not returned bare; `resume` constructs their
+resolution. Retry preserves completed earlier steps and uses arguments already computed for the
+failed invocation. It retries the operation, not an isolated sub-effect; earlier effects from an
+attempt are not rolled back and may repeat. No automatic retry limit is selected: a custom handler
+can inspect history and choose policy.
+
+A lazy field receives no value while resolution/retry is pending. It settles only when a result
+is supplied, including `~`; an established field is not subsequently retried. Neither `eager`
+nor `eagerWithRetry` owns retries. The proposed `eagerWithRetry` and shared failed-call caches
+were abandoned in favor of general handler policy.
+
+### Failure records and default behavior
+
+Each failed attempt appends a structured record, even if identical to the last failure.
+History belongs to that particular operation invocation and its retries, not all calls with equal
+arguments. Each handler invocation gets an immutable history snapshot through the latest failure,
+in attempt order. Records include effect identity, diagnostic code, source location, and structured
+details; the exact schema and storage/query API remain unresolved. Preserve sandbox sanitization
+and do not expose secrets or host objects.
+
+Recording a failure is distinct from printing or reporting it. A later diagnostic consumer can
+inspect records; output/logging has its ordinary effects. How observable record access is
+represented in the effect model is deferred rather than declared invisibly pure.
+
+A default handler covers recoverable effect failures: record the failure and supply `~` as close
+to the failed operation as possible when the result contract permits missing. Otherwise terminate
+with a located diagnostic. Contract violations, invalid programs, and authority violations retain
+their existing nonrecoverable behavior; they do not silently become missing. Operations designed
+to return ordinary `~` or Result values keep those semantics.
+
+An explicit `stop` returns missing from its owning wrapper, whose result contract must therefore
+permit missing when stop is possible. It retains the failure record. There is no implicit rollback.
+
+### Concurrent handling and stop
+
+Independent failures may have concurrent handlers. One failed invocation has one active
+resolution process and remains suspended until resolution. General concurrency/synchronization
+implementation is deferred.
+
+Stop returns `~` immediately from the owning wrapped computation. Already-started child
+computations finish as complete developer-defined units, including their internal multi-step
+sequences; do not cut them off at arbitrary calls or effects. Their results are discarded.
+Already-running handlers for the stopped computation finish but their resolutions are ignored.
+They cannot resume/retry that stopped computation. Effects may occur after the wrapper returns.
+
+Continuing child computations retain normal failure handling so they can complete coherently;
+their failures are not globally suppressed merely because an enclosing result is discarded.
+Handlers inspect their wrapped computation reference, not a new parent-chain API.
+Status observations obey the same lazy lexical rule as any other value: a first observation fixes
+that value for the context, so subsequent reads by that invocation need not reveal a later stop.
+A new access in a fresh context may observe stopped state. This does not require a live mutable
+status value to overwrite an earlier observation.
+
+Unrelated work is unaffected. This design neither supplies OS/process isolation nor chooses
+deadlines, resource quotas, hard cancellation, or cleanup synchronization.
+
 ## Purity and effects
 
 Every function has an inferred effect set.

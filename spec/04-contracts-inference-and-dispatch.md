@@ -3,6 +3,24 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Planned Collection contract integration
+
+Phase 4 introduces `Natural`, a contract for Number values that are integers greater than or
+equal to zero. It remains subject to Caret's finite-number representation; it does not introduce
+infinite numeric values. Collection `size` has result contract `Natural~`.
+
+The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+owns guarantee queries, shape inference, Field tuples, and contextual empty-Collection equality.
+Runtime validation of lazy membership is unnecessary when inferred/declared producer contracts
+already establish the answer; otherwise necessary computation contributes its ordinary effects.
+Provider guarantees are trusted unless explicitly validated; detectable contradictory declarations
+are errors.
+
+Existing template calls remain predicates in Phase 4. The later dual predicate/constructor
+interpretation selected by result contracts and arity is
+[explicitly deferred](06-collections-fields-and-templates.md#deferred-template-construction-and-callable-eager).
+That overload and its ambiguity diagnostics are not Phase 4 requirements.
+
 <a id="contract-foundation-currently-implemented"></a>
 ## Contract foundation currently implemented
 

@@ -3,8 +3,342 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Phase 4 Collection protocol revision (planned)
+
+This section records the decisions from issues #55 and #59 and their joint design discussion.
+It specifies planned behavior, not current interpreter support. For the subjects covered here it
+supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
+eager transforms, a distinct non-Collection Field representation, and earlier collection-equality
+assumptions. Existing tests and the implemented baseline remain valid descriptions of the current
+prototype until their corresponding implementation changes land. All examples in this section
+are conceptual/planned.
+
+### Scope and remaining decisions
+
+Phase 4 includes the common protocol, built-in lazy transforms, collection-value `eager`,
+and their contracts, effects, reflection, and diagnostics. Public custom-provider construction,
+its registration/constructor syntax, general computations, concurrency/synchronization, resumable
+failure handling, callable forms of `eager`, and contextual template invocation are deferred.
+Built-in laziness must not depend on exposing those deferred APIs.
+
+The following remain unresolved and must not be silently selected during implementation:
+
+- Default Dictionary enumeration order: existing canonical sorted order versus construction order,
+  especially for equality-comparable keys without a sorting relation.
+- The public callable name and full signature for paired key/value-sequence construction.
+- Integration of lazy named members with `with`, including absent versus present-missing lookup.
+- Compatibility details for changing existing Field values to Field-contract tuples, including
+  literal recognition, contract checking, reflective metadata, and preservation of existing programs.
+
+### Protocol operations and guarantees
+
+The common operations are ordinary callables, with provider-specific contracts and effects:
+
+| Operation | Meaning |
+|---|---|
+| `getElement collection key` | Obtain the element for a valid key; absent keys return `~`. |
+| `keys collection` | Sequential enumeration of unique keys, or `~` if key access is unsupported. |
+| `values collection` | Sequential value enumeration, or `~` for a key-only Set. |
+| `fields collection` | Sequential enumeration of Field tuples for keyed Collections, plain values for keyless Collections. |
+| `size collection` | `Natural~`; the provider may compute it and perform declared effects. |
+
+`Natural` is a contract for non-negative integer Numbers, including zero. Unknown size is `~`;
+a known-infinite Collection returns `~` from `size`. No purity or constant-time requirement is
+imposed on the size provider.
+
+| Callable query | Reflection member | Result |
+|---|---|---|
+| `isSequential collection` | `@collection.sequential` | `Boolean~` |
+| `isOrdered collection` | `@collection.ordered` | `Boolean~` |
+| `isUnique collection` | `@collection.unique` | `Boolean~` |
+| `isFinite collection` | `@collection.finite` | `Boolean~` |
+| `isKeyed collection` | `@collection.keyed` | `Boolean~` |
+| `hasValues collection` | `@collection.hasValues` | `Boolean~` |
+| `size collection` | `@collection.size` | `Natural~` |
+
+Queries and their reflective projections describe the same protocol facts. Size reflection uses
+the same provider operation and effects, not a separate hidden calculation. Ordinary lazy-access
+and visibility rules apply. For guarantees, `true` means guaranteed, `false` means known not to
+hold, and `~` means unknown. Detectably contradictory declarations are contract errors without
+forcing elements: for example, sequential true and ordered false.
+
+Keyed/keyless and, for keyed Collections, Set/dictionary shape are determined before settlement;
+they must not be inferred by forcing a lazy Collection. Shape-neutral `[]` is the exception:
+`isKeyed` and `hasValues` are `~` until context selects shape. Its `keys`, `values`, and
+`fields` return `[]`; size is zero, finite and unique are true. Ordering and sequentiality
+come from the selected contract. These size/finiteness/uniqueness facts also hold for shaped
+empty Collections.
+
+Sequential guarantees numeric access to all elements at consecutive keys starting at zero and
+the same values in the same order on every enumeration, including across separate invocations.
+Sequential Collections may be lazy: deferred computation does not weaken that guarantee.
+Ordered is separate: it guarantees stable entry order without requiring stable values or
+consecutive numeric keys. An ordered keyed Collection can use arbitrary keys.
+
+Keyless means no explicit user-defined keys; it does not prohibit positional access. A keyless,
+non-sequential Collection may expose numeric enumeration positions if they are valid access keys.
+Without such access, `keys` returns `~`. Sequential providers may additionally implement
+nonnumeric aliases, but aliases are neither supplied by default nor included in key enumeration.
+
+Keys are always unique. The optional unique guarantee concerns element values. Lazy providers'
+guarantees are trusted; ordinary access does not automatically scan or remember all previous
+values to validate uniqueness, sequentiality, or finiteness. Developers may explicitly use a
+uniqueness checker or other validation when they do not trust the provider; its concrete public
+API remains unspecified. Detected violations of declared guarantees are errors. Trust does not
+justify returning internally contradictory declarations.
+
+### Enumeration and lexical evaluation
+
+Enumeration is part of the Collection protocol, not available only through metadata. Its results
+are ordinary, possibly lazy sequential Collections; `keys` additionally guarantees unique values.
+Where both exist, key and value enumerations align by entry order; keyed `fields` describes
+the corresponding key/value pairs. Set fields have missing associated values. For keyless
+Collections, `fields` yields values without synthetic index tuples.
+
+A returned enumeration is individually sequential and stable. Separate calls in separate
+invocations can obtain different enumeration Collections from a general lazy provider. Both
+key enumeration and element access obey the general
+[lazy-value rules](02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts):
+first access establishes a value in the accessing lexical context; inherited values stay shared;
+a fresh invocation can obtain different results. No special context is introduced by `eager`,
+reflection, or a handler. A sequential provider must uphold its stronger cross-invocation
+stability guarantee.
+
+Providers determine the relationship between enumerated keys and access: the language does not
+require enumeration to list every accessible key. Duplicate enumerated keys count once, retaining
+their first position. Thus materializing enumerated content need not preserve access to omitted
+keys. Provider APIs for custom construction are deferred; built-in protocol support is not.
+
+### Lookup and keys
+
+These planned expressions use the same access operation:
+
+```caret
+collection.name
+collection.name~
+collection["name"]
+collection["name"]~
+getElement collection "name"
+```
+
+Dot access is sugar for a String key, not a distinct guaranteed-presence operation. Optional
+spellings remain accepted equivalents. Bracket access accepts every key allowed by the access
+contract, including composite keys; the former String/Number/Boolean restriction is removed.
+The sugar follows ordinary lexical resolution of `getElement`, including local shadowing.
+
+Valid absent keys return `~` without recording an operation failure. Invalid keys violate the
+access contract: wrong key types, fractional sequence indices, and `~` as a key are errors.
+A valid integer outside a sequence's range is absent. Null `?` is a permitted key if its
+contract allows it. Keys must support equality but need not be sortable. Key equality may force
+lazy values or perform effects, which lookup and duplicate detection must account for.
+
+Holes lower through ordinary partial application: `collection[_]` corresponds to
+`getElement collection _`, and `_[key]` awaits a Collection. Ordinary fixed-operand evaluation,
+hole ordering and numbering, and the prohibition on mixed numbered/unnumbered holes apply.
+This syntax decision requires parser/interaction tests, especially at Collection literal hole
+boundaries; it is not an implemented extension yet.
+
+### Fields, tuples, Sets, and contextual shape
+
+A tuple is a positional Collection following a template, not a separate tuple runtime kind.
+`field key value` constructs a two-position tuple carrying the `Field` contract.
+That contract distinguishes fields from ordinary pairs. More-than-two-position Fields are deferred;
+the exact migration from the current distinct Field runtime representation remains open.
+
+Field interpretation uses the result Collection contract:
+
+| Field content | Contribution |
+|---|---|
+| `(Field) [key value]`, both present | A keyed entry with its associated value. |
+| `(Field) [~ value]`, value present | A keyless element. |
+| `(Field) [key ~]`, key present | A dictionary entry storing missing under a dictionary contract; a key-only member under a Set contract. |
+| `(Field) [~ ~]` | No entry; no evidence toward shape inference. |
+
+Plain values and Fields with absent keys may mix in a keyless result. Incompatible keyed/keyless
+entry shapes are errors; simply mixing Field and non-Field runtime forms is not itself an error.
+All-omitted results without a selecting contract produce shape-neutral `[]`.
+
+A Set has unique keys with no associated values. `keys set` enumerates its members;
+`fields set` enumerates `(Field) [key ~]` tuples; `values set` is `~`. Lookup returns the
+stored member or `~` for absence. A Set cannot contain missing as an actual member/key.
+Set versus dictionary is selected by the expected or inferred contract. All fields lacking
+values may establish a Set only when contracts establish that fact without traversing lazy output;
+otherwise require an explicit contract. This never conflates a dictionary entry storing `~`
+with an absent entry.
+
+### Construction and settlement
+
+Constructing code may read, add, remove, and replace elements before the Collection settles.
+Outside constructing code there is no exposed Collection until settlement. Guarantees are available
+during construction. Settlement fixes structure and access mechanism without forcing all deferred
+values; afterward analogous updates produce new immutable Collections, not changes to the original.
+This replaces the earlier per-element-only monotonic construction proposal for the unpublished
+construction phase. It does not introduce deep mutation or a public builder syntax.
+
+Adding a repeated key refers to the existing entry: its new value is ignored and its original
+position is retained. This is distinct from an explicit replacement operation in unpublished
+construction. A value ignored because its key is already present need not be forced; effects
+already performed to produce an eager value cannot be undone.
+
+A planned paired-construction operation takes key and value sequences and pairs positions.
+Different lengths are contract errors when discovered; do not silently truncate or pad.
+Duplicate-key positions still consume positions for alignment but do not force ignored values.
+Construction from defined data is eager; if either source is lazy the result is lazy, retaining
+already-computed data. Public spelling and complete contracts remain unresolved.
+
+When mapping only the values of an existing Collection while retaining its keys, the paired
+inputs derive from one shared enumeration of that source's fields, ensuring alignment.
+The value transformation stays lazy. General paired construction permits independently supplied
+sequences; their alignment is the developer's responsibility.
+
+### Lazy transforms and consumers
+
+`map transform collection` and `filter collection predicate` always produce lazy Collections,
+even for eager inputs. Creating them does not run the transform/predicate. Their deferred effects
+come from the source and function contracts and propagate through access, enumeration, equality,
+rendering, and materialization as those operations demand work. Proven-pure cases may use only
+optimizations preserving observable behavior.
+
+All transforms/consumers use the elements exposed by `fields`: bare values for keyless inputs,
+Field tuples for keyed inputs, including Sets. `fold` passes accumulator then element.
+`fold` remains a strict ordered traversal returning its final accumulator; `any` and `all`
+demand values immediately as needed and retain their established short-circuit/predicate rules.
+
+`filter` preserves retained keys for keyed inputs. Positional keyless filtering compacts indices
+from zero and preserves traversal order. Key enumeration of a filtered result can demand source
+values and invoke predicates to determine membership, acquiring their effects.
+
+`map` result shape is selected from returned fields/values and expected or inferred contracts:
+Field results with keys produce keyed Collections, absent-key Fields or plain results can produce
+keyless Collections. Mapping keyed input to plain values is allowed; mapping keyless input to
+Fields is allowed. Set map defaults to Set for member results, but Fields with associated values
+can select dictionary shape, and an expected keyless contract or absent-key Field can select
+keyless shape. Key and value contracts follow the transform rather than being fixed to the source.
+
+A keyed transform may change keys. Enumerating output keys therefore may invoke the transform
+and establish its returned pair, including any eager value computation or effects within that
+pair. This does not make ordinary map construction eager. Repeated output keys follow first-entry
+semantics. Key-only enumeration is not a promise that a key-changing transform avoids all value work.
+
+Empty map results use the transform's declared/inferred contract or expected context; unresolved
+shape requires an explicit contract. An established all-omitted result without a selecting
+contract remains the shape-neutral empty exception. Never force a lazy result just to infer shape.
+
+Guarantee propagation must be sound:
+
+- Map/filter retain sequentiality only when stable values and order are guaranteed; numeric indexing
+  alone is insufficient. An effectful transform or predicate does not automatically preserve it.
+- Map preserves value uniqueness only when proven to do so. Filter preserves uniqueness.
+- Finite inputs give finite outputs. Filter of infinite or unknown input has unknown finiteness.
+- A one-output-per-input keyless map preserves cardinality/finiteness. Key-changing maps can collapse
+  keys, and Fields can omit entries; do not propagate infinite size or cardinality through those
+  cases without proof. Infinite keyed map has unknown finiteness by default.
+- One-output-per-input keyless map preserves known size. Filter/keyed map otherwise report unknown
+  size unless a more precise result is established. Empty source size is zero. Providers may
+  compute size through their ordinary protocol operation.
+
+Default Collection text conversion recursively calls ordinary `toString` on elements, honoring
+their overloads. It may demand lazy values and acquires their and selected overloads' effects.
+There is no mandatory preview limit; developers can overload conversion.
+
+### Collection materialization with eager
+
+Phase 4 `eager value` materializes Collection values. It follows ordinary lexical evaluation;
+there is no special traversal-wide cache/context overriding fresh versus inherited bindings.
+
+1. Reject a Collection declared infinite immediately with a located error. For unknown finiteness,
+   attempt enumeration, which may never finish.
+2. Complete key enumeration before materializing any entry. If keys are unavailable, complete
+   value enumeration instead. Enumeration itself may demand computations needed to produce its
+   results, such as key-changing maps and filtering.
+3. Process entries in enumeration order, depth-first. Materialize a key immediately before its
+   retained value, completing nested content before advancing to the next entry.
+4. If materialized keys collide, retain the first entry and do not force the later ignored value.
+   Retain enumerated dictionary keys whose value settles to `~`.
+5. Produce a separate fully defined Collection of that enumerated content, without retaining its
+   provider. Omitted but provider-accessible keys are absent from this result. The original lazy
+   Collection remains usable through its provider.
+
+Do not add positional access or sequentiality to a result merely because storage uses an array.
+A keyless source with unavailable keys remains keyless with unavailable keys. Derive compatible
+result contracts when materialization transforms content; do not falsely retain uniqueness or
+element contracts invalidated by those transformations.
+
+Reflection references become `[]` without traversing their metadata, including nested references
+and references in composite keys. For example, conceptual `eager [42 @person]` yields
+`[42 []]` and leaves the source unchanged. Mutable container references remain the same containers:
+do not dereference, freeze, or traverse their contents. Stored callables remain unchanged.
+Phase 4 also returns directly supplied callables unchanged; later callable behavior is deferred.
+Already-defined scalar values, including null and missing, remain unchanged.
+
+Preserve shared acyclic nested Collections where ordinary lexical rules identify shared values.
+Cyclic Collection containment is a located `eager` error, distinct from deferred synchronization
+cycle detection. Do not traverse container contents or reflected metadata to discover such cycles.
+
+Phase 4 uses existing failure behavior, not the deferred resumable-handler design.
+There is no `eagerWithRetry` and no automatic cross-field failed-computation cache.
+Recovery policy belongs to general failure handlers when that later facility exists.
+
+### Collection equality (forcing policy provisional)
+
+The choice to force lazy content during equality is provisional and must be revisited if edge
+cases require it, especially effects/order, failures, infinite content, and sandbox-sensitive
+reflection. Until revised:
+
+- Contracts must permit a match; differing contracts alone do not prohibit equality. Set and
+  dictionary shapes are unequal, even when all dictionary values are missing.
+- Ordered and unordered Collections compare unequal. Unknown ordering gives false by default;
+  developers may define custom comparison functions.
+- Compare declared ordered Collections in order. For unordered keyed Collections compare by key;
+  unordered keyless Collections compare values with multiplicities, ignoring enumeration order.
+- If either Collection is known infinite, return false without enumeration, even for self-comparison.
+  Equality is intentionally non-reflexive there; identity shortcuts must not override this rule.
+  Unknown finiteness may be traversed and may not terminate.
+- Compare enumerated content only; provider-accessible but unenumerated keys do not participate.
+  Demand corresponding values left before right, reuse established values under lexical rules,
+  and stop at the first mismatch. Propagate effects of demanded computations/comparisons.
+- Shape-neutral `[]` adopts the compared Collection's matching contract. This is contextual
+  adaptation, not one fixed shaped value equal to every empty Collection; distinct shaped empty
+  Sets and dictionaries remain unequal.
+
+No built-in comparison operation for ignoring contract/order differences is required.
+General comparison strategies may be written by developers.
+
+### Deferred template construction and callable eager
+
+Existing structural templates remain contracts/predicates in Phase 4. Later template calls may
+also construct instances by filling holes. Boolean result context selects predicate use;
+Collection or compatible template result context selects construction. Independently inferred
+contracts and arity may disambiguate; inference must not circularly assume an interpretation to
+justify it. Otherwise emit a located ambiguity error asking for an explicit expression contract.
+Two arguments to a two-hole template can select construction over unary predicate use.
+Zero-hole templates construct in Collection context and test membership when applied to one value;
+ambiguous bare uses require context.
+
+Constructor partial application follows ordinary/numbered-hole rules. Defined inputs construct
+eagerly; explicitly deferred inputs construct lazily. Ordinary calls evaluate values where needed;
+a stored function remains a function. The completely deferred computation syntax is postponed.
+Membership can rely on declared/inferred producer contracts when they establish the answer;
+only necessary checks execute deferred computation and acquire its effects.
+
+Later `eager` on a non-nullary callable returns a same-arity callable applying `eager` to its
+completed result, preserving partial application and recursively handling callable results.
+Wrapper creation is pure; invocation carries original and materialization effects.
+A directly supplied nullary computation is executed and its result materialized. Stored function
+values remain untouched. These forms are expressly not Phase 4 behavior.
+
+### Required future implementation evidence
+
+Add parser/resolver/runtime and runnable integration coverage for protocol reflection, key errors
+and shadowed access sugar, hole boundaries, Field shape selection, Sets and keyless access,
+lexical lazy sharing, effect propagation, duplicate suppression, paired alignment, contextual empty
+values, equality order/infinite cases, eager key/value traversal, reflection removal, unchanged
+containers/functions, alias sharing, containment cycles, and all located failures. Update the
+diagnostic inventory with exact codes and locations when implementation chooses them.
+Do not claim the new protocol implemented based on tests of legacy Sequence/Dictionary behavior.
+
 <a id="immutable-collections"></a>
-## Immutable collections
+## Immutable collections (implemented baseline)
 
 The prototype provides String-keyed Dictionaries through exported blocks, explicit named literals,
 ordinary `field key value` construction, and persistent updates. It also provides immutable sequences through:

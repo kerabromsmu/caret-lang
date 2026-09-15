@@ -289,11 +289,38 @@ Current foundation: `Collection` is implemented as the general contract for Sequ
 Dictionaries. Static `^name`, ordinary `field "name" value`, exported blocks, and `dictPut` share
 one String-keyed `Dictionary K V` representation; mixed shapes and duplicate keys are diagnosed.
 The steps below describe the remaining contextual, template, and representation work.
+The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+records the newer #55/#59 decisions and takes precedence over legacy implementation targets
+for its covered behavior. These decisions are planned, not implemented by the existing tests.
+
+### Agreed collection revision and deferrals
+
+- Implement ordinary keys/values/fields/size access, guarantee queries and reflective equivalents,
+  Natural size contracts, keyed/keyless and Set/dictionary shapes, and Field-contract tuples.
+- Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
+  first-entry duplicate handling, and paired key/value construction once its API is settled.
+- Apply ordinary lexical lazy-value establishment and inferred provider effects; retain stronger
+  sequential guarantees without introducing automatic uniqueness tracking.
+- Implement unified dot/bracket/getElement lookup, general equality-comparable keys, invalid-key
+  contracts, and ordinary shadowing/partial-application lowering.
+- Implement collection-value eager with complete enumeration before depth-first materialization,
+  reflection removal, preserved containers/functions and sharing, and cycle/infinite diagnostics.
+- Implement the revised contract-sensitive equality, contextual empty Collections, unordered
+  multiplicity comparison, and the provisional forcing policy.
+- Resolve default Dictionary enumeration order, paired-construction spelling/contracts, lazy with
+  membership, and migration of the existing Field representation before dependent implementation.
+- Preserve existing structural-template predicates. Defer contextual predicate/constructor calls,
+  general completely deferred computations, custom provider construction, concurrency and resumable
+  handlers, and function-wrapping/nullary-invocation forms of eager beyond Phase 4. No particular
+  later phase is assigned yet. There is no eagerWithRetry feature.
+- Use existing failure behavior in Phase 4. The deferred handler design is not a prerequisite for
+  built-in lazy Collections. Add the protocol/revision conformance evidence before claiming completion.
 
 ### Collection protocol and literals
 
 - Generalize existing sequences/dictionaries behind `Collection` and capability contracts while
-  keeping persistent semantics and canonical Dictionary field order.
+  keeping persistent semantics. Current Dictionaries use canonical field order; the default order
+  for general non-sortable keys remains an explicit open decision.
 - Complete contextual behavior for `[...]`, including shape-neutral empty values and inferred
   content contracts, without assigning a fixed container meaning to square brackets.
 - Make each collection literal a hole-expression boundary: materialize its collection-constructor
@@ -305,8 +332,9 @@ The steps below describe the remaining contextual, template, and representation 
 
 ### Fields and dictionary-like collections
 
-- Preserve the implemented first-class `Field K V`, ordinary `field name value` construction, and
-  unified `Dictionary K V` representation shared by exports, static fields, and persistent updates.
+- Retain the `Field` contract and ordinary `field name value` construction while migrating Fields
+  to contract-bearing tuples. Reconcile existing `Field K V`, exports, static fields, reflection,
+  and persistent updates through the pending compatibility decision.
 - Preserve the implemented positional/named shape diagnostic. Make `[]` shape-neutral and valid
   under every zero-compatible collection contract.
 - Support static and dynamic access, optional lookup, and exact missing/null/present-`~` behavior.
@@ -339,10 +367,10 @@ The steps below describe the remaining contextual, template, and representation 
   collection shape, and mixed numbered/unnumbered holes remain invalid.
 - Validate statically known template membership and retain runtime checks when proof is unavailable.
   Diagnose invalid constructors and non-comparable fixed values with their settled template codes;
-  reuse ordinary field, contract, and hole codes for malformed dynamic keys, duplicate fields,
-  invalid contracted holes, and mixed hole styles. Preserve parser phase for malformed syntax and
-  keep behavioral codes stable across semantic and runtime discovery, with the offending construct
-  primary and the first duplicate field related.
+  reuse ordinary field, contract, and hole codes for malformed dynamic keys, invalid contracted
+  holes, and mixed hole styles. Reconcile legacy duplicate-field diagnostics with the new
+  first-entry construction rule. Preserve parser phase for malformed syntax and stable located
+  behavioral diagnostics across semantic and runtime discovery.
 - Reflect template structure as metadata on `Contract` descriptors. Permit shared metadata and
   packed-layout derivation only when optimized and optimization-disabled behavior is identical.
 

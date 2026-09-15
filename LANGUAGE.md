@@ -107,6 +107,15 @@ These links replace the major anchors of the former monolithic document:
 
 ## Deferred specification work
 
+The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+records the joint #55/#59 decisions, their explicit precedence over affected legacy target behavior,
+and unresolved integration points. General
+[lazy-value evaluation](spec/02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts)
+belongs to the evaluation specification; deferred
+[resumable failure handling](spec/05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)
+belongs to the effects specification. Those sections distinguish Phase 4 work from later designs;
+none changes the prototype's implementation status by documentation alone.
+
 Deferred work remains documented in the feature document that owns the affected semantics. The
 current deferred inventory and initial implementation boundary are tracked in
 [`CONFORMANCE.md`](CONFORMANCE.md); future implementation sequencing belongs in [`PLAN.md`](PLAN.md).

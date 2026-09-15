@@ -4,6 +4,20 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="mutability-containers"></a>
+## Phase 4 integration boundary
+
+The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+defines unpublished construction and settlement. Constructing code can inspect and edit an
+unfinished Collection, but outside code cannot access it until settlement. This is distinct from
+a stable-identity mutable container. Settled Collection updates produce new values. `eager`
+preserves container references and never reads or freezes their contents.
+
+The revised dot/bracket equivalence and lazy Collection providers require an explicit integration
+decision for `with`: distinguish absent members from present members whose value is missing
+without losing lexical shadowing or export visibility. That decision remains unresolved; do not
+infer fallback by treating `getElement` returning missing as proof of absence. The existing
+resolver-only and sandbox restrictions on `with`/`outer` remain authoritative.
+
 ## Mutability Containers
 
 <a id="overview"></a>
