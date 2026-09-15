@@ -31,6 +31,11 @@ baseline.
   consumes the same form so semantics cannot drift.
 - Give every public value kind a language-owned descriptor and reflective view. Never use Java
   reflection as Caret reflection.
+- Preserve the [ordinary-callable construction model](spec/03-functions-operators-and-lambdas.md#function-application)
+  for `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox`. Lookup, aliases, shadowing,
+  arity, partial application, dispatch, effects, reflection, and staging use ordinary function rules.
+  Specialized analysis and lowering recognize resolved language-owned callable identities, never
+  lexical spellings; these bindings introduce no feature-specific application or declaration grammar.
 - Pass an explicit execution environment through interpretation, imports, tests, REPL sessions, and
   compiled entry points. Reflection and authority are always relative to that environment.
 - Assign stable diagnostic phase/code/span data before expanding error messages. All new syntax and
@@ -79,9 +84,9 @@ survivor signatures with conservative summaries.
 
 ### Layout and expressions
 
-- Extend the structured logical-line engine already used by grouped expressions, dynamic lookups,
-  ungrouped multiline argument lists, and indented bodies to lambdas, collection literals, `format`, `cycle`,
-  rules, and trailing blocks as those constructs are implemented.
+- Preserve the structured logical-line engine for grouped expressions, dynamic lookups, multiline
+  arguments, lambdas, collection literals, and indented bodies. Future `format`, `cycle`, `rule`, and
+  `sandbox` calls use these ordinary application/layout rules without parser-specific headers.
 - Preserve the implemented pre-parse layout-mapping stack for terminal `\\` baseline adjustments
   and standalone `\*` restoration lines as later indentation-opening forms are added. Effective
   indentation is computed before parsing while diagnostics retain physical coordinates.
@@ -261,15 +266,18 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   matches the authoritative optimization-disabled persistent behavior. This foundation later supports
   efficient cycles, collection updates, SIMD memory, and compiled execution.
 
-## Phase 3 — Lambdas and higher-order programming (completed)
+## Phase 3 — Lambdas and higher-order programming (foundation completed; refinement follow-up)
 
-Current status: Phase 3 is complete. Lambdas share the ordinary callable representation, lexical
+Current status: The Phase 3 foundation is complete. Lambdas share the ordinary callable representation, lexical
 capture metadata, contracts, effects, partial application, composition, reflection, and guarded
 higher-order execution. Sequence map/filter/fold/any/all and lambda precedence above `$` have full
 runtime and corpus evidence. Anonymous lambdas do not yet receive the refinement-eligibility flag
 already supported by suitable named predicates and aliases; canonical callable parity still requires
 that remaining interpreter correction.
 
+- Complete the remaining `CONTRACT-LAMBDA-REFINE-001` correction before starting Phase 4:
+  grant proven-pure unary Boolean lambdas the same refinement eligibility as named predicates,
+  with contract/alias, rejection, diagnostic, and runnable integration evidence.
 - Parse unary/multi-parameter lambdas, contracted parameters, expression bodies, and indented bodies
   with the precedence/extent rules settled in Phase 0.
 - Lower lambdas to the same function representation as named functions. Implement lexical capture,
@@ -370,6 +378,10 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 - Implement unconstrained and contracted holes, equality-checked fixed values, exact positional and
   named shape, dynamic field names, and recursive nested collection shapes.
+- Track [general optional named members](spec/06-collections-fields-and-templates.md#named-fields)
+  and required/optional membership reflection as `TEMPLATE-OPTIONAL-001`. Their declaration syntax
+  remains unresolved; settle it before implementing that capability and before Phase 8
+  `RuleDefinition` construction. Do not substitute absence modifiers or optional lookup syntax.
 - Derive membership as the structural inverse of eligible constructors without invoking them.
   Repeated numbered holes impose candidate equality; numbering changes parameter order but not
   collection shape, and mixed numbered/unnumbered holes remain invalid.
@@ -410,8 +422,10 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 ### `cycle`
 
-- Implement `cycle` as an expression over an initial state, pure unary condition, unary body, and
-  unary prepare transformation. Support omitted body/prepare forms exactly as specified.
+- Implement ordinary four-argument `cycle initial condition body prepare`, with a pure unary
+  condition and unary body/prepare transformations. Supply ordinary `identity` for an unused body
+  or prepare phase; fewer arguments retain ordinary partial-application behavior. Omission
+  shorthand remains a future possibility, not a required cycle grammar.
 - Accept named functions, lambdas, partials, and positional or named Collections as phase values. Enforce a
   stable state shape and compatible contracts across iterations.
 - Infer phase effects while requiring the condition to remain pure. Lower to an internal loop/tail
@@ -440,8 +454,9 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 ## Phase 7 — First-class bidirectional formats
 
 - Add immutable `Format` values representing bidirectional relations. `decode` and `encode` return
-  `Result`, with expected failures carrying an `ErrorTemplate` payload. Implement empty formats and
-  ordinary functional construction.
+  `Result`, with expected failures carrying an `ErrorTemplate` payload. Implement ordinary nullary
+  `format : [] -> Format`; bare `format` invokes it under normal nullary rules to produce an empty
+  Format. Format constructors and transformations use ordinary callable application.
 - Implement primitive byte/integer formats, `field format "name"`, constants/signatures, nested
   formats, fixed/prior-field repetition, conditions, general `selector ==` choices, constraints,
   and `>>` composition.
@@ -461,11 +476,16 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 ### Contexts and rules
 
+- Before rule construction, settle `TEMPLATE-OPTIONAL-001` and `RULE-PHASE-CONTRACT-001`:
+  [RuleDefinition requires optional template members and first-class C/T/E contracts](spec/11-rules-rulesets-and-objects.md#basic-definition).
+  Their unresolved syntax/contracts must not be replaced by rule-specific ASTs, parser exceptions,
+  or hidden lazy-expression wrappers.
 - Add persistent `Context` values, idempotent `raise`/`lower`, and transient `rise`/`fall` fronts over
   Boolean context expressions.
-- Add first-class `Rule` values with unique optional CATEN clauses, defaults, inferred or explicit
-  string-literal IDs for `N`, runtime active state, edge-trigger history, effect block, and implicit
-  application context.
+- Implement ordinary unary `rule : RuleDefinition -> Rule`, consuming a named Collection validated
+  by the general template-derived contract. Its unique optional CATEN fields preserve defaults,
+  inferred or explicit string-literal IDs for `N`, runtime active state, edge-trigger history,
+  deferred effect execution, and implicit application context.
 - Implement gate semantics: `C` and `A` permit application but never replay a trigger missed while
   gated. Require `C` and `T` purity; propagate ordinary effects from `E`.
 - Implement `activate`/`deactivate`, implicit context rise/effect/fall, reevaluation after each effect,
@@ -646,6 +666,11 @@ for its covered behavior. These decisions are planned, not implemented by the ex
   related spans when two declarations/contracts/rules conflict.
 - Interaction tests combine each new feature with null/missing, exports, lookup, reflection,
   closures, partials, contracts/effects, collections, and modules as relevant.
+- Ordinary constructor-call tests cover aliases, local shadowing, arity, prefix/numbered-hole
+  partials, dispatch, effects, and reflection; extend them to staging when available. Verify
+  recognition by resolved identity, four-argument cycle/identity phases, normal nullary format
+  invocation/reference behavior, and Collection-based rule construction after its design blockers
+  are resolved.
 - Low-precedence application tests cover right associativity and its boundary with whitespace calls,
   every infix tier, composition, conditionals, holes, multiline layout, and later lambdas.
 - Scoped-lookup tests cover one-time target evaluation, local/member/enclosing shadowing,
@@ -677,8 +702,9 @@ allowances and callable-value constraints; unknown higher-order invocation rejec
 aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
 explicit higher-order arrow contracts, and the initial static operator matrix are settled.
 Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
-item in Phases 1, 2, or 3 remains formally unresolved. Next implement the settled Phase 4 universal
-collection and field foundations. `with`/`outer` wait for the Phase 4 public named-member protocol
+item in Phases 1, 2, or 3 remains formally unresolved. First complete the specified lambda-refinement
+correction `CONTRACT-LAMBDA-REFINE-001`; then implement the settled Phase 4 universal collection
+and field foundations. `with`/`outer` wait for the Phase 4 public named-member protocol
 rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals
