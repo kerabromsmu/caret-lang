@@ -11,6 +11,13 @@ unfinished Collection, but outside code cannot access it until settlement. This 
 a stable-identity mutable container. Settled Collection updates produce new values. `eager`
 preserves container references and never reads or freezes their contents.
 
+The common `addElement`, `removeElement`, and `replaceElement` names have distinct receiver/result
+contracts: construction edits return the affected Field (the old Field for replacement) or missing;
+settled updates return an immutable Collection and preserve the original. The
+[Collection specification](06-collections-fields-and-templates.md#element-operations-during-construction-and-after-settlement)
+owns their selection and no-change rules. Sequential construction does not expose numeric
+indices until settlement; its first-equal-value selection rule is explicitly provisional.
+
 ### Planned with binding over lazy Collections
 
 During compilation or interpreter analysis, identify unqualified names in the block that need

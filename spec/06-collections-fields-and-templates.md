@@ -43,6 +43,10 @@ The common operations are ordinary callables, with provider-specific contracts a
 | `fields collection` | Sequential enumeration of Field tuples for keyed Collections, plain values for keyless Collections. |
 | `size collection` | `Natural~`; the provider may compute it and perform declared effects. |
 
+The protocol also includes `addElement`, `removeElement`, and `replaceElement`, whose
+construction and persistent-update contracts are specified under
+[element operations](#element-operations-during-construction-and-after-settlement).
+
 `Natural` is a contract for non-negative integer Numbers, including zero. Unknown size is `~`;
 a known-infinite Collection returns `~` from `size`. No purity or constant-time requirement is
 imposed on the size provider.
@@ -190,6 +194,55 @@ Adding a repeated key refers to the existing entry: its new value is ignored and
 position is retained. This is distinct from an explicit replacement operation in unpublished
 construction. A value ignored because its key is already present need not be forced; effects
 already performed to produce an eager value cannot be undone.
+
+### Element operations during construction and after settlement
+
+These planned ordinary functions use different contracts for unsettled construction and settled
+Collections. This does not expose unfinished Collections to outside code or define the deferred
+public custom-provider/builder API. The contract distinguishes the construction receiver from a
+settled receiver; concrete surface types for unpublished construction remain to be specified
+with that API.
+
+| Call | Selection or input | Successful result during construction |
+|---|---|---|
+| `addElement collection element` | Plain value for keyless content; Field for keyed content. | The added Field. |
+| `removeElement collection keyOrValue` | By key when key access is supported; otherwise the first equal value in enumeration order. | The removed Field. |
+| `replaceElement collection keyOrValue replacement` | Same selection as removal; replacement uses the Collection's element form. | The old Field, not the replacement. |
+
+For keyless content, a returned Field represents the element as `[~ value]`. Dictionary inputs
+use `field key value`; Set inputs use `field key ~`. Ordinary Field shape interpretation and
+Collection contracts apply. Replacement can change a keyed entry's key by supplying a new Field.
+
+During construction, the operation edits the unpublished Collection and returns `Field~`.
+The following no-change cases return `~` and leave the Collection unchanged:
+
+- Adding a key already present; retain the existing entry under the first-key rule.
+- Removing or replacing a valid key or value with no matching entry.
+- Replacing an entry with a Field whose key collides with another existing entry. Do not remove
+  the selected entry or overwrite the other one.
+
+Invalid keys and detected contract violations remain errors, not missing results. In keyless
+by-value selection, removal and replacement affect only the first equal occurrence, not all
+duplicates. Equality and any demanded lazy access follow their ordinary contracts/effects.
+
+For a settled Collection, the same function names have persistent-update contracts returning
+the resulting immutable Collection, rather than a Field. They preserve the original Collection.
+An absent selection or key collision leaves the content unchanged under the same rules.
+There is no implicit mutable container or hidden replacement of the caller's binding.
+
+### Sequential construction indices (provisional)
+
+Unpublished sequential construction maintains element order but does not expose numeric
+positional keys. Settlement assigns consecutive numeric indices starting at zero. The declared
+sequential guarantee describes the settled Collection; it does not require positional access
+to unfinished construction.
+
+Removal and replacement during that keyless construction therefore select by the first equal
+value. For example, removing `a` from the conceptual ordered contents `[a b a]` leaves `[b a]`;
+replacing it with `c` gives `[c b a]`. There are no temporary element-reference selectors.
+This rule is provisional: reconsider precise selection among equal values during implementation
+if necessary, documenting any change rather than silently selecting a different behavior.
+Settled Collections with positional key access use the by-key operation contract.
 
 ### Zip construction
 

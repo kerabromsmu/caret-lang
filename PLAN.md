@@ -299,6 +299,11 @@ for its covered behavior. These decisions are planned, not implemented by the ex
   Natural size contracts, keyed/keyless and Set/dictionary shapes, and Field-contract tuples.
 - Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
   first-entry duplicate handling, two-input zip tuples and zipWithKeys keyed construction.
+- Add addElement/removeElement/replaceElement with unpublished-construction Field~ results and
+  settled persistent Collection results. Replacement returns the old Field during construction;
+  valid absent targets and conflicting keys leave content unchanged. Provisional sequential
+  construction assigns indices only at settlement and selects the first equal value beforehand.
+  Do not introduce a public custom-provider construction API as part of these protocol semantics.
 - Apply ordinary lexical lazy-value establishment and inferred provider effects; retain stronger
   sequential guarantees without introducing automatic uniqueness tracking.
 - Implement unified dot/bracket/getElement lookup, general equality-comparable keys, invalid-key

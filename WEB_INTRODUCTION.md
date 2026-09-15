@@ -41,6 +41,12 @@ keys. Planned `zip` pairs two sequences into ordinary tuples, while `zipWithKeys
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
 Dictionary construction. Field tuples support positional key/value access.
 
+Planned `addElement`, `removeElement`, and `replaceElement` edit unpublished construction and
+return the added, removed, or old replaced Field; a no-change outcome returns missing. On settled
+Collections, the same names instead return immutable updated Collections. Selection uses keys
+where supported, otherwise the first equal value. During sequential construction, numeric indices
+are assigned only at settlement; this construction-selection policy remains provisional.
+
 Planned `with` analyzes the names used in its body and binds them against enumerated public keys
 before executing the body. Member values remain lazy; a present missing value shadows outer
 bindings, while an absent name resolves outward. Explicit `outer.name` accesses the outer binding.
