@@ -13,7 +13,7 @@ assumptions. Existing tests and the implemented baseline remain valid descriptio
 prototype until their corresponding implementation changes land. All examples in this section
 are conceptual/planned.
 
-### Scope and remaining decisions
+### Scope and custom-provider deferral
 
 Phase 4 includes the common protocol, built-in lazy transforms, collection-value `eager`,
 and their contracts, effects, reflection, and diagnostics. Public custom-provider construction,
@@ -21,14 +21,15 @@ its registration/constructor syntax, general computations, concurrency/synchroni
 failure handling, callable forms of `eager`, and contextual template invocation are deferred.
 Built-in laziness must not depend on exposing those deferred APIs.
 
-The following remain unresolved and must not be silently selected during implementation:
+The Dictionary-order, zip construction, with-binding, and Field-access decisions below supersede
+the former open items. Their implementation remains planned.
 
-- Default Dictionary enumeration order: existing canonical sorted order versus construction order,
-  especially for equality-comparable keys without a sorting relation.
-- The public callable name and full signature for paired key/value-sequence construction.
-- Integration of lazy named members with `with`, including absent versus present-missing lookup.
-- Compatibility details for changing existing Field values to Field-contract tuples, including
-  literal recognition, contract checking, reflective metadata, and preservation of existing programs.
+Custom construction has a semantic model: a provider supplies access, enumeration, size, and
+guarantees; constructing code can edit unpublished content until settlement. The public mechanism
+for supplying/registering that provider, its constructor syntax, and its complete interface remain
+deferred beyond Phase 4, with no later phase assigned yet. Built-in constructors and transforms
+can implement the protocol internally without exposing that mechanism. Do not invent a public
+custom-provider API from conceptual constructor examples.
 
 ### Protocol operations and guarantees
 
@@ -132,6 +133,13 @@ A valid integer outside a sequence's range is absent. Null `?` is a permitted ke
 contract allows it. Keys must support equality but need not be sortable. Key equality may force
 lazy values or perform effects, which lookup and duplicate detection must account for.
 
+Dictionaries impose an additional restriction: keys have one homogeneous type with a defined
+ordering, and enumeration uses sorted key order. Mixed Dictionary key types are rejected rather
+than assigned an implicit cross-type ordering. Existing String Dictionary order remains
+locale-independent Unicode code-point order. General keyed Collections do not require sortable
+or homogeneous keys; their access contracts still determine permitted keys. First-key retention
+chooses the retained entry during construction, not a replacement for Dictionary sorted enumeration.
+
 Holes lower through ordinary partial application: `collection[_]` corresponds to
 `getElement collection _`, and `_[key]` awaits a Collection. Ordinary fixed-operand evaluation,
 hole ordering and numbering, and the prohibition on mixed numbered/unnumbered holes apply.
@@ -142,8 +150,11 @@ boundaries; it is not an implemented extension yet.
 
 A tuple is a positional Collection following a template, not a separate tuple runtime kind.
 `field key value` constructs a two-position tuple carrying the `Field` contract.
-That contract distinguishes fields from ordinary pairs. More-than-two-position Fields are deferred;
-the exact migration from the current distinct Field runtime representation remains open.
+That contract distinguishes fields from ordinary pairs. Field tuples support ordinary positional
+access: `fieldValue[0]` obtains the key and `fieldValue[1]` obtains the value. Existing named
+reflective metadata is retained under the usual visibility rules. More-than-two-position Fields
+are deferred. Migrating the current distinct Field representation must preserve that contract,
+field recognition and reflection while implementing the revised tuple/access semantics.
 
 Field interpretation uses the result Collection contract:
 
@@ -180,16 +191,30 @@ position is retained. This is distinct from an explicit replacement operation in
 construction. A value ignored because its key is already present need not be forced; effects
 already performed to produce an eager value cannot be undone.
 
-A planned paired-construction operation takes key and value sequences and pairs positions.
+### Zip construction
+
+Phase 4 provides two ordinary functions, each taking exactly two input sequences:
+
+- `zip left right` produces a keyless sequence of two-element positional tuples, pairing input
+  positions. These tuples are not automatically Fields.
+- `zipWithKeys keys values` produces a keyed Collection, using its first input as keys and its
+  second as associated values. Its entries follow the Field construction rules.
+
 Different lengths are contract errors when discovered; do not silently truncate or pad.
-Duplicate-key positions still consume positions for alignment but do not force ignored values.
-Construction from defined data is eager; if either source is lazy the result is lazy, retaining
-already-computed data. Public spelling and complete contracts remain unresolved.
+For `zipWithKeys`, duplicate-key positions still consume positions for alignment but do not
+force ignored values; the first entry is retained. Construction from defined data is eager;
+if either source is lazy the result is lazy, retaining already-computed data.
+
+`zipWithKeys` defaults to a general keyed Collection. An expected Dictionary contract selects
+Dictionary construction with homogeneous sortable keys and sorted enumeration. General keyed
+construction permits equality-comparable keys without requiring sorting. Neither function is a
+public custom-provider registration mechanism; zip with more than two inputs is deferred.
 
 When mapping only the values of an existing Collection while retaining its keys, the paired
 inputs derive from one shared enumeration of that source's fields, ensuring alignment.
 The value transformation stays lazy. General paired construction permits independently supplied
-sequences; their alignment is the developer's responsibility.
+sequences; their alignment is the developer's responsibility. This value-only mapping uses
+`zipWithKeys` with the shared source enumeration.
 
 ### Lazy transforms and consumers
 

@@ -258,8 +258,9 @@ syntax or semantics must never be inferred silently from an example.
 The [Phase 4 revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
 is a planned replacement for affected legacy behavior, not evidence that the runtime has changed.
 Existing implemented rows above describe the current prototype. New rows below require their own
-implementation, diagnostics, and runnable integration evidence. Dictionary order, paired-construction
-API, lazy with integration, and Field migration remain open. Equality forcing is provisional.
+implementation, diagnostics, and runnable integration evidence. Dictionary order, zip APIs,
+lazy with binding, and Field positional access are now specified but unimplemented.
+Public custom-provider construction remains deferred. Equality forcing is provisional.
 
 | Requirement | Normative behavior | Status | Automated evidence | Runnable examples | Notes |
 |---|---|---|---|---|---|
@@ -279,7 +280,7 @@ API, lazy with integration, and Field migration remain open. Equality forcing is
 | FAILURE-HANDLER-001 | Effect-selected handlers, wrapped references, delegation, resolutions, retry histories and default policy. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
 | FAILURE-CONCURRENT-001 | Concurrent handler isolation, immediate stop with finishing child work, lexical status observations. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
 | LAZY-SYNC-001 | Shared first-access production and dependent reader suspension; cycle detection deferred. | deferred | — | — | Beyond Phase 4; preserve agreed design without implementing unresolved APIs. |
-| COLL-ORDER-OPEN | Default Dictionary enumeration for general non-sortable keys. | unresolved | — | — | Must be settled before dependent implementation. |
-| COLL-PAIR-OPEN | Public name and full contracts of paired key/value construction. | unresolved | — | — | Must be settled before dependent implementation. |
-| COLL-WITH-OPEN | Lazy member lookup, presence and shadowing under with. | unresolved | — | — | Must be settled before dependent implementation. |
-| COLL-FIELD-OPEN | Field tuple migration across literals, contracts and reflection. | unresolved | — | — | Must be settled before dependent implementation. |
+| COLL-DICT-ORDER-001 | Dictionaries require homogeneous sortable keys and sorted enumeration; general keyed Collections need not sort. | planned | — | — | Test mixed-key rejection and retained String ordering. |
+| COLL-ZIP-001 | Two-input zip produces tuple sequences; zipWithKeys produces general keyed or context-selected Dictionary results. | planned | — | — | Test length errors, lazy inputs, duplicates and sorted Dictionary context. |
+| COLL-WITH-BIND-001 | Analyze needed names; bind against enumerated keys before body execution; lazy present-missing members shadow outer bindings. | planned | — | — | Test early completion, absent fallback, unlisted provider keys and enumeration effects. |
+| COLL-FIELD-ACCESS-001 | Field tuples retain their contract and reflective metadata with positional key/value access at zero/one. | planned | — | — | Test literals, contracts, positional access and reflective compatibility. |

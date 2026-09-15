@@ -36,6 +36,15 @@ associated values. Transforms can change Collection shape when contracts determi
 Dot and bracket access will share `getElement` semantics: absent valid keys yield missing,
 invalid keys are errors, and keys may be composite values supporting equality.
 
+Dictionaries retain sorted keys of one type; general keyed Collections need only comparable
+keys. Planned `zip` pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
+first sequence as keys and its second as values. A Dictionary result contract selects sorted
+Dictionary construction. Field tuples support positional key/value access.
+
+Planned `with` analyzes the names used in its body and binds them against enumerated public keys
+before executing the body. Member values remain lazy; a present missing value shadows outer
+bindings, while an absent name resolves outward. Explicit `outer.name` accesses the outer binding.
+
 These are future semantics; the executable examples elsewhere in this introduction still describe
 the current interpreter. Custom provider construction, completely deferred computation syntax,
 resumable failure handling, template constructor/predicate disambiguation, and callable forms of

@@ -298,7 +298,7 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 - Implement ordinary keys/values/fields/size access, guarantee queries and reflective equivalents,
   Natural size contracts, keyed/keyless and Set/dictionary shapes, and Field-contract tuples.
 - Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
-  first-entry duplicate handling, and paired key/value construction once its API is settled.
+  first-entry duplicate handling, two-input zip tuples and zipWithKeys keyed construction.
 - Apply ordinary lexical lazy-value establishment and inferred provider effects; retain stronger
   sequential guarantees without introducing automatic uniqueness tracking.
 - Implement unified dot/bracket/getElement lookup, general equality-comparable keys, invalid-key
@@ -307,8 +307,11 @@ for its covered behavior. These decisions are planned, not implemented by the ex
   reflection removal, preserved containers/functions and sharing, and cycle/infinite diagnostics.
 - Implement the revised contract-sensitive equality, contextual empty Collections, unordered
   multiplicity comparison, and the provisional forcing policy.
-- Resolve default Dictionary enumeration order, paired-construction spelling/contracts, lazy with
-  membership, and migration of the existing Field representation before dependent implementation.
+- Keep Dictionaries sorted with homogeneous sortable keys; general keyed Collections only require
+  equality-comparable keys accepted by their contracts. Add positional Field tuple access while
+  retaining the Field contract and existing reflective metadata.
+- Analyze the identifiers needing with lookup and bind them against enumerated public keys before
+  body execution. Matched members remain lazy; only established absence permits outer fallback.
 - Preserve existing structural-template predicates. Defer contextual predicate/constructor calls,
   general completely deferred computations, custom provider construction, concurrency and resumable
   handlers, and function-wrapping/nullary-invocation forms of eager beyond Phase 4. No particular
@@ -319,8 +322,8 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 ### Collection protocol and literals
 
 - Generalize existing sequences/dictionaries behind `Collection` and capability contracts while
-  keeping persistent semantics. Current Dictionaries use canonical field order; the default order
-  for general non-sortable keys remains an explicit open decision.
+  keeping persistent semantics. Dictionaries retain sorted homogeneous keys; general keyed
+  Collections permit non-sortable keys and do not inherit a Dictionary sorting requirement.
 - Complete contextual behavior for `[...]`, including shape-neutral empty values and inferred
   content contracts, without assigning a fixed container meaning to square brackets.
 - Make each collection literal a hole-expression boundary: materialize its collection-constructor
@@ -333,8 +336,8 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 ### Fields and dictionary-like collections
 
 - Retain the `Field` contract and ordinary `field name value` construction while migrating Fields
-  to contract-bearing tuples. Reconcile existing `Field K V`, exports, static fields, reflection,
-  and persistent updates through the pending compatibility decision.
+  to contract-bearing tuples with key/value access at positions zero/one. Preserve existing
+  reflective metadata and integrate `Field K V`, exports, static fields, and persistent updates.
 - Preserve the implemented positional/named shape diagnostic. Make `[]` shape-neutral and valid
   under every zero-compatible collection contract.
 - Support static and dynamic access, optional lookup, and exact missing/null/present-`~` behavior.
