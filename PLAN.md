@@ -307,11 +307,10 @@ for its covered behavior. These decisions are planned, not implemented by the ex
   Natural size contracts, keyed/keyless and Set/dictionary shapes, and Field-contract tuples.
 - Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
   first-entry duplicate handling, two-input zip tuples and zipWithKeys keyed construction.
-- Add addElement/removeElement/replaceElement with unpublished-construction Field~ results and
-  settled persistent Collection results. Replacement returns the old Field during construction;
-  valid absent targets and conflicting keys leave content unchanged. Provisional sequential
-  construction assigns indices only at settlement and selects the first equal value beforehand.
-  Do not introduce a public custom-provider construction API as part of these protocol semantics.
+- Retain internal construction and settlement without exposing unfinished Collections. Public
+  addElement/removeElement/replaceElement, their construction-selection interface, and additional
+  immutable-update syntax are deferred beyond Phase 4, with no later phase assigned. Preserve the
+  existing persistent primitives; built-in construction does not require a public builder API.
 - Apply ordinary lexical lazy-value establishment and inferred provider effects; retain stronger
   sequential guarantees without introducing automatic uniqueness tracking.
 - Implement unified dot/bracket/getElement lookup, general equality-comparable keys, invalid-key
@@ -378,10 +377,10 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 - Implement unconstrained and contracted holes, equality-checked fixed values, exact positional and
   named shape, dynamic field names, and recursive nested collection shapes.
-- Track [general optional named members](spec/06-collections-fields-and-templates.md#named-fields)
-  and required/optional membership reflection as `TEMPLATE-OPTIONAL-001`. Their declaration syntax
-  remains unresolved; settle it before implementing that capability and before Phase 8
-  `RuleDefinition` construction. Do not substitute absence modifiers or optional lookup syntax.
+- Verify [required fields with optional values](spec/06-collections-fields-and-templates.md#named-fields)
+  as `TEMPLATE-OPTIONAL-001`: every declared field is present, while `T~` permits an explicit missing
+  value. Cover omission rejection, nullability, wrong/extra fields, nesting, and ordinary reflected
+  value contracts using existing template syntax. No optional-member syntax design is required.
 - Derive membership as the structural inverse of eligible constructors without invoking them.
   Repeated numbered holes impose candidate equality; numbering changes parameter order but not
   collection shape, and mixed numbered/unnumbered holes remain invalid.
@@ -396,8 +395,8 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 ### Persistent updates and contained mutation
 
-- Implement immutable collection update syntax, including nested updates and
-  shape/contract checking.
+- Preserve existing persistent collection primitives. Additional immutable-update syntax and the
+  new public element-operation functions are deferred; they are not Phase 4 completion gates.
 - Implement `{ value }` and `{ (Contract...) value }`, postfix `container{}`, and `put container
   value`. Infer stable content contracts, validate initial and replacement values, return the stored
   value from successful `put`, and leave prior content unchanged on failed validation.
@@ -476,16 +475,18 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 ### Contexts and rules
 
-- Before rule construction, settle `TEMPLATE-OPTIONAL-001` and `RULE-PHASE-CONTRACT-001`:
-  [RuleDefinition requires optional template members and first-class C/T/E contracts](spec/11-rules-rulesets-and-objects.md#basic-definition).
-  Their unresolved syntax/contracts must not be replaced by rule-specific ASTs, parser exceptions,
+- Before rule construction, settle `RULE-PHASE-CONTRACT-001`:
+  [RuleDefinition needs first-class C/T/E contracts](spec/11-rules-rulesets-and-objects.md#basic-definition).
+  Require the Phase 4 `TEMPLATE-OPTIONAL-001` evidence for present fields with optional values.
+  Unresolved phase contracts must not be replaced by rule-specific ASTs, parser exceptions,
   or hidden lazy-expression wrappers.
 - Add persistent `Context` values, idempotent `raise`/`lower`, and transient `rise`/`fall` fronts over
   Boolean context expressions.
 - Implement ordinary unary `rule : RuleDefinition -> Rule`, consuming a named Collection validated
-  by the general template-derived contract. Its unique optional CATEN fields preserve defaults,
-  inferred or explicit string-literal IDs for `N`, runtime active state, edge-trigger history,
-  deferred effect execution, and implicit application context.
+  by the general template-derived contract. All CATEN fields are present; explicit missing values
+  select the documented defaults. Preserve explicit string-literal IDs for `N`, anonymous identity
+  for `N = ~`, runtime active state, edge-trigger history, deferred effect execution, and implicit
+  application context. Assignment names do not supply `N`.
 - Implement gate semantics: `C` and `A` permit application but never replay a trigger missed while
   gated. Require `C` and `T` purity; propagate ordinary effects from `E`.
 - Implement `activate`/`deactivate`, implicit context rise/effect/fall, reevaluation after each effect,

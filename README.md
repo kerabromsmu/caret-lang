@@ -67,6 +67,8 @@ ordinary function whose parameters complete that collection. Passing such a reif
 or a concrete fixed collection, to the implemented `template` function creates an exact structural
 contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
 generic three-field `Result` contract remains the planned public success/failure envelope.
+Every template-declared field must be present; an optional value contract such as `String~`
+permits an explicit `~` value, not omission of the field. Null requires a nullable contract.
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
@@ -331,8 +333,9 @@ contextual template constructors, and callable `eager` forms are deferred beyond
   planned headers become eligible as their syntax is implemented.
 - Higher-order Sequence operations propagate known callback effects; generalized collection
   element/result variables remain planned.
-- Mutability containers and immutable collection-update syntax are specified but not implemented. There
-  is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
+- Mutability containers are specified but not implemented. Public `addElement`, `removeElement`,
+  `replaceElement`, their construction-selection interface, and additional immutable-update syntax
+  are deferred beyond Phase 4. There is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
   observable persistent semantics.
 - Reflection is intentionally limited to language-owned metadata for value kind and collection

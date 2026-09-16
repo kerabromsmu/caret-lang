@@ -21,6 +21,11 @@ its registration/constructor syntax, general computations, concurrency/synchroni
 failure handling, callable forms of `eager`, and contextual template invocation are deferred.
 Built-in laziness must not depend on exposing those deferred APIs.
 
+Public `addElement`, `removeElement`, and `replaceElement`, their construction-selection
+interface, and additional immutable-update syntax are also deferred beyond Phase 4, with no later
+phase assigned. Their design is retained below. Internal construction and settlement, existing
+persistent primitives, and mutable containers with `put` remain in scope.
+
 The Dictionary-order, zip construction, with-binding, and Field-access decisions below supersede
 the former open items. Their implementation remains planned.
 
@@ -43,8 +48,8 @@ The common operations are ordinary callables, with provider-specific contracts a
 | `fields collection` | Sequential enumeration of Field tuples for keyed Collections, plain values for keyless Collections. |
 | `size collection` | `Natural~`; the provider may compute it and perform declared effects. |
 
-The protocol also includes `addElement`, `removeElement`, and `replaceElement`, whose
-construction and persistent-update contracts are specified under
+The deferred protocol extension includes `addElement`, `removeElement`, and `replaceElement`, whose
+construction and persistent-update contracts are retained under
 [element operations](#element-operations-during-construction-and-after-settlement).
 
 `Natural` is a contract for non-negative integer Numbers, including zero. Unknown size is `~`;
@@ -197,8 +202,10 @@ already performed to produce an eager value cannot be undone.
 
 ### Element operations during construction and after settlement
 
-These planned ordinary functions use different contracts for unsettled construction and settled
-Collections. This does not expose unfinished Collections to outside code or define the deferred
+These ordinary functions and their construction-selection interface are deferred beyond Phase 4;
+additional immutable-update syntax is deferred too. No later phase is assigned. The retained design
+uses different contracts for unsettled construction and settled Collections. It does not expose
+unfinished Collections to outside code or define the deferred
 public custom-provider/builder API. The contract distinguishes the construction receiver from a
 settled receiver; concrete surface types for unpublished construction remain to be specified
 with that API.
@@ -231,6 +238,9 @@ An absent selection or key collision leaves the content unchanged under the same
 There is no implicit mutable container or hidden replacement of the caller's binding.
 
 ### Sequential construction indices (provisional)
+
+The construction-selection interface below is deferred with the element-operation functions.
+It is not a Phase 4 public API requirement.
 
 Unpublished sequential construction maintains element order but does not expose numeric
 positional keys. Settlement assigns consecutive numeric indices starting at zero. The declared
@@ -1541,7 +1551,8 @@ unconstrained and contracted holes, repeated numbered-hole equality, direct nest
 field keys participate in membership. Dynamic keys and fixed expressions are evaluated once during
 constructor creation. Template contracts compose with aliases, null/missing modifiers,
 parameterized collection contracts, conservative implication, overload dispatch, and ordinary
-contract reflection. The unresolved optional-member surface spelling remains unimplemented.
+contract reflection. Optional field values use ordinary `T~` contracts while every declared field
+remains required. Focused evidence for this combination is tracked by `TEMPLATE-OPTIONAL-001`.
 
 Reflection retains kind `Contract` and adds language-owned `shape`, `size`, and `elements` metadata.
 Element metadata identifies its public `id`, constraint kind, zero-based repeated-hole parameter,
@@ -1850,13 +1861,22 @@ exact set of field names and the field ordering defined by the universal collect
 additional, or reordered fields are incompatible whenever that ordering is observable for the
 candidate collection.
 
-The general template model also supports members explicitly designated optional by the template
-descriptor. A candidate may omit any such member; if present, it must occupy the ordinary named
-Collection shape and satisfy the member's fixed-value, hole, or contract requirement. Members not
-declared by the template remain incompatible, so optional members do not make a template open.
-This capability is required by structural contracts such as `RuleDefinition`. Its final Caret
-surface spelling is unresolved; implementations and examples must not invent a feature-specific
-spelling or silently treat `T?`, `T~`, or optional lookup syntax as an optional-field declaration.
+Every field declared by a template must be present in a matching Collection. An optional field
+has an optional value contract such as `T~`: its value may be `~`, but the field cannot be omitted.
+Null is a separate value and requires a nullable contract such as `T?` or `T?~`. Undeclared fields
+remain incompatible. No separate optional-member declaration syntax or omittable-member descriptor
+is introduced. This rule supersedes the earlier proposal permitting optional fields to be omitted.
+
+For example, using existing template syntax:
+
+```caret
+Person = template [^name = (String) _ ^phone = (String~) _]
+```
+
+A candidate with `name = "Caret"` and `phone = ~` matches. A candidate containing only `name`
+does not. A numeric or null `phone` does not satisfy `String~`. Reflection describes the declared
+field and its ordinary value contract, including its missing/null alternatives; it must not imply
+permission to omit that field. `RuleDefinition` follows the same rule for its CATEN fields.
 
 The template system does not require a separate record-schema syntax.
 
@@ -2698,9 +2718,9 @@ fields, and malformed contracted holes.
 
 23. Identical observable behavior with shared-template and packed-layout optimizations disabled.
 
-24. General optional named members, including reflection of required/optional membership, for
-structural contracts that require them such as `RuleDefinition`; the final declaration spelling is
-unresolved.
+24. Required named fields with optional value contracts such as `T~`, including reflection of the
+value contract, for structural contracts such as `RuleDefinition`. Test explicit missing values,
+omitted fields, nullability, extra fields, wrong values, and nested templates using existing syntax.
 
 The initial implementation may postpone:
 
