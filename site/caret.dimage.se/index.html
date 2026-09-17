@@ -6,10 +6,66 @@
   <meta name="description" content="Caret is an experimental language with whitespace application, indentation-defined blocks, contracts, persistent collections, and explicit missing values.">
   <meta name="theme-color" content="#10100f">
   <title>Caret programming language</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=IBM+Plex+Sans+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="favicon2.ico">
   <link rel="stylesheet" href="styles.css">
+    <style>
+        .analytics-consent {
+            position: fixed;
+            left: 1rem;
+            right: 1rem;
+            bottom: 1rem;
+            z-index: 10000;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 1rem 1.2rem;
+            background: #10100f;
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        .analytics-consent[hidden] {
+            display: none;
+        }
+
+        .analytics-consent p {
+            margin: 0 0 0.9rem;
+        }
+
+        .analytics-consent-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .analytics-consent-choice,
+        .analytics-settings {
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .analytics-consent-choice {
+            padding: 0.6rem 0.9rem;
+            border: 1px solid currentColor;
+            background: transparent;
+            color: inherit;
+        }
+
+        .analytics-settings {
+            position: fixed;
+            left: 1rem;
+            bottom: 1rem;
+            z-index: 9999;
+            padding: 0.45rem 0.65rem;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            background: #10100f;
+            color: #fff;
+        }
+
+        .analytics-settings[hidden] {
+            display: none;
+        }
+    </style>
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -127,6 +183,46 @@ print addThenDouble 2 3
   <footer>
     <div class="wrap"><a class="brand" href="#top"><span class="caret-mark">^</span><span>caret</span></a><p>Compact syntax. Explicit meaning.</p><a href="https://github.com/kerabromsmu/caret-lang" target="_blank" rel="noreferrer">github.com/kerabromsmu/caret-lang ↗</a></div>
   </footer>
+  <section
+          id="analytics-consent"
+          class="analytics-consent"
+          role="dialog"
+          aria-labelledby="analytics-consent-title"
+          hidden
+  >
+      <p id="analytics-consent-title">
+          <strong>Optional analytics</strong><br>
+          This site can use Google Analytics to understand how it is used.
+          Google Analytics is loaded only if you accept.
+      </p>
+
+      <div class="analytics-consent-actions">
+          <button
+                  id="analytics-accept"
+                  class="analytics-consent-choice"
+                  type="button"
+          >
+              Accept analytics
+          </button>
+
+          <button
+                  id="analytics-reject"
+                  class="analytics-consent-choice"
+                  type="button"
+          >
+              Reject analytics
+          </button>
+      </div>
+  </section>
+
+  <button
+          id="analytics-settings"
+          class="analytics-settings"
+          type="button"
+          hidden
+  >
+      Analytics settings
+  </button>
   <script src="script.js"></script>
 </body>
 </html>

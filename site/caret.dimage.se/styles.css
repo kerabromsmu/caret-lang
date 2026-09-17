@@ -14,6 +14,62 @@
     box-sizing: border-box
 }
 
+@font-face {
+    font-family: 'IBM Plex Sans Condensed';
+    src: url('fonts/IBMPlexSansCondensed-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Condensed';
+    src: url('fonts/IBMPlexSansCondensed-Medium.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Condensed';
+    src: url('fonts/IBMPlexSansCondensed-SemiBold.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Condensed';
+    src: url('fonts/IBMPlexSansCondensed-Bold.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('fonts/JetBrainsMono-Light.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 300;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('fonts/JetBrainsMono-Regular.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('fonts/JetBrainsMono-Medium.ttf') format('truetype');
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+}
+
 html {
     scroll-behavior: smooth
 }
@@ -60,7 +116,7 @@ a {
     display: flex;
     gap: 9px;
     align-items: center;
-    font-weight: 800;
+    font-weight: 700;
     text-decoration: none;
     letter-spacing: -.04em;
     font-size: 20px

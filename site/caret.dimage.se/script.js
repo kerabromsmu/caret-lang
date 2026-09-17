@@ -105,3 +105,149 @@ if ('IntersectionObserver' in window) {
 } else {
   revealElements.forEach(element => element.classList.add('visible'));
 }
+// -----------------------------------------------------------------------------
+// Optional Google Analytics
+// -----------------------------------------------------------------------------
+
+const GA_ID = 'G-0WHEJJ6PSL';
+const ANALYTICS_CONSENT_KEY = 'caret.analyticsConsent.v1';
+
+const analyticsBanner = document.querySelector('#analytics-consent');
+const analyticsSettings = document.querySelector('#analytics-settings');
+const analyticsAccept = document.querySelector('#analytics-accept');
+const analyticsReject = document.querySelector('#analytics-reject');
+
+function readAnalyticsConsent() {
+    try {
+        return localStorage.getItem(ANALYTICS_CONSENT_KEY);
+    } catch {
+        return null;
+    }
+}
+
+function writeAnalyticsConsent(value) {
+    try {
+        localStorage.setItem(ANALYTICS_CONSENT_KEY, value);
+    } catch {
+        // If storage is unavailable, the choice applies only to this page load.
+    }
+}
+
+function gtag() {
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push(arguments);
+}
+
+function loadGoogleAnalytics() {
+    if (window.__caretAnalyticsLoaded) {
+        return;
+    }
+
+    window.__caretAnalyticsLoaded = true;
+    window.dataLayer = window.dataLayer || [];
+
+    // Nothing has been transmitted yet because gtag.js has not been loaded.
+    gtag('consent', 'default', {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied'
+    });
+
+    gtag('consent', 'update', {
+        analytics_storage: 'granted'
+    });
+
+    gtag('js', new Date());
+    gtag('config', GA_ID);
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src =
+        `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_ID)}`;
+
+    document.head.appendChild(script);
+}
+
+function deleteGoogleAnalyticsCookies() {
+    const names = document.cookie
+        .split(';')
+        .map(cookie => cookie.split('=')[0].trim())
+        .filter(name =>
+            name === '_ga' ||
+            name.startsWith('_ga_') ||
+            name === '_gid' ||
+            name.startsWith('_gat')
+        );
+
+    const hostnameParts = location.hostname.split('.');
+    const parentDomain =
+        hostnameParts.length >= 2
+            ? `.${hostnameParts.slice(-2).join('.')}`
+            : null;
+
+    for (const name of names) {
+        // Host-only cookie.
+        document.cookie =
+            `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+
+        // Cookie explicitly scoped to this hostname.
+        document.cookie =
+            `${name}=; Max-Age=0; path=/; domain=${location.hostname}; SameSite=Lax`;
+
+        // Cookie scoped to the parent domain, e.g. .dimage.se.
+        if (parentDomain) {
+            document.cookie =
+                `${name}=; Max-Age=0; path=/; domain=${parentDomain}; SameSite=Lax`;
+        }
+    }
+}
+
+function showAnalyticsSettings() {
+    analyticsBanner.hidden = false;
+    analyticsSettings.hidden = true;
+}
+
+function hideAnalyticsSettings() {
+    analyticsBanner.hidden = true;
+    analyticsSettings.hidden = false;
+}
+
+analyticsAccept.addEventListener('click', () => {
+    writeAnalyticsConsent('granted');
+    hideAnalyticsSettings();
+    loadGoogleAnalytics();
+});
+
+analyticsReject.addEventListener('click', () => {
+    const wasLoaded = Boolean(window.__caretAnalyticsLoaded);
+
+    writeAnalyticsConsent('denied');
+    deleteGoogleAnalyticsCookies();
+    hideAnalyticsSettings();
+
+    // If Analytics was already loaded during this page view, reload so that
+    // no Google Analytics code remains active after consent is withdrawn.
+    if (wasLoaded) {
+        location.reload();
+    }
+});
+
+analyticsSettings.addEventListener('click', showAnalyticsSettings);
+
+const analyticsConsent = readAnalyticsConsent();
+
+if (analyticsConsent === 'granted') {
+    hideAnalyticsSettings();
+    loadGoogleAnalytics();
+} else {
+    // Also cleans up cookies left by the site's previous unconditional
+    // Analytics implementation.
+    deleteGoogleAnalyticsCookies();
+
+    if (analyticsConsent === 'denied') {
+        hideAnalyticsSettings();
+    } else {
+        showAnalyticsSettings();
+    }
+}

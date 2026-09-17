@@ -41,11 +41,10 @@ keys. Planned `zip` pairs two sequences into ordinary tuples, while `zipWithKeys
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
 Dictionary construction. Field tuples support positional key/value access.
 
-Planned `addElement`, `removeElement`, and `replaceElement` edit unpublished construction and
-return the added, removed, or old replaced Field; a no-change outcome returns missing. On settled
-Collections, the same names instead return immutable updated Collections. Selection uses keys
-where supported, otherwise the first equal value. During sequential construction, numeric indices
-are assigned only at settlement; this construction-selection policy remains provisional.
+Public `addElement`, `removeElement`, and `replaceElement`, their construction-selection
+interface, and additional immutable-update syntax are deferred beyond Phase 4. Their design is
+retained in the specification. Internal construction/settlement, existing persistent collection
+primitives, and mutable containers with `put` remain in scope.
 
 Planned `with` analyzes the names used in its body and binds them against enumerated public keys
 before executing the body. Member values remain lazy; a present missing value shadows outer
@@ -55,6 +54,20 @@ These are future semantics; the executable examples elsewhere in this introducti
 the current interpreter. Custom provider construction, completely deferred computation syntax,
 resumable failure handling, template constructor/predicate disambiguation, and callable forms of
 `eager` are later work.
+
+### Template fields and missing values
+
+Every field declared by a template must be present in a matching Collection. An optional field
+uses an optional value contract such as `String~`: it may contain `~`, but cannot be omitted.
+Null is distinct and needs a nullable contract. For example, the existing syntax is:
+
+```caret
+Person = template [^name = (String) _ ^phone = (String~) _]
+```
+
+A Collection with a String `name` and `phone = ~` matches; leaving out `phone` does not.
+The planned rule model follows this convention: all CATEN fields are supplied, and explicit `~`
+selects a component's documented default. Rules themselves remain unimplemented.
 
 ### Ordinary functions
 
