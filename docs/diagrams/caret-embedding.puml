@@ -1,0 +1,77 @@
+@startuml Caret embedding API
+title Caret prototype — Java embedding facade
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "caretlang.embedding (public)" #EAF3FF {
+  class CaretSandbox <<public, AutoCloseable>>
+  class Builder <<public>>
+  class CaretEnvironment <<public>>
+  class CaretSource <<public, record>>
+  class LoadedProgram <<public>>
+  class CaretCallable <<public>>
+  class CaretEffect <<public, record>>
+  interface CaretValue <<public, sealed>>
+  class NumberValue <<record>>
+  class TextValue <<record>>
+  class BooleanValue <<record>>
+  enum NullValue
+  enum MissingValue
+  class FieldValue <<record>>
+  class SequenceValue <<record>>
+  class CollectionValue <<record>>
+  class "CaretOperationResult<T>" as CaretOperationResult <<public>>
+  class CaretLoadResult <<public>>
+  class CaretExecutionResult <<public>>
+  class CaretInvocationResult <<public>>
+  class CaretDiagnostic <<public, record>>
+  class CaretEmbeddingException <<public>>
+}
+
+CaretSandbox *-- Builder
+CaretSandbox o-- CaretEnvironment
+CaretSandbox ..> CaretSource : load
+CaretSandbox ..> LoadedProgram : load/execute
+CaretSandbox ..> CaretCallable : invoke/register
+CaretSandbox ..> CaretLoadResult
+CaretSandbox ..> CaretExecutionResult
+CaretSandbox ..> CaretInvocationResult
+CaretEnvironment o-- "0..*" CaretEffect
+CaretEnvironment o-- "0..*" CaretValue
+
+CaretValue <|-- NumberValue
+CaretValue <|-- TextValue
+CaretValue <|-- BooleanValue
+CaretValue <|-- NullValue
+CaretValue <|-- MissingValue
+CaretValue <|-- FieldValue
+CaretValue <|-- SequenceValue
+CaretValue <|-- CollectionValue
+CaretValue <|-- CaretCallable
+SequenceValue *-- "0..*" CaretValue
+CollectionValue *-- "0..*" CaretValue
+FieldValue *-- CaretValue
+
+CaretLoadResult *-- CaretOperationResult : wraps LoadedProgram
+CaretExecutionResult *-- CaretOperationResult : wraps CollectionValue
+CaretInvocationResult *-- CaretOperationResult : wraps CaretValue
+CaretOperationResult o-- "0..*" CaretDiagnostic
+CaretEmbeddingException --|> RuntimeException
+
+package "caretlang (internal adapter)" {
+  class EmbeddingBridge
+  class Prepared <<record>>
+  class Interpreter
+  interface Value
+}
+
+CaretSandbox *-- EmbeddingBridge
+EmbeddingBridge *-- Interpreter
+EmbeddingBridge ..> Prepared
+EmbeddingBridge ..> CaretValue : external conversion
+EmbeddingBridge ..> Value : internal conversion
+EmbeddingBridge ..> CaretDiagnostic : diagnostic conversion
+@enduml

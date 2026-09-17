@@ -4,6 +4,39 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="values"></a>
+## Planned lazy values and lexical contexts
+
+This planned general rule applies to lazy values throughout the language, including Collection
+access and reflection. It is not specific to handlers, `eager`, or any one runtime kind.
+
+First access computes or obtains the specific value; it is not fixed before access. Once obtained,
+the value stays fixed in that lexical context. Nested contexts using the same inherited established
+binding share it. A fresh invocation creating a new lazy access/binding may obtain a different
+value, even for the same provider and key. Do not impose permanent Collection-wide memoization or
+a special `eager` context. Stronger provider contracts, such as sequential stability, still apply.
+The Collection protocol is owned by the
+[Phase 4 revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned).
+
+### Deferred computations and synchronization
+
+A computation will represent a completely deferred expression/function call. Constructing it
+performs none of its runtime work, including argument evaluation; explicit compile-time work
+continues to follow staging rules. Ordinary calls still evaluate where values are needed.
+The computation syntax, full contract, and remaining capture/staging integration are deferred
+beyond Phase 4. Earlier proposals to evaluate arguments at computation construction are superseded.
+Arguments exposed for a failed invocation have already been evaluated at invocation time;
+reflection does not evaluate them again.
+
+Concurrent first readers of the same shared lazy value use one producer. Dependent readers suspend
+until a result is established and resume on completion; independent work continues. Recoverable
+retries, when implemented, leave that result unsettled. These are deferred synchronization design
+constraints, not a Phase 4 concurrency implementation.
+
+Runtime dependency-cycle detection is deferred with concurrency/synchronization; lazy dependency
+cycles may deadlock for now. This permission does not replace the separate planned `eager`
+diagnostic for cyclic Collection containment. No universal timeout or cancellation policy is
+selected here.
+
 ## Values
 
 ```text
@@ -115,7 +148,7 @@ Dynamic names are strings. The `~` suffix makes a missing binding a normal resul
 meta = @a
 meta.kind
 meta.size
-meta.names
+meta.ids
 
 functionMeta = @function
 functionMeta.kind
@@ -127,8 +160,8 @@ functionMeta.variants
 Current metadata:
 
 - all values: `kind`
-- named Collections: `shape = "named"`, `size`, `names`
-- function metadata: `kind = "Function"`, visible declaration `name` or `~`, `remaining`,
+- named Collections: `shape = "named"`, `size`, `ids`
+- function metadata: `kind = "Function"`, visible declaration `id` or `~`, `remaining`,
   language-owned `signature`, and surviving overload `variants`
 
 Every reflection result is a named metadata Collection with runtime kind `Dictionary`. It retains

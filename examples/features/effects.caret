@@ -6,7 +6,7 @@ identity value = value
 (pure) copy = identity
 
 EffectfulNumber = [Number] -> (Output Number)
-print (@EffectfulNumber).name
+print (@EffectfulNumber).id
 print EffectfulNumber noisy
 print noisy 3
 print copy 2
@@ -14,6 +14,6 @@ print map noisy [4]
 
 noisySignature = (@noisy).signature
 print seqSize noisySignature.result.declared
-print (seqGet noisySignature.result.declared 0).name
+print (seqGet noisySignature.result.declared 0).id
 print seqSize noisySignature.effects.declared
-print (seqGet noisySignature.effects.declared 0).name
+print (seqGet noisySignature.effects.declared 0).id

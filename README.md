@@ -12,6 +12,8 @@ The current prototype supports:
 - finite numbers, strings, Booleans, null (`?`), and missing (`~`);
 - indentation-delimited functions, lexical closures with resolver-owned upvalue metadata, and
   direct and mutual recursion;
+- unary, multi-parameter, contracted, nullary, expression-bodied, and indentation-bodied lambdas
+  using the same callable and lexical-capture runtime path;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
@@ -21,16 +23,17 @@ The current prototype supports:
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
 - persistent sequences and canonically ordered Dictionaries with structural equality;
-- higher-order Sequence mapping through `map transform values` for current callable forms;
+- higher-order Sequence `map`, `filter`, strict left `fold`, `any`, and `all` through named,
+  partial, composed, and lambda callables;
 - polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
-- proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
-  and direct clauses; and
+- proven-pure named unary Boolean functions and their aliases as first-class refinement requirements
+  in derived contracts and direct clauses (anonymous-lambda refinement eligibility remains planned); and
 - first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
   distinction between null and missing; and
-- initial parameterized contracts through `Sequence T`, including direct and aliased clauses,
+- callable parameterized contracts through `Sequence T`, `Field K V`, and `Dictionary K V`, including direct and aliased clauses,
   nesting, modifiers, predicates, and reflection; and
 - closed same-name function overload sets with contract-based most-specific dispatch, generic
   fallbacks, prefix/infix calls, and persistent hole partials.
@@ -64,6 +67,8 @@ ordinary function whose parameters complete that collection. Passing such a reif
 or a concrete fixed collection, to the implemented `template` function creates an exact structural
 contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
 generic three-field `Result` contract remains the planned public success/failure envelope.
+Every template-declared field must be present; an optional value contract such as `String~`
+permits an explicit `~` value, not omission of the field. Null requires a nullable contract.
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
@@ -159,7 +164,7 @@ named embedding module, generated API documentation, and a standalone example.
 
 The tracked [`VERSION`](VERSION) file is the source of the release version in
 `MAJOR.MINOR.UPDATE` form. The completed `0.1.x` line represents Phase 1, and `0.2.x` represents the
-current Phase 2 development line from [`PLAN.md`](PLAN.md).
+Phase 2 release line from [`PLAN.md`](PLAN.md).
 
 - Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
 - Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
@@ -304,29 +309,37 @@ shadows this builtin-only grouping and follows ordinary application rules.
 
 ## Current limitations
 
+The newly settled [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+is not implemented yet. It adds the common enumeration/guarantee protocol, lazy map/filter,
+Field tuples and Sets, unified missing-returning dot/bracket lookup, revised equality, and
+collection-value `eager`. The implementation descriptions and runnable examples below describe
+the existing prototype. General computations, custom providers, resumable failure handlers,
+contextual template constructors, and callable `eager` forms are deferred beyond Phase 4.
+
 - A function definition must start at the beginning of a logical line.
-- Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
-  Trailing callable blocks remain unavailable until lambda syntax is implemented.
+- Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines;
+  an indented trailing lambda is the final call argument and owns its deeper body.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
   dynamically. Named-function constraint inference and Phase 2 transitive/higher-order effect
   analysis are implemented, including the read-only `caret inspect` report;
-  nullable/optional contract unions and the initial `Sequence T` parameterized contract are
+  nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
   implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
 - Contract-selected collection representations, first-class dynamic fields, formats,
-  lambdas, cycles, SIMD, rules,
+  cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
   and whole-domain overload coverage. Complete static dispatch/type proof remains planned.
 - Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
   planned headers become eligible as their syntax is implemented.
-- `map` supports current unary callable values and propagates the supplied transform's known effect
-  bound, but generalized element/result variables and lambdas remain planned.
-- Mutability containers and immutable collection-update syntax are specified but not implemented. There
-  is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
+- Higher-order Sequence operations propagate known callback effects; generalized collection
+  element/result variables remain planned.
+- Mutability containers are specified but not implemented. Public `addElement`, `removeElement`,
+  `replaceElement`, their construction-selection interface, and additional immutable-update syntax
+  are deferred beyond Phase 4. There is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
   observable persistent semantics.
-- Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
-  base/requirement metadata.
+- Reflection is intentionally limited to language-owned metadata for value kind and collection
+  shape, callable signatures and surviving overload variants, and contract bases and requirements.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
   quines, and `sandbox source environment` execution are specified but not implemented.
 - Stable module-ID declarations, catalog discovery, and path/`ModuleId` import overloads are
@@ -371,19 +384,19 @@ value is `~`.
 fieldName = "count"
 print source[fieldName]~
 print (@source).kind
-print (@source).names
+print (@source).ids
 ```
 
-Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `names`. Field keys are
+Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `ids`. Field keys are
 ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
 or update order; their value expressions are still evaluated in source order. Identifier shorthand
 `^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
 Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
 non-callable metadata Dictionary exposing `kind`, visible
-declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
+declaration `id`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
 the known invocation-effect bound. Metadata fields are lazily filtered for the observing execution
-environment, retain descriptor identity behind hidden names, and cannot gain visibility when moved
+environment, retain descriptor identity behind hidden identifiers, and cannot gain visibility when moved
 between environments. The internal observation policy is not a Caret value. Prefix and hole partials specialize variables and project their
 remaining parameters; repeated holes conjoin requirements. Compositions specialize compatible
 parameter/result relationships and union known invocation effects. Narrowed overloads preserve

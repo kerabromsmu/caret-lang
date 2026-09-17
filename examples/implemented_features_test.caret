@@ -127,9 +127,12 @@ assertEqual "optional dynamic lookup" person["phone"]~ ~
 assertEqual "dictionary reflection kind" (@person).kind "Dictionary"
 assertEqual "collection reflection shape" (@person).shape "named"
 assertEqual "collection reflection size" (@person).size 2
-assertEqual "collection reflection names" (@person).names "age,name"
+assertEqual "collection reflection ids" (@person).ids "age,name"
+assertEqual "legacy collection reflection names are absent" (@person).names~ ~
 assertEqual "function reflection kind" (@factorial).kind "Function"
 assertEqual "function reflection remaining arity" (@factorial).remaining 1
+assertEqual "function reflection id" (@factorial).id "factorial"
+assertEqual "legacy function reflection name is absent" (@factorial).name~ ~
 factorialReference = @factorial
 assertEqual "function metadata type" (type factorialReference) "Dictionary"
 assert "function metadata is structural" (factorialReference == @factorial)
@@ -225,7 +228,7 @@ assert "nested dictionary and sequence equality is structural" (dictPut dictEmpt
 assert "dictionary structural equality" (dictionary == sameDictionary)
 assertEqual "dictionary reflection kind" (@dictionary).kind "Dictionary"
 assertEqual "dictionary reflection size" (@dictionary).size 2
-assertEqual "dictionary reflection names" (@dictionary).names "missingValue,present"
+assertEqual "dictionary reflection ids" (@dictionary).ids "missingValue,present"
 
 // Left-to-right function composition, chaining, partials, and reflection.
 double value = value * 2
@@ -270,7 +273,8 @@ assert "optional contract rejects null" (not NumberOrMissing ?)
 assert "combined contract accepts numbers" (NumberOrAbsent 1)
 assert "combined contract accepts null" (NumberOrAbsent ?)
 assert "combined contract accepts missing" (NumberOrAbsent ~)
-assertEqual "modified contract reflection name" (@NumberOrAbsent).name "Number?~"
+assertEqual "modified contract reflection id" (@NumberOrAbsent).id "Number?~"
+assertEqual "legacy contract reflection name is absent" (@NumberOrAbsent).name~ ~
 assertEqual "modified contract reflection base" (@NumberOrAbsent).bases ["Number"]
 assert "redundant nullable modifier normalizes" (Null? == Null)
 assert "modified contract identity is stable" (Number? == Number?)
@@ -297,7 +301,7 @@ coverageUpdates = dictPut (dictPut (dictPut dictEmpty "with" 1) "z" 2) "a" 3
 assertEqual "reserved words may be collection fields" coverageNamed.with 1
 assertEqual "field construction matches literal construction" coverageNamed coverageFields
 assertEqual "dictionary updates retain canonical identity-independent order" coverageFields coverageUpdates
-assertEqual "canonical reflected field names" (@coverageNamed).names "a,with,z"
+assertEqual "canonical reflected field ids" (@coverageNamed).ids "a,with,z"
 
 // map accepts current callable kinds and preserves null, missing, and nested values.
 coverageMapAdd left right = left + right
@@ -338,7 +342,7 @@ CoverageNestedNumbers = Sequence (Sequence Number)
 (CoverageNestedNumbers) coverageNestedNumbers = [[1 2] [] [3]]
 assert "parameterized Sequence accepts matching elements" (CoverageNumbers coverageNumbers)
 assert "nested parameterized Sequence accepts matching elements" (CoverageNestedNumbers coverageNestedNumbers)
-assertEqual "parameterized contract reflection retains its name" (@CoverageNumbers).name "Sequence Number"
+assertEqual "parameterized contract reflection retains its id" (@CoverageNumbers).id "Sequence Number"
 assertEqual "parameterized contract reflection retains its argument" (@CoverageNumbers).requirements ["Number"]
 
 // Closed overloads select the unique most-specific variant and specialize partials.
@@ -388,7 +392,7 @@ coverageHoleChoice = coverageChoose _ 2
 assertEqual "generalized prefix partial specializes" (coverageNumberChoice 2) 1
 assertEqual "generalized hole partial specializes" (coverageHoleChoice 1) 1
 assertEqual "signature variables use canonical indices" (seqGet (seqGet (@coverageChoose).signature.parameters 0).requirements 0).index 0
-assertEqual "specialized variable becomes a concrete descriptor" (seqGet (seqGet (@coverageNumberChoice).signature.parameters 0).requirements 0).name "Number"
+assertEqual "specialized variable becomes a concrete descriptor" (seqGet (seqGet (@coverageNumberChoice).signature.parameters 0).requirements 0).id "Number"
 
 // Callable reflection exposes current partial, hole, composition, overload, and identity views.
 (Number) coverageSignatureAdd (Number) left (Number) right = left + right
@@ -402,16 +406,19 @@ coverageReordered = coverageSignatureCombine _2 _1
 (String) coverageText (String) value = value
 coveragePipeline = coverageInferIdentity >> coverageText
 assertEqual "callable reflection retains arity" (@coverageSignatureAdd).remaining 2
-assertEqual "callable reflection exposes declared requirements" (seqGet coverageFirstParameter.requirements 0).name "Number"
+assertEqual "callable reflection exposes declared requirements" (seqGet coverageFirstParameter.requirements 0).id "Number"
+assertEqual "legacy contract-reference name is absent" (seqGet coverageFirstParameter.requirements 0).name~ ~
+assertEqual "parameter reflection id" coverageFirstParameter.id "left"
+assertEqual "legacy parameter reflection name is absent" coverageFirstParameter.name~ ~
 assertEqual "prefix partial reflection drops a parameter" (@coverageSignatureAddOne).remaining 1
-assertEqual "prefix partial reflection retains the next name" (seqGet (@coverageSignatureAddOne).signature.parameters 0).name "right"
+assertEqual "prefix partial reflection retains the next id" (seqGet (@coverageSignatureAddOne).signature.parameters 0).id "right"
 assertEqual "pure signature exposes a known-empty bound" (seqSize coverageSignature.effects.upperBound) 0
 assertEqual "reflected callable dereference preserves its target" (coverageSignatureAlias 2 3) 5
 assertEqual "repeated holes conjoin requirements" (seqSize (seqGet (@coverageRepeated).signature.parameters 0).requirements) 2
-assertEqual "reordered holes expose application order" (seqGet (@coverageReordered).signature.parameters 0).name "right"
-assertEqual "reordered holes retain the second source name" (seqGet (@coverageReordered).signature.parameters 1).name "left"
-assertEqual "composition specializes its public parameter" (seqGet (seqGet (@coveragePipeline).signature.parameters 0).requirements 0).name "String"
-assertEqual "composition exposes its final guarantee" (seqGet (@coveragePipeline).signature.result.guarantees 0).name "String"
+assertEqual "reordered holes expose application order" (seqGet (@coverageReordered).signature.parameters 0).id "right"
+assertEqual "reordered holes retain the second source id" (seqGet (@coverageReordered).signature.parameters 1).id "left"
+assertEqual "composition specializes its public parameter" (seqGet (seqGet (@coveragePipeline).signature.parameters 0).requirements 0).id "String"
+assertEqual "composition exposes its final guarantee" (seqGet (@coveragePipeline).signature.result.guarantees 0).id "String"
 coverageSavedMetadata = @coverageSignatureAdd
 assert "repeated reflection preserves callable identity" (coverageSavedMetadata == @coverageSignatureAdd)
 assertEqual "saved metadata remains dereferenceable" (coverageSavedMetadata: 3 4) 7
@@ -423,8 +430,9 @@ CoverageEffectfulNumber = [Number] -> (Output Number)
 assert "effectful arrow accepts a declared allowance" (CoverageEffectfulNumber coverageNoisy)
 assertEqual "pure callable constraint preserves behavior" (coveragePureCopy 2) 2
 coverageNoisySignature = (@coverageNoisy).signature
-assertEqual "mixed result clause contains only its value requirement" (seqGet coverageNoisySignature.result.declared 0).name "Number"
-assertEqual "mixed result clause exposes its effect separately" (seqGet coverageNoisySignature.effects.declared 0).name "Output"
+assertEqual "mixed result clause contains only its value requirement" (seqGet coverageNoisySignature.result.declared 0).id "Number"
+assertEqual "mixed result clause exposes its effect separately" (seqGet coverageNoisySignature.effects.declared 0).id "Output"
+assertEqual "legacy effect reflection name is absent" (seqGet coverageNoisySignature.effects.declared 0).name~ ~
 
 // Rendering overloads are tested last so they cannot alter earlier test diagnostics.
 (String) toString (Number) value = "number:" + numberText value

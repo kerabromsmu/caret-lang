@@ -401,6 +401,30 @@ final class Interpreter {
         }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
     }
 
+    private Value.Callable lambdaFunction(Lambda lambda, Environment env, Resolution resolution) {
+        List<String> parameterNames = lambda.params().stream().map(Parameter::name).toList();
+        LinkedHashMap<Integer, Environment.BindingReference> captures = new LinkedHashMap<>();
+        for (Resolution.Upvalue upvalue : resolution.upvalues(lambda)) {
+            captures.put(upvalue.symbolId(), env.referenceAt(upvalue.lexicalDepth(), upvalue.slot()));
+        }
+        Value.Callable raw = new Value.FunctionValue("<anonymous>", parameterNames, (arguments, ignoredCallSpan) -> {
+            Environment parameters = new Environment(env, captures);
+            for (int index = 0; index < lambda.params().size(); index++) {
+                Value value = arguments.get(index).value();
+                ownership.share(value);
+                parameters.define(lambda.params().get(index).name(), value);
+            }
+            return executeBlock(lambda.body(), new Environment(parameters), resolution);
+        }, false, Objects.requireNonNull(inference).signature(lambda));
+        if (lambda.params().stream().noneMatch(parameter -> parameter.contracts() != null)) return raw;
+        return new Value.ContractedCallable(raw, (index, argument) -> {
+            Parameter parameter = lambda.params().get(index);
+            Value checked = validateContracts(argument.value(), argument.span(), parameter.contracts(),
+                    resolution, env, "parameter " + parameter.name());
+            return new Value.Argument(checked, argument.span());
+        });
+    }
+
     private record OverloadVariant(FunctionDef definition, Value.Callable function) {}
     private record ApplicabilityKey(Object requirement, int position) {}
     private record RefinementRequirement(Value.Callable callable, boolean nullable, boolean optional) {}
@@ -475,6 +499,96 @@ final class Interpreter {
             return transform == null ? List.of() : List.of(transform);
         }
         @Override public String toString() { return "<fn map/" + remainingArity() + ">"; }
+    }
+
+    private enum SequenceOperation { FILTER, FOLD, ANY, ALL }
+
+    private final class SequenceOperationCallable implements Value.Callable {
+        private static final List<String> ALL_EFFECTS =
+                List.of("Output", "StateRead", "StateWrite", "TestReport");
+        private final SequenceOperation operation;
+        private final List<Value.Argument> arguments;
+
+        private SequenceOperationCallable(SequenceOperation operation) { this(operation, List.of()); }
+        private SequenceOperationCallable(SequenceOperation operation, List<Value.Argument> arguments) {
+            this.operation = operation;
+            this.arguments = List.copyOf(arguments);
+        }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            ArrayList<Value.Argument> next = new ArrayList<>(arguments);
+            next.add(argument);
+            if (next.size() == 1) sequence(argument);
+            if (next.size() < arity()) return new SequenceOperationCallable(operation, next);
+            if (next.size() > arity()) throw runtime(Diagnostic.Codes.TOO_MANY_ARGUMENTS,
+                    "Too many arguments for " + id(), callSpan);
+            return executeSequenceOperation(next, callSpan);
+        }
+
+        private Value executeSequenceOperation(List<Value.Argument> supplied, SourceSpan callSpan) {
+            Value.Seq values = sequence(supplied.getFirst());
+            int callbackIndex = operation == SequenceOperation.FOLD ? 2 : 1;
+            int callbackArity = operation == SequenceOperation.FOLD ? 2 : 1;
+            Value.Callable callback = collectionCallback(supplied.get(callbackIndex), callbackArity, id(),
+                    operation == SequenceOperation.FOLD ? "combine" : "predicate");
+            return switch (operation) {
+                case FILTER -> {
+                    ArrayList<Value> selected = new ArrayList<>();
+                    for (Value value : values) {
+                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                        if (predicateResult(result, id(), supplied.get(callbackIndex).span())) selected.add(value);
+                    }
+                    yield ownership.fresh(new Value.Seq(selected));
+                }
+                case FOLD -> {
+                    Value accumulator = supplied.get(1).value();
+                    for (Value value : values) {
+                        Value partial = invoke(callback,
+                                new Value.Argument(accumulator, supplied.get(1).span()), callSpan);
+                        if (!(underlying(partial) instanceof Value.Callable remaining)) {
+                            throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                                    "fold combine lost its second parameter", callSpan);
+                        }
+                        accumulator = invoke(remaining,
+                                new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                    }
+                    yield accumulator;
+                }
+                case ANY -> {
+                    boolean matched = false;
+                    for (Value value : values) {
+                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                        if (predicateResult(result, id(), supplied.get(callbackIndex).span())) { matched = true; break; }
+                    }
+                    yield new Value.Bool(matched);
+                }
+                case ALL -> {
+                    boolean matched = true;
+                    for (Value value : values) {
+                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                        if (!predicateResult(result, id(), supplied.get(callbackIndex).span())) { matched = false; break; }
+                    }
+                    yield new Value.Bool(matched);
+                }
+            };
+        }
+
+        private int arity() { return operation == SequenceOperation.FOLD ? 3 : 2; }
+        private String id() { return operation.name().toLowerCase(Locale.ROOT); }
+        @Override public int remainingArity() { return arity() - arguments.size(); }
+        @Override public String publicName() { return id(); }
+        @Override public CallableSignature signature() {
+            List<String> parameters = operation == SequenceOperation.FOLD
+                    ? List.of("values", "initial", "combine") : List.of("values", "predicate");
+            CallableSignature signature = CallableSignature.builtin(parameters, ALL_EFFECTS);
+            for (int index = 0; index < arguments.size(); index++) {
+                signature = signature.specializeFirst(arguments.get(index).value());
+            }
+            return signature;
+        }
+        @Override public List<Value> retainedValues() {
+            return arguments.stream().map(Value.Argument::value).toList();
+        }
     }
 
     private static List<CallableSignature> operatorSignatures(String operator) {
@@ -764,7 +878,7 @@ final class Interpreter {
                 acquired.add(nominal);
                 continue;
             }
-            if (contract.accepts(value)) continue;
+            if (contract.test(value, valueSpan)) continue;
             List<Diagnostic.Related> related = analyzed == null ? List.of()
                     : List.of(new Diagnostic.Related("Required contract: " + contract.publicName(), analyzed.span()));
             throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
@@ -1231,6 +1345,10 @@ final class Interpreter {
             }
             return new Value.ContractValue(modifiedContract(contract.descriptor(), nullable, optional));
         }
+        if (expr instanceof ContractTerms) {
+            throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                    "Unanalyzed arrow contract terms reached evaluation", expr.span());
+        }
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
             return evalInner(expression, env, resolution);
         }
@@ -1272,6 +1390,9 @@ final class Interpreter {
         }
         if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                                           boolean explicitPure, SourceSpan ignored)) {
+            ArrowContract analyzed = resolution.arrow((ArrowContract) expr);
+            parameters = analyzed.parameters();
+            result = analyzed.result();
             ArrayList<List<ContractDescriptor>> parameterDescriptors = new ArrayList<>();
             for (List<Expr> parameter : parameters) {
                 parameterDescriptors.add(parameter.stream()
@@ -1282,6 +1403,7 @@ final class Interpreter {
                     List.copyOf(parameterDescriptors), resultDescriptor, effectTerms.stream()
                     .map(effect -> effectCatalog.resolve(effect.name()).orElseThrow()).toList()));
         }
+        if (expr instanceof Lambda lambda) return lambdaFunction(lambda, env, resolution);
         throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Unknown expression: " + expr);
     }
 
@@ -1590,6 +1712,10 @@ final class Interpreter {
         globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
         globals.define("map", new MapCallable());
+        globals.define("filter", new SequenceOperationCallable(SequenceOperation.FILTER));
+        globals.define("fold", new SequenceOperationCallable(SequenceOperation.FOLD));
+        globals.define("any", new SequenceOperationCallable(SequenceOperation.ANY));
+        globals.define("all", new SequenceOperationCallable(SequenceOperation.ALL));
 
         globals.define("dictEmpty", function("dictEmpty", List.of(), args ->
                 ownership.fresh(new Value.Dictionary(Map.of()))));
@@ -1708,6 +1834,23 @@ final class Interpreter {
         if (raw instanceof Value.Callable callable && callable.remainingArity() == 1) return callable;
         throw runtime(Diagnostic.Codes.INVALID_MAP_TRANSFORM,
                 "map transform must be a callable requiring exactly one argument", argument.span());
+    }
+
+    private Value.Callable collectionCallback(Value.Argument argument, int arity,
+                                              String operation, String role) {
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.Callable callable && callable.remainingArity() == arity) return callable;
+        throw runtime(Diagnostic.Codes.INVALID_COLLECTION_CALLBACK,
+                operation + " " + role + " must be a callable requiring exactly "
+                        + (arity == 1 ? "one argument" : "two arguments"), argument.span());
+    }
+
+    private boolean predicateResult(Value value, String operation, SourceSpan span) {
+        Value raw = underlying(value);
+        if (raw instanceof Value.Bool(boolean value1)) return value1;
+        if (raw instanceof Value.Null || raw instanceof Value.Missing) return false;
+        throw runtime(Diagnostic.Codes.INVALID_PREDICATE_RESULT,
+                operation + " predicate must return Boolean, null, or missing", span);
     }
 
     private Value.Dictionary dictionary(Value.Argument argument) {

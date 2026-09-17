@@ -1,0 +1,1 @@
+Error: Line 1, column 12: filter predicate must be a callable requiring exactly one argument

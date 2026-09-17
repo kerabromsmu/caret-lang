@@ -8,3 +8,5 @@ true
 Number
 true
 false
+[Sequence Number] -> Number
+[] -> Sequence Number

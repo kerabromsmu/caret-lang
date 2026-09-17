@@ -31,6 +31,11 @@ baseline.
   consumes the same form so semantics cannot drift.
 - Give every public value kind a language-owned descriptor and reflective view. Never use Java
   reflection as Caret reflection.
+- Preserve the [ordinary-callable construction model](spec/03-functions-operators-and-lambdas.md#function-application)
+  for `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox`. Lookup, aliases, shadowing,
+  arity, partial application, dispatch, effects, reflection, and staging use ordinary function rules.
+  Specialized analysis and lowering recognize resolved language-owned callable identities, never
+  lexical spellings; these bindings introduce no feature-specific application or declaration grammar.
 - Pass an explicit execution environment through interpretation, imports, tests, REPL sessions, and
   compiled entry points. Reflection and authority are always relative to that environment.
 - Assign stable diagnostic phase/code/span data before expanding error messages. All new syntax and
@@ -67,7 +72,7 @@ expressions form nested calls. Potential named prefix/infix calls are parsed neu
 from lexical callable facts, with runtime fallback only when arity is genuinely dynamic. Callable
 partial arguments use persistent O(1) accumulation, and language-owned value descriptors now
 centralize public kinds, basic reflection, structural equality, and stack-safe rendering. Trailing
-lambdas remain deferred to Phase 3. Right-associative low-precedence `$` application now lowers to
+lambdas and right-associative low-precedence `$` application now lower to
 the ordinary callable path. Language-owned callable signature metadata and its safe reflective
 projection are implemented for named functions, built-ins, prefix partials, compositions, and
 closed overload sets. Exact-arity arrow contracts now work as named or inline structural
@@ -79,9 +84,9 @@ survivor signatures with conservative summaries.
 
 ### Layout and expressions
 
-- Extend the structured logical-line engine already used by grouped expressions, dynamic lookups,
-  ungrouped multiline argument lists, and indented bodies to lambdas, collection literals, `format`, `cycle`,
-  rules, and trailing blocks as those constructs are implemented.
+- Preserve the structured logical-line engine for grouped expressions, dynamic lookups, multiline
+  arguments, lambdas, collection literals, and indented bodies. Future `format`, `cycle`, `rule`, and
+  `sandbox` calls use these ordinary application/layout rules without parser-specific headers.
 - Preserve the implemented pre-parse layout-mapping stack for terminal `\\` baseline adjustments
   and standalone `\*` restoration lines as later indentation-opening forms are added. Effective
   indentation is computed before parsing while diagnostics retain physical coordinates.
@@ -149,8 +154,8 @@ effects, preserves unknown dynamic calls, and proves refinement
 eligibility without exposing effect syntax. Proven unary Boolean callables now participate as
 first-class predicate requirements in derived contracts and direct clauses, including through
 aliases. Nullable/optional contract modifiers are implemented as first-class, identity-stable
-contract unions without collapsing null into missing. The initial parameterized-contract slice is
-also implemented as `Sequence T`, with constructor metadata preserved through aliases, recursive
+contract unions without collapsing null into missing. The initial parameterized-contract slice uses
+callable `Sequence T`, `Field K V`, and `Dictionary K V` constructors, with constructor metadata preserved through aliases, recursive
 element validation, nesting, modifiers, identity semantics, reflection, and conservative outer-kind
 inference. Environment-relative public effect identities, catalog aliases, declaration allowances,
 callable constraints, guarded invocation bounds, and effectful arrow contracts are implemented.
@@ -194,8 +199,8 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   and context, and report `AMBIGUOUS_CONTRACT` rather than generalizing an operator constraint or
   defaulting to Number. Use `INCOMPATIBLE_CONTRACTS` for statically impossible operands while
   preserving established runtime operand, zero-divisor, non-finite, and callable-equality errors.
-- Extend the implemented ordinary contract/function parameterization beyond `Sequence T` as later
-  value kinds arrive; keep general `Collection T` and mutable `Container T` aligned with Phase 4
+- Extend the implemented ordinary contract/function parameterization as later value kinds arrive;
+  keep `Collection` unparameterized and mutable `Container T` aligned with Phase 4
   rather than introducing a separate generic-type subsystem.
 - Preserve implemented same-named overload sets and static normalization of parameter conjunctions,
   aliases, redundant nominal bases, `Any`, and absence alternatives, then order variants with the
@@ -261,8 +266,18 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   matches the authoritative optimization-disabled persistent behavior. This foundation later supports
   efficient cycles, collection updates, SIMD memory, and compiled execution.
 
-## Phase 3 — Lambdas and higher-order programming
+## Phase 3 — Lambdas and higher-order programming (foundation completed; refinement follow-up)
 
+Current status: The Phase 3 foundation is complete. Lambdas share the ordinary callable representation, lexical
+capture metadata, contracts, effects, partial application, composition, reflection, and guarded
+higher-order execution. Sequence map/filter/fold/any/all and lambda precedence above `$` have full
+runtime and corpus evidence. Anonymous lambdas do not yet receive the refinement-eligibility flag
+already supported by suitable named predicates and aliases; canonical callable parity still requires
+that remaining interpreter correction.
+
+- Complete the remaining `CONTRACT-LAMBDA-REFINE-001` correction before starting Phase 4:
+  grant proven-pure unary Boolean lambdas the same refinement eligibility as named predicates,
+  with contract/alias, rejection, diagnostic, and runnable integration evidence.
 - Parse unary/multi-parameter lambdas, contracted parameters, expression bodies, and indented bodies
   with the precedence/extent rules settled in Phase 0.
 - Lower lambdas to the same function representation as named functions. Implement lexical capture,
@@ -270,9 +285,9 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   calls.
 - Support ordinary partial application and hole-based partial application around lambdas without
   conflating holes with parameter declarations.
+- Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 - Implement composition and standard higher-order collection functions (`map`, `filter`, `fold`,
   `any`, `all`) using the unified callable/effect model.
-- Infer contracts, purity, effects, and later SIMD eligibility exactly as for named functions.
 - Complete `LAMBDA-LOWAPP-001`: lambda construction binds above `$`, with parser and runtime
   coverage for ungrouped lambdas used as complete low-precedence arguments.
 
@@ -282,11 +297,45 @@ Current foundation: `Collection` is implemented as the general contract for Sequ
 Dictionaries. Static `^name`, ordinary `field "name" value`, exported blocks, and `dictPut` share
 one String-keyed `Dictionary K V` representation; mixed shapes and duplicate keys are diagnosed.
 The steps below describe the remaining contextual, template, and representation work.
+The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+records the newer #55/#59 decisions and takes precedence over legacy implementation targets
+for its covered behavior. These decisions are planned, not implemented by the existing tests.
+
+### Agreed collection revision and deferrals
+
+- Implement ordinary keys/values/fields/size access, guarantee queries and reflective equivalents,
+  Natural size contracts, keyed/keyless and Set/dictionary shapes, and Field-contract tuples.
+- Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
+  first-entry duplicate handling, two-input zip tuples and zipWithKeys keyed construction.
+- Retain internal construction and settlement without exposing unfinished Collections. Public
+  addElement/removeElement/replaceElement, their construction-selection interface, and additional
+  immutable-update syntax are deferred beyond Phase 4, with no later phase assigned. Preserve the
+  existing persistent primitives; built-in construction does not require a public builder API.
+- Apply ordinary lexical lazy-value establishment and inferred provider effects; retain stronger
+  sequential guarantees without introducing automatic uniqueness tracking.
+- Implement unified dot/bracket/getElement lookup, general equality-comparable keys, invalid-key
+  contracts, and ordinary shadowing/partial-application lowering.
+- Implement collection-value eager with complete enumeration before depth-first materialization,
+  reflection removal, preserved containers/functions and sharing, and cycle/infinite diagnostics.
+- Implement the revised contract-sensitive equality, contextual empty Collections, unordered
+  multiplicity comparison, and the provisional forcing policy.
+- Keep Dictionaries sorted with homogeneous sortable keys; general keyed Collections only require
+  equality-comparable keys accepted by their contracts. Add positional Field tuple access while
+  retaining the Field contract and existing reflective metadata.
+- Analyze the identifiers needing with lookup and bind them against enumerated public keys before
+  body execution. Matched members remain lazy; only established absence permits outer fallback.
+- Preserve existing structural-template predicates. Defer contextual predicate/constructor calls,
+  general completely deferred computations, custom provider construction, concurrency and resumable
+  handlers, and function-wrapping/nullary-invocation forms of eager beyond Phase 4. No particular
+  later phase is assigned yet. There is no eagerWithRetry feature.
+- Use existing failure behavior in Phase 4. The deferred handler design is not a prerequisite for
+  built-in lazy Collections. Add the protocol/revision conformance evidence before claiming completion.
 
 ### Collection protocol and literals
 
 - Generalize existing sequences/dictionaries behind `Collection` and capability contracts while
-  keeping persistent semantics and canonical Dictionary field order.
+  keeping persistent semantics. Dictionaries retain sorted homogeneous keys; general keyed
+  Collections permit non-sortable keys and do not inherit a Dictionary sorting requirement.
 - Complete contextual behavior for `[...]`, including shape-neutral empty values and inferred
   content contracts, without assigning a fixed container meaning to square brackets.
 - Make each collection literal a hole-expression boundary: materialize its collection-constructor
@@ -298,8 +347,9 @@ The steps below describe the remaining contextual, template, and representation 
 
 ### Fields and dictionary-like collections
 
-- Preserve the implemented first-class `Field K V`, ordinary `field name value` construction, and
-  unified `Dictionary K V` representation shared by exports, static fields, and persistent updates.
+- Retain the `Field` contract and ordinary `field name value` construction while migrating Fields
+  to contract-bearing tuples with key/value access at positions zero/one. Preserve existing
+  reflective metadata and integrate `Field K V`, exports, static fields, and persistent updates.
 - Preserve the implemented positional/named shape diagnostic. Make `[]` shape-neutral and valid
   under every zero-compatible collection contract.
 - Support static and dynamic access, optional lookup, and exact missing/null/present-`~` behavior.
@@ -327,22 +377,26 @@ The steps below describe the remaining contextual, template, and representation 
 
 - Implement unconstrained and contracted holes, equality-checked fixed values, exact positional and
   named shape, dynamic field names, and recursive nested collection shapes.
+- Verify [required fields with optional values](spec/06-collections-fields-and-templates.md#named-fields)
+  as `TEMPLATE-OPTIONAL-001`: every declared field is present, while `T~` permits an explicit missing
+  value. Cover omission rejection, nullability, wrong/extra fields, nesting, and ordinary reflected
+  value contracts using existing template syntax. No optional-member syntax design is required.
 - Derive membership as the structural inverse of eligible constructors without invoking them.
   Repeated numbered holes impose candidate equality; numbering changes parameter order but not
   collection shape, and mixed numbered/unnumbered holes remain invalid.
 - Validate statically known template membership and retain runtime checks when proof is unavailable.
   Diagnose invalid constructors and non-comparable fixed values with their settled template codes;
-  reuse ordinary field, contract, and hole codes for malformed dynamic keys, duplicate fields,
-  invalid contracted holes, and mixed hole styles. Preserve parser phase for malformed syntax and
-  keep behavioral codes stable across semantic and runtime discovery, with the offending construct
-  primary and the first duplicate field related.
+  reuse ordinary field, contract, and hole codes for malformed dynamic keys, invalid contracted
+  holes, and mixed hole styles. Reconcile legacy duplicate-field diagnostics with the new
+  first-entry construction rule. Preserve parser phase for malformed syntax and stable located
+  behavioral diagnostics across semantic and runtime discovery.
 - Reflect template structure as metadata on `Contract` descriptors. Permit shared metadata and
   packed-layout derivation only when optimized and optimization-disabled behavior is identical.
 
 ### Persistent updates and contained mutation
 
-- Implement immutable collection update syntax, including nested updates and
-  shape/contract checking.
+- Preserve existing persistent collection primitives. Additional immutable-update syntax and the
+  new public element-operation functions are deferred; they are not Phase 4 completion gates.
 - Implement `{ value }` and `{ (Contract...) value }`, postfix `container{}`, and `put container
   value`. Infer stable content contracts, validate initial and replacement values, return the stored
   value from successful `put`, and leave prior content unchanged on failed validation.
@@ -367,8 +421,10 @@ The steps below describe the remaining contextual, template, and representation 
 
 ### `cycle`
 
-- Implement `cycle` as an expression over an initial state, pure unary condition, unary body, and
-  unary prepare transformation. Support omitted body/prepare forms exactly as specified.
+- Implement ordinary four-argument `cycle initial condition body prepare`, with a pure unary
+  condition and unary body/prepare transformations. Supply ordinary `identity` for an unused body
+  or prepare phase; fewer arguments retain ordinary partial-application behavior. Omission
+  shorthand remains a future possibility, not a required cycle grammar.
 - Accept named functions, lambdas, partials, and positional or named Collections as phase values. Enforce a
   stable state shape and compatible contracts across iterations.
 - Infer phase effects while requiring the condition to remain pure. Lower to an internal loop/tail
@@ -397,8 +453,9 @@ The steps below describe the remaining contextual, template, and representation 
 ## Phase 7 — First-class bidirectional formats
 
 - Add immutable `Format` values representing bidirectional relations. `decode` and `encode` return
-  `Result`, with expected failures carrying an `ErrorTemplate` payload. Implement empty formats and
-  ordinary functional construction.
+  `Result`, with expected failures carrying an `ErrorTemplate` payload. Implement ordinary nullary
+  `format : [] -> Format`; bare `format` invokes it under normal nullary rules to produce an empty
+  Format. Format constructors and transformations use ordinary callable application.
 - Implement primitive byte/integer formats, `field format "name"`, constants/signatures, nested
   formats, fixed/prior-field repetition, conditions, general `selector ==` choices, constraints,
   and `>>` composition.
@@ -418,11 +475,18 @@ The steps below describe the remaining contextual, template, and representation 
 
 ### Contexts and rules
 
+- Before rule construction, settle `RULE-PHASE-CONTRACT-001`:
+  [RuleDefinition needs first-class C/T/E contracts](spec/11-rules-rulesets-and-objects.md#basic-definition).
+  Require the Phase 4 `TEMPLATE-OPTIONAL-001` evidence for present fields with optional values.
+  Unresolved phase contracts must not be replaced by rule-specific ASTs, parser exceptions,
+  or hidden lazy-expression wrappers.
 - Add persistent `Context` values, idempotent `raise`/`lower`, and transient `rise`/`fall` fronts over
   Boolean context expressions.
-- Add first-class `Rule` values with unique optional CATEN clauses, defaults, inferred or explicit
-  string-literal IDs for `N`, runtime active state, edge-trigger history, effect block, and implicit
-  application context.
+- Implement ordinary unary `rule : RuleDefinition -> Rule`, consuming a named Collection validated
+  by the general template-derived contract. All CATEN fields are present; explicit missing values
+  select the documented defaults. Preserve explicit string-literal IDs for `N`, anonymous identity
+  for `N = ~`, runtime active state, edge-trigger history, deferred effect execution, and implicit
+  application context. Assignment names do not supply `N`.
 - Implement gate semantics: `C` and `A` permit application but never replay a trigger missed while
   gated. Require `C` and `T` purity; propagate ordinary effects from `E`.
 - Implement `activate`/`deactivate`, implicit context rise/effect/fall, reevaluation after each effect,
@@ -603,6 +667,11 @@ The steps below describe the remaining contextual, template, and representation 
   related spans when two declarations/contracts/rules conflict.
 - Interaction tests combine each new feature with null/missing, exports, lookup, reflection,
   closures, partials, contracts/effects, collections, and modules as relevant.
+- Ordinary constructor-call tests cover aliases, local shadowing, arity, prefix/numbered-hole
+  partials, dispatch, effects, and reflection; extend them to staging when available. Verify
+  recognition by resolved identity, four-argument cycle/identity phases, normal nullary format
+  invocation/reference behavior, and Collection-based rule construction after its design blockers
+  are resolved.
 - Low-precedence application tests cover right associativity and its boundary with whitespace calls,
   every infix tier, composition, conditionals, holes, multiline layout, and later lambdas.
 - Scoped-lookup tests cover one-time target evaluation, local/member/enclosing shadowing,
@@ -624,17 +693,20 @@ The steps below describe the remaining contextual, template, and representation 
 
 Low-precedence application, runtime user-contract derivation, generalized contract inference, the
 minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
-are complete. Initial parameterized contracts are also complete through `Sequence T`. The shared
+are complete. Initial parameterized contracts are complete through callable `Sequence T`,
+`Field K V`, and `Dictionary K V` constructors. The shared
 callable-signature scheme and safe callable reflection are now implemented for the current callable
 kinds. Exact-arity higher-order arrow contracts are now parsed and analyzed over that metadata,
 including inline clauses, variance checks, declaration-wide variables, explicit effects, and runnable examples.
-The environment-relative effect catalog and mixed-clause analysis now enforce public declaration
-allowances and callable-value constraints. Next complete unknown higher-order invocation rejection,
-catalog aliases, and complete higher-order effect propagation. Callable signatures, reflection, explicit higher-order arrow contracts,
-and the initial static operator matrix are settled. Mixed-clause and callable-effect diagnostic
-codes and attribution are also settled; no conformance item in Phases 1 or 2 remains formally
-unresolved. `with`/`outer` wait for the Phase 4 public named-member protocol rather
-than introducing a separate exported Scope value model.
+The environment-relative effect catalog and mixed-clause analysis enforce public declaration
+allowances and callable-value constraints; unknown higher-order invocation rejection, catalog
+aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
+explicit higher-order arrow contracts, and the initial static operator matrix are settled.
+Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
+item in Phases 1, 2, or 3 remains formally unresolved. First complete the specified lambda-refinement
+correction `CONTRACT-LAMBDA-REFINE-001`; then implement the settled Phase 4 universal collection
+and field foundations. `with`/`outer` wait for the Phase 4 public named-member protocol
+rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals
 

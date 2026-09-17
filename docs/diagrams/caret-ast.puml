@@ -1,0 +1,98 @@
+@startuml Caret AST
+title Caret prototype — syntax tree
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "caretlang.Ast" {
+  interface Stmt <<sealed>>
+  class Assign <<record>>
+  class ExprStmt <<record>>
+  class PrintLine <<record>>
+  class FunctionDef <<record>>
+
+  interface Expr <<sealed>>
+  class Literal <<record>>
+  class Name <<record>>
+  class Unary <<record>>
+  class Binary <<record>>
+  class Compose <<record>>
+  class NamedInfix <<record>>
+  class AmbiguousCall <<record>>
+  class Conditional <<record>>
+  class Apply <<record>>
+  class Field <<record>>
+  class DynamicField <<record>>
+  class Reflect <<record>>
+  class Dereference <<record>>
+  class ContractModifier <<record>>
+  class ContractTerms <<record>>
+  class Hole <<record>>
+  class ContractVariable <<record>>
+  class Group <<record>>
+  class CollectionLiteral <<record>>
+  class ArrowContract <<record>>
+  class Lambda <<record>>
+
+  interface CollectionElement <<sealed>>
+  class PositionalElement <<record>>
+  class NamedElement <<record>>
+  class ContractClause <<record>>
+  class ContractName <<record>>
+  class Parameter <<record>>
+}
+
+Stmt <|-- Assign
+Stmt <|-- ExprStmt
+Stmt <|-- PrintLine
+Stmt <|-- FunctionDef
+
+Expr <|-- Literal
+Expr <|-- Name
+Expr <|-- Unary
+Expr <|-- Binary
+Expr <|-- Compose
+Expr <|-- NamedInfix
+Expr <|-- AmbiguousCall
+Expr <|-- Conditional
+Expr <|-- Apply
+Expr <|-- Field
+Expr <|-- DynamicField
+Expr <|-- Reflect
+Expr <|-- Dereference
+Expr <|-- ContractModifier
+Expr <|-- ContractTerms
+Expr <|-- Hole
+Expr <|-- ContractVariable
+Expr <|-- Group
+Expr <|-- CollectionLiteral
+Expr <|-- ArrowContract
+Expr <|-- Lambda
+
+CollectionElement <|-- PositionalElement
+CollectionElement <|-- NamedElement
+CollectionLiteral *-- "0..*" CollectionElement
+FunctionDef *-- "0..*" Parameter
+FunctionDef *-- "1..*" Stmt : body
+Lambda *-- "0..*" Parameter
+Lambda *-- "1..*" Stmt : body
+Assign --> ContractClause
+Parameter --> ContractClause
+ContractClause *-- "1..*" ContractName
+ContractName *-- "0..*" ContractName : arguments
+ArrowContract *-- Expr : requirements
+ContractTerms *-- "2..*" Expr
+
+class Parser
+class AstTraversal
+class AstRewriter
+class SourceSpan <<record>>
+Parser ..> Stmt : creates
+Parser ..> Expr : creates
+AstTraversal ..> Expr : visits/rebuilds
+AstRewriter ..> Expr : rewrites
+Stmt --> SourceSpan
+Expr --> SourceSpan
+@enduml

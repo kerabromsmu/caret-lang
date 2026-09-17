@@ -87,8 +87,8 @@ final class MainTest {
                 ~
                 10
                 [
+                  "ids" = "count,name"
                   "kind" = "Dictionary"
-                  "names" = "count,name"
                   "shape" = "named"
                   "size" = 2
                 ]

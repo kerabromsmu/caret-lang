@@ -3,6 +3,24 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Planned Collection contract integration
+
+Phase 4 introduces `Natural`, a contract for Number values that are integers greater than or
+equal to zero. It remains subject to Caret's finite-number representation; it does not introduce
+infinite numeric values. Collection `size` has result contract `Natural~`.
+
+The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+owns guarantee queries, shape inference, Field tuples, and contextual empty-Collection equality.
+Runtime validation of lazy membership is unnecessary when inferred/declared producer contracts
+already establish the answer; otherwise necessary computation contributes its ordinary effects.
+Provider guarantees are trusted unless explicitly validated; detectable contradictory declarations
+are errors.
+
+Existing template calls remain predicates in Phase 4. The later dual predicate/constructor
+interpretation selected by result contracts and arity is
+[explicitly deferred](06-collections-fields-and-templates.md#deferred-template-construction-and-callable-eager).
+That overload and its ambiguity diagnostics are not Phase 4 requirements.
+
 <a id="contract-foundation-currently-implemented"></a>
 ## Contract foundation currently implemented
 
@@ -24,13 +42,13 @@ add (Number) left (Number) right = left + right
 
 Arguments are checked as they fill parameters, including during partial application. Contracted
 initializers are checked before their bindings commit. `type Number` and `(@Number).kind` report
-`"Contract"`, and `(@Number).name` reports `"Number"`.
+`"Contract"`, and `(@Number).id` reports `"Number"`.
 
 The unary `contract` function constructs nominal contracts. `contract ~` creates a base contract,
 `contract A` derives from one contract, and `contract [A B]` derives from several contracts packaged
 in one ordinary collection argument. Explicit binding and parameter clauses acquire nominal
 membership while checking built-in base constraints; leading function clauses check and attribute
-results. Unannotated named functions infer parameter and result contracts from their values,
+results. Unannotated named functions and lambdas infer parameter and result contracts from their values,
 operations, calls, and surrounding context. When callable contracts remain unresolved, they are
 generalized and each external use receives a fresh instantiation. Ordinary non-callable bindings
 must instead resolve from their initializer or context. An actual use that still leaves a required
@@ -41,21 +59,21 @@ need must be guaranteed by the declared parameter domain; it cannot silently nar
 domain. Inferred results incompatible with an explicit result clause are rejected with a located
 `INCOMPATIBLE_CONTRACTS` diagnostic.
 
-The semantic analyzer also computes an initial effect summary for named functions. It propagates
+The semantic analyzer also computes effect summaries for named functions and lambdas. It propagates
 known effects through direct named calls, includes effects from the fixed subexpressions captured
 eagerly while constructing partials, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
 prove that a prospective refinement is unary, Boolean-returning, and pure. Environment-relative
 effect identities, declaration allowances, callable constraints, and effectful arrow contracts are
-implemented. Higher-order propagation covers the current named, aliased, partial, composed,
+implemented. Higher-order propagation covers the current named, anonymous, aliased, partial, composed,
 overloaded, closure, and recursive callable forms, and `caret inspect` exposes the resulting facts
-without executing the program. Later lambdas, cycles, codecs, rules, and containers extend this
-same analysis as those value kinds arrive. Proven
-predicates are implemented as first-class refinement
-requirements in `contract` construction and direct clauses, including through ordinary aliases.
+without executing the program. Later cycles, codecs, rules, and containers extend this same analysis
+as those value kinds arrive. Proven predicates are first-class refinement requirements in `contract`
+construction and direct clauses. Named predicates and their ordinary aliases are implemented; the
+same eligibility for otherwise suitable anonymous lambdas remains an interpreter gap.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
 evaluation of `contract` creates an unequal descriptor even when its requirements are identical.
-Names and reflective metadata do not participate in equality. Contract reflection exposes `name`,
+Identifiers and reflective metadata do not participate in equality. Contract reflection exposes `id`,
 `bases`, and language-owned refinement
 `requirements`.
 
@@ -98,7 +116,8 @@ A modifier target known not to be a contract is rejected during semantic analysi
 When the target's contract status depends on runtime evaluation, failure is instead a located runtime
 `NOT_A_CONTRACT` diagnostic. It never reports Java AST or implementation details.
 
-The general unary `Collection` contract and the initial `Sequence T` parameterized-contract form are
+The unparameterized unary `Collection` predicate and the callable `Sequence T`, `Field K V`, and
+`Dictionary K V` parameterized-contract constructors are
 implemented as described in the collection section below. General parameterization, complete static
 inference/proof, and contextual collection representation selection remain planned.
 

@@ -167,7 +167,10 @@ From lower to higher precedence:
 13. reflection primary `@`
 14. field lookup and adjacent dereference `:`
 
-Lambda construction will also bind more tightly than `$` once lambdas are implemented.
+Lambda construction binds more tightly than `$`. The parser accepts an ungrouped lambda as the
+complete right operand of `$`, including a contracted or multi-parameter header followed by an
+indented body. Chained `$` remains right-associative, and a nested lambda owns the remainder of its
+expression or its deeper indentation block. Evaluation lowers through ordinary callable application.
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
@@ -252,6 +255,12 @@ planned contract/effect system.
 
 <a id="lambda-functions"></a>
 ## Lambda Functions
+
+The prototype implements the syntax, layout, precedence, source spans, closure construction,
+lexical capture, ordinary invocation, parameter-contract boundaries, nullary invocation, storage,
+return, prefix and arbitrary-hole partial application, and environment-filtered callable reflection
+described in this section. Lambda bodies use the named-function analyzer for parameter/result facts,
+generalized relationships, purity, observable effects, higher-order calls, composition, and partials.
 
 <a id="overview"></a>
 ### Overview
@@ -813,6 +822,15 @@ map (person -> person.name) people
 ```
 
 Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.
+
+This is the canonical callable-parity rule. The current interpreter infers a lambda's parameter,
+result, and effect signature but does not yet mark an anonymous lambda as refinement-eligible;
+named predicates and their aliases provide the implemented form until that gap is closed.
+
+The implemented Sequence operations use `map transform values`, `filter values predicate`,
+`fold values initial combine`, `any values predicate`, and `all values predicate`. Fold supplies the
+accumulator before the element. Predicate null and missing results count as false, while other
+non-Boolean results are invalid; `any` and `all` short-circuit.
 
 For example:
 

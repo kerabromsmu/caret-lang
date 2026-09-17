@@ -4,6 +4,30 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="planned-modules-and-compilation"></a>
+## Planned lazy reflection integration
+
+Reflection uses the general
+[lazy-value and lexical-context rules](02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts).
+A value is projected on first access and remains established in that context; reflection is not
+a special live-read exception. Provider access enforces the execution environment's visibility and
+authority. Specific captured argument values do not propagate through sandbox boundaries.
+
+For deferred computation reflection, arguments are ordinary reflective content, subject to those
+general boundaries. Any argument value available for inspection is already computed at invocation
+time; inspecting it does not perform argument evaluation. This is not permission to expose private
+lexical captures, host implementations, or inaccessible capabilities. Computation syntax and
+handler facilities remain deferred; the
+[effects specification](05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)
+owns their design.
+
+The [planned Collection protocol](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
+an ordinary protocol operation, not restricted to metadata access.
+
+Planned `eager` replaces a reflection reference with the empty Collection without traversing its
+metadata, including nested references. It does not snapshot the reflective target or recover
+anything hidden by an environment boundary. This behavior leaves ordinary reflection intact.
+
 ## Planned modules and compilation
 
 <a id="source-modules-and-stable-module-ids"></a>
@@ -150,12 +174,12 @@ loaded as the root module:
 catalog lookup identity; `@module` reflects the current source module. Module metadata may eventually
 expose its ID when present, but this specification does not yet assign a field name for it.
 
-The initial metadata common to these references consists of `kind`, `name`, visible binding
-`names`, and semantic `code`. Future catalogs such as `functions`, `contracts`, and `modules` may
+The initial metadata common to these references consists of `kind`, `id`, visible binding
+`ids`, and semantic `code`. Future catalogs such as `functions`, `contracts`, and `modules` may
 be added, but their entries are non-callable descriptors; ordinary bindings remain the invocation
 path.
 
-The existing reflective `name` metadata is not thereby defined as the optional stable ModuleId.
+The existing reflective `id` metadata is not thereby defined as the optional stable ModuleId.
 
 An imported module may be reflected through its binding:
 
@@ -203,7 +227,7 @@ Structural code equality and canonical serialization:
 
 * compare binding relationships rather than parameter and private-local spelling;
 * preserve every externally or reflectively observable name, including exports, fields, contracts,
-  module bindings, metadata names, and dynamic lookup targets;
+  module bindings, metadata identifiers, and dynamic lookup targets;
 * may reorder elements only when semantic analysis proves them independent, using a
   language-defined structural order; and
 * retain source/evaluation order whenever independence cannot be proved.
@@ -290,12 +314,12 @@ The root may eventually expose additional metadata catalogs such as:
 
 ```caret
 @root.code
-@root.name
+@root.id
 @root.contracts
 @root.functions
 ```
 
-`kind`, `name`, `names`, and `code` are the settled minimum schema. Additional catalogs contain
+`kind`, `id`, `ids`, and `code` are the settled minimum schema. Additional catalogs contain
 non-callable descriptors, not callable bindings or ambient capabilities.
 
 `@root` is available from anywhere in Caret code. Its contents are relative to, and filtered by,
@@ -405,7 +429,7 @@ Reflection should expose references rather than duplicating runtime objects unne
 For example, a function code element may expose information such as:
 
 ```text
-name
+id
 parameters
 contracts
 body

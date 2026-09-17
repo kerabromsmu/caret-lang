@@ -9,6 +9,101 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ParserTest {
     @Test
+    void parsesLambdaFormsAndPreservesTheirExtent() {
+        Lambda unary = assertInstanceOf(Lambda.class, expression("x -> x + 1"));
+        assertEquals(List.of("x"), unary.params().stream().map(Parameter::name).toList());
+        assertInstanceOf(Binary.class, assertInstanceOf(ExprStmt.class, unary.body().getFirst()).expression());
+
+        Lambda multiple = assertInstanceOf(Lambda.class, expression("x y -> x + y"));
+        assertEquals(List.of("x", "y"), multiple.params().stream().map(Parameter::name).toList());
+
+        Lambda contracted = assertInstanceOf(Lambda.class,
+                expression("(Int) x (String optional) y -> x"));
+        assertEquals(List.of("Int"), contracted.params().getFirst().contracts().names().stream()
+                .map(ContractName::name).toList());
+        assertEquals(List.of("String", "optional"), contracted.params().get(1).contracts().names().stream()
+                .map(ContractName::name).toList());
+
+        Lambda nullary = assertInstanceOf(Lambda.class, expression("-> 42"));
+        assertTrue(nullary.params().isEmpty());
+        Lambda nested = assertInstanceOf(Lambda.class,
+                assertInstanceOf(ExprStmt.class, assertInstanceOf(Lambda.class,
+                        expression("x -> y -> x + y")).body().getFirst()).expression());
+        assertEquals("y", nested.params().getFirst().name());
+
+        Apply dollar = assertInstanceOf(Apply.class, expression("use $ x -> x + 1"));
+        assertInstanceOf(Lambda.class, dollar.argument());
+        assertInstanceOf(Conditional.class, lambdaBody(expression("x -> true & x ! 0")));
+        assertInstanceOf(Compose.class, lambdaBody(expression("x -> f x >> g")));
+        assertInstanceOf(AmbiguousCall.class, lambdaBody(expression("x -> x combine 1")));
+        assertInstanceOf(Hole.class,
+                assertInstanceOf(Binary.class, lambdaBody(expression("x -> x + _"))).right());
+
+        Apply immediate = assertInstanceOf(Apply.class, expression("(x -> x * 2) 10"));
+        assertInstanceOf(Lambda.class, assertInstanceOf(Group.class, immediate.function()).expression());
+        assertInstanceOf(ArrowContract.class, expression("[Int] -> Int"));
+    }
+
+    private Expr lambdaBody(Expr expression) {
+        Lambda lambda = assertInstanceOf(Lambda.class, expression);
+        return assertInstanceOf(ExprStmt.class, lambda.body().getFirst()).expression();
+    }
+
+    @Test
+    void parsesIndentedAndTrailingLambdaBodies() {
+        Assign assignment = assertInstanceOf(Assign.class, new Parser("""
+                transform = x ->
+                  doubled = x * 2
+                  doubled + 1
+                """).parseProgram().getFirst());
+        Lambda lambda = assertInstanceOf(Lambda.class, assignment.value());
+        assertEquals(2, lambda.body().size());
+        assertEquals(1, lambda.span().start().line());
+        assertEquals(3, lambda.span().end().line());
+
+        ExprStmt call = assertInstanceOf(ExprStmt.class, new Parser("""
+                map values
+                  x -> x * 2
+                """).parseProgram().getFirst());
+        Apply applied = assertInstanceOf(Apply.class, call.expression());
+        assertInstanceOf(Lambda.class, applied.argument());
+
+        Assign lowApplication = assertInstanceOf(Assign.class, new Parser("""
+                functions = seqAdd [] $ (Number) value ->
+                  value * 2
+                """).parseProgram().getFirst());
+        Apply lowCall = assertInstanceOf(Apply.class, lowApplication.value());
+        Lambda lowLambda = assertInstanceOf(Lambda.class, lowCall.argument());
+        assertNotNull(lowLambda.params().getFirst().contracts());
+
+        Assign chained = assertInstanceOf(Assign.class, new Parser("""
+                result = identity $ seqAdd [] $ left right ->
+                  left + right
+                """).parseProgram().getFirst());
+        Apply outer = assertInstanceOf(Apply.class, chained.value());
+        Apply inner = assertInstanceOf(Apply.class, outer.argument());
+        assertInstanceOf(Lambda.class, inner.argument());
+
+        Assign nestedLambda = assertInstanceOf(Assign.class, new Parser("""
+                nested = first -> second ->
+                  first + second
+                """).parseProgram().getFirst());
+        Lambda first = assertInstanceOf(Lambda.class, nestedLambda.value());
+        assertInstanceOf(Lambda.class,
+                assertInstanceOf(ExprStmt.class, first.body().getFirst()).expression());
+    }
+
+    @Test
+    void requiresACompleteAndUnambiguousLambdaHeaderAndBody() {
+        for (String source : List.of("value = x ->", "value = 1 x -> x", "value = (_) x -> x")) {
+            LangException error = assertThrows(LangException.class, () -> new Parser(source).parseProgram(), source);
+            assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+            assertTrue(error.span().start().line() > 0);
+            assertTrue(error.span().start().column() > 0);
+        }
+    }
+
+    @Test
     void parsesRightAssociativeExactArityArrowContracts() {
         ArrowContract unary = assertInstanceOf(ArrowContract.class, expression("[Number] -> String"));
         assertEquals(1, unary.parameters().size());
@@ -20,6 +115,10 @@ final class ParserTest {
         ArrowContract nested = assertInstanceOf(ArrowContract.class,
                 expression("[Number] -> [String] -> Boolean"));
         assertInstanceOf(ArrowContract.class, nested.result());
+
+        ArrowContract unresolvedResult = assertInstanceOf(ArrowContract.class,
+                expression("[] -> Seq Number"));
+        assertEquals(2, assertInstanceOf(ContractTerms.class, unresolvedResult.result()).terms().size());
 
         ArrowContract conjunction = assertInstanceOf(ArrowContract.class,
                 expression("[(Number Any) String] -> Boolean"));
@@ -102,20 +201,24 @@ final class ParserTest {
     }
 
     @Test
-    void parsesParameterizedSequenceContractsWithoutChangingConjunctions() {
+    void parsesContractTermsWithoutKnowingConstructorNamesOrChangingConjunctions() {
         List<Stmt> program = new Parser("""
                 (Sequence Number positive) values = []
                 (Sequence (Sequence String)) nested = []
                 """).parseProgram();
         ContractClause first = ((Assign) program.getFirst()).contracts();
-        assertEquals(2, first.names().size());
+        assertEquals(3, first.names().size());
         ContractName sequence = first.names().getFirst();
         assertEquals("Sequence", sequence.name());
-        assertEquals(List.of("Number"), sequence.arguments().stream().map(ContractName::name).toList());
-        assertEquals("positive", first.names().get(1).name());
+        assertTrue(sequence.arguments().isEmpty());
+        assertEquals("Number", first.names().get(1).name());
+        assertEquals("positive", first.names().get(2).name());
         ContractName nested = ((Assign) program.get(1)).contracts().names().getFirst();
-        assertEquals("Sequence", nested.arguments().getFirst().name());
-        assertEquals("String", nested.arguments().getFirst().arguments().getFirst().name());
+        assertEquals("Sequence", nested.name());
+        ContractName group = ((Assign) program.get(1)).contracts().names().get(1);
+        assertEquals("<group>", group.name());
+        assertEquals(List.of("Sequence", "String"),
+                group.arguments().stream().map(ContractName::name).toList());
     }
 
     @Test

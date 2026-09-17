@@ -394,6 +394,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     }
 
     private static ContractTerm arrowTerm(Ast.ArrowContract arrow, Resolution resolution) {
+        arrow = resolution.arrow(arrow);
         return new ArrowRef(arrow.parameters().stream().map(parameter -> parameter.stream()
                 .map(expression -> expressionTerm(expression, resolution)).toList()).toList(),
                 expressionTerm(arrow.result(), resolution));
@@ -419,6 +420,8 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
             }
             case Ast.ContractModifier modifier -> new ModifiedRef(expressionTerm(modifier.target(), resolution),
                     modifier.nullable(), modifier.optional());
+            case Ast.ContractTerms ignored -> throw new IllegalStateException(
+                    "Unanalyzed arrow contract terms reached signature construction");
             case Ast.ArrowContract arrow -> arrowTerm(arrow, resolution);
             case Ast.Group group -> expressionTerm(group.expression(), resolution);
             default -> new NamedRef(expression.toString());

@@ -193,4 +193,25 @@ final class ResolverTest {
                 assertInstanceOf(ExprStmt.class, lazy.getFirst()).expression());
         assertNull(resolution.binding(assertInstanceOf(Name.class, conditional.whenFalse())));
     }
+
+    @Test
+    void lambdaCapturesUseResolverOwnedUpvalueMetadata() {
+        List<Stmt> program = new Parser("""
+                factory captured =
+                  lambda = value -> value + captured
+                  lambda
+                """).parseProgram();
+        Resolution resolution = Resolver.resolve(program, new Environment(null));
+        FunctionDef factory = assertInstanceOf(FunctionDef.class, program.getFirst());
+        Lambda lambda = assertInstanceOf(Lambda.class,
+                assertInstanceOf(Assign.class, factory.body().getFirst()).value());
+
+        Resolution.Upvalue capture = assertDoesNotThrow(() -> resolution.upvalues(lambda).getFirst());
+        assertEquals(0, capture.slot());
+        assertEquals(1, capture.lexicalDepth());
+        Name use = assertInstanceOf(Name.class,
+                assertInstanceOf(Binary.class,
+                        assertInstanceOf(ExprStmt.class, lambda.body().getFirst()).expression()).right());
+        assertTrue(resolution.binding(use).captured());
+    }
 }

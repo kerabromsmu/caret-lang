@@ -16,3 +16,5 @@ print Scored [^score = 9]
 print (@Person).shape
 print (@Person).size
 print (seqGet (@Person).elements 0).constraint
+print (seqGet (@Person).elements 0).id
+print (seqGet (@Person).elements 0).name~

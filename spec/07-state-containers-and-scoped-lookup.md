@@ -3,6 +3,53 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Phase 4 integration boundary
+
+The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+defines unpublished construction and settlement. Constructing code can inspect and edit an
+unfinished Collection, but outside code cannot access it until settlement. This is distinct from
+a stable-identity mutable container. Settled Collection updates produce new values. `eager`
+preserves container references and never reads or freezes their contents.
+
+The deferred `addElement`, `removeElement`, and `replaceElement` names have distinct receiver/result
+contracts: construction edits return the affected Field (the old Field for replacement) or missing;
+settled updates return an immutable Collection and preserve the original. The
+[Collection specification](06-collections-fields-and-templates.md#element-operations-during-construction-and-after-settlement)
+owns their selection and no-change rules. Sequential construction does not expose numeric
+indices until settlement; its first-equal-value selection rule is explicitly provisional.
+These public operations, their construction-selection interface, and additional immutable-update
+syntax are outside Phase 4, with no later phase assigned. Internal construction/settlement and
+existing persistent primitives remain available; this deferral does not postpone containers or `put`.
+
+### Planned with binding over lazy Collections
+
+During compilation or interpreter analysis, identify unqualified names in the block that need
+lookup through `with`. Exclude names resolved to local declarations and explicit `outer` paths.
+Keep declaration predeclaration and initialization checks; a local binding that is not initialized
+does not fall back to a member.
+
+On execution, evaluate the target once and establish all required name bindings before executing
+the body. Match the identified names against the target's enumerated public keys; do not create
+bindings for every unrelated key. Enumeration can stop once all required names match. Otherwise
+it must finish to establish absence before unmatched names resolve to enclosing bindings.
+An infinite enumeration may therefore prevent body execution when a required name cannot be found.
+Enumeration effects occur before the body and follow ordinary effect contracts.
+
+A matched member is a lazy binding to the target's member; its value is obtained when needed,
+without copying fields or widening authority. A member whose value is `~` still shadows an outer
+binding. Do not probe `getElement` and interpret missing as absence: existence for lexical lookup
+comes from enumerated keys. A provider-accessible but unlisted key remains available through
+explicit access, but does not introduce a name into `with`.
+
+For example, conceptually a target that enumerates only `"name"` but also permits explicit lookup
+of `"age"` does not shadow an outer `age` binding. Conversely, enumerating `"age"` shadows it
+even when that member's value is missing. `outer.age` remains the explicit enclosing path.
+
+These planned binding rules refine the runtime selection of dynamic members described below;
+the complete target shape need not be statically known. Resolver-only, export, and sandbox
+restrictions on `with`/`outer` remain authoritative. Custom provider construction is deferred; these lookup rules also guide
+the implementation of built-in lazy Collections.
+
 <a id="mutability-containers"></a>
 ## Mutability Containers
 
@@ -1311,9 +1358,10 @@ The expression supplied to `with` is evaluated once.
 
 Its accessible named members participate directly in name resolution throughout the body.
 The target must expose a public named-member interface; otherwise evaluation produces a located
-diagnostic. Statically known members should resolve during semantic analysis. When the target's
-shape is dynamic, member selection is checked at runtime without weakening ordinary lexical or
-visibility rules.
+diagnostic. Analysis identifies the names requiring member lookup. Runtime binding against
+enumerated public keys completes before body execution, as specified in
+[planned with binding](#planned-with-binding-over-lazy-collections), without weakening ordinary
+lexical or visibility rules.
 
 ---
 

@@ -1,6 +1,5 @@
 package caretlang;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -37,15 +36,17 @@ final class TemplateContract implements ContractDescriptor {
         if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) {
             return ValueSemantics.equal(fixed.value(), value);
         }
-        if (node instanceof CollectionConstructorDescriptor.HoleNode hole) {
-            Value prior = repeated.putIfAbsent(hole.parameter(), value);
+        if (node instanceof CollectionConstructorDescriptor.HoleNode(
+                int parameter, List<Object> requirements, SourceSpan span
+        )) {
+            Value prior = repeated.putIfAbsent(parameter, value);
             if (prior != null && !ValueSemantics.equal(prior, value)) return false;
-            for (Object requirement : hole.requirements()) {
+            for (Object requirement : requirements) {
                 if (requirement instanceof ContractDescriptor contract) {
                     if (!contract.accepts(value)) return false;
                 } else {
                     Value result = ValueSemantics.underlying(refinementInvoker.apply(
-                            (Value.Callable) requirement, new Value.Argument(value, hole.span())));
+                            (Value.Callable) requirement, new Value.Argument(value, span)));
                     if (!(result instanceof Value.Bool(boolean accepted)) || !accepted) return false;
                 }
             }
@@ -129,7 +130,7 @@ final class TemplateContract implements ContractDescriptor {
 
     private Value elementMetadata(CollectionConstructorDescriptor.Element element) {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
-        fields.put("name", element.name() == null ? Value.Missing.INSTANCE : new Value.Str(element.name()));
+        fields.put("id", element.name() == null ? Value.Missing.INSTANCE : new Value.Str(element.name()));
         fields.put("constraint", new Value.Str(switch (element.value()) {
             case CollectionConstructorDescriptor.CollectionNode ignored -> "collection";
             case CollectionConstructorDescriptor.FixedNode ignored -> "fixed";
