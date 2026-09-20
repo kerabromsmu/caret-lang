@@ -1432,22 +1432,28 @@ The initial implementation should support at minimum:
 2. Base/tag contracts:
 
 ```caret
-Eq = contract ~
+Marker = contract ~
 ```
 
 3. Contract derivation:
 
 ```caret
-Number = contract [Eq Comparable]
+Readable = contract Marker
 ```
 
-4. Multiple derivation.
+4. Multiple derivation:
+
+```caret
+Writable = contract Marker
+ReadWrite = contract [Readable Writable]
+```
+
 5. Contracts usable as membership predicates.
 6. Ordinary pure predicates used as refinements.
 7. Derived refinement contracts:
 
 ```caret
-PositiveInt = contract [Int positive]
+PositiveNumber = contract [Number positive]
 ```
 
 8. Separate function definitions for operations.

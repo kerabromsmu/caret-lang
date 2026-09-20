@@ -291,17 +291,20 @@ grammar or parser-level construction form. Its one argument is `~`, one base con
 predicate, or one ordinary Collection of requirements. Consequently:
 
 ```caret
-Number = contract [Eq Comparable Arithmetic]
+Readable = contract ~
+Writable = contract ~
+ReadWrite = contract [Readable Writable]
 ```
 
-is an ordinary assignment whose right-hand side calls `contract` once with a single Collection.
+Each line is an ordinary assignment whose right-hand side calls `contract` once. The final call
+receives one Collection containing both requirements; it is not a two-argument `contract` call.
 Static knowledge of nominal contract construction attaches to the resolved language-owned
 `contract` callable identity, never merely to an identifier spelled `contract`.
 
 A base contract with no additional value restriction may be defined as:
 
 ```caret
-Eq = contract ~
+Marker = contract ~
 ```
 
 Here `~` means that the contract introduces no additional value predicate of its own.
@@ -662,15 +665,8 @@ Thus Caret uses the same mechanism for:
 <a id="contracts-do-not-contain-operations"></a>
 #### Contracts do not contain operations
 
-A contract does not contain a method table or list of allowed operations.
-
-For example:
-
-```caret
-Eq = contract ~
-```
-
-does not itself declare `eq`.
+A contract does not contain a method table or list of allowed operations. For example, the built-in
+`Eq` contract describes equality eligibility but does not itself declare `eq`.
 
 Equality is an ordinary function defined separately:
 

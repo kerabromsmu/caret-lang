@@ -90,9 +90,9 @@ value = record[
 ]~
 ```
 
-More-indented ungrouped multiline arguments are implemented. Trailing callable blocks remain
-planned until lambda syntax is implemented; their layout rule is specified in the implementation
-roadmap below.
+More-indented ungrouped multiline arguments are implemented. An indented trailing lambda is the
+final call argument and owns its deeper body; the ordinary lambda rules below determine its
+parameters, capture, contracts, and result.
 
 `print` also has a statement form. The complete remainder of its logical line is parsed as one
 expression, so common output does not require grouping:
