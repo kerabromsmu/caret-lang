@@ -67,8 +67,11 @@ ordinary function whose parameters complete that collection. Passing such a reif
 or a concrete fixed collection, to the implemented `template` function creates an exact structural
 contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
 generic three-field `Result` contract remains the planned public success/failure envelope.
-Every template-declared field must be present; an optional value contract such as `String~`
-permits an explicit `~` value, not omission of the field. Null requires a nullable contract.
+Every value satisfying a template contains every declared field. In the planned contextual-literal
+rule, omitting a field whose template hole directly uses `T~` or `T?~` materializes that field with
+value `~`; `T?~` also permits an explicitly supplied null. Aliases of those contracts accept an
+explicit `~` but do not enable omission. Existing Collections remain exact-shape values: template
+membership and explicit conversion do not insert fields.
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
@@ -309,12 +312,24 @@ shadows this builtin-only grouping and follows ordinary application rules.
 
 ## Current limitations
 
+The approved [Phase 4 numeric and packed design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
+also remains unimplemented. It adds exact arbitrary-precision integers, signed/unsigned formats
+through 64 bits, `Float`/`Double`, true `/` alongside truncating integer `div`, and precision
+warnings or errors according to explicit result requirements. Planned `(Contract) expression`
+converts a value; declarations and directly contracted holes remain checks. Packed storage will
+cover finite positional sequences of fixed-format scalars or fixed-size templates, preserving
+template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
+conversion through this new syntax are deferred. See the canonical
+[acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
+
 The newly settled [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
 is not implemented yet. It adds the common enumeration/guarantee protocol, lazy map/filter,
 Field tuples and Sets, unified missing-returning dot/bracket lookup, revised equality, and
 collection-value `eager`. The implementation descriptions and runnable examples below describe
-the existing prototype. General computations, custom providers, resumable failure handlers,
-contextual template constructors, and callable `eager` forms are deferred beyond Phase 4.
+the existing prototype. Phase 4 includes expected-template completion for Collection literals but
+does not add a context-dependent `Template value` constructor call: ordinary template application
+remains a membership predicate. General computations, custom providers, resumable failure handlers,
+template constructor/predicate invocation, and callable `eager` forms are deferred beyond Phase 4.
 
 - A function definition must start at the beginning of a logical line.
 - Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines;

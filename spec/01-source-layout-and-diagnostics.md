@@ -44,6 +44,36 @@ Every parsed AST node retains its complete physical source span. Logical indenta
 multiline grouping, implicit nodes, desugaring, and AST rebuilding must not replace those coordinates
 with logical positions or truncate an enclosing node to one of its children.
 
+<a id="phase-4-numeric-and-conversion-diagnostics-planned"></a>
+### Phase 4 numeric, conversion, and template diagnostics (planned)
+
+The approved [numeric precision policy](02-values-bindings-and-evaluation.md#precision-requirements-and-warnings-planned)
+adds nonfatal warnings for lossy implicit conversions in broad result contexts. A warning includes
+the same stable code, phase, physical source location, and relevant contract location information
+as other diagnostics, but it does not abort evaluation or turn an otherwise successful operation
+into a failure. Compiler/interpreter analysis reports provable loss; dynamic loss is reported when
+it occurs. Avoid reporting the same established loss twice during analysis and execution.
+
+CLI/REPL/test runners deliver warnings through their diagnostic channel, separately from program
+output. Embedded loading, execution, and invocation expose warnings separately from failure
+diagnostics. Do not alter the seven-field `ErrorTemplate` payload to add warning metadata or treat
+warnings as catchable runtime values. Diagnostic delivery grants no output or host capability.
+
+Explicit strict numeric result requirements make implicit precision loss an error. Unsupported
+conversion, failed final contract checks, invalid packed layouts, and out-of-range values also
+remain errors. Attribute failures to the offending operand/conversion/layout requirement and
+retain related declaration locations. Static rejection is permitted when proven; dynamic values
+retain equivalent runtime checks and one-based physical locations. Existing zero-division and
+non-finite-result errors remain applicable. Implementation must inventory concrete codes and
+message variants with exact positive/negative evidence before claiming support; this planned
+section does not add implemented entries to the diagnostic catalog.
+
+Phase 4 expected-template literal completion reuses `CONTRACT_VIOLATION` when a named literal omits
+a required or nondefaultable field. Attribute the failure to the complete literal because an
+omitted field has no source token, and retain the template field declaration as related context.
+Static and runtime discovery must preserve equivalent code and physical locations. Successful
+insertion of `~` for a direct `T~` or `T?~` field emits no warning or diagnostic.
+
 <a id="test-files"></a>
 ## Test files
 

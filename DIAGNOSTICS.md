@@ -4,6 +4,17 @@ Every stable message variant in `DiagnosticCatalog` and `HostMessageCatalog` is 
 fixtures compare complete stderr with the adjacent `.expected` file. Entries that cannot be reached
 from ordinary Caret source use focused Java evidence.
 
+The planned Phase 4 numeric/conversion/packed additions are specified in
+[the diagnostic owner](spec/01-source-layout-and-diagnostics.md#phase-4-numeric-and-conversion-diagnostics-planned)
+and [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
+Their implementation must add exact evidence for implicit-precision warnings versus strict errors,
+unsupported conversions, range failures, invalid layouts, and zero-divisor/operator paths.
+No catalog code or message below is claimed to implement those planned diagnostics. Warnings must
+remain separate from program output and embedded failure diagnostics.
+Expected-template literal completion also remains planned: omitted required or nondefaultable
+fields reuse `CONTRACT_VIOLATION` at the literal with the template field as related context, while
+successful direct `T~`/`T?~` default insertion is silent.
+
 | Variant ID | Category | Code | Evidence |
 |---|---|---|---|
 | LEX-INCOMPLETE-ESCAPE | public | LEX_INVALID_ESCAPE | `examples/errors/incomplete_escape.caret` |

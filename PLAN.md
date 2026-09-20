@@ -324,12 +324,45 @@ for its covered behavior. These decisions are planned, not implemented by the ex
   retaining the Field contract and existing reflective metadata.
 - Analyze the identifiers needing with lookup and bind them against enumerated public keys before
   body execution. Matched members remain lazy; only established absence permits outer fallback.
-- Preserve existing structural-template predicates. Defer contextual predicate/constructor calls,
-  general completely deferred computations, custom provider construction, concurrency and resumable
-  handlers, and function-wrapping/nullary-invocation forms of eager beyond Phase 4. No particular
-  later phase is assigned yet. There is no eagerWithRetry feature.
+- Preserve existing structural-template predicates. Add expected-template completion for named
+  Collection constructors without changing ordinary `Template value` application from a predicate.
+  Defer contextual predicate/constructor calls, general completely deferred computations, custom
+  provider construction, concurrency and resumable handlers, and function-wrapping/nullary-invocation
+  forms of eager beyond Phase 4. No particular later phase is assigned yet. There is no
+  eagerWithRetry feature.
 - Use existing failure behavior in Phase 4. The deferred handler design is not a prerequisite for
   built-in lazy Collections. Add the protocol/revision conformance evidence before claiming completion.
+
+### Packed design and separate numeric/conversion prerequisites
+
+The [approved packed design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
+and its acceptance matrix clarify #77 and #78. Both remain open implementation-roadmap work;
+recording the design does not supply runtime evidence. Preserve #76 as the representation-analysis
+dependency and require these separate prerequisite cards before packed implementation:
+
+1. **Numeric foundations (#82):** format-independent Number/Real/Integer/Natural, exact arbitrary-precision
+   integers, full signed/unsigned 8/16/32/64-bit domains, finite Float/Double, value-based
+   representability, aliases, contextual literals, exact integer arithmetic/comparison, true `/`,
+   truncating integer `div` at multiplicative precedence, precision diagnostics, and exact Java
+   embedding round trips. This task consumes #77's design and must reconcile Natural with #65's
+   protocol work without duplicating or weakening its contract.
+2. **Explicit contract conversion (#83):** depends on #82 and #77. Implement
+   `(Contract) expression`, following-application precedence, identity-based target resolution,
+   preserved non-contract grouping, strict declarations/checked holes, built-in conversion and
+   recursive structural rules, and exact diagnostics. Prepare representation-conversion integration
+   for #78; do not claim packed storage implemented before that card supplies it.
+3. **Packed implementation (#78):** depends on #76, #77, #82, and #83. Implement selected
+   finite positional layouts for fixed numeric formats, one-byte Boolean, and fixed-size templates;
+   retain declaration order, exclude nullable/variable-size payloads, materialize explicit lazy
+   conversions, reject incompatible appends, and integrate the common protocol with reference-mode
+   parity. Keep physical layout metadata internal.
+
+This order adds prerequisites without renumbering existing Phase 4 cards: #77 → #82 → #83 → #78.
+#79's completion audit
+must include their transitive implementation evidence. Add runnable examples and genuine
+conformance/diagnostic evidence when each feature is implemented. Numeric text parsing through the
+new syntax, custom conversions (possibly related to future formats), Fractional/Complex, wider
+named fixed formats, packed keyed Collections, and bit fields remain deferred.
 
 ### Collection protocol and literals
 
@@ -377,10 +410,14 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 - Implement unconstrained and contracted holes, equality-checked fixed values, exact positional and
   named shape, dynamic field names, and recursive nested collection shapes.
-- Verify [required fields with optional values](spec/06-collections-fields-and-templates.md#named-fields)
-  as `TEMPLATE-OPTIONAL-001`: every declared field is present, while `T~` permits an explicit missing
-  value. Cover omission rejection, nullability, wrong/extra fields, nesting, and ordinary reflected
-  value contracts using existing template syntax. No optional-member syntax design is required.
+- Implement [contextual completion of required fields](spec/06-collections-fields-and-templates.md#named-fields)
+  as `TEMPLATE-OPTIONAL-001`: every constructed value contains every declared field. In a named
+  Collection constructor with one unambiguous expected template, omitted holes directly written
+  with `T~` or `T?~` materialize as `~` when their full clauses accept missing. Propagate context
+  through annotated bindings, known parameters, declared results, nested literals, dynamic template
+  keys, and exported-block shorthand. Aliases, fixed `~`, unconstrained holes, ambiguous overloads,
+  predicates, and explicit conversions do not enable insertion. Reflect `defaultsMissing` metadata
+  and cover nullability, wrong/extra fields, nesting, evaluation order, and source locations.
 - Derive membership as the structural inverse of eligible constructors without invoking them.
   Repeated numbered holes impose candidate equality; numbering changes parameter order but not
   collection shape, and mixed numbered/unnumbered holes remain invalid.
@@ -477,7 +514,8 @@ for its covered behavior. These decisions are planned, not implemented by the ex
 
 - Before rule construction, settle `RULE-PHASE-CONTRACT-001`:
   [RuleDefinition needs first-class C/T/E contracts](spec/11-rules-rulesets-and-objects.md#basic-definition).
-  Require the Phase 4 `TEMPLATE-OPTIONAL-001` evidence for present fields with optional values.
+  Require the Phase 4 `TEMPLATE-OPTIONAL-001` evidence for contextual CATEN literal completion and
+  exact membership of already established values.
   Unresolved phase contracts must not be replaced by rule-specific ASTs, parser exceptions,
   or hidden lazy-expression wrappers.
 - Add persistent `Context` values, idempotent `raise`/`lower`, and transient `rise`/`fall` fronts over
