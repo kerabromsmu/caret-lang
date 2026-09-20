@@ -1,0 +1,3 @@
+invalid = value -> value + 1
+print "must not happen"
+(invalid) count = 1

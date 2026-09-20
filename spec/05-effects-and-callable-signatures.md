@@ -690,6 +690,11 @@ Higher-order standard callables retain their callback position and callback-deri
 through ordinary aliases and partials; analysis does not depend on the source spelling of `map`,
 `filter`, `fold`, `any`, or `all`.
 
+Refinement eligibility uses this same effect proof for named functions and lambdas. A unary callable
+with a guaranteed non-null/non-missing Boolean result is eligible only when its inferred invocation
+bound is known and empty. Eligibility checking does not invoke the callable, and retained aliases
+preserve the proven metadata across execution submissions.
+
 IDE tooling should expose inferred effects directly at function declarations.
 
 For example, the source:

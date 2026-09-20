@@ -8,3 +8,19 @@ PositiveNumber = contract [Number predicate]
 
 print keep count
 print PositiveNumber count
+
+minimum = 1
+lambdaPositive = (Number) value -> value > minimum
+lambdaAlias = lambdaPositive
+
+LambdaPositiveNumber = contract [Number lambdaAlias]
+DirectLambdaPositiveNumber = contract [Number (value -> value > minimum)]
+
+(LambdaPositiveNumber) lambdaCount = 4
+(DirectLambdaPositiveNumber) directLambdaCount = 3
+(Number lambdaAlias) keepLambda (Number lambdaAlias) value = value
+
+print keepLambda lambdaCount
+print LambdaPositiveNumber lambdaCount
+print keepLambda directLambdaCount
+print DirectLambdaPositiveNumber directLambdaCount

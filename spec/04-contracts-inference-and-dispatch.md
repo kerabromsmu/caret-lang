@@ -156,7 +156,9 @@ overloaded, closure, and recursive callable forms, and `caret inspect` exposes t
 without executing the program. Later cycles, codecs, rules, and containers extend this same analysis
 as those value kinds arrive. Proven predicates are first-class refinement requirements in `contract`
 construction and direct clauses. Named predicates and their ordinary aliases are implemented; the
-same eligibility for otherwise suitable anonymous lambdas remains an interpreter gap.
+same proof and runtime metadata apply to direct, assigned, captured, and aliased lambdas. Wrong-arity,
+non-Boolean, nullable/optional-result, effectful, and unknown-effect callables are rejected before
+unrelated execution when clause analysis can prove the failure.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
 evaluation of `contract` creates an unequal descriptor even when its requirements are identical.
 Identifiers and reflective metadata do not participate in equality. Contract reflection exposes `id`,

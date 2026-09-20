@@ -266,18 +266,17 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
   matches the authoritative optimization-disabled persistent behavior. This foundation later supports
   efficient cycles, collection updates, SIMD memory, and compiled execution.
 
-## Phase 3 — Lambdas and higher-order programming (foundation completed; refinement follow-up)
+## Phase 3 — Lambdas and higher-order programming (completed)
 
-Current status: The Phase 3 foundation is complete. Lambdas share the ordinary callable representation, lexical
+Current status: Phase 3 is complete. Lambdas share the ordinary callable representation, lexical
 capture metadata, contracts, effects, partial application, composition, reflection, and guarded
 higher-order execution. Sequence map/filter/fold/any/all and lambda precedence above `$` have full
-runtime and corpus evidence. Anonymous lambdas do not yet receive the refinement-eligibility flag
-already supported by suitable named predicates and aliases; canonical callable parity still requires
-that remaining interpreter correction.
+runtime and corpus evidence. Proven-pure unary Boolean lambdas share named-predicate refinement
+eligibility through direct construction, assignments, lexical captures, aliases, retained metadata,
+and direct declaration clauses.
 
-- Complete the remaining `CONTRACT-LAMBDA-REFINE-001` correction before starting Phase 4:
-  grant proven-pure unary Boolean lambdas the same refinement eligibility as named predicates,
-  with contract/alias, rejection, diagnostic, and runnable integration evidence.
+- Preserve implemented `CONTRACT-LAMBDA-REFINE-001` callable parity, including contract/alias,
+  rejection, diagnostic, retained-submission, reflection, and runnable integration evidence.
 - Parse unary/multi-parameter lambdas, contracted parameters, expression bodies, and indented bodies
   with the precedence/extent rules settled in Phase 0.
 - Lower lambdas to the same function representation as named functions. Implement lexical capture,
@@ -741,9 +740,9 @@ allowances and callable-value constraints; unknown higher-order invocation rejec
 aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
 explicit higher-order arrow contracts, and the initial static operator matrix are settled.
 Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
-item in Phases 1, 2, or 3 remains formally unresolved. First complete the specified lambda-refinement
-correction `CONTRACT-LAMBDA-REFINE-001`; then implement the settled Phase 4 universal collection
-and field foundations. `with`/`outer` wait for the Phase 4 public named-member protocol
+item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction
+`CONTRACT-LAMBDA-REFINE-001` is complete; implement the settled Phase 4 universal collection and
+field foundations next. `with`/`outer` wait for the Phase 4 public named-member protocol
 rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals

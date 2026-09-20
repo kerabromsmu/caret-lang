@@ -403,6 +403,7 @@ final class Interpreter {
 
     private Value.Callable lambdaFunction(Lambda lambda, Environment env, Resolution resolution) {
         List<String> parameterNames = lambda.params().stream().map(Parameter::name).toList();
+        boolean refinementEligible = Objects.requireNonNull(inference).isRefinementEligible(lambda);
         LinkedHashMap<Integer, Environment.BindingReference> captures = new LinkedHashMap<>();
         for (Resolution.Upvalue upvalue : resolution.upvalues(lambda)) {
             captures.put(upvalue.symbolId(), env.referenceAt(upvalue.lexicalDepth(), upvalue.slot()));
@@ -415,7 +416,7 @@ final class Interpreter {
                 parameters.define(lambda.params().get(index).name(), value);
             }
             return executeBlock(lambda.body(), new Environment(parameters), resolution);
-        }, false, Objects.requireNonNull(inference).signature(lambda));
+        }, refinementEligible, inference.signature(lambda));
         if (lambda.params().stream().noneMatch(parameter -> parameter.contracts() != null)) return raw;
         return new Value.ContractedCallable(raw, (index, argument) -> {
             Parameter parameter = lambda.params().get(index);
