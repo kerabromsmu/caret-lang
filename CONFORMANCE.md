@@ -309,8 +309,8 @@ Public custom-provider construction remains deferred. Equality forcing is provis
 | COLL-ZIP-001 | Two-input zip produces tuple sequences; zipWithKeys produces general keyed or context-selected Dictionary results. | planned | — | — | Test length errors, lazy inputs, duplicates and sorted Dictionary context. |
 | COLL-WITH-BIND-001 | Analyze needed names; bind against enumerated keys before body execution; lazy present-missing members shadow outer bindings. | planned | — | — | Test early completion, absent fallback, unlisted provider keys and enumeration effects. |
 | COLL-FIELD-ACCESS-001 | Field tuples retain their contract and reflective metadata with positional key/value access at zero/one. | planned | — | — | Test literals, contracts, positional access and reflective compatibility. |
-| COLL-ELEMENT-OPS-001 | addElement/removeElement/replaceElement edit unpublished construction and return added/removed/old Fields or missing; settled contracts return persistent Collections. | planned | — | — | Test return contracts, absent targets, duplicate addition, key-changing replacement collisions, unchanged originals and invalid-key errors. |
-| COLL-CONSTRUCT-INDEX-001 | Sequential construction exposes no numeric indices until settlement; removal/replacement select the first equal value beforehand. | planned | — | — | Provisional; test separated duplicate values, order retention and settled positional selection. |
+| COLL-ELEMENT-OPS-001 | addElement/removeElement/replaceElement edit unpublished construction and return added/removed/old Fields or missing; settled contracts return persistent Collections. | deferred | — | — | Beyond Phase 4 with no later phase assigned; retain the specified contracts for future implementation. |
+| COLL-CONSTRUCT-INDEX-001 | Sequential construction exposes no numeric indices until settlement; removal/replacement select the first equal value beforehand. | deferred | — | — | Deferred with the public element-operation API; the first-equal-value selection rule remains provisional. |
 
 ## Phase 4 numeric, conversion, and packed design
 
