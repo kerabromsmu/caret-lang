@@ -289,6 +289,7 @@ expect_failure examples/errors/template_noncomparable_fixed.caret unused
 expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
 expect_failure examples/errors/invalid_refinement.caret unused
+expect_failure examples/errors/invalid_lambda_refinement.caret unused
 expect_failure examples/errors/inconsistent_overload_arity.caret unused
 expect_failure examples/errors/no_applicable_overload.caret unused
 expect_failure examples/errors/ambiguous_overload.caret unused

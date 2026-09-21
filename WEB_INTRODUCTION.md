@@ -51,23 +51,103 @@ before executing the body. Member values remain lazy; a present missing value sh
 bindings, while an absent name resolves outward. Explicit `outer.name` accesses the outer binding.
 
 These are future semantics; the executable examples elsewhere in this introduction still describe
-the current interpreter. Custom provider construction, completely deferred computation syntax,
-resumable failure handling, template constructor/predicate disambiguation, and callable forms of
-`eager` are later work.
+the current interpreter. Phase 4 also plans expected-template completion for Collection literals.
+This does not turn ordinary `Template value` application into construction; template
+constructor/predicate invocation, custom provider construction, completely deferred computation
+syntax, resumable failure handling, and callable forms of `eager` remain later work.
+
+For example, this planned literal has all three fields after construction:
+
+<!-- caret-example: planned -->
+```caret
+Person = template [
+  ^name = (String) _
+  ^phone = (String~) _
+  ^nickname = (String?~) _
+]
+
+(Person) ada = [^name = "Ada"]
+// ada contains phone = ~ and nickname = ~
+```
+
+Only directly written `T~` and `T?~` field requirements enable this default. An alias that accepts
+missing still requires the field to be written in the literal. Membership and explicit conversion
+of an established Collection never add fields, and omission always supplies missing rather than
+null.
+
+### Planned numbers, conversions, and packed data
+
+The approved Phase 4 design makes `Number`, `Real`, `Integer`, and `Natural` common domains without
+prescribing storage formats. Integers will remain exact at arbitrary size. Concrete formats include
+signed and unsigned 8/16/32/64-bit integers, `Float` (binary32), and `Double` (binary64).
+`Int`, `Byte`, `Float32`, and `Float64` alias `Integer`, `UInt8`, `Float`, and `Double` respectively.
+These contracts test exact representability, so their memberships can overlap.
+
+The following examples are **planned, not runnable in the current interpreter**:
+
+<!-- caret-example: planned -->
+```caret
+count = 123456789012345678901234567890  // exact integer
+(Float) sample = 0.1                  // context selects the literal format
+rounded = (Float) source              // explicitly convert a numeric source
+whole = (Integer) -3.75               // -3: truncate toward zero
+5 / 2                                // 2.5: true division
+5 div 2                              // 2: integer division
+10 div 3 + 2                         // 5: div has multiplication precedence
+```
+
+`Float value` remains a membership test; `(Float) value` requests conversion. Declaration contracts
+and directly contracted holes remain checks. Implicit precision loss warns in broad Number/Real
+result contexts but is an error under explicit concrete numeric or integer result requirements.
+Normal floating-point arithmetic rounding does not warn. Explicit conversion permits its specified
+rounding or truncation, but never bypasses range or final contract checks. Numeric text parsing and
+custom conversion registration are deferred for this syntax.
+
+`Packed T` will select a contiguous fixed-layout representation for a finite positional sequence.
+It supports concrete numeric formats, one-byte Booleans, and fixed-size templates. Named record
+fields retain template declaration order; scalar positions need concrete formats. There are no
+missing/null payloads, variable-size fields, or bit fields in this first packed version.
+
+<!-- caret-example: planned -->
+```caret
+(Packed Int8) small = [1 2]
+converted = (Packed Int8) [1.9 2.1]  // [1 2], with explicit element conversion
+ordinary = (Sequence Number) small
+extended = seqAdd ordinary 300
+// seqAdd small 300                 // error: incompatible packed element
+```
+
+Lazy input must be consumed before a packed result is available. Keyed input requires an explicit
+choice of `keys`, `values`, or `fields`. Lazy map/filter stay lazy; repacking is explicit. Reflection
+exposes contracts without exposing buffers or physical layout details. The
+[numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned),
+[conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned),
+and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
+define the implementation requirements.
 
 ### Template fields and missing values
 
-Every field declared by a template must be present in a matching Collection. An optional field
-uses an optional value contract such as `String~`: it may contain `~`, but cannot be omitted.
-Null is distinct and needs a nullable contract. For example, the existing syntax is:
+Every value matching a template contains every declared field. Phase 4 plans to complete a named
+Collection literal when one expected template is known: an omitted field directly declared with
+`T~` or `T?~` is inserted with value `~` when its full clause accepts missing. Null remains distinct;
+`T?~` permits an explicitly supplied null but omission still supplies missing.
 
+<!-- caret-example: planned -->
 ```caret
-Person = template [^name = (String) _ ^phone = (String~) _]
+Person = template [
+  ^name = (String) _
+  ^phone = (String~) _
+  ^nickname = (String?~) _
+]
+
+(Person) ada = [^name = "Ada"]
 ```
 
-A Collection with a String `name` and `phone = ~` matches; leaving out `phone` does not.
-The planned rule model follows this convention: all CATEN fields are supplied, and explicit `~`
-selects a component's documented default. Rules themselves remain unimplemented.
+The completed value contains `phone = ~` and `nickname = ~`. An alias that accepts missing permits
+an explicitly supplied `~` but does not enable omission. A separately established Collection that
+lacks either field does not match, and explicit conversion does not complete it. Planned direct
+RuleDefinition literals use the same contextual rule for defaultable CATEN fields. Rules and this
+literal-completion behavior remain unimplemented.
 
 ### Ordinary functions
 
@@ -310,10 +390,10 @@ block; multiple-base diamonds imply every transitive base, while direct and indi
 cycles are rejected with their declaration locations. Clauses can constrain bindings, parameters, and function
 results. An internal analysis also propagates known effects and conservatively rejects unknown
 dynamic calls when proving whether a refinement predicate is pure, including effects incurred while
-fixed operands are captured into partial applications. Proven unary Boolean functions are
-first-class refinement requirements in derived contracts and direct clauses. The prototype currently
-supports named predicates and retains their eligibility through aliases; canonical callable parity
-also admits suitable anonymous lambdas, whose refinement-eligibility flag remains to be implemented.
+fixed operands are captured into partial applications. Proven unary Boolean functions and lambdas
+are first-class refinement requirements in derived contracts and direct clauses. Direct, assigned,
+captured, and aliased lambdas retain eligibility through ordinary callable metadata; checking
+eligibility never invokes the predicate or exposes its captures.
 Parameterized `Sequence T`, `Field K V`, and `Dictionary K V`
 contracts use ordinary callable contract application. Contract arguments construct contracts,
 multi-parameter constructors curry, and non-contract arguments retain raw-kind predicate behavior.

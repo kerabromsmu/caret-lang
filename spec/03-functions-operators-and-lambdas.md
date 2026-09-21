@@ -90,9 +90,9 @@ value = record[
 ]~
 ```
 
-More-indented ungrouped multiline arguments are implemented. Trailing callable blocks remain
-planned until lambda syntax is implemented; their layout rule is specified in the implementation
-roadmap below.
+More-indented ungrouped multiline arguments are implemented. An indented trailing lambda is the
+final call argument and owns its deeper body; the ordinary lambda rules below determine its
+parameters, capture, contracts, and result.
 
 `print` also has a statement form. The complete remainder of its logical line is parsed as one
 expression, so common output does not require grouping:
@@ -161,8 +161,8 @@ From lower to higher precedence:
 7. comparison `< <= > >=`
 8. named binary infix functions
 9. addition `+ -`
-10. multiplication `* / %`
-11. unary `- not`
+10. multiplication `* / %` (Phase 4 adds `div` at this same level)
+11. unary `- not` (Phase 4 conversion also covers the following application)
 12. function application
 13. reflection primary `@`
 14. field lookup and adjacent dereference `:`
@@ -228,6 +228,55 @@ That spelling is only a design direction and is not valid Caret syntax.
 
 Analyzed named infix calls invoke the same callable values as prefix application. A non-callable
 infix target or a callable whose remaining arity is not two produces a located runtime diagnostic.
+
+## Phase 4 conversion syntax and div (planned)
+
+These are approved future syntax changes, not current parser support.
+
+`div` is a built-in operator with the same precedence and left associativity as `*`, `/`, and `%`.
+It is not an ordinary named-infix spelling and is reserved against user declaration/shadowing.
+Like the existing binary operators, its value supports prefix calls, aliases, reflection, and
+ordinary partial application. An alias has ordinary named-function syntax, not the reserved
+spelling's special precedence. The operator's pure contract is `[Integer Integer] -> Integer`.
+[Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+defines truncation toward zero, exactness, remainder, and zero-divisor behavior.
+
+<!-- caret-example: planned -->
+```caret
+10 div 3 + 2           // (10 div 3) + 2 == 5
+div 7 3                // 2
+(-7) div 3             // -2
+quotient = div
+quotient 10 3           // 3
+10 quotient 3 + 2       // 10 quotient (3 + 2) == 2
+halves = div _ 2
+```
+
+A parenthesized contract before a supplied value requests conversion:
+`(Contract) expression`. Resolve the head by its language-owned contract identity, including
+aliases and computed contract values, never by capitalization or a list of privileged names.
+A bare parenthesized contract with no operand remains the contract value. Non-contract callable
+heads retain ordinary grouped application. Retain sufficient syntactic structure for semantic
+resolution and, where required, runtime discrimination; evaluate the head once, before its
+operand, and preserve ordinary evaluation order for non-contract calls.
+
+Conversion covers the following application but stops before infix operators. Thus
+`(Int8) calculate x + y` means `((Int8) (calculate x)) + y`; converting the sum requires
+`(Int8) (calculate x + y)`. It is not a remainder marker like `#`. Existing Collection element
+boundaries still apply; group complex conversion operands or an entire converted element where
+the single-line literal grammar requires it. Multiline elements retain their line-expression
+boundaries. These interactions require parser and execution evidence, including `$`, lambdas,
+postfix access, nested grouping, and an ordinary callable shadowing a contract name.
+
+This is an intentional exception to transparent grouping for contract heads: `Float x` tests
+membership, whereas `(Float) x` converts. `(Contract) _` and `(Contract) _1` are separate, existing
+checked-hole forms, not partially applied conversions. Their constructor parameter requirements,
+numbering, repeated-hole equality, and template reification remain intact. Use an ordinary
+function or lambda to convert a subsequently supplied value.
+
+Declaration, parameter, and result clauses stay strict checks; contextual literal creation is
+specified separately. Conversion behavior and its exclusions belong to
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned).
 
 <a id="function-composition"></a>
 ## Function composition
@@ -823,9 +872,11 @@ map (person -> person.name) people
 
 Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.
 
-This is the canonical callable-parity rule. The current interpreter infers a lambda's parameter,
-result, and effect signature but does not yet mark an anonymous lambda as refinement-eligible;
-named predicates and their aliases provide the implemented form until that gap is closed.
+This callable-parity rule is implemented. The interpreter uses the lambda's ordinary inferred
+parameter, result, and effect signature: eligibility requires exactly one parameter, a guaranteed
+non-null/non-missing Boolean result, and a proven empty effect bound. Direct lambdas, assigned
+lambdas, lexical captures, and ordinary aliases retain that proof without invoking the predicate or
+exposing captures.
 
 The implemented Sequence operations use `map transform values`, `filter values predicate`,
 `fold values initial combine`, `any values predicate`, and `all values predicate`. Fold supplies the

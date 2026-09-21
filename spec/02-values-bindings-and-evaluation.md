@@ -57,6 +57,75 @@ literals are reported as language errors rather than leaking a Java numeric-conv
 Numbers must remain finite. Literals outside the finite range and arithmetic producing a non-finite
 result are errors. Division and remainder by zero are errors.
 
+### Phase 4 numeric values and arithmetic (planned)
+
+The following approved design extends the current finite-`double` prototype. It is not implemented
+by the existing Number tests. Numeric contract membership is owned by
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-planned).
+
+`Number` prescribes no storage format. Integer values support arbitrary precision, including every
+value in the signed and unsigned 64-bit domains. A runtime must not pass exact integers through
+`double` when parsing, storing, comparing, rendering, exporting, or invoking host callbacks.
+Storage choice is separate from the mathematical value and its public numeric contracts.
+
+Whole-number tokens without a selecting context produce exact integers. Decimal tokens default to
+`Double`. An expected concrete numeric format can instead select the literal representation:
+
+<!-- caret-example: planned -->
+```caret
+count = 123456789012345678901234567890  // exact integer
+ratio = 0.1                           // Double
+(Float) sample = 0.1                  // directly rounded to binary32
+```
+
+Floating-point literal creation rounds to nearest, ties to even, directly from the source literal
+to the selected format; do not first round through another floating-point format. Preserve literal
+text/source provenance until contextual selection is known. The existing lexical number spelling
+is unchanged. NaN and infinities remain unsupported; a result outside the selected finite range is
+an error. No fixed width is silently selected for an unconstrained `Integer` or `Natural`.
+
+| Operation | Phase 4 behavior |
+| --- | --- |
+| Integer `+`, `-`, `*`, unary negation | Exact arbitrary-precision result; no wrap or clamp. |
+| Integer `%` | Exact remainder with the dividend's sign, or zero; zero divisor is an error. |
+| `/` on integers | Exact integer quotient if divisible; otherwise the mathematical quotient rounds to `Double`. |
+| `div` | Two `Integer` operands; exact quotient truncated toward zero; result is `Integer`. |
+| Non-integral real arithmetic | `Double` precision, with ordinary floating-point rounding. |
+| Numeric equality and ordering | Compare mathematical values accurately across representations, without a lossy common-`double` shortcut. |
+
+Integer membership is value-based: `7.0` is integral, but `7.5` is not. For integer operands and
+nonzero `b`, `a == (a div b) * b + (a % b)`. `/` does not become truncating division because its
+operands are integers. A required integer result rejects a mathematically fractional quotient
+before floating-point rounding can make it appear integral. Integer fractional division rounds
+the quotient, rather than overflowing a floating-point conversion of its integer operands first.
+An arithmetic result does not inherit an operand's fixed-width constraint; explicit result
+requirements validate it. In particular, adding `255` and `1` produces `256`, which fails `UInt8`.
+
+### Precision requirements and warnings (planned)
+
+An implicit conversion that changes a numeric value is a precision loss. In a broad `Number` or
+`Real` result context it warns and continues with the rounded value. Under an explicit concrete
+numeric result requirement, or an `Integer`/`Natural` requirement, it is an error. Contextual literal
+creation and ordinary floating-point arithmetic rounding are permitted by their selected formats;
+they do not generate precision warnings. Explicit conversion deliberately authorizes its documented
+rounding or truncation and does not generate an implicit-precision warning.
+
+An explicit `Float` result requirement does not select binary32 arithmetic: non-integral arithmetic
+still uses `Double`, and the resulting value must satisfy the requirement. A declaration checks an
+existing value without converting it. Inferred default `Double` results alone do not turn the
+broad-context warning policy into an explicit strict requirement.
+
+Declared function result contracts govern precision policy inside the function. A function
+explicitly returning `Number` can warn and return a rounded value; its caller validates that
+established value rather than changing the callee's declaration or inspecting its rounding history.
+Ordinary inference applies where there is no explicit declaration boundary. Failures to satisfy
+the final result contract remain errors even if an earlier conversion emitted only a warning.
+
+Warnings do not excuse overflow, zero division, invalid operand contracts, or unsupported
+conversions. See [diagnostic delivery](01-source-layout-and-diagnostics.md#phase-4-numeric-and-conversion-diagnostics-planned).
+Future rational `Fractional`, `Complex`, wider named fixed-width formats, and bit fields are not
+part of this implementation boundary.
+
 ### Immutable semantics and storage ownership
 
 Caret values are observably immutable. An implementation may reuse collection storage only while
@@ -242,9 +311,9 @@ Function invocation has an interpreter-owned maximum depth. Both ordinary applic
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
 
-The planned static contract system preserves this runtime behavior through the normative operator
-matrix below. Concrete numeric representations added later require explicit specialized variants;
-they do not silently change these scalar rules.
+The initial operator matrix records this implemented runtime behavior. The explicitly planned
+[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-planned) specifies the changes
+for exact integers, concrete formats, and `div`; it does not claim current runtime support.
 
 The self-interpreter may represent successful and failed operations as named result collections. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.

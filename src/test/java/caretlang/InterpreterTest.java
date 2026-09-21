@@ -491,6 +491,86 @@ final class InterpreterTest {
     }
 
     @Test
+    void lambdaRefinementsWorkInContractsClausesCapturesAndAliases() {
+        assertEquals("3\n4\ntrue\ntrue\n", execute("""
+                minimum = 0
+                positive = (Number) value -> value > minimum
+                alias = positive
+
+                DirectPositive = contract [Number (value -> value > minimum)]
+                AliasedPositive = contract [Number alias]
+                (DirectPositive) direct = 3
+                (AliasedPositive) aliased = 4
+                (Number alias) keep (Number alias) value = value
+
+                print keep direct
+                print keep aliased
+                print DirectPositive direct
+                print AliasedPositive aliased
+                """));
+
+        LangException rejected = assertThrows(LangException.class, () -> execute("""
+                positive = value -> value > 0
+                (positive) count = 0
+                """));
+        assertEquals(Diagnostic.Phase.RUNTIME, rejected.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, rejected.diagnostic().code());
+        assertEquals(2, rejected.diagnostic().primarySpan().start().line());
+        assertEquals(20, rejected.diagnostic().primarySpan().start().column());
+    }
+
+    @Test
+    void rejectsInvalidLambdaRefinementsBeforeProgramEffects() {
+        record Invalid(String lambda, String reason) {}
+        List<Invalid> invalid = List.of(
+                new Invalid("-> true", "must take exactly one parameter"),
+                new Invalid("left right -> left == right", "must take exactly one parameter"),
+                new Invalid("value -> value + 1", "must guarantee a Boolean result"),
+                new Invalid("value -> value > 0 & true ! ?", "must guarantee a Boolean result"),
+                new Invalid("value ->\n  print value\n  value > 0", "has observable effects"),
+                new Invalid("value -> dynamic value == true", "purity cannot be proved"));
+
+        for (Invalid candidate : invalid) {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            Interpreter interpreter = new Interpreter(
+                    new PrintStream(bytes, true, StandardCharsets.UTF_8));
+            String source = "candidate = " + candidate.lambda() + "\n"
+                    + "print \"must not happen\"\n"
+                    + "(candidate) value = 1\n";
+
+            LangException error = assertThrows(LangException.class,
+                    () -> interpreter.execute(new Parser(source).parseProgram()), source);
+            assertEquals(Diagnostic.Phase.SEMANTIC, error.diagnostic().phase(), source);
+            assertEquals(Diagnostic.Codes.INVALID_REFINEMENT, error.diagnostic().code(), source);
+            assertEquals(1, error.diagnostic().primarySpan().start().line(), source);
+            assertEquals(13, error.diagnostic().primarySpan().start().column(), source);
+            assertTrue(error.getMessage().contains(candidate.reason()), error::getMessage);
+            assertEquals("", bytes.toString(StandardCharsets.UTF_8), source);
+        }
+    }
+
+    @Test
+    void retainedLambdaRefinementMetadataSurvivesLaterSubmissionsAndReflection() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("""
+                minimum = 0
+                predicate = value -> value > minimum
+                alias = predicate
+                """).parseProgram());
+
+        interpreter.execute(new Parser("""
+                (alias) count = 2
+                print count
+                print (@alias).id
+                print (seqGet (@alias).signature.result.guarantees 0).id
+                print seqSize (@alias).signature.effects.upperBound
+                """).parseProgram());
+
+        assertEquals("2\n~\nBoolean\n0\n", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
     void rejectsCallablesThatCannotBeProvedValidAsRefinements() {
         LangException wrongArity = assertThrows(LangException.class, () -> execute("""
                 same left right = left == right
