@@ -1306,18 +1306,15 @@ final class Interpreter {
             }
             return invoke(callable, new Value.Argument(argument, argument1.span()), expr.span());
         }
-        if (expr instanceof Field(Expr target2, String field, boolean optional1, SourceSpan ignored)) {
+        if (expr instanceof Field(Expr target2, String field, boolean ignoredOptional, SourceSpan ignored)) {
             Value target = evalInner(target2, env, resolution);
-            return field(target, field, optional1);
+            return invokeAccessor(expr, target, target2.span(), new Value.Str(field), expr.span(),
+                    env, resolution);
         }
-        if (expr instanceof DynamicField(Expr target1, Expr name1, boolean optional, SourceSpan ignored)) {
+        if (expr instanceof DynamicField(Expr target1, Expr name1, boolean ignoredOptional, SourceSpan ignored)) {
             Value target = evalInner(target1, env, resolution);
-            Value name = underlying(evalInner(name1, env, resolution));
-            if (!(name instanceof Value.Str(String fieldName))) {
-                throw runtime(Diagnostic.Codes.INVALID_DYNAMIC_FIELD_NAME,
-                        "Dynamic field name must be a string, got: " + name);
-            }
-            return field(target, fieldName, optional);
+            Value key = evalInner(name1, env, resolution);
+            return invokeAccessor(expr, target, target1.span(), key, name1.span(), env, resolution);
         }
         if (expr instanceof Reflect(Expr target, SourceSpan ignored)) {
             // Reflection of a name observes the binding itself. In particular,
@@ -1677,6 +1674,8 @@ final class Interpreter {
         builtins.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
                 new Value.Field(args.getFirst().value(), args.get(1).value())));
 
+        builtins.define("getElement", getElementFunction());
+
         builtins.define("keys", collectionFunction("keys", BuiltinContract.COLLECTION, true,
                 (args, ignored) -> collectionEnumeration(
                         collection(args.getFirst()).keys(), "keys", args.getFirst().span())));
@@ -1866,6 +1865,63 @@ final class Interpreter {
         CallableSignature signature = CallableSignature.builtin(List.of("collection"),
                 List.of(List.of(collection)), List.of(resultTerm), List.of());
         return new Value.FunctionValue(name, List.of("collection"), implementation, false, signature);
+    }
+
+    private Value.FunctionValue getElementFunction() {
+        CallableSignature.ContractTerm collection = new CallableSignature.NamedRef(
+                BuiltinContract.COLLECTION, BuiltinContract.COLLECTION.publicName());
+        CallableSignature.ContractTerm comparable = new CallableSignature.NamedRef(
+                BuiltinContract.EQ, BuiltinContract.EQ.publicName());
+        CallableSignature.ContractTerm result = new CallableSignature.ModifiedRef(
+                new CallableSignature.NamedRef(BuiltinContract.ANY, BuiltinContract.ANY.publicName()),
+                false, true);
+        CallableSignature signature = CallableSignature.builtin(List.of("collection", "key"),
+                List.of(List.of(collection), List.of(comparable)), List.of(result), List.of());
+        return new Value.FunctionValue("getElement", List.of("collection", "key"), (arguments, ignored) -> {
+            Value.Argument collectionArgument = arguments.getFirst();
+            Value.Argument keyArgument = arguments.get(1);
+            Value rawCollection = underlying(collectionArgument.value());
+            Value key = underlying(keyArgument.value());
+            CollectionRuntime.Provider provider = collection(collectionArgument);
+            validateAccessKey(rawCollection, key, keyArgument.span());
+            if (rawCollection instanceof Value.ProjectedDictionary projected
+                    && key instanceof Value.Str(String name)) {
+                return projected.find(name, reflectionContext).orElse(Value.Missing.INSTANCE);
+            }
+            return provider.getElement(keyArgument.value());
+        }, false, signature);
+    }
+
+    private void validateAccessKey(Value collection, Value key, SourceSpan span) {
+        if (key == Value.Missing.INSTANCE) {
+            throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                    "Collection access key cannot be missing", span);
+        }
+        if (!ValueSemantics.equalityEligible(key)) {
+            throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                    "Collection access key must support equality, got: " + ValueSemantics.kind(key), span);
+        }
+        if (collection instanceof Value.Seq || collection instanceof Value.Field) {
+            if (!(key instanceof Value.Num(double number)) || number != Math.rint(number)) {
+                throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                        "Sequential Collection key must be an integer, got: " + key, span);
+            }
+            return;
+        }
+        if (collection instanceof Value.Dictionary || collection instanceof Value.ProjectedDictionary) {
+            if (!(key instanceof Value.Str)) {
+                throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                        "Dictionary access key must be a String, got: " + ValueSemantics.kind(key), span);
+            }
+            return;
+        }
+        if (collection instanceof Value.KeyedCollection keyed
+                && keyed.shape() != Value.KeyedCollection.Shape.GENERAL
+                && !keyed.entries().isEmpty()
+                && ValueKind.of(key) != ValueKind.of(keyed.entries().getFirst().key())) {
+            throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                    "Key does not satisfy the Collection access contract", span);
+        }
     }
 
     private Value.Callable unaryMapTransform(Value.Argument argument) {
@@ -2066,21 +2122,22 @@ final class Interpreter {
         return key;
     }
 
-    private Value field(Value target, String name, boolean optional) {
-        target = underlying(target);
-        if (!(target instanceof Value.Reflective reflective)) {
-            throw runtime(Diagnostic.Codes.INVALID_FIELD_TARGET,
-                    "Field access requires a named collection or reflective value, got: " + target);
+    private Value invokeAccessor(Expr expression, Value target, SourceSpan targetSpan,
+                                 Value key, SourceSpan keySpan, Environment env,
+                                 Resolution resolution) {
+        Resolution.Binding binding = resolution.accessor(expression);
+        Value resolved = binding == null ? env.get("getElement") : env.getResolved(binding);
+        Value raw = underlying(resolved);
+        if (!(raw instanceof Value.Callable callable)) {
+            throw runtime(Diagnostic.Codes.NOT_CALLABLE,
+                    "Value is not callable: " + resolved, expression.span());
         }
-        Optional<Value> value = reflective instanceof Value.ProjectedDictionary projected
-                ? projected.find(name, reflectionContext) : reflective.find(name);
-        if (value.isPresent()) return value.get();
-        if (optional) return Value.Missing.INSTANCE;
-        if (target instanceof Value.Dictionary || target instanceof Value.ProjectedDictionary
-                || target instanceof Value.EmptyCollection) {
-            throw runtime(Diagnostic.Codes.MISSING_FIELD, "Collection has no field: " + name);
+        Value partial = invoke(callable, new Value.Argument(target, targetSpan), expression.span());
+        if (!(underlying(partial) instanceof Value.Callable remaining)) {
+            throw runtime(Diagnostic.Codes.TOO_MANY_ARGUMENTS,
+                    "Callable accepts fewer than two arguments", keySpan);
         }
-        throw runtime(Diagnostic.Codes.MISSING_FIELD, "Reflected value has no field: " + name);
+        return invoke(remaining, new Value.Argument(key, keySpan), expression.span());
     }
 
     private Value reflect(Value value) {

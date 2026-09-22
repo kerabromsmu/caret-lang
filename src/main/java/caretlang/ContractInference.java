@@ -710,6 +710,7 @@ final class ContractInference {
         result.put("dictHas", builtin(2, EffectSummary.PURE));
         result.put("dictKeys", builtin(1, EffectSummary.PURE));
         result.put("field", builtin(2, EffectSummary.PURE));
+        result.put("getElement", builtin(2, EffectSummary.PURE));
         result.put("assert", builtin(2, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         result.put("assertEqual", builtin(3, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         return Map.copyOf(result);
@@ -904,9 +905,9 @@ final class ContractInference {
             case AmbiguousCall call -> ambiguousCallEffects(call, visible);
             case Compose compose -> expressionEffects(compose.left(), visible)
                     .plus(expressionEffects(compose.right(), visible));
-            case Field field -> expressionEffects(field.target(), visible);
+            case Field field -> expressionEffects(field.target(), visible).plus(accessorEffects(visible));
             case DynamicField field -> expressionEffects(field.target(), visible)
-                    .plus(expressionEffects(field.name(), visible));
+                    .plus(expressionEffects(field.name(), visible)).plus(accessorEffects(visible));
             case Reflect reflect -> reflect.target() instanceof Name
                     ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
             case Dereference dereference -> expressionEffects(dereference.target(), visible);
@@ -919,6 +920,11 @@ final class ContractInference {
             case ArrowContract ignored -> EffectSummary.PURE;
             case Lambda ignored -> EffectSummary.PURE;
         };
+    }
+
+    private static EffectSummary accessorEffects(Map<String, CallableEffects> visible) {
+        CallableEffects accessor = visible.get("getElement");
+        return accessor != null && accessor.arity() == 2 ? accessor.summary() : EffectSummary.UNKNOWN;
     }
 
     private EffectSummary applicationEffects(Apply application, Map<String, CallableEffects> visible) {

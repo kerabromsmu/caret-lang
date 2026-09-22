@@ -54,6 +54,7 @@ final class Resolver {
     }
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
+    private final IdentityHashMap<Expr, Resolution.Binding> accessors = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.ContractClause, Resolution.AnalyzedClause> clauses = new IdentityHashMap<>();
     private final EffectCatalog effectCatalog;
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
@@ -78,7 +79,7 @@ final class Resolver {
         Resolver resolver = new Resolver(effectCatalog);
         Scope root = resolver.environmentScope(globals);
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names, resolver.clauses, resolver.calls,
+        return new Resolution(resolver.names, resolver.accessors, resolver.clauses, resolver.calls,
                 resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.resolvedLambdaUpvalues(),
                 resolver.analyzedArrows, resolver.declarations);
     }
@@ -554,10 +555,14 @@ final class Resolver {
                 resolveExpr(apply.function(), scope, functionBody, deferred);
                 resolveExpr(apply.argument(), scope, functionBody, deferred);
             }
-            case Field field -> resolveExpr(field.target(), scope, functionBody, deferred);
+            case Field field -> {
+                resolveExpr(field.target(), scope, functionBody, deferred);
+                resolveAccessor(field, scope, functionBody, deferred);
+            }
             case DynamicField field -> {
                 resolveExpr(field.target(), scope, functionBody, deferred);
                 resolveExpr(field.name(), scope, functionBody, deferred);
+                resolveAccessor(field, scope, functionBody, deferred);
             }
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
             case Dereference dereference -> resolveExpr(dereference.target(), scope, functionBody, deferred);
@@ -860,6 +865,13 @@ final class Resolver {
         }
         // Preserve lazy conditional/Boolean behavior: an unresolved name in an unselected branch
         // is harmless. Selected unresolved reads retain the established runtime diagnostic.
+    }
+
+    private void resolveAccessor(Expr expression, Scope scope, boolean functionBody, boolean deferred) {
+        Name synthetic = new Name("getElement", expression.span());
+        resolveName(synthetic, scope, functionBody, deferred);
+        Resolution.Binding binding = names.get(synthetic);
+        if (binding != null) accessors.put(expression, binding);
     }
 
     private static Resolution.Binding binding(Symbol symbol, int depth, boolean captured) {

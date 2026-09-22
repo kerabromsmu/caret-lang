@@ -1,0 +1,42 @@
+record = [^present = 1 ^storedMissing = ~ ^storedNull = ?]
+
+// Dot, bracket, optional spellings, and getElement share one missing-returning path.
+print record.present
+print record.present~
+print record["present"]
+print record["present"]~
+print getElement record "present"
+print record.absent
+print record.storedMissing
+print dictHas record "storedMissing"
+print record.storedNull
+
+// Sets return their member, general keyed Collections accept composite/null keys,
+// and Fields expose their two tuple positions.
+(Set String) members = ["member"]
+print members["member"]
+general = [(field [1] "nested") (field ? "null-key")]
+print general[[1]]
+print general[?]
+item = field "key" 9
+print item[0]
+print item[1]
+
+// Access sugar lowers through ordinary partial application.
+byKey = record[_]
+byCollection = _["present"]
+reordered = _2[_1]
+literalBoundary = [10 20][_]
+print byKey "present"
+print byCollection record
+print reordered "present" record
+print literalBoundary 1
+
+// A lexical getElement binding controls both sugar spellings.
+custom collection key = "shadow"
+(Output Any) shadowAccess value =
+  getElement = custom
+  print value.present
+  print value["present"]
+
+shadowAccess record

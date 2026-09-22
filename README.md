@@ -329,8 +329,9 @@ The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phas
 now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,
 `values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
 two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,
-first-key settlement, and shape-neutral empty facts are implemented. Lazy map/filter, unified
-missing-returning dot/bracket lookup, revised equality, and collection-value `eager` remain planned.
+first-key settlement, shape-neutral empty facts, and unified missing-returning
+dot/bracket/`getElement` access are implemented. Lazy map/filter, revised equality, and
+collection-value `eager` remain planned.
 Phase 4 includes expected-template
 completion for Collection literals but
 does not add a context-dependent `Template value` constructor call: ordinary template application
@@ -393,6 +394,7 @@ The ordinary runtime provides:
   `Field`, `Set`, and `Dictionary` as first-class contracts; `Field K V`, `Set K`, and
   `Dictionary K V` are curried;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
+- `getElement collection key`, with dot and bracket access lowering through the same lexical binding;
 - `seqEmpty`, `seqAdd`, `seqGet`, `seqSize`, and callable-first `map`; and
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
 
@@ -416,6 +418,10 @@ or update order; their value expressions are still evaluated in source order. Id
 Fields accept arbitrary non-missing keys, expose `key` and `value` metadata, and participate in the
 Collection protocol as two-position tuples. Set context treats plain elements and key-only Fields as
 members; Dictionary context distinguishes a stored `~` value from absence.
+Valid absent access returns `~` for every spelling. Brackets accept equality-comparable keys allowed
+by the Collection, including null and composite keys; missing keys, fractional sequence indices,
+and keys outside the access contract are located errors. `collection[_]` and `_[key]` are ordinary
+partials, and a local `getElement` binding controls the sugar.
 Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
 non-callable metadata Dictionary exposing `kind`, visible
 declaration `id`, remaining arity, a language-owned `signature`, and surviving overload `variants`.

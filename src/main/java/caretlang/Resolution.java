@@ -5,6 +5,7 @@ import caretlang.Ast.ContractClause;
 import caretlang.Ast.AmbiguousCall;
 import caretlang.Ast.FunctionDef;
 import caretlang.Ast.Lambda;
+import caretlang.Ast.Expr;
 
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -31,6 +32,7 @@ final class Resolution {
     }
 
     private final IdentityHashMap<Name, Binding> names;
+    private final IdentityHashMap<Expr, Binding> accessors;
     private final IdentityHashMap<ContractClause, AnalyzedClause> clauses;
     private final IdentityHashMap<AmbiguousCall, CallMode> calls;
     private final IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines;
@@ -40,6 +42,7 @@ final class Resolution {
     private final java.util.Map<SourceSpan, Integer> declarations;
 
     Resolution(IdentityHashMap<Name, Binding> names,
+               IdentityHashMap<Expr, Binding> accessors,
                IdentityHashMap<ContractClause, AnalyzedClause> clauses,
                IdentityHashMap<AmbiguousCall, CallMode> calls,
                IdentityHashMap<Ast.PrintLine, Boolean> builtinPrintLines,
@@ -48,6 +51,7 @@ final class Resolution {
                IdentityHashMap<Ast.ArrowContract, Ast.ArrowContract> analyzedArrows,
                java.util.Map<SourceSpan, Integer> declarations) {
         this.names = new IdentityHashMap<>(names);
+        this.accessors = new IdentityHashMap<>(accessors);
         this.clauses = new IdentityHashMap<>(clauses);
         this.calls = new IdentityHashMap<>(calls);
         this.builtinPrintLines = new IdentityHashMap<>(builtinPrintLines);
@@ -62,6 +66,8 @@ final class Resolution {
     Binding binding(Name name) {
         return names.get(name);
     }
+
+    Binding accessor(Expr expression) { return accessors.get(expression); }
 
     AnalyzedClause clause(ContractClause clause) {
         return clause == null ? null : clauses.get(clause);

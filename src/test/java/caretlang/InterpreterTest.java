@@ -1511,14 +1511,15 @@ final class InterpreterTest {
 
     @Test
     void optionalMissingFieldsAreValuesButInvalidOperationsAreDiagnostics() {
-        assertEquals("~\n", execute("""
+        assertEquals("~\n~\n", execute("""
                 make =
                   ^present = true
                 value = make
                 print value.absent~
+                print value.absent
                 """));
 
-        assertDiagnostic("print (1).absent~", "Field access requires a named collection", 1, 7);
+        assertDiagnostic("print (1).absent~", "Expected Collection, got: 1", 1, 7);
         assertDiagnostic("print 1 + true", "Expected number", 1, 11);
         assertDiagnostic("print 1 2", "Value is not callable", 1, 7);
         LangException invalidCondition = assertThrows(LangException.class,
@@ -1528,7 +1529,7 @@ final class InterpreterTest {
     }
 
     @Test
-    void dynamicLookupRequiresAString() {
+    void dictionaryLookupRejectsKeysOutsideItsAccessContract() {
         LangException error = assertThrows(LangException.class, () -> execute("""
                 make =
                   ^value = 1
@@ -1536,8 +1537,9 @@ final class InterpreterTest {
                 print scope[42]~
                 """));
         assertEquals(4, error.span().start().line());
-        assertEquals(7, error.span().start().column());
-        assertTrue(error.getMessage().contains("Dynamic field name must be a string"));
+        assertEquals(13, error.span().start().column());
+        assertEquals(Diagnostic.Codes.INVALID_COLLECTION_KEY, error.diagnostic().code());
+        assertTrue(error.getMessage().contains("Dictionary access key must be a String"));
     }
 
     @Test
@@ -1549,16 +1551,131 @@ final class InterpreterTest {
     }
 
     @Test
-    void requiredMissingFieldReportsTheFieldExpression() {
-        LangException error = assertThrows(LangException.class, () -> execute("""
+    void requiredAndOptionalMissingFieldSpellingsReturnMissing() {
+        assertEquals("~\n~\n", execute("""
                 make =
                   ^present = true
                 value = make
                 print value.absent
+                print value.absent~
                 """));
-        assertEquals(4, error.span().start().line());
-        assertEquals(7, error.span().start().column());
-        assertTrue(error.getMessage().contains("Collection has no field: absent"));
+    }
+
+    @Test
+    void unifiedCollectionAccessSupportsSugarContractsCompositeKeysAndPartials() {
+        assertEquals("""
+                1
+                1
+                1
+                1
+                1
+                1
+                ~
+                ~
+                true
+                ?
+                ?
+                member
+                nested
+                null-key
+                ~
+                key
+                9
+                ~
+                ~
+                20
+                1
+                1
+                1
+                1
+                2
+                1
+                0
+                """, execute("""
+                record = [^present = 1 ^storedMissing = ~ ^storedNull = ?]
+                print record.present
+                print record.present~
+                print record["present"]
+                print record["present"]~
+                print getElement record "present"
+                lookup = getElement
+                print lookup record "present"
+                print record.absent
+                print record.storedMissing
+                print dictHas record "storedMissing"
+                print record.storedNull
+                print getElement record "storedNull"
+
+                (Set String) members = ["member"]
+                print members["member"]
+                general = [(field [1] "nested") (field ? "null-key")]
+                print general[[1]]
+                print general[?]
+                print general[[2]]
+
+                item = field "key" 9
+                print item[0]
+                print item[1]
+                print item[2]
+                print [10 20][-1]
+                print [10 20][1]
+
+                byKey = record[_]
+                byCollection = _["present"]
+                reordered = _2[_1]
+                literalBoundary = [1 2][_]
+                print byKey "present"
+                print byCollection record
+                print reordered "present" record
+                print literalBoundary 0
+                print (@getElement).remaining
+                print (@byKey).remaining
+                print seqSize (@getElement).signature.effects.upperBound
+                """));
+
+        assertEquals("shadow\nshadow\nshadow\n", execute("""
+                custom collection key = "shadow"
+                getElement = custom
+                record = [^present = 1]
+                print record.present
+                print record["present"]
+                print getElement record "present"
+                """));
+
+        assertEquals("true\n", execute("""
+                sameAccess left right = left == right
+                getElement = sameAccess
+                same = _1[_1]
+                print same 4
+                """));
+
+        assertEquals("99\n", execute("""
+                (Number) getElement (Sequence Number) collection (Number) key = 99
+                print [1][0]
+                """));
+
+        assertEquals("fixed\n1\n", execute("""
+                (Output Any) mark value =
+                  print "fixed"
+                  value
+                record = [^present = 1]
+                selected = (mark record)[_]
+                print selected "present"
+                """));
+
+        assertEquals("lookup\n7\n", execute("""
+                (Output Number) noisyGet collection key =
+                  print "lookup"
+                  7
+                getElement = noisyGet
+                (Output Number) access collection = collection.key
+                print access []
+                """));
+
+        assertDiagnostic("print [1][0.5]", "Sequential Collection key must be an integer, got: 0.5", 1, 11);
+        assertDiagnostic("print [1][~]", "Collection access key cannot be missing", 1, 11);
+        assertDiagnostic("identity value = value\nprint [1][identity]",
+                "Collection access key must support equality, got: Function", 2, 11);
     }
 
     @Test

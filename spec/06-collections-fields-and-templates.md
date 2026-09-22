@@ -129,7 +129,7 @@ keys. Provider APIs for custom construction are deferred; built-in protocol supp
 
 ### Lookup and keys
 
-These planned expressions use the same access operation:
+These implemented expressions use the same access operation:
 
 ```caret
 collection.name
@@ -160,8 +160,8 @@ chooses the retained entry during construction, not a replacement for Dictionary
 Holes lower through ordinary partial application: `collection[_]` corresponds to
 `getElement collection _`, and `_[key]` awaits a Collection. Ordinary fixed-operand evaluation,
 hole ordering and numbering, and the prohibition on mixed numbered/unnumbered holes apply.
-This syntax decision requires parser/interaction tests, especially at Collection literal hole
-boundaries; it is not an implemented extension yet.
+Parser and interaction tests cover Collection literal boundaries, ordinary and numbered holes,
+reused holes, lexical shadowing, source order, and fixed-operand effects.
 
 ### Fields, tuples, Sets, and contextual shape
 

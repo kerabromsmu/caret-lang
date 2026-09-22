@@ -72,12 +72,10 @@ successful direct `T~`/`T?~` default insertion is silent.
 | RUNTIME-EXPECTED-COLLECTION | public | EXPECTED_COLLECTION | `examples/errors/expected_collection.caret` |
 | RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES | public | CONTRADICTORY_COLLECTION_GUARANTEES | `InterpreterTest#internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent` |
 | RUNTIME-INVALID-DICTIONARY-KEY | public | INVALID_DICTIONARY_KEY | `examples/errors/invalid_dictionary_key.caret` |
+| RUNTIME-INVALID-COLLECTION-KEY | public | INVALID_COLLECTION_KEY | `examples/errors/invalid_collection_key.caret`; `InterpreterTest#unifiedCollectionAccessSupportsSugarContractsCompositeKeysAndPartials` |
 | RUNTIME-AMBIGUOUS-COLLECTION-SHAPE | public | AMBIGUOUS_COLLECTION_SHAPE | `examples/errors/ambiguous_collection_shape.caret` |
 | RUNTIME-DIVISION-BY-ZERO | public | DIVISION_BY_ZERO | `examples/errors/division_by_zero.caret` |
 | RUNTIME-NONFINITE-RESULT | public | NON_FINITE_RESULT | `examples/errors/non_finite_result.caret` |
-| RUNTIME-INVALID-FIELD-TARGET | public | INVALID_FIELD_TARGET | `examples/errors/invalid_field_target.caret` |
-| RUNTIME-MISSING-COLLECTION-FIELD | public | MISSING_FIELD | `examples/errors/required_missing_field.caret` |
-| RUNTIME-MISSING-REFLECTED-FIELD | public | MISSING_FIELD | `examples/errors/missing_reflected_field.caret` |
 | RUNTIME-INVALID-DYNAMIC-FIELD | public | INVALID_DYNAMIC_FIELD_NAME | `examples/errors/invalid_dynamic_key.caret` |
 | RUNTIME-TEMPLATE-INVALID-CONSTRUCTOR | public | TEMPLATE_INVALID_CONSTRUCTOR | `examples/errors/template_invalid_constructor.caret` |
 | RUNTIME-TEMPLATE-NONCOMPARABLE-FIXED-VALUE | public | TEMPLATE_NONCOMPARABLE_FIXED_VALUE | `examples/errors/template_noncomparable_fixed.caret` |

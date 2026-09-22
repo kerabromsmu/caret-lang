@@ -47,15 +47,15 @@ Collections carrying `Field K V`; `keys` returns `[ 0 1 ]`, and reflection expos
 `value`. A Set is keyed without associated values, and `Set K` context selects member semantics for
 plain values or key-only Fields. Missing-key Fields contribute keyless values, while fully omitted
 Fields contribute nothing. Transforms can change Collection shape when contracts determine their output.
-Dot and bracket access will share `getElement` semantics: absent valid keys yield missing,
+Dot and bracket access share implemented `getElement` semantics: absent valid keys yield missing,
 invalid keys are errors, and keys may be composite values supporting equality.
 
 Dictionaries retain sorted keys of one sortable type; general keyed Collections need only equality
 keys and retain their established entry order. Repeated keys retain the first entry. Planned `zip`
 pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
-Dictionary construction. Field positional access is available through the common provider;
-surface bracket and `getElement` lowering follows in the access slice.
+Dictionary construction. Field positions zero and one use the same bracket/`getElement` path.
+Access sugar follows lexical `getElement`, including local shadowing and ordinary hole partials.
 
 Public `addElement`, `removeElement`, and `replaceElement`, their construction-selection
 interface, and additional immutable-update syntax are deferred beyond Phase 4. Their design is
