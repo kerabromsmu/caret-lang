@@ -36,11 +36,12 @@ print (@record).keyed       // true
 print size []               // 0
 ```
 
-The implemented keyless `map` adapter produces a lazy sequential result even from eager input.
-Each demanded position establishes once for aliases of that result, while a fresh invocation gets
-a fresh result; known size and guarantees do not force values. General shape-changing map/filter
-integration remains planned. Values are obtained when demanded, and their function contracts
-describe any effects. `eager` materializes enumerated content
+The implemented `map` and `filter` adapters produce lazy results even from eager input across
+keyless, keyed, and Set Collections. Each demanded entry establishes once for aliases of that
+result, while a fresh invocation gets a fresh result. Keyed transforms consume Field tuples,
+filtered key enumeration performs the predicate work needed to discover retained entries, and
+strict `fold`, `any`, and `all` traverse the same field stream. Values are obtained when demanded,
+and their function contracts describe any effects. `eager` materializes enumerated content
 in order, recursively, leaving mutable containers and stored functions intact. It replaces
 reflection references with empty Collections and reports cyclic containment or known-infinite
 input. Unknown finiteness may mean it never completes.
@@ -476,10 +477,10 @@ constrains the result while `Output` is the callable's effect allowance. The ana
 clause once, so callable reflection reports `Number` only as a result requirement and `Output` only
 as an effect; source order does not change that meaning.
 
-The prototype implements `map transform values`, `filter values predicate`,
-`fold values initial combine`, `any values predicate`, and `all values predicate` for Sequences.
+The prototype implements `map transform collection`, `filter collection predicate`,
+`fold collection initial combine`, `any collection predicate`, and `all collection predicate`.
 They accept named, partial, composed, and lambda callables through the guarded call path and preserve
-callback effect bounds. Fold is a strict left fold; `any` and `all` short-circuit. Null and missing
+callback effect bounds. Map/filter are lazy; fold is a strict left fold; `any` and `all` short-circuit. Null and missing
 predicate results count as false. Declaration-wide variable schemes retain their substitutions
 through prefix and hole partials, including executable lambdas.
 

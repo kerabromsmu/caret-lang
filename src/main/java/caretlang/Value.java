@@ -7,7 +7,8 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Field, Value.KeyedCollection, Value.LazySeq, Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
+        Value.Field, Value.KeyedCollection, Value.LazyCollection, Value.LazySeq,
+        Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
         public Attributed {
@@ -313,11 +314,20 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Value[] established;
         private final RuntimeException[] failures;
         private final boolean[] demanded;
+        private final CollectionRuntime.Facts facts;
 
         LazySeq(int size, java.util.function.IntFunction<Value> producer) {
+            this(size, producer, new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                    CollectionRuntime.Guarantee.TRUE));
+        }
+
+        LazySeq(int size, java.util.function.IntFunction<Value> producer, CollectionRuntime.Facts facts) {
             if (size < 0) throw new IllegalArgumentException("negative lazy sequence size");
             this.size = size;
             this.producer = Objects.requireNonNull(producer);
+            this.facts = Objects.requireNonNull(facts);
             this.established = new Value[size];
             this.failures = new RuntimeException[size];
             this.demanded = new boolean[size];
@@ -352,12 +362,195 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public Value valueEntries() { return new Seq(materialize()); }
         @Override public Value fieldEntries() { return valueEntries(); }
         @Override public Value size() { return new Num(size); }
-        @Override public CollectionRuntime.Facts facts() {
-            return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE,
-                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
-                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
-                    CollectionRuntime.Guarantee.TRUE);
+        @Override public CollectionRuntime.Facts facts() { return facts; }
+        @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
+    /** Incremental transform result backed by an ordered stream of keyless values or keyed fields. */
+    final class LazyCollection implements Value, CollectionRuntime.Provider {
+        enum Shape { INFER, KEYLESS, KEYED, SET }
+        record Produced(Value key, Value value, Shape shape) {
+            Produced {
+                Objects.requireNonNull(value);
+                Objects.requireNonNull(shape);
+                if (shape == Shape.KEYLESS && key != null) throw new IllegalArgumentException("keyless result has a key");
+                if ((shape == Shape.KEYED || shape == Shape.SET) && key == null) {
+                    throw new IllegalArgumentException("keyed result has no key");
+                }
+            }
         }
+        @FunctionalInterface interface Producer { Produced next(); }
+
+        private Shape shape;
+        private final Producer producer;
+        private final CollectionRuntime.Facts initialFacts;
+        private final Integer knownSize;
+        private final SourceSpan sourceSpan;
+        private final ArrayList<Produced> established = new ArrayList<>();
+        private RuntimeException failure;
+        private boolean exhausted;
+
+        LazyCollection(Shape shape, Producer producer, CollectionRuntime.Facts facts, Integer knownSize,
+                       SourceSpan sourceSpan) {
+            this.shape = Objects.requireNonNull(shape);
+            this.producer = Objects.requireNonNull(producer);
+            this.initialFacts = Objects.requireNonNull(facts);
+            this.knownSize = knownSize;
+            this.sourceSpan = sourceSpan;
+        }
+
+        synchronized Optional<Produced> entryAt(int index) {
+            if (index < 0) return Optional.empty();
+            while (established.size() <= index && !exhausted) establishNext();
+            if (failure != null) throw failure;
+            return index < established.size() ? Optional.of(established.get(index)) : Optional.empty();
+        }
+
+        synchronized List<Produced> materializeEntries() {
+            while (!exhausted) establishNext();
+            if (failure != null) throw failure;
+            return List.copyOf(established);
+        }
+
+        Value materializedValue() {
+            List<Produced> entries = materializeEntries();
+            Shape current = resolvedShape();
+            if (current == Shape.KEYLESS || current == Shape.INFER) {
+                return new Seq(entries.stream().map(Produced::value).toList());
+            }
+            ArrayList<KeyedCollection.Entry> keyed = new ArrayList<>(entries.stream()
+                    .map(entry -> new KeyedCollection.Entry(entry.key(), entry.value())).toList());
+            Value.KeyedCollection.Shape settled;
+            if (current == Shape.SET) settled = Value.KeyedCollection.Shape.SET;
+            else if (homogeneousSortable(keyed)) {
+                settled = Value.KeyedCollection.Shape.DICTIONARY;
+                keyed.sort((left, right) -> compareKeys(left.key(), right.key()));
+            } else settled = Value.KeyedCollection.Shape.GENERAL;
+            return new KeyedCollection(settled, keyed);
+        }
+
+        private static boolean homogeneousSortable(List<KeyedCollection.Entry> entries) {
+            if (entries.isEmpty()) return false;
+            Value first = ValueSemantics.underlying(entries.getFirst().key());
+            Class<?> kind = first.getClass();
+            if (!(first instanceof Num || first instanceof Str || first instanceof Bool || first instanceof Null)) {
+                return false;
+            }
+            return entries.stream().allMatch(entry -> ValueSemantics.underlying(entry.key()).getClass() == kind);
+        }
+
+        private static int compareKeys(Value left, Value right) {
+            left = ValueSemantics.underlying(left);
+            right = ValueSemantics.underlying(right);
+            if (left instanceof Num(double a) && right instanceof Num(double b)) return Double.compare(a, b);
+            if (left instanceof Str(String a) && right instanceof Str(String b)) {
+                return CollectionRuntime.FIELD_ORDER.compare(a, b);
+            }
+            if (left instanceof Bool(boolean a) && right instanceof Bool(boolean b)) return Boolean.compare(a, b);
+            if (left instanceof Null && right instanceof Null) return 0;
+            throw new IllegalArgumentException("Non-sortable transformed Dictionary key");
+        }
+
+        Shape resolvedShape() {
+            synchronized (this) { return shape; }
+        }
+
+        private void establishNext() {
+            try {
+                Produced produced = producer.next();
+                if (produced == null) {
+                    exhausted = true;
+                    return;
+                }
+                if (shape == Shape.INFER) shape = produced.shape();
+                if (produced.shape() != shape) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+                            "A transformed Collection cannot mix keyed and keyless elements", sourceSpan);
+                }
+                if (shape != Shape.KEYLESS) {
+                    for (Produced existing : established) {
+                        if (ValueSemantics.equal(existing.key(), produced.key())) return;
+                    }
+                }
+                established.add(produced);
+            } catch (RuntimeException problem) {
+                failure = problem;
+                exhausted = true;
+            }
+        }
+
+        @Override public Value getElement(Value key) {
+            Shape current = resolvedShape();
+            if (current == Shape.INFER) {
+                if (entryAt(0).isEmpty()) return Missing.INSTANCE;
+                current = resolvedShape();
+            }
+            if (current == Shape.KEYLESS) {
+                if (!(ValueSemantics.underlying(key) instanceof Num(double number))
+                        || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) {
+                    return Missing.INSTANCE;
+                }
+                return entryAt((int) number).map(Produced::value).orElse(Missing.INSTANCE);
+            }
+            int index = 0;
+            Optional<Produced> entry;
+            while ((entry = entryAt(index++)).isPresent()) {
+                if (ValueSemantics.equal(entry.get().key(), key)) {
+                    return current == Shape.SET ? entry.get().key() : entry.get().value();
+                }
+            }
+            return Missing.INSTANCE;
+        }
+
+        @Override public Value keys() {
+            if (resolvedShape() == Shape.KEYLESS && knownSize != null) {
+                ArrayList<Value> keys = new ArrayList<>(knownSize);
+                for (int index = 0; index < knownSize; index++) keys.add(new Num(index));
+                return new Seq(keys);
+            }
+            List<Produced> entries = materializeEntries();
+            if (resolvedShape() == Shape.KEYLESS || resolvedShape() == Shape.INFER) {
+                ArrayList<Value> keys = new ArrayList<>(entries.size());
+                for (int index = 0; index < entries.size(); index++) keys.add(new Num(index));
+                return new Seq(keys);
+            }
+            return ((CollectionRuntime.Provider) materializedValue()).keys();
+        }
+
+        @Override public Value valueEntries() {
+            List<Produced> entries = materializeEntries();
+            if (resolvedShape() == Shape.SET) return Missing.INSTANCE;
+            if (resolvedShape() == Shape.KEYLESS || resolvedShape() == Shape.INFER) {
+                return new Seq(entries.stream().map(Produced::value).toList());
+            }
+            return ((CollectionRuntime.Provider) materializedValue()).valueEntries();
+        }
+
+        @Override public Value fieldEntries() {
+            List<Produced> entries = materializeEntries();
+            if (resolvedShape() == Shape.KEYLESS || resolvedShape() == Shape.INFER) {
+                return new Seq(entries.stream().map(Produced::value).toList());
+            }
+            return ((CollectionRuntime.Provider) materializedValue()).fieldEntries();
+        }
+
+        @Override public Value size() {
+            return new Num(knownSize != null ? knownSize : materializeEntries().size());
+        }
+
+        @Override public CollectionRuntime.Facts facts() {
+            Shape current = resolvedShape();
+            CollectionRuntime.Guarantee keyed = switch (current) {
+                case KEYLESS -> CollectionRuntime.Guarantee.FALSE;
+                case KEYED, SET -> CollectionRuntime.Guarantee.TRUE;
+                case INFER -> initialFacts.keyed();
+            };
+            CollectionRuntime.Guarantee hasValues = current == Shape.SET
+                    ? CollectionRuntime.Guarantee.FALSE : initialFacts.hasValues();
+            return new CollectionRuntime.Facts(initialFacts.sequential(), initialFacts.ordered(),
+                    initialFacts.unique(), initialFacts.finite(), keyed, hasValues);
+        }
+
         @Override public String toString() { return ValueSemantics.render(this); }
     }
 

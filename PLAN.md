@@ -300,15 +300,15 @@ queries, matching reflection fields, `Natural`, and shape-neutral empty facts ar
 The steps below describe the remaining contextual, template, and representation work.
 The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
 records the newer #55/#59 decisions and takes precedence over legacy implementation targets
-for its covered behavior. The common protocol, Field tuple, contextual shape, and settlement
-foundations are implemented; the remaining decisions are planned and require their own evidence.
+for its covered behavior. The common protocol, Field tuple, contextual shape, settlement, lazy
+transform, and strict-consumer foundations are implemented; remaining decisions require their own evidence.
 
 ### Agreed collection revision and deferrals
 
 - Preserve implemented ordinary keys/values/fields/size access, guarantee queries and reflective
   equivalents, Natural size contracts, shape-neutral empty facts, keyed/keyless and Set/Dictionary
   contextual shapes, Field-contract tuples, and first-key settlement.
-- Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
+- Preserve implemented lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
   first-entry duplicate handling, two-input zip tuples and zipWithKeys keyed construction.
 - Retain internal construction and settlement without exposing unfinished Collections. Public
   addElement/removeElement/replaceElement, their construction-selection interface, and additional
@@ -746,8 +746,8 @@ explicit higher-order arrow contracts, and the initial static operator matrix ar
 Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
 item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction, Phase 4
 common Collection protocol, Field tuples, contextual shapes, general keyed Collections, internal
-settlement, unified dot/bracket/`getElement` access, and lexical lazy establishment are complete;
-generalize lazy transforms and strict Collection consumers next.
+settlement, unified dot/bracket/`getElement` access, lexical lazy establishment, generalized lazy
+transforms, and strict Collection consumers are complete; implement `zip` and `zipWithKeys` next.
 `with`/`outer` wait for the public named-member protocol
 rather than introducing a separate exported Scope value model.
 

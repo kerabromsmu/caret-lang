@@ -32,6 +32,7 @@ enum BuiltinContract implements ContractDescriptor {
     SEQUENCE("Sequence") {
         @Override public boolean accepts(Value value) {
             value = ValueSemantics.underlying(value);
+            if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
             return value instanceof Value.EmptyCollection || ValueKind.of(value) == ValueKind.SEQUENCE;
         }
         @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
@@ -44,6 +45,7 @@ enum BuiltinContract implements ContractDescriptor {
     DICTIONARY("Dictionary") {
         @Override public boolean accepts(Value value) {
             value = ValueSemantics.underlying(value);
+            if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
             return value instanceof Value.EmptyCollection || ValueKind.of(value) == ValueKind.DICTIONARY;
         }
         @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
@@ -52,6 +54,7 @@ enum BuiltinContract implements ContractDescriptor {
     SET("Set") {
         @Override public boolean accepts(Value value) {
             value = ValueSemantics.underlying(value);
+            if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
             return value instanceof Value.EmptyCollection
                     || value instanceof Value.KeyedCollection collection
                     && collection.shape() == Value.KeyedCollection.Shape.SET;

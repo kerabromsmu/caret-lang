@@ -9,8 +9,8 @@
 This section records the decisions from issues #55 and #59 and their joint design discussion.
 The common `keys`/`values`/`fields`/`size` protocol, Boolean-or-missing guarantee queries,
 matching reflection fields, `Natural`, contextual Field/Set/Dictionary/keyless shapes, first-key
-settlement, unified access, the keyless lazy-map foundation, and shape-neutral empty facts are
-implemented. The remaining generalized transform, equality, state, scoped-lookup, materialization,
+settlement, unified access, lazy shape-aware transforms and strict consumers, and shape-neutral empty facts are
+implemented. The remaining equality, state, scoped-lookup, materialization,
 and template work in this revision is
 planned. For the subjects covered here the revision
 supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
@@ -294,6 +294,10 @@ sequences; their alignment is the developer's responsibility. This value-only ma
 `zipWithKeys` with the shared source enumeration.
 
 ### Lazy transforms and consumers
+
+The built-in `map`, `filter`, `fold`, `any`, and `all` now implement this section for the built-in
+Collection representations. Lazy transform results establish demanded entries incrementally and
+retain first output keys; public custom providers and automatic parallel evaluation remain deferred.
 
 `map transform collection` and `filter collection predicate` always produce lazy Collections,
 even for eager inputs. Creating them does not run the transform/predicate. Their deferred effects

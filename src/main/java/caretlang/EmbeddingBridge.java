@@ -161,6 +161,18 @@ public final class EmbeddingBridge {
                             ValueSemantics.render(entry.key()), external(entry.value()))).toList());
             case Value.Seq sequence -> new CaretValue.SequenceValue(sequence.values().stream().map(this::external).toList());
             case Value.LazySeq sequence -> new CaretValue.SequenceValue(sequence.materialize().stream().map(this::external).toList());
+            case Value.LazyCollection collection -> {
+                List<Value.LazyCollection.Produced> entries = collection.materializeEntries();
+                if (collection.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
+                        || collection.resolvedShape() == Value.LazyCollection.Shape.INFER) {
+                    yield new CaretValue.SequenceValue(entries.stream().map(Value.LazyCollection.Produced::value)
+                            .map(this::external).toList());
+                }
+                yield new CaretValue.SequenceValue(entries.stream().map(entry -> (CaretValue)
+                        new CaretValue.FieldValue(ValueSemantics.render(entry.key()),
+                                external(collection.resolvedShape() == Value.LazyCollection.Shape.SET
+                                        ? Value.Missing.INSTANCE : entry.value()))).toList());
+            }
             case Value.Dictionary dictionary -> collection(dictionary.entries());
             case Value.EmptyCollection ignored -> new CaretValue.CollectionValue(Map.of());
             case Value.ProjectedDictionary dictionary -> collection(dictionary.fields());

@@ -25,8 +25,8 @@ The current prototype supports:
 - persistent sequences and canonically ordered Dictionaries with structural equality;
 - ordinary Collection `keys`, `values`, `fields`, `size`, Boolean-or-missing guarantee queries,
   matching reflection fields, and the non-negative integer `Natural` contract;
-- higher-order Sequence `map`, `filter`, strict left `fold`, `any`, and `all` through named,
-  partial, composed, and lambda callables;
+- lazy Collection `map` and `filter`, plus strict left `fold`, `any`, and `all`, through named,
+  partial, composed, and lambda callables over keyless values or keyed Field tuples;
 - polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
@@ -330,8 +330,8 @@ now has its common enumeration/guarantee foundation and contextual shape constru
 `values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
 two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,
 first-key settlement, shape-neutral empty facts, and unified missing-returning
-dot/bracket/`getElement` access and the keyless lazy-map foundation are implemented. Generalized
-lazy map/filter, revised equality, and collection-value `eager` remain planned.
+dot/bracket/`getElement` access, lazy shape-aware map/filter, and strict Field-based consumers are
+implemented. Revised equality and collection-value `eager` remain planned.
 Phase 4 includes expected-template
 completion for Collection literals but
 does not add a context-dependent `Template value` constructor call: ordinary template application

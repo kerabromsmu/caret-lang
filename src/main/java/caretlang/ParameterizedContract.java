@@ -27,6 +27,7 @@ final class ParameterizedContract implements ContractDescriptor {
 
     @Override public boolean accepts(Value value) {
         value = ValueSemantics.underlying(value);
+        if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
         if (parameterArity() > 0 || !base.accepts(value)) return false;
         if (value instanceof Value.EmptyCollection) return true;
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
@@ -57,6 +58,7 @@ final class ParameterizedContract implements ContractDescriptor {
 
     @Override public boolean test(Value value, SourceSpan span) {
         value = ValueSemantics.underlying(value);
+        if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
         if (parameterArity() > 0) return false;
         if (!base.test(value, span)) return false;
         if (value instanceof Value.EmptyCollection) return true;

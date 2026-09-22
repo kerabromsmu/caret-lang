@@ -52,6 +52,7 @@ final class ValueSemantics {
             }
             case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
             case Value.LazySeq sequence -> fields.put("size", new Value.Num(sequence.length()));
+            case Value.LazyCollection collection -> fields.put("size", collection.size());
             case Value.Reflective reflective -> fields.putAll(reflective instanceof Value.ProjectedDictionary projected
                     ? projected.fields(context) : reflective.fields());
             default -> { }
@@ -87,6 +88,8 @@ final class ValueSemantics {
             Value b = pair.right();
             if (a instanceof Value.Attributed attributed) a = attributed.value();
             if (b instanceof Value.Attributed attributed) b = attributed.value();
+            if (a instanceof Value.LazyCollection collection) a = collection.materializedValue();
+            if (b instanceof Value.LazyCollection collection) b = collection.materializedValue();
             if (a instanceof Value.ContractValue x && b instanceof Value.ContractValue y) {
                 if (x.descriptor() != y.descriptor()) return false;
                 continue;
@@ -171,6 +174,8 @@ final class ValueSemantics {
                 sequence.values().forEach(pending::push);
             } else if (value instanceof Value.LazySeq sequence) {
                 sequence.materialize().forEach(pending::push);
+            } else if (value instanceof Value.LazyCollection collection) {
+                pending.push(collection.materializedValue());
             }
         }
         return true;
@@ -275,6 +280,8 @@ final class ValueSemantics {
                 }
                 case RenderValue(Value.LazySeq sequence, int indent, boolean quote) ->
                         pending.push(new RenderValue(new Value.Seq(sequence.materialize()), indent, quote));
+                case RenderValue(Value.LazyCollection collection, int indent, boolean quote) ->
+                        pending.push(new RenderValue(collection.materializedValue(), indent, quote));
                 case RenderValue(Value.KeyedCollection collection, int indent, boolean ignoredQuote) -> {
                     if (collection.entries().isEmpty()) {
                         output.append("[]");
@@ -305,7 +312,7 @@ final class ValueSemantics {
         value = underlying(value);
         return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary
                 || value instanceof Value.Seq || value instanceof Value.LazySeq
-                || value instanceof Value.KeyedCollection;
+                || value instanceof Value.LazyCollection || value instanceof Value.KeyedCollection;
     }
 
     private static String spaces(int count) { return " ".repeat(count); }
@@ -333,6 +340,7 @@ final class ValueSemantics {
         return value instanceof Value.EmptyCollection
                 || value instanceof Value.Seq sequence && sequence.size() == 0
                 || value instanceof Value.LazySeq sequence && sequence.length() == 0
+                || value instanceof Value.LazyCollection collection && collection.materializeEntries().isEmpty()
                 || value instanceof Value.Dictionary dictionary && dictionary.size() == 0;
     }
 

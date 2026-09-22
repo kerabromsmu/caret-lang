@@ -17,7 +17,7 @@ enum ValueKind {
         Value value = ValueSemantics.underlying(input);
         if (value instanceof CollectionRuntime.Provider
                 && !(value instanceof Value.Field) && !(value instanceof Value.KeyedCollection)
-                && !(value instanceof Value.LazySeq)) return COLLECTION;
+                && !(value instanceof Value.LazySeq) && !(value instanceof Value.LazyCollection)) return COLLECTION;
         return switch (value) {
             case Value.Num ignored -> NUMBER;
             case Value.Str ignored -> STRING;
@@ -35,6 +35,11 @@ enum ValueKind {
             case Value.EmptyCollection ignored -> COLLECTION;
             case Value.Seq ignored -> SEQUENCE;
             case Value.LazySeq ignored -> SEQUENCE;
+            case Value.LazyCollection collection -> switch (collection.resolvedShape()) {
+                case KEYLESS -> SEQUENCE;
+                case SET -> SET;
+                case KEYED, INFER -> COLLECTION;
+            };
             case Value.ContractValue ignored -> CONTRACT;
             case Value.Attributed attributed -> of(attributed.value());
             case Value.Reflective ignored -> REFLECTIVE;

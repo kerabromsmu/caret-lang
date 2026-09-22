@@ -2630,7 +2630,6 @@ final class InterpreterTest {
         assertEquals(Diagnostic.Codes.INVALID_MAP_TRANSFORM, transform.diagnostic().code());
         assertEquals(Diagnostic.Phase.RUNTIME, transform.diagnostic().phase());
         assertDiagnostic("add left right = left\nmap add [1]", "exactly one argument", 2, 5);
-        assertDiagnostic("map numberText [^value = 1]", "Expected sequence", 1, 16);
 
         LangException element = expectDiagnostic("mapped = map numberText [1 \"bad\"]\nprint mapped",
                 "Expected number", 1, 25);
@@ -2926,7 +2925,7 @@ final class InterpreterTest {
         assertEquals(Diagnostic.Codes.INVALID_PREDICATE_RESULT, result.diagnostic().code());
 
         LangException contract = assertThrows(LangException.class,
-                () -> execute("filter [1 ?] ((Number) value -> true)"));
+                () -> execute("selected = filter [1 ?] ((Number) value -> true)\nprint selected"));
         assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, contract.diagnostic().code());
 
         assertEquals("1\n2\n[ 1 2 ]\n", execute("""
@@ -2943,6 +2942,44 @@ final class InterpreterTest {
                 invalid values = filter values emit
                 """));
         assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, undeclared.diagnostic().code());
+    }
+
+    @Test
+    void lazyTransformsUseFieldsAcrossCollectionShapesAndRetainFirstKeys() {
+        assertEquals("""
+                built
+                1
+                2
+                2
+                3
+                4
+                [ 2 4 ]
+                [
+                  "b" = 2
+                  "c" = 3
+                ]
+                [
+                  "same" = 10
+                ]
+                5
+                """, execute("""
+                (Output Boolean) tracedEven value =
+                  print value
+                  value % 2 == 0
+                selected = filter [1 2 3 4] tracedEven
+                print "built"
+                print selected[0]
+                print selected
+
+                keepLarge pair = pair[1] > 1
+                print filter [^a = 1 ^b = 2 ^c = 3] keepLarge
+
+                collide pair = field "same" (pair[1] * 10)
+                print map collide [^a = 1 ^b = 2]
+
+                sumField accumulator pair = accumulator + pair[1]
+                print fold [^left = 2 ^right = 3] 0 sumField
+                """));
     }
 
     @Test

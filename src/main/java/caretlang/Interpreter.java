@@ -485,9 +485,37 @@ final class Interpreter {
 
         @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
             if (transform == null) return new MapCallable(unaryMapTransform(argument));
-            Value.Seq values = sequence(argument);
-            return ownership.fresh(new Value.LazySeq(values.size(), index -> invoke(transform,
-                    new Value.Argument(values.find(index).orElseThrow(), argument.span()), callSpan)));
+            IndexedCollection source = indexedFields(argument);
+            boolean pure = knownPure(transform);
+            CollectionRuntime.Facts sourceFacts = source.facts();
+            CollectionRuntime.Guarantee sequential = sourceFacts.sequential() == CollectionRuntime.Guarantee.TRUE
+                    && pure ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN;
+            CollectionRuntime.Facts keylessFacts = new CollectionRuntime.Facts(sequential,
+                    sourceFacts.ordered(), CollectionRuntime.Guarantee.UNKNOWN, sourceFacts.finite(),
+                    CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE);
+            boolean sourceSet = sourceFacts.keyed() == CollectionRuntime.Guarantee.TRUE
+                    && sourceFacts.hasValues() == CollectionRuntime.Guarantee.FALSE;
+            if (!sourceSet && source.knownSize() != null && definitelyNonField(transform)) {
+                return ownership.fresh(new Value.LazySeq(source.knownSize(), index -> invoke(transform,
+                        new Value.Argument(source.at(index).orElseThrow(), argument.span()), callSpan), keylessFacts));
+            }
+            int[] next = {0};
+            Value.LazyCollection.Shape initialShape = sourceSet
+                    ? Value.LazyCollection.Shape.SET : Value.LazyCollection.Shape.INFER;
+            CollectionRuntime.Facts facts = new CollectionRuntime.Facts(sequential, sourceFacts.ordered(),
+                    sourceSet ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN,
+                    sourceFacts.finite(), sourceSet ? CollectionRuntime.Guarantee.TRUE
+                    : CollectionRuntime.Guarantee.UNKNOWN, sourceSet ? CollectionRuntime.Guarantee.FALSE
+                    : CollectionRuntime.Guarantee.UNKNOWN);
+            return ownership.fresh(new Value.LazyCollection(initialShape, () -> {
+                while (true) {
+                    Optional<Value> input = source.at(next[0]++);
+                    if (input.isEmpty()) return null;
+                    Value mapped = invoke(transform, new Value.Argument(input.get(), argument.span()), callSpan);
+                    Value.LazyCollection.Produced produced = transformedEntry(mapped, sourceSet, callSpan);
+                    if (produced != null) return produced;
+                }
+            }, facts, null, callSpan));
         }
 
         @Override public int remainingArity() { return transform == null ? 2 : 1; }
@@ -525,7 +553,7 @@ final class Interpreter {
         @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
             ArrayList<Value.Argument> next = new ArrayList<>(arguments);
             next.add(argument);
-            if (next.size() == 1) sequence(argument);
+            if (next.size() == 1) collection(argument);
             if (next.size() < arity()) return new SequenceOperationCallable(operation, next);
             if (next.size() > arity()) throw runtime(Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                     "Too many arguments for " + id(), callSpan);
@@ -533,23 +561,46 @@ final class Interpreter {
         }
 
         private Value executeSequenceOperation(List<Value.Argument> supplied, SourceSpan callSpan) {
-            Value.Seq values = sequence(supplied.getFirst());
+            IndexedCollection values = indexedFields(supplied.getFirst());
             int callbackIndex = operation == SequenceOperation.FOLD ? 2 : 1;
             int callbackArity = operation == SequenceOperation.FOLD ? 2 : 1;
             Value.Callable callback = collectionCallback(supplied.get(callbackIndex), callbackArity, id(),
                     operation == SequenceOperation.FOLD ? "combine" : "predicate");
             return switch (operation) {
                 case FILTER -> {
-                    ArrayList<Value> selected = new ArrayList<>();
-                    for (Value value : values) {
-                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
-                        if (predicateResult(result, id(), supplied.get(callbackIndex).span())) selected.add(value);
-                    }
-                    yield ownership.fresh(new Value.Seq(selected));
+                    CollectionRuntime.Facts sourceFacts = values.facts();
+                    boolean pure = knownPure(callback);
+                    CollectionRuntime.Guarantee sequential = sourceFacts.sequential()
+                            == CollectionRuntime.Guarantee.TRUE && pure
+                            ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN;
+                    CollectionRuntime.Guarantee finite = sourceFacts.finite() == CollectionRuntime.Guarantee.TRUE
+                            ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN;
+                    CollectionRuntime.Facts facts = new CollectionRuntime.Facts(sequential, sourceFacts.ordered(),
+                            sourceFacts.unique(), finite, sourceFacts.keyed(), sourceFacts.hasValues());
+                    Value.LazyCollection.Shape shape = sourceFacts.keyed() == CollectionRuntime.Guarantee.FALSE
+                            ? Value.LazyCollection.Shape.KEYLESS
+                            : sourceFacts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                            ? Value.LazyCollection.Shape.SET : sourceFacts.keyed() == CollectionRuntime.Guarantee.TRUE
+                            ? Value.LazyCollection.Shape.KEYED : Value.LazyCollection.Shape.INFER;
+                    int[] next = {0};
+                    Integer knownSize = values.knownSize() != null && values.knownSize() == 0 ? 0 : null;
+                    yield ownership.fresh(new Value.LazyCollection(shape, () -> {
+                        while (true) {
+                            Optional<Value> candidate = values.at(next[0]++);
+                            if (candidate.isEmpty()) return null;
+                            Value result = invoke(callback, new Value.Argument(candidate.get(),
+                                    supplied.getFirst().span()), callSpan);
+                            if (predicateResult(result, id(), supplied.get(callbackIndex).span())) {
+                                return retainedEntry(candidate.get(), shape, callSpan);
+                            }
+                        }
+                    }, facts, knownSize, callSpan));
                 }
                 case FOLD -> {
                     Value accumulator = supplied.get(1).value();
-                    for (Value value : values) {
+                    for (int index = 0; ; index++) {
+                        Optional<Value> next = values.at(index);
+                        if (next.isEmpty()) break;
                         Value partial = invoke(callback,
                                 new Value.Argument(accumulator, supplied.get(1).span()), callSpan);
                         if (!(underlying(partial) instanceof Value.Callable remaining)) {
@@ -557,22 +608,26 @@ final class Interpreter {
                                     "fold combine lost its second parameter", callSpan);
                         }
                         accumulator = invoke(remaining,
-                                new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                                new Value.Argument(next.get(), supplied.getFirst().span()), callSpan);
                     }
                     yield accumulator;
                 }
                 case ANY -> {
                     boolean matched = false;
-                    for (Value value : values) {
-                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                    for (int index = 0; ; index++) {
+                        Optional<Value> next = values.at(index);
+                        if (next.isEmpty()) break;
+                        Value result = invoke(callback, new Value.Argument(next.get(), supplied.getFirst().span()), callSpan);
                         if (predicateResult(result, id(), supplied.get(callbackIndex).span())) { matched = true; break; }
                     }
                     yield new Value.Bool(matched);
                 }
                 case ALL -> {
                     boolean matched = true;
-                    for (Value value : values) {
-                        Value result = invoke(callback, new Value.Argument(value, supplied.getFirst().span()), callSpan);
+                    for (int index = 0; ; index++) {
+                        Optional<Value> next = values.at(index);
+                        if (next.isEmpty()) break;
+                        Value result = invoke(callback, new Value.Argument(next.get(), supplied.getFirst().span()), callSpan);
                         if (!predicateResult(result, id(), supplied.get(callbackIndex).span())) { matched = false; break; }
                     }
                     yield new Value.Bool(matched);
@@ -1818,8 +1873,133 @@ final class Interpreter {
         if (raw instanceof Value.EmptyCollection) return ownership.fresh(new Value.Seq(List.of()));
         if (raw instanceof Value.Seq sequence) return sequence;
         if (raw instanceof Value.LazySeq sequence) return ownership.fresh(new Value.Seq(sequence.materialize()));
+        if (raw instanceof Value.LazyCollection collection
+                && collection.materializedValue() instanceof Value.Seq sequence) return ownership.fresh(sequence);
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
+    }
+
+    private record IndexedCollection(java.util.function.IntFunction<Optional<Value>> accessor,
+                                     Integer knownSize, CollectionRuntime.Facts facts) {
+        private Optional<Value> at(int index) {
+            return index < 0 ? Optional.empty() : accessor.apply(index);
+        }
+    }
+
+    private IndexedCollection indexedFields(Value.Argument argument) {
+        CollectionRuntime.Provider provider = collection(argument);
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.EmptyCollection) {
+            return new IndexedCollection(ignored -> Optional.empty(), 0, provider.facts());
+        }
+        if (raw instanceof Value.Seq sequence) {
+            return new IndexedCollection(sequence::find, sequence.size(), provider.facts());
+        }
+        if (raw instanceof Value.LazySeq sequence) {
+            return new IndexedCollection(index -> index < sequence.length()
+                    ? Optional.of(sequence.at(index)) : Optional.empty(), sequence.length(), provider.facts());
+        }
+        if (raw instanceof Value.Field field) {
+            List<Value> values = List.of(field.key(), field.value());
+            return indexed(values, provider.facts());
+        }
+        if (raw instanceof Value.KeyedCollection keyed) {
+            List<Value> fields = keyed.entries().stream().map(entry -> (Value) new Value.Field(entry.key(),
+                    keyed.shape() == Value.KeyedCollection.Shape.SET
+                            ? Value.Missing.INSTANCE : entry.value())).toList();
+            return indexed(fields, provider.facts());
+        }
+        if (raw instanceof Value.Dictionary dictionary) {
+            List<Value> fields = dictionary.entries().entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey(CollectionRuntime.FIELD_ORDER))
+                    .map(entry -> (Value) new Value.Field(new Value.Str(entry.getKey()), entry.getValue())).toList();
+            return indexed(fields, provider.facts());
+        }
+        if (raw instanceof Value.ProjectedDictionary dictionary) {
+            List<Value> fields = dictionary.fields(reflectionContext).entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey(CollectionRuntime.FIELD_ORDER))
+                    .map(entry -> (Value) new Value.Field(new Value.Str(entry.getKey()), entry.getValue())).toList();
+            return indexed(fields, provider.facts());
+        }
+        if (raw instanceof Value.LazyCollection collection) {
+            return new IndexedCollection(index -> collection.entryAt(index).map(entry ->
+                    collection.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
+                            ? entry.value() : new Value.Field(entry.key(),
+                            collection.resolvedShape() == Value.LazyCollection.Shape.SET
+                                    ? Value.Missing.INSTANCE : entry.value())), null, provider.facts());
+        }
+        Value enumeration = provider.fieldEntries();
+        if (underlying(enumeration) == raw) {
+            throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                    "Collection provider cannot enumerate its fields", argument.span());
+        }
+        return indexedFields(new Value.Argument(enumeration, argument.span()));
+    }
+
+    private IndexedCollection indexed(List<Value> values, CollectionRuntime.Facts facts) {
+        return new IndexedCollection(index -> index < values.size()
+                ? Optional.of(values.get(index)) : Optional.empty(), values.size(), facts);
+    }
+
+    private boolean knownPure(Value.Callable callback) {
+        List<CallableSignature.EffectRef> effects = callback.signature().effects().upperBound();
+        return effects != null && effects.isEmpty();
+    }
+
+    private boolean definitelyNonField(Value.Callable callback) {
+        List<CallableSignature.ContractTerm> results = callback.signature().result().guarantees();
+        if (results.isEmpty()) return false;
+        for (CallableSignature.ContractTerm result : results) {
+            while (result instanceof CallableSignature.ModifiedRef modified) result = modified.base();
+            if (result instanceof CallableSignature.VariableRef) return false;
+            if (result instanceof CallableSignature.NamedRef named
+                    && (named.identity() == BuiltinContract.ANY || named.identity() == BuiltinContract.FIELD
+                    || named.identity() == BuiltinContract.COLLECTION)) return false;
+        }
+        return true;
+    }
+
+    private Value.LazyCollection.Produced transformedEntry(Value mapped, boolean sourceSet, SourceSpan span) {
+        Value raw = underlying(mapped);
+        if (raw instanceof Value.Field field) {
+            Value key = underlying(field.key());
+            if (key == Value.Missing.INSTANCE) {
+                return underlying(field.value()) == Value.Missing.INSTANCE ? null
+                        : new Value.LazyCollection.Produced(null, field.value(),
+                        Value.LazyCollection.Shape.KEYLESS);
+            }
+            if (!ValueSemantics.equalityEligible(key)) {
+                throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                        "Transformed Collection key must support equality", span);
+            }
+            Value.LazyCollection.Shape shape = underlying(field.value()) == Value.Missing.INSTANCE
+                    ? Value.LazyCollection.Shape.SET : Value.LazyCollection.Shape.KEYED;
+            return new Value.LazyCollection.Produced(field.key(), field.value(), shape);
+        }
+        if (sourceSet) {
+            if (raw == Value.Missing.INSTANCE || !ValueSemantics.equalityEligible(raw)) {
+                throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                        "A transformed Set member must support equality and cannot be missing", span);
+            }
+            return new Value.LazyCollection.Produced(mapped, Value.Missing.INSTANCE,
+                    Value.LazyCollection.Shape.SET);
+        }
+        return new Value.LazyCollection.Produced(null, mapped, Value.LazyCollection.Shape.KEYLESS);
+    }
+
+    private Value.LazyCollection.Produced retainedEntry(Value candidate, Value.LazyCollection.Shape shape,
+                                                        SourceSpan span) {
+        if (shape == Value.LazyCollection.Shape.KEYLESS || shape == Value.LazyCollection.Shape.INFER) {
+            return shape == Value.LazyCollection.Shape.INFER
+                    ? transformedEntry(candidate, false, span)
+                    : new Value.LazyCollection.Produced(null, candidate, shape);
+        }
+        Value raw = underlying(candidate);
+        if (!(raw instanceof Value.Field field)) {
+            throw runtime(Diagnostic.Codes.INTERNAL_ERROR,
+                    "A keyed Collection enumerated a non-Field value", span);
+        }
+        return new Value.LazyCollection.Produced(field.key(), field.value(), shape);
     }
 
     private CollectionRuntime.Provider collection(Value.Argument argument) {
@@ -1899,7 +2079,10 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                     "Collection access key must support equality, got: " + ValueSemantics.kind(key), span);
         }
-        if (collection instanceof Value.Seq || collection instanceof Value.Field) {
+        if (collection instanceof Value.Seq || collection instanceof Value.LazySeq
+                || collection instanceof Value.Field
+                || collection instanceof Value.LazyCollection lazy
+                && lazy.resolvedShape() == Value.LazyCollection.Shape.KEYLESS) {
             if (!(key instanceof Value.Num(double number)) || number != Math.rint(number)) {
                 throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                         "Sequential Collection key must be an integer, got: " + key, span);
