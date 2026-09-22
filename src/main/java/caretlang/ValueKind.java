@@ -38,7 +38,8 @@ enum ValueKind {
             case Value.LazyCollection collection -> switch (collection.resolvedShape()) {
                 case KEYLESS -> SEQUENCE;
                 case SET -> SET;
-                case KEYED, INFER -> COLLECTION;
+                case KEYED -> collection.dictionarySelected() ? DICTIONARY : COLLECTION;
+                case INFER -> COLLECTION;
             };
             case Value.ContractValue ignored -> CONTRACT;
             case Value.Attributed attributed -> of(attributed.value());

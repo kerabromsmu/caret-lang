@@ -131,6 +131,9 @@ diff -u examples/features/lazy_collection.expected "$CARET_TEST_TMP/lazy-collect
 "$CARET_LAUNCHER" examples/features/collection_transforms.caret > "$CARET_TEST_TMP/collection-transforms-output.txt"
 diff -u examples/features/collection_transforms.expected "$CARET_TEST_TMP/collection-transforms-output.txt"
 
+"$CARET_LAUNCHER" examples/features/zip.caret > "$CARET_TEST_TMP/zip-output.txt"
+diff -u examples/features/zip.expected "$CARET_TEST_TMP/zip-output.txt"
+
 "$CARET_LAUNCHER" examples/features/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
 diff -u examples/features/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
 
@@ -290,6 +293,7 @@ expect_failure examples/errors/definition_in_continuation.caret unused
 expect_failure examples/errors/missing_lambda_body.caret unused
 expect_failure examples/errors/invalid_collection_callback.caret unused
 expect_failure examples/errors/invalid_predicate_result.caret unused
+expect_failure examples/errors/zip_length_mismatch.caret unused
 expect_failure examples/errors/invalid_numbered_hole.caret unused
 expect_failure examples/errors/ambiguous_call_arity.caret unused
 expect_failure examples/errors/unknown_contract.caret unused

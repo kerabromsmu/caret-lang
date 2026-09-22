@@ -265,6 +265,7 @@ final class Interpreter {
                             && contract.descriptor() instanceof TemplateContract template) {
                         template.nameIfAnonymous(name);
                     }
+                    if (underlying(value) instanceof Value.LazyCollection collection) collection.lockShape();
                     ownership.share(value);
                     env.initialize(name, value);
                 }
@@ -515,7 +516,7 @@ final class Interpreter {
                     Value.LazyCollection.Produced produced = transformedEntry(mapped, sourceSet, callSpan);
                     if (produced != null) return produced;
                 }
-            }, facts, null, callSpan));
+            }, facts, null, callSpan, true, true));
         }
 
         @Override public int remainingArity() { return transform == null ? 2 : 1; }
@@ -594,7 +595,8 @@ final class Interpreter {
                                 return retainedEntry(candidate.get(), shape, callSpan);
                             }
                         }
-                    }, facts, knownSize, callSpan));
+                    }, facts, knownSize, callSpan, true,
+                            ValueKind.of(supplied.getFirst().value()) == ValueKind.DICTIONARY));
                 }
                 case FOLD -> {
                     Value accumulator = supplied.get(1).value();
@@ -646,6 +648,45 @@ final class Interpreter {
             for (int index = 0; index < arguments.size(); index++) {
                 signature = signature.specializeFirst(arguments.get(index).value());
             }
+            return signature;
+        }
+        @Override public List<Value> retainedValues() {
+            return arguments.stream().map(Value.Argument::value).toList();
+        }
+    }
+
+    private final class ZipCallable implements Value.Callable {
+        private final boolean keyed;
+        private final List<Value.Argument> arguments;
+
+        private ZipCallable(boolean keyed) { this(keyed, List.of()); }
+        private ZipCallable(boolean keyed, List<Value.Argument> arguments) {
+            this.keyed = keyed;
+            this.arguments = List.copyOf(arguments);
+        }
+
+        @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
+            indexedSequence(argument);
+            ArrayList<Value.Argument> next = new ArrayList<>(arguments);
+            next.add(argument);
+            if (next.size() < 2) return new ZipCallable(keyed, next);
+            if (next.size() > 2) throw runtime(Diagnostic.Codes.TOO_MANY_ARGUMENTS,
+                    "Too many arguments for " + publicName(), callSpan);
+            return zip(next.get(0), next.get(1), keyed, callSpan);
+        }
+
+        @Override public int remainingArity() { return 2 - arguments.size(); }
+        @Override public String publicName() { return keyed ? "zipWithKeys" : "zip"; }
+        @Override public CallableSignature signature() {
+            CallableSignature.ContractTerm sequence = new CallableSignature.NamedRef(
+                    BuiltinContract.SEQUENCE, BuiltinContract.SEQUENCE.publicName());
+            CallableSignature.ContractTerm result = new CallableSignature.NamedRef(
+                    keyed ? BuiltinContract.COLLECTION : BuiltinContract.SEQUENCE,
+                    keyed ? BuiltinContract.COLLECTION.publicName() : BuiltinContract.SEQUENCE.publicName());
+            CallableSignature signature = CallableSignature.builtin(keyed
+                            ? List.of("keys", "values") : List.of("left", "right"),
+                    List.of(List.of(sequence), List.of(sequence)), List.of(result), List.of());
+            for (Value.Argument supplied : arguments) signature = signature.specializeFirst(supplied.value());
             return signature;
         }
         @Override public List<Value> retainedValues() {
@@ -936,6 +977,8 @@ final class Interpreter {
             if (underlyingValue == Value.Missing.INSTANCE && contract.accepts(value)) continue;
             ContractDescriptor nominal = contract instanceof ModifiedContract modified
                     ? modified.base() : contract;
+            if (underlying(value) instanceof Value.LazyCollection collection
+                    && dictionaryRequirement(nominal)) collection.selectDictionary();
             if (nominal instanceof UserContract user && user.canAcquire(value, valueSpan)) {
                 acquired.add(nominal);
                 continue;
@@ -955,6 +998,12 @@ final class Interpreter {
             return new Value.Attributed(value1, acquired);
         }
         return new Value.Attributed(value, acquired);
+    }
+
+    private boolean dictionaryRequirement(ContractDescriptor descriptor) {
+        if (descriptor == BuiltinContract.DICTIONARY) return true;
+        return descriptor instanceof ParameterizedContract parameterized
+                && parameterized.base() == BuiltinContract.DICTIONARY;
     }
 
     private void validateEffectConstraint(Value value, SourceSpan valueSpan, ContractClause clause,
@@ -1763,6 +1812,8 @@ final class Interpreter {
         builtins.define("fold", new SequenceOperationCallable(SequenceOperation.FOLD));
         builtins.define("any", new SequenceOperationCallable(SequenceOperation.ANY));
         builtins.define("all", new SequenceOperationCallable(SequenceOperation.ALL));
+        builtins.define("zip", new ZipCallable(false));
+        builtins.define("zipWithKeys", new ZipCallable(true));
 
         builtins.define("dictEmpty", function("dictEmpty", List.of(), args ->
                 ownership.fresh(new Value.Dictionary(Map.of()))));
@@ -1884,6 +1935,115 @@ final class Interpreter {
         private Optional<Value> at(int index) {
             return index < 0 ? Optional.empty() : accessor.apply(index);
         }
+        private boolean hasIndex(int index) {
+            return index >= 0 && (knownSize != null ? index < knownSize : at(index).isPresent());
+        }
+    }
+
+    private IndexedCollection indexedSequence(Value.Argument argument) {
+        Value raw = underlying(argument.value());
+        if (raw instanceof Value.EmptyCollection || raw instanceof Value.Seq || raw instanceof Value.LazySeq) {
+            return indexedFields(argument);
+        }
+        if (raw instanceof Value.LazyCollection collection
+                && (collection.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
+                || collection.resolvedShape() == Value.LazyCollection.Shape.INFER
+                || collection.facts().keyed() == CollectionRuntime.Guarantee.FALSE)) {
+            return new IndexedCollection(index -> collection.entryAt(index).map(entry -> {
+                if (collection.resolvedShape() != Value.LazyCollection.Shape.KEYLESS) {
+                    throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
+                            "Expected sequence, got a keyed Collection", argument.span());
+                }
+                return entry.value();
+            }), null, collection.facts());
+        }
+        throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
+                "Expected sequence, got: " + argument.value(), argument.span());
+    }
+
+    private Value zip(Value.Argument leftArgument, Value.Argument rightArgument,
+                      boolean keyed, SourceSpan callSpan) {
+        IndexedCollection left = indexedSequence(leftArgument);
+        IndexedCollection right = indexedSequence(rightArgument);
+        boolean lazy = underlying(leftArgument.value()) instanceof Value.LazySeq
+                || underlying(leftArgument.value()) instanceof Value.LazyCollection
+                || underlying(rightArgument.value()) instanceof Value.LazySeq
+                || underlying(rightArgument.value()) instanceof Value.LazyCollection;
+        if (!keyed && !lazy) {
+            if (!Objects.equals(left.knownSize(), right.knownSize())) throw zipLengthMismatch(callSpan);
+            ArrayList<Value> tuples = new ArrayList<>(left.knownSize());
+            for (int index = 0; index < left.knownSize(); index++) {
+                tuples.add(new Value.Seq(List.of(left.at(index).orElseThrow(), right.at(index).orElseThrow())));
+            }
+            return ownership.fresh(new Value.Seq(tuples));
+        }
+
+        CollectionRuntime.Guarantee finite = left.facts().finite() == CollectionRuntime.Guarantee.TRUE
+                && right.facts().finite() == CollectionRuntime.Guarantee.TRUE
+                ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN;
+        CollectionRuntime.Guarantee ordered = left.facts().ordered() == CollectionRuntime.Guarantee.TRUE
+                && right.facts().ordered() == CollectionRuntime.Guarantee.TRUE
+                ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN;
+        CollectionRuntime.Facts facts = keyed
+                ? new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE, ordered,
+                CollectionRuntime.Guarantee.UNKNOWN, finite, CollectionRuntime.Guarantee.TRUE,
+                CollectionRuntime.Guarantee.TRUE)
+                : new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE, ordered,
+                CollectionRuntime.Guarantee.UNKNOWN, finite, CollectionRuntime.Guarantee.FALSE,
+                CollectionRuntime.Guarantee.TRUE);
+        Integer knownSize = !keyed && left.knownSize() != null && Objects.equals(left.knownSize(), right.knownSize())
+                ? left.knownSize() : null;
+        int[] next = {0};
+        ArrayList<Value> retainedKeys = new ArrayList<>();
+        Value.LazyCollection result = new Value.LazyCollection(keyed
+                ? Value.LazyCollection.Shape.KEYED : Value.LazyCollection.Shape.KEYLESS, () -> {
+            while (true) {
+                int index = next[0]++;
+                Optional<Value> leftValue = left.at(index);
+                if (leftValue.isEmpty()) {
+                    if (right.hasIndex(index)) throw zipLengthMismatch(callSpan);
+                    return null;
+                }
+                if (!keyed) {
+                    Optional<Value> rightValue = right.at(index);
+                    if (rightValue.isEmpty()) throw zipLengthMismatch(callSpan);
+                    return new Value.LazyCollection.Produced(null,
+                            new Value.Seq(List.of(leftValue.get(), rightValue.get())),
+                            Value.LazyCollection.Shape.KEYLESS);
+                }
+                Value key = leftValue.get();
+                validateZipKey(key, leftArgument.span());
+                boolean duplicate = retainedKeys.stream().anyMatch(existing -> ValueSemantics.equal(existing, key));
+                if (duplicate) {
+                    if (!right.hasIndex(index)) throw zipLengthMismatch(callSpan);
+                    continue;
+                }
+                Optional<Value> rightValue = right.at(index);
+                if (rightValue.isEmpty()) throw zipLengthMismatch(callSpan);
+                retainedKeys.add(key);
+                return new Value.LazyCollection.Produced(key, rightValue.get(),
+                        Value.LazyCollection.Shape.KEYED);
+            }
+        }, facts, knownSize, callSpan, true, false);
+        if (!lazy) result.materializeEntries();
+        return ownership.fresh(result);
+    }
+
+    private void validateZipKey(Value key, SourceSpan span) {
+        Value raw = underlying(key);
+        if (raw == Value.Missing.INSTANCE) {
+            throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                    "zipWithKeys key cannot be missing", span);
+        }
+        if (!ValueSemantics.equalityEligible(raw)) {
+            throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                    "zipWithKeys key must support equality", span);
+        }
+    }
+
+    private LangException zipLengthMismatch(SourceSpan span) {
+        return runtime(Diagnostic.Codes.ZIP_LENGTH_MISMATCH,
+                "zip inputs must have equal lengths", span);
     }
 
     private IndexedCollection indexedFields(Value.Argument argument) {
@@ -1948,15 +2108,15 @@ final class Interpreter {
 
     private boolean definitelyNonField(Value.Callable callback) {
         List<CallableSignature.ContractTerm> results = callback.signature().result().guarantees();
-        if (results.isEmpty()) return false;
         for (CallableSignature.ContractTerm result : results) {
             while (result instanceof CallableSignature.ModifiedRef modified) result = modified.base();
-            if (result instanceof CallableSignature.VariableRef) return false;
+            if (result instanceof CallableSignature.AppliedRef applied) result = applied.constructor();
             if (result instanceof CallableSignature.NamedRef named
-                    && (named.identity() == BuiltinContract.ANY || named.identity() == BuiltinContract.FIELD
-                    || named.identity() == BuiltinContract.COLLECTION)) return false;
+                    && named.identity() instanceof BuiltinContract contract
+                    && contract != BuiltinContract.ANY && contract != BuiltinContract.EQ
+                    && contract != BuiltinContract.FIELD && contract != BuiltinContract.COLLECTION) return true;
         }
-        return true;
+        return false;
     }
 
     private Value.LazyCollection.Produced transformedEntry(Value mapped, boolean sourceSet, SourceSpan span) {

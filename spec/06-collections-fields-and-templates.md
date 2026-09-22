@@ -9,7 +9,8 @@
 This section records the decisions from issues #55 and #59 and their joint design discussion.
 The common `keys`/`values`/`fields`/`size` protocol, Boolean-or-missing guarantee queries,
 matching reflection fields, `Natural`, contextual Field/Set/Dictionary/keyless shapes, first-key
-settlement, unified access, lazy shape-aware transforms and strict consumers, and shape-neutral empty facts are
+settlement, unified access, lazy shape-aware transforms, strict consumers, paired construction,
+and shape-neutral empty facts are
 implemented. The remaining equality, state, scoped-lookup, materialization,
 and template work in this revision is
 planned. For the subjects covered here the revision
@@ -269,6 +270,10 @@ if necessary, documenting any change rather than silently selecting a different 
 Settled Collections with positional key access use the by-key operation contract.
 
 ### Zip construction
+
+The built-in `zip` and `zipWithKeys` functions now implement this section. Their lazy results use
+the same incremental provider foundation as transforms, and Dictionary context selects sorted
+homogeneous construction without changing the default general keyed result.
 
 Phase 4 provides two ordinary functions, each taking exactly two input sequences:
 

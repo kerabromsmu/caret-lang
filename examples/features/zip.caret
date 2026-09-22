@@ -1,0 +1,24 @@
+// zip creates ordinary two-position tuples.
+print zip [1 2] ["a" "b"]
+print Field (zip [1] [2])[0]
+
+// zipWithKeys defaults to a general keyed Collection, including composite keys.
+general = zipWithKeys [[2] [1]] ["b" "a"]
+print type general
+print keys general
+
+// A Dictionary contract selects homogeneous sorted keys.
+(Dictionary String Number) sorted = zipWithKeys ["b" "a"] [2 1]
+print keys sorted
+
+// Duplicate keys retain the first position without demanding a known ignored lazy value.
+(Output Number) trace value =
+  print value
+  value
+lazyValues = map trace [10 20]
+print zipWithKeys ["same" "same"] lazyValues
+
+// Ordinary numbered-hole partials can reorder the two inputs.
+swapped = zip _2 _1
+print swapped [3] [4]
+

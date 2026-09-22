@@ -58,6 +58,7 @@ successful direct `T~`/`T?~` default insertion is silent.
 | RUNTIME-INVALID-COMPOSITION-RIGHT | public | INVALID_COMPOSITION_RIGHT | `examples/errors/invalid_composition_arity.caret` |
 | RUNTIME-INVALID-MAP-TRANSFORM | public | INVALID_MAP_TRANSFORM | `InterpreterTest#mapRejectsInvalidInputsAndRetainsLocatedElementFailures` |
 | RUNTIME-INVALID-COLLECTION-CALLBACK | public | INVALID_COLLECTION_CALLBACK | `examples/errors/invalid_collection_callback.caret` |
+| RUNTIME-ZIP-LENGTH-MISMATCH | public | ZIP_LENGTH_MISMATCH | `examples/errors/zip_length_mismatch.caret` |
 | RUNTIME-INVALID-PREDICATE-RESULT | public | INVALID_PREDICATE_RESULT | `examples/errors/invalid_predicate_result.caret` |
 | RUNTIME-AMBIGUOUS-CALL-ARITY | public | TOO_MANY_ARGUMENTS | `examples/errors/ambiguous_call_arity.caret` |
 | INTERNAL-TOO-MANY-FUNCTION-ARGUMENTS | internal | TOO_MANY_ARGUMENTS | `DiagnosticCoverageTest#everyInternalCatalogVariantIsIndividuallyIdentifiable` |

@@ -57,6 +57,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `COLL-ACCESS-001`, `COLL-FIELD-ACCESS-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | `features/collection_access.caret`; equivalent dot/bracket/getElement lookup, composite/null keys, Set and Field access, lexical shadowing, and partials; `errors/invalid_collection_key.caret` |
 | `COLL-LAZY-001` | `features/lazy_collection.caret`; lazy keyless map demand, alias sharing, known size without forcing, and fresh invocation results with effect traces |
 | `COLL-TRANSFORM-001` | `features/collection_transforms.caret`; lazy sequence/keyed/Set map and filter, duplicate-key retention, and strict Field-based consumers |
+| `COLL-ZIP-001` | `features/zip.caret`; tuple pairing, general and Dictionary keyed construction, lazy duplicate suppression, and numbered-hole partials; `errors/zip_length_mismatch.caret` |
 
 Run all examples with:
 

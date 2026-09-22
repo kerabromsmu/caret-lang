@@ -126,7 +126,7 @@ defines evidence required before claiming implementation.
 The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
 records the joint #55/#59 decisions and their explicit precedence over affected legacy target behavior.
 Its common enumeration, size, guarantee, reflection, `Natural`, contextual Field/Set/Dictionary
-shape, settlement, unified access, lazy transforms, strict consumers, and empty-Collection foundation
+shape, settlement, unified access, lazy transforms, strict consumers, paired construction, and empty-Collection foundation
 is implemented; the remaining integration
 points are planned. General
 [lazy-value evaluation](spec/02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts)

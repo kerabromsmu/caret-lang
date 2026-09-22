@@ -55,7 +55,7 @@ Dot and bracket access share implemented `getElement` semantics: absent valid ke
 invalid keys are errors, and keys may be composite values supporting equality.
 
 Dictionaries retain sorted keys of one sortable type; general keyed Collections need only equality
-keys and retain their established entry order. Repeated keys retain the first entry. Planned `zip`
+keys and retain their established entry order. Repeated keys retain the first entry. Implemented `zip`
 pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
 Dictionary construction. Field positions zero and one use the same bracket/`getElement` path.

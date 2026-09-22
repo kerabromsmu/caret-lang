@@ -2983,6 +2983,101 @@ final class InterpreterTest {
     }
 
     @Test
+    void zipPairsExactlyTwoSequencesAndSupportsOrdinaryCallableForms() {
+        assertEquals("""
+                []
+                [
+                  [ 1 "a" ]
+                  [ 2 "b" ]
+                ]
+                false
+                Collection
+                [
+                  [ 2 ]
+                  [ 1 ]
+                ]
+                false
+                [ "a" "b" ]
+                [
+                  [ 1 2 ]
+                ]
+                [
+                  [ 4 3 ]
+                ]
+                2
+                """, execute("""
+                print zip [] []
+                print zip [1 2] ["a" "b"]
+                print Field (zip [1] [2])[0]
+
+                general = zipWithKeys [[2] [1]] ["b" "a"]
+                print type general
+                print keys general
+                candidate = zipWithKeys ["b" "a"] [2 1]
+                print (Dictionary String Number) candidate
+                (Dictionary String Number) sorted = zipWithKeys ["b" "a"] [2 1]
+                print keys sorted
+
+                pair = zip [1]
+                print pair [2]
+                swapped = zip _2 _1
+                print swapped [3] [4]
+                print (@zip).remaining
+                """));
+    }
+
+    @Test
+    void zipWithKeysKeepsAlignmentWithoutDemandingIgnoredDuplicateValues() {
+        assertEquals("""
+                10
+                [
+                  "same" = 10
+                ]
+                """, execute("""
+                (Output Number) trace value =
+                  print value
+                  value
+                lazyValues = map trace [10 20]
+                paired = zipWithKeys ["same" "same"] lazyValues
+                print paired
+                """));
+
+        assertEquals("""
+                2
+                1
+                [ field 1 10 field 2 20 ]
+                """, execute("""
+                (Output) makeField value =
+                  print value
+                  field value (value * 10)
+                source = map makeField [2 1]
+                paired = zipWithKeys (keys source) (values source)
+                print fields paired
+                """));
+    }
+
+    @Test
+    void zipRejectsUnequalLengthsInvalidShapesAndMixedDictionaryKeys() {
+        LangException eager = expectDiagnostic("zip [1] []", "equal lengths", 1, 1);
+        assertEquals(Diagnostic.Codes.ZIP_LENGTH_MISMATCH, eager.diagnostic().code());
+
+        LangException lazy = assertThrows(LangException.class, () -> execute("""
+                source = filter [1] (value -> true)
+                paired = zip source []
+                print paired
+                """));
+        assertEquals(Diagnostic.Codes.ZIP_LENGTH_MISMATCH, lazy.diagnostic().code());
+
+        LangException shape = assertThrows(LangException.class,
+                () -> execute("zip [1] [^value = 2]"));
+        assertEquals(Diagnostic.Codes.EXPECTED_SEQUENCE, shape.diagnostic().code());
+
+        LangException dictionary = assertThrows(LangException.class,
+                () -> execute("(Dictionary Any Any) result = zipWithKeys [\"a\" 1] [1 2]"));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, dictionary.diagnostic().code());
+    }
+
+    @Test
     void higherOrderAliasesAndPrefixPartialsPreserveCallbackEffects() {
         assertEquals("1\n[ 1 ]\n2\n[ true ]\n3\n[ 3 ]\n", execute("""
                 (Output Boolean) emit value =

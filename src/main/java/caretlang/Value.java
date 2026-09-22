@@ -386,17 +386,22 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final CollectionRuntime.Facts initialFacts;
         private final Integer knownSize;
         private final SourceSpan sourceSpan;
+        private final boolean dictionarySelectable;
+        private boolean dictionarySelected;
+        private boolean shapeLocked;
         private final ArrayList<Produced> established = new ArrayList<>();
         private RuntimeException failure;
         private boolean exhausted;
 
         LazyCollection(Shape shape, Producer producer, CollectionRuntime.Facts facts, Integer knownSize,
-                       SourceSpan sourceSpan) {
+                       SourceSpan sourceSpan, boolean dictionarySelectable, boolean dictionarySelected) {
             this.shape = Objects.requireNonNull(shape);
             this.producer = Objects.requireNonNull(producer);
             this.initialFacts = Objects.requireNonNull(facts);
             this.knownSize = knownSize;
             this.sourceSpan = sourceSpan;
+            this.dictionarySelectable = dictionarySelectable;
+            this.dictionarySelected = dictionarySelected;
         }
 
         synchronized Optional<Produced> entryAt(int index) {
@@ -422,7 +427,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                     .map(entry -> new KeyedCollection.Entry(entry.key(), entry.value())).toList());
             Value.KeyedCollection.Shape settled;
             if (current == Shape.SET) settled = Value.KeyedCollection.Shape.SET;
-            else if (homogeneousSortable(keyed)) {
+            else if (dictionarySelected && homogeneousSortable(keyed)) {
                 settled = Value.KeyedCollection.Shape.DICTIONARY;
                 keyed.sort((left, right) -> compareKeys(left.key(), right.key()));
             } else settled = Value.KeyedCollection.Shape.GENERAL;
@@ -454,6 +459,15 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         Shape resolvedShape() {
             synchronized (this) { return shape; }
         }
+
+        synchronized boolean selectDictionary() {
+            if (!dictionarySelectable || shapeLocked) return false;
+            dictionarySelected = true;
+            return true;
+        }
+
+        synchronized boolean dictionarySelected() { return dictionarySelected; }
+        synchronized void lockShape() { shapeLocked = true; }
 
         private void establishNext() {
             try {
