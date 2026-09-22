@@ -134,6 +134,9 @@ diff -u examples/features/collection_transforms.expected "$CARET_TEST_TMP/collec
 "$CARET_LAUNCHER" examples/features/zip.caret > "$CARET_TEST_TMP/zip-output.txt"
 diff -u examples/features/zip.expected "$CARET_TEST_TMP/zip-output.txt"
 
+"$CARET_LAUNCHER" examples/features/collection_equality.caret > "$CARET_TEST_TMP/collection-equality-output.txt"
+diff -u examples/features/collection_equality.expected "$CARET_TEST_TMP/collection-equality-output.txt"
+
 "$CARET_LAUNCHER" examples/features/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
 diff -u examples/features/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
 

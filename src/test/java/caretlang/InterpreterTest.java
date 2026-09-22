@@ -2119,6 +2119,39 @@ final class InterpreterTest {
     }
 
     @Test
+    void revisedCollectionEqualityUsesShapeOrderAndIncrementalLazyDemand() {
+        assertEquals("""
+                true
+                false
+                true
+                1
+                90
+                false
+                """, execute("""
+                (Sequence Number) broad = [1 2]
+                (Sequence Natural) narrow = [1 2]
+                print broad == narrow
+
+                (Set Number) sourceSet = [1]
+                (Dictionary String Number) sourceDictionary = [(field "value" 1)]
+                emptySet = filter sourceSet (value -> false)
+                emptyDictionary = filter sourceDictionary (value -> false)
+                print emptySet == emptyDictionary
+                print [] == emptySet
+
+                (Output Number) traceLeft value =
+                  print value
+                  value
+                (Output Number) traceRight value =
+                  print (value * 10)
+                  value
+                left = map traceLeft [1 2]
+                right = map traceRight [9 2]
+                print left == right
+                """));
+    }
+
+    @Test
     void evaluatesGroupedMultilineCallsAndLookups() {
         assertEquals("6\n42\n", execute("""
                 add a b = a + b

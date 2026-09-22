@@ -747,8 +747,8 @@ Mixed-clause and callable-effect diagnostic codes and attribution are also settl
 item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction, Phase 4
 common Collection protocol, Field tuples, contextual shapes, general keyed Collections, internal
 settlement, unified dot/bracket/`getElement` access, lexical lazy establishment, generalized lazy
-transforms, strict Collection consumers, and paired `zip`/`zipWithKeys` construction are complete;
-implement revised Collection equality next.
+transforms, strict Collection consumers, paired `zip`/`zipWithKeys` construction, and revised
+Collection equality are complete; implement mutable containers and state effects next.
 `with`/`outer` wait for the public named-member protocol
 rather than introducing a separate exported Scope value model.
 

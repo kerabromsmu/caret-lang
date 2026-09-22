@@ -10,8 +10,9 @@ This section records the decisions from issues #55 and #59 and their joint desig
 The common `keys`/`values`/`fields`/`size` protocol, Boolean-or-missing guarantee queries,
 matching reflection fields, `Natural`, contextual Field/Set/Dictionary/keyless shapes, first-key
 settlement, unified access, lazy shape-aware transforms, strict consumers, paired construction,
+revised Collection equality,
 and shape-neutral empty facts are
-implemented. The remaining equality, state, scoped-lookup, materialization,
+implemented. The remaining state, scoped-lookup, materialization,
 and template work in this revision is
 planned. For the subjects covered here the revision
 supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
@@ -391,6 +392,9 @@ There is no `eagerWithRetry` and no automatic cross-field failed-computation cac
 Recovery policy belongs to general failure handlers when that later facility exists.
 
 ### Collection equality (forcing policy provisional)
+
+The built-in equality operators now implement this policy for eager and lazy Collection providers.
+Equality enumerates incrementally so a mismatch does not demand later entries.
 
 The choice to force lazy content during equality is provisional and must be revisited if edge
 cases require it, especially effects/order, failures, infinite content, and sandbox-sensitive

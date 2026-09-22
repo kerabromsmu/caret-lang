@@ -559,8 +559,11 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 case KEYED, SET -> CollectionRuntime.Guarantee.TRUE;
                 case INFER -> initialFacts.keyed();
             };
-            CollectionRuntime.Guarantee hasValues = current == Shape.SET
-                    ? CollectionRuntime.Guarantee.FALSE : initialFacts.hasValues();
+            CollectionRuntime.Guarantee hasValues = switch (current) {
+                case KEYLESS, KEYED -> CollectionRuntime.Guarantee.TRUE;
+                case SET -> CollectionRuntime.Guarantee.FALSE;
+                case INFER -> initialFacts.hasValues();
+            };
             return new CollectionRuntime.Facts(initialFacts.sequential(), initialFacts.ordered(),
                     initialFacts.unique(), initialFacts.finite(), keyed, hasValues);
         }

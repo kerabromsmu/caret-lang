@@ -60,6 +60,9 @@ pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
 Dictionary construction. Field positions zero and one use the same bracket/`getElement` path.
 Access sugar follows lexical `getElement`, including local shadowing and ordinary hole partials.
+Collection equality respects keyed/value shape and declared ordering, compares unordered content by
+key or multiplicity, short-circuits lazy demand, and treats known-infinite Collections as unequal.
+A shape-neutral empty Collection adapts to the established empty shape on its other side.
 
 Public `addElement`, `removeElement`, and `replaceElement`, their construction-selection
 interface, and additional immutable-update syntax are deferred beyond Phase 4. Their design is

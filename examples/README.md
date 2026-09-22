@@ -58,6 +58,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `COLL-LAZY-001` | `features/lazy_collection.caret`; lazy keyless map demand, alias sharing, known size without forcing, and fresh invocation results with effect traces |
 | `COLL-TRANSFORM-001` | `features/collection_transforms.caret`; lazy sequence/keyed/Set map and filter, duplicate-key retention, and strict Field-based consumers |
 | `COLL-ZIP-001` | `features/zip.caret`; tuple pairing, general and Dictionary keyed construction, lazy duplicate suppression, and numbered-hole partials; `errors/zip_length_mismatch.caret` |
+| `COLL-EQUALITY-001` | `features/collection_equality.caret`; compatible contracts, shape-sensitive empties, contextual empty adaptation, and left-before-right lazy short-circuiting |
 
 Run all examples with:
 
