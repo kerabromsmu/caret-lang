@@ -326,10 +326,12 @@ conversion through this new syntax are deferred. See the canonical
 [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
 
 The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
-now has its common enumeration/guarantee foundation: `keys`, `values`, `fields`, `size`, the six
-guarantee queries, matching reflection fields, `Natural`, and shape-neutral empty facts are
-implemented. Lazy map/filter, Field tuples and Sets, unified missing-returning dot/bracket lookup,
-revised equality, and collection-value `eager` remain planned. Phase 4 includes expected-template
+now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,
+`values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
+two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,
+first-key settlement, and shape-neutral empty facts are implemented. Lazy map/filter, unified
+missing-returning dot/bracket lookup, revised equality, and collection-value `eager` remain planned.
+Phase 4 includes expected-template
 completion for Collection literals but
 does not add a context-dependent `Template value` constructor call: ordinary template application
 remains a membership predicate. General computations, custom providers, resumable failure handlers,
@@ -343,7 +345,7 @@ template constructor/predicate invocation, and callable `eager` forms are deferr
   analysis are implemented, including the read-only `caret inspect` report;
   nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
   implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
-- Contract-selected collection representations, first-class dynamic fields, formats,
+- Additional contract-selected collection representations, formats,
   cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
@@ -388,7 +390,8 @@ The ordinary runtime provides:
 
 - `print value` and `type value`;
 - `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`,
-  `Field`, and `Dictionary` as first-class contracts; `Field K V` and `Dictionary K V` are curried;
+  `Field`, `Set`, and `Dictionary` as first-class contracts; `Field K V`, `Set K`, and
+  `Dictionary K V` are curried;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
 - `seqEmpty`, `seqAdd`, `seqGet`, `seqSize`, and callable-first `map`; and
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
@@ -406,10 +409,13 @@ print (@source).kind
 print (@source).ids
 ```
 
-Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `ids`. Field keys are
+Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `ids`. String Field keys are
 ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
 or update order; their value expressions are still evaluated in source order. Identifier shorthand
 `^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
+Fields accept arbitrary non-missing keys, expose `key` and `value` metadata, and participate in the
+Collection protocol as two-position tuples. Set context treats plain elements and key-only Fields as
+members; Dictionary context distinguishes a stored `~` value from absence.
 Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
 non-callable metadata Dictionary exposing `kind`, visible
 declaration `id`, remaining arity, a language-owned `signature`, and surviving overload `variants`.

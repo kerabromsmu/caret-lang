@@ -63,6 +63,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String EXPECTED_COLLECTION = "EXPECTED_COLLECTION";
         static final String CONTRADICTORY_COLLECTION_GUARANTEES = "CONTRADICTORY_COLLECTION_GUARANTEES";
         static final String INVALID_DICTIONARY_KEY = "INVALID_DICTIONARY_KEY";
+        static final String AMBIGUOUS_COLLECTION_SHAPE = "AMBIGUOUS_COLLECTION_SHAPE";
         static final String DIVISION_BY_ZERO = "DIVISION_BY_ZERO";
         static final String NON_FINITE_RESULT = "NON_FINITE_RESULT";
         static final String INVALID_FIELD_TARGET = "INVALID_FIELD_TARGET";
@@ -72,7 +73,6 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String TEMPLATE_NONCOMPARABLE_FIXED_VALUE = "TEMPLATE_NONCOMPARABLE_FIXED_VALUE";
         static final String NOT_DEREFERENCEABLE = "NOT_DEREFERENCEABLE";
         static final String MIXED_COLLECTION_SHAPE = "MIXED_COLLECTION_SHAPE";
-        static final String DUPLICATE_FIELD = "DUPLICATE_FIELD";
         static final String CALLABLE_EQUALITY = "CALLABLE_EQUALITY";
         static final String CALLABLE_RENDERING = "CALLABLE_RENDERING";
         static final String MIXED_HOLE_STYLES = "MIXED_HOLE_STYLES";

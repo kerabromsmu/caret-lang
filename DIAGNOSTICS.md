@@ -72,6 +72,7 @@ successful direct `T~`/`T?~` default insertion is silent.
 | RUNTIME-EXPECTED-COLLECTION | public | EXPECTED_COLLECTION | `examples/errors/expected_collection.caret` |
 | RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES | public | CONTRADICTORY_COLLECTION_GUARANTEES | `InterpreterTest#internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent` |
 | RUNTIME-INVALID-DICTIONARY-KEY | public | INVALID_DICTIONARY_KEY | `examples/errors/invalid_dictionary_key.caret` |
+| RUNTIME-AMBIGUOUS-COLLECTION-SHAPE | public | AMBIGUOUS_COLLECTION_SHAPE | `examples/errors/ambiguous_collection_shape.caret` |
 | RUNTIME-DIVISION-BY-ZERO | public | DIVISION_BY_ZERO | `examples/errors/division_by_zero.caret` |
 | RUNTIME-NONFINITE-RESULT | public | NON_FINITE_RESULT | `examples/errors/non_finite_result.caret` |
 | RUNTIME-INVALID-FIELD-TARGET | public | INVALID_FIELD_TARGET | `examples/errors/invalid_field_target.caret` |
@@ -92,10 +93,7 @@ successful direct `T~`/`T?~` default insertion is silent.
 | SEMANTIC-INCOMPATIBLE-COMPOSITION | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_composition_contracts.caret` |
 | SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
 | SEMANTIC-CONTRACT-DERIVATION-CYCLE | public | CONTRACT_DERIVATION_CYCLE | `examples/errors/contract_derivation_cycle.caret` |
-| SEMANTIC-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `examples/errors/mixed_collection_shape.caret` |
-| SEMANTIC-DUPLICATE-FIELD | public | DUPLICATE_FIELD | `InterpreterTest#rejectsMixedAndDuplicateNamedCollectionElements` |
-| RUNTIME-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `InterpreterTest#fieldCollectionsRejectMixedDuplicateAndNonStringKeys` |
-| RUNTIME-DUPLICATE-FIELD | public | DUPLICATE_FIELD | `InterpreterTest#fieldCollectionsRejectMixedDuplicateAndNonStringKeys` |
+| RUNTIME-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `examples/errors/mixed_collection_shape.caret`; `InterpreterTest#fieldCollectionsSupportContextualShapesMissingPartsAndGeneralKeys` |
 | SEMANTIC-INVALID-REFINEMENT | public | INVALID_REFINEMENT | `ContractInferenceTest#validatesOnlyProvenPureUnaryBooleanRefinements`; `ContractInferenceTest#validatesLambdaRefinementsWithTheOrdinaryCallableProof`; `InterpreterTest#invalidRefinementsAreRejectedBeforeProgramEffects`; `InterpreterTest#rejectsInvalidLambdaRefinementsBeforeProgramEffects`; `examples/errors/invalid_refinement.caret`; `examples/errors/invalid_lambda_refinement.caret` |
 | SEMANTIC-INVALID-CONTRACT-VARIABLE | public | INVALID_CONTRACT_VARIABLE | `InterpreterTest#arrowContractVariablesAreContiguousAndRequireGenericRelationships`; `InterpreterTest#declarationVariablesIncludeNestedArrowsAndRejectUnrelatedOccurrences` |
 | SEMANTIC-AMBIGUOUS-CLAUSE-NAME | public | AMBIGUOUS_CLAUSE_NAME | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |

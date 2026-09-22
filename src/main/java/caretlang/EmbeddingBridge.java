@@ -153,7 +153,12 @@ public final class EmbeddingBridge {
             case Value.Bool bool -> new CaretValue.BooleanValue(bool.value());
             case Value.Null ignored -> CaretValue.NullValue.INSTANCE;
             case Value.Missing ignored -> CaretValue.MissingValue.INSTANCE;
-            case Value.Field field -> new CaretValue.FieldValue(field.key(), external(field.value()));
+            case Value.Field field -> new CaretValue.FieldValue(
+                    field.key() instanceof Value.Str(String name) ? name : ValueSemantics.render(field.key()),
+                    external(field.value()));
+            case Value.KeyedCollection collection -> new CaretValue.SequenceValue(
+                    collection.entries().stream().map(entry -> (CaretValue) new CaretValue.FieldValue(
+                            ValueSemantics.render(entry.key()), external(entry.value()))).toList());
             case Value.Seq sequence -> new CaretValue.SequenceValue(sequence.values().stream().map(this::external).toList());
             case Value.Dictionary dictionary -> collection(dictionary.entries());
             case Value.EmptyCollection ignored -> new CaretValue.CollectionValue(Map.of());
@@ -178,7 +183,7 @@ public final class EmbeddingBridge {
             case CaretValue.BooleanValue bool -> new Value.Bool(bool.value());
             case CaretValue.NullValue ignored -> Value.Null.INSTANCE;
             case CaretValue.MissingValue ignored -> Value.Missing.INSTANCE;
-            case CaretValue.FieldValue field -> new Value.Field(field.name(), internal(field.value()));
+            case CaretValue.FieldValue field -> new Value.Field(new Value.Str(field.name()), internal(field.value()));
             case CaretValue.SequenceValue sequence -> new Value.Seq(sequence.values().stream().map(this::internal).toList());
             case CaretValue.CollectionValue collection -> {
                 LinkedHashMap<String, Value> fields = new LinkedHashMap<>();

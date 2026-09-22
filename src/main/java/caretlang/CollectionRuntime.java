@@ -139,7 +139,7 @@ final class CollectionRuntime {
 
         @Override public Value fieldEntries() {
             return new Value.Seq(orderedEntries().stream()
-                    .map(entry -> (Value) new Value.Field(entry.getKey(), entry.getValue())).toList());
+                    .map(entry -> (Value) new Value.Field(new Value.Str(entry.getKey()), entry.getValue())).toList());
         }
 
         @Override public Value size() { return new Value.Num(entries.size()); }

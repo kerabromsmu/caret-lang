@@ -572,28 +572,7 @@ final class Resolver {
                     "Unanalyzed arrow contract terms reached expression resolution");
             case Group group -> resolveExpr(group.expression(), scope, functionBody, deferred);
             case Ast.CollectionLiteral collection -> {
-                Class<?> shape = null;
-                LinkedHashMap<String, SourceSpan> names = new LinkedHashMap<>();
                 for (Ast.CollectionElement element : collection.elements()) {
-                    Class<?> elementShape = element instanceof Ast.NamedElement
-                            || staticallyFieldExpression(element.value())
-                            ? Ast.NamedElement.class : Ast.PositionalElement.class;
-                    if (shape == null) shape = elementShape;
-                    else if (shape != elementShape) {
-                        throw new LangException(Diagnostic.Phase.SEMANTIC,
-                                Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
-                                "A collection cannot mix named and positional elements", element.span());
-                    }
-                    if (element instanceof Ast.NamedElement named) {
-                        SourceSpan original = names.putIfAbsent(named.name(), named.span());
-                        if (original != null) {
-                            throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
-                                    Diagnostic.Codes.DUPLICATE_FIELD,
-                                    "Duplicate field: " + named.name(), named.span(),
-                                    List.of(new Diagnostic.Related(
-                                            "First field named " + named.name(), original))));
-                        }
-                    }
                     resolveExpr(element.value(), scope, functionBody, deferred);
                 }
             }

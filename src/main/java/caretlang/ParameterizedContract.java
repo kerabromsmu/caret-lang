@@ -32,13 +32,22 @@ final class ParameterizedContract implements ContractDescriptor {
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
             return sequence.values().stream().allMatch(arguments.getFirst()::accepts);
         }
-        if (base == BuiltinContract.FIELD && value instanceof Value.Field(String key, Value fieldValue)) {
-            return arguments.get(0).accepts(new Value.Str(key)) && arguments.get(1).accepts(fieldValue);
+        if (base == BuiltinContract.FIELD && value instanceof Value.Field(Value key, Value fieldValue)) {
+            return arguments.get(0).accepts(key) && arguments.get(1).accepts(fieldValue);
         }
         if (base == BuiltinContract.DICTIONARY && value instanceof Value.Dictionary dictionary) {
             return dictionary.entries().entrySet().stream().allMatch(entry ->
                     arguments.getFirst().accepts(new Value.Str(entry.getKey()))
                             && arguments.get(1).accepts(entry.getValue()));
+        }
+        if (base == BuiltinContract.DICTIONARY && value instanceof Value.KeyedCollection collection
+                && collection.shape() == Value.KeyedCollection.Shape.DICTIONARY) {
+            return collection.entries().stream().allMatch(entry -> arguments.get(0).accepts(entry.key())
+                    && arguments.get(1).accepts(entry.value()));
+        }
+        if (base == BuiltinContract.SET && value instanceof Value.KeyedCollection collection
+                && collection.shape() == Value.KeyedCollection.Shape.SET) {
+            return collection.entries().stream().allMatch(entry -> arguments.getFirst().accepts(entry.key()));
         }
         return false;
     }
@@ -53,8 +62,8 @@ final class ParameterizedContract implements ContractDescriptor {
             return sequence.values().stream().allMatch(
                     elementValue -> element.acceptsRequirement(elementValue, span));
         }
-        if (base == BuiltinContract.FIELD && value instanceof Value.Field(String key1, Value value1)) {
-            return arguments.get(0).acceptsRequirement(new Value.Str(key1), span)
+        if (base == BuiltinContract.FIELD && value instanceof Value.Field(Value key1, Value value1)) {
+            return arguments.get(0).acceptsRequirement(key1, span)
                     && arguments.get(1).acceptsRequirement(value1, span);
         }
         if (base == BuiltinContract.DICTIONARY && value instanceof Value.Dictionary dictionary) {
@@ -63,6 +72,18 @@ final class ParameterizedContract implements ContractDescriptor {
             return dictionary.entries().entrySet().stream().allMatch(entry ->
                     key.acceptsRequirement(new Value.Str(entry.getKey()), span)
                             && element.acceptsRequirement(entry.getValue(), span));
+        }
+        if (base == BuiltinContract.DICTIONARY && value instanceof Value.KeyedCollection collection
+                && collection.shape() == Value.KeyedCollection.Shape.DICTIONARY) {
+            ContractDescriptor key = arguments.get(0);
+            ContractDescriptor element = arguments.get(1);
+            return collection.entries().stream().allMatch(entry -> key.acceptsRequirement(entry.key(), span)
+                    && element.acceptsRequirement(entry.value(), span));
+        }
+        if (base == BuiltinContract.SET && value instanceof Value.KeyedCollection collection
+                && collection.shape() == Value.KeyedCollection.Shape.SET) {
+            return collection.entries().stream().allMatch(
+                    entry -> arguments.getFirst().acceptsRequirement(entry.key(), span));
         }
         return false;
     }

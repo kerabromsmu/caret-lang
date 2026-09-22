@@ -5,7 +5,7 @@ import java.util.Objects;
 /** One authoritative classification of runtime values into public Caret kinds. */
 enum ValueKind {
     NUMBER("Number"), STRING("String"), BOOLEAN("Boolean"), NULL("Null"), MISSING("Missing"),
-    COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), FUNCTION("Function"),
+    COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), SET("Set"), FUNCTION("Function"),
     FIELD("Field"), CONTRACT("Contract"), REFLECTIVE("Reflective");
 
     private final String publicName;
@@ -15,7 +15,8 @@ enum ValueKind {
     static ValueKind of(Value input) {
         Objects.requireNonNull(input);
         Value value = ValueSemantics.underlying(input);
-        if (value instanceof CollectionRuntime.Provider) return COLLECTION;
+        if (value instanceof CollectionRuntime.Provider
+                && !(value instanceof Value.Field) && !(value instanceof Value.KeyedCollection)) return COLLECTION;
         return switch (value) {
             case Value.Num ignored -> NUMBER;
             case Value.Str ignored -> STRING;
@@ -23,6 +24,11 @@ enum ValueKind {
             case Value.Null ignored -> NULL;
             case Value.Missing ignored -> MISSING;
             case Value.Field ignored -> FIELD;
+            case Value.KeyedCollection collection -> switch (collection.shape()) {
+                case DICTIONARY -> DICTIONARY;
+                case SET -> SET;
+                case GENERAL -> COLLECTION;
+            };
             case Value.Dictionary ignored -> DICTIONARY;
             case Value.ProjectedDictionary ignored -> DICTIONARY;
             case Value.EmptyCollection ignored -> COLLECTION;

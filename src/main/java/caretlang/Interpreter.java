@@ -244,7 +244,11 @@ final class Interpreter {
         for (Stmt statement : statements) {
             if (statement instanceof Assign(String name, boolean exported, ContractClause contracts,
                                             Expr value1, SourceSpan ignored)) {
-                Value value = eval(value1, env, null, resolution);
+                Value value = value1 instanceof CollectionLiteral collection
+                        && analyzeCollectionHoles(collection).indexes().isEmpty()
+                        ? evaluateCollection(collection, env, resolution,
+                        expectedCollectionShape(contracts, env, resolution))
+                        : eval(value1, env, null, resolution);
                 value = validateContracts(value, value1.span(), contracts, resolution, env, "binding " + name);
                 UserContract placeholder = contractPlaceholders.get(statement);
                 if (placeholder != null && value instanceof Value.ContractValue contract
@@ -1085,7 +1089,7 @@ final class Interpreter {
         if (!collection.named()) return ownership.fresh(new Value.Seq(collection.elements().stream()
                 .map(element -> materialize(element.value(), arguments)).toList()));
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
-        collection.elements().forEach(element -> fields.put(element.name(),
+        collection.elements().forEach(element -> fields.putIfAbsent(element.name(),
                 materialize(element.value(), arguments)));
         return ownership.fresh(new Value.Dictionary(fields));
     }
@@ -1359,40 +1363,7 @@ final class Interpreter {
             return evalInner(expression, env, resolution);
         }
         if (expr instanceof CollectionLiteral(List<CollectionElement> elements, SourceSpan ignored)) {
-            if (elements.isEmpty()) return Value.EmptyCollection.INSTANCE;
-            ArrayList<Value> values = new ArrayList<>(elements.size());
-            for (CollectionElement element : elements) {
-                Value value = evalInner(element.value(), env, resolution);
-                values.add(element instanceof NamedElement named
-                        ? new Value.Field(named.name(), value) : value);
-            }
-            boolean fields = values.stream().allMatch(Value.Field.class::isInstance);
-            boolean ordinary = values.stream().noneMatch(Value.Field.class::isInstance);
-            if (!fields && !ordinary) {
-                int mixed = 0;
-                boolean firstIsField = values.getFirst() instanceof Value.Field;
-                while ((values.get(mixed) instanceof Value.Field) == firstIsField) mixed++;
-                throw new LangException(Diagnostic.Phase.RUNTIME,
-                        Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
-                        "A collection cannot mix Field values and positional elements",
-                        elements.get(mixed).span());
-            }
-            if (ordinary) return ownership.fresh(new Value.Seq(values));
-            LinkedHashMap<String, Value> dictionary = new LinkedHashMap<>();
-            LinkedHashMap<String, SourceSpan> locations = new LinkedHashMap<>();
-            for (int i = 0; i < values.size(); i++) {
-                Value.Field field = (Value.Field) values.get(i);
-                SourceSpan first = locations.putIfAbsent(field.key(), elements.get(i).span());
-                if (first != null) {
-                    throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
-                            Diagnostic.Codes.DUPLICATE_FIELD,
-                            "Duplicate field: " + field.key(), elements.get(i).span(),
-                            List.of(new Diagnostic.Related(
-                                    "First field named " + field.key(), first))));
-                }
-                dictionary.put(field.key(), field.value());
-            }
-            return ownership.fresh(new Value.Dictionary(dictionary));
+            return evaluateCollection((CollectionLiteral) expr, env, resolution, CollectionShape.INFER);
         }
         if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
                                           boolean explicitPure, SourceSpan ignored)) {
@@ -1704,7 +1675,7 @@ final class Interpreter {
                 new Value.Str(new Value.Num(number(args.getFirst())).toString())));
 
         builtins.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
-                new Value.Field(requiredDictionaryKey(args.getFirst()), args.get(1).value())));
+                new Value.Field(args.getFirst().value(), args.get(1).value())));
 
         builtins.define("keys", collectionFunction("keys", BuiltinContract.COLLECTION, true,
                 (args, ignored) -> collectionEnumeration(
@@ -1904,6 +1875,147 @@ final class Interpreter {
                 "map transform must be a callable requiring exactly one argument", argument.span());
     }
 
+    private enum CollectionShape { INFER, KEYLESS, DICTIONARY, SET }
+
+    private CollectionShape expectedCollectionShape(ContractClause clause, Environment env,
+                                                    Resolution resolution) {
+        Resolution.AnalyzedClause analyzed = resolution.clause(clause);
+        for (Resolution.ContractBinding reference : valueRequirements(analyzed)) {
+            ContractDescriptor descriptor;
+            try {
+                descriptor = resolveContractDescriptor(reference, env, resolution);
+            } catch (LangException ignored) {
+                continue;
+            }
+            if (descriptor instanceof ModifiedContract modified) descriptor = modified.base();
+            if (descriptor instanceof ParameterizedContract parameterized) descriptor = parameterized.base();
+            if (descriptor == BuiltinContract.SET) return CollectionShape.SET;
+            if (descriptor == BuiltinContract.DICTIONARY) return CollectionShape.DICTIONARY;
+            if (descriptor == BuiltinContract.SEQUENCE) return CollectionShape.KEYLESS;
+        }
+        return CollectionShape.INFER;
+    }
+
+    private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
+                                     CollectionShape expected) {
+        if (literal.elements().isEmpty()) return Value.EmptyCollection.INSTANCE;
+        ArrayList<Value> values = new ArrayList<>(literal.elements().size());
+        for (CollectionElement element : literal.elements()) {
+            Value value = evalInner(element.value(), env, resolution);
+            values.add(element instanceof NamedElement named
+                    ? new Value.Field(new Value.Str(named.name()), value) : value);
+        }
+
+        ArrayList<Value> keyless = new ArrayList<>();
+        ArrayList<Value.KeyedCollection.Entry> keyed = new ArrayList<>();
+        boolean sawKeyed = false;
+        boolean sawKeyless = false;
+        boolean sawAssociatedValue = false;
+        for (int index = 0; index < values.size(); index++) {
+            Value value = ValueSemantics.underlying(values.get(index));
+            SourceSpan span = literal.elements().get(index).span();
+            if (expected == CollectionShape.SET && !(value instanceof Value.Field)) {
+                if (value == Value.Missing.INSTANCE) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_DICTIONARY_KEY,
+                            "A Set cannot contain missing", span);
+                }
+                sawKeyed = true;
+                addFirst(keyed, value, Value.Missing.INSTANCE);
+                continue;
+            }
+            if (!(value instanceof Value.Field field)) {
+                sawKeyless = true;
+                keyless.add(values.get(index));
+                continue;
+            }
+            Value key = ValueSemantics.underlying(field.key());
+            Value associated = field.value();
+            if (key == Value.Missing.INSTANCE) {
+                if (ValueSemantics.underlying(associated) != Value.Missing.INSTANCE) {
+                    sawKeyless = true;
+                    keyless.add(associated);
+                }
+                continue;
+            }
+            sawKeyed = true;
+            if (ValueSemantics.underlying(associated) != Value.Missing.INSTANCE) sawAssociatedValue = true;
+            addFirst(keyed, field.key(), associated);
+        }
+
+        if (!sawKeyed && !sawKeyless) return Value.EmptyCollection.INSTANCE;
+        if (sawKeyed && sawKeyless) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+                    "A collection cannot mix keyed and keyless elements", literal.span());
+        }
+        if (sawKeyless) {
+            if (expected == CollectionShape.DICTIONARY || expected == CollectionShape.SET) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+                        "Collection elements do not satisfy the selected keyed shape", literal.span());
+            }
+            return ownership.fresh(new Value.Seq(keyless));
+        }
+        if (expected == CollectionShape.KEYLESS) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+                    "Keyed fields do not satisfy the selected keyless shape", literal.span());
+        }
+        if (expected == CollectionShape.SET) {
+            if (sawAssociatedValue) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+                        "A Set cannot contain associated field values", literal.span());
+            }
+            return ownership.fresh(new Value.KeyedCollection(Value.KeyedCollection.Shape.SET, keyed));
+        }
+        if (expected == CollectionShape.INFER && !sawAssociatedValue) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.AMBIGUOUS_COLLECTION_SHAPE,
+                    "Fields without values require a Set or Dictionary contract", literal.span());
+        }
+
+        boolean dictionary = expected == CollectionShape.DICTIONARY || homogeneousSortableKeys(keyed);
+        if (expected == CollectionShape.DICTIONARY && !homogeneousSortableKeys(keyed)) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_DICTIONARY_KEY,
+                    "Dictionary keys must have one homogeneous sortable type", literal.span());
+        }
+        if (dictionary) keyed.sort((left, right) -> compareDictionaryKeys(left.key(), right.key()));
+        if (dictionary && keyed.stream().allMatch(entry -> ValueSemantics.underlying(entry.key()) instanceof Value.Str)) {
+            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
+            for (Value.KeyedCollection.Entry entry : keyed) {
+                fields.put(((Value.Str) ValueSemantics.underlying(entry.key())).value(), entry.value());
+            }
+            return ownership.fresh(new Value.Dictionary(fields));
+        }
+        return ownership.fresh(new Value.KeyedCollection(dictionary
+                ? Value.KeyedCollection.Shape.DICTIONARY : Value.KeyedCollection.Shape.GENERAL, keyed));
+    }
+
+    private void addFirst(List<Value.KeyedCollection.Entry> entries, Value key, Value value) {
+        for (Value.KeyedCollection.Entry entry : entries) {
+            if (ValueSemantics.equal(entry.key(), key, reflectionContext)) return;
+        }
+        entries.add(new Value.KeyedCollection.Entry(key, value));
+    }
+
+    private static boolean homogeneousSortableKeys(List<Value.KeyedCollection.Entry> entries) {
+        if (entries.isEmpty()) return true;
+        ValueKind kind = ValueKind.of(entries.getFirst().key());
+        if (!(kind == ValueKind.NUMBER || kind == ValueKind.STRING || kind == ValueKind.BOOLEAN
+                || kind == ValueKind.NULL)) return false;
+        return entries.stream().allMatch(entry -> ValueKind.of(entry.key()) == kind);
+    }
+
+    private static int compareDictionaryKeys(Value left, Value right) {
+        left = ValueSemantics.underlying(left);
+        right = ValueSemantics.underlying(right);
+        if (left instanceof Value.Num(double a) && right instanceof Value.Num(double b)) return Double.compare(a, b);
+        if (left instanceof Value.Str(String a) && right instanceof Value.Str(String b)) {
+            return CollectionRuntime.FIELD_ORDER.compare(a, b);
+        }
+        if (left instanceof Value.Bool(boolean a) && right instanceof Value.Bool(boolean b)) {
+            return Boolean.compare(a, b);
+        }
+        if (left instanceof Value.Null && right instanceof Value.Null) return 0;
+        throw new IllegalArgumentException("Non-sortable Dictionary key");
+    }
+
     private Value.Callable collectionCallback(Value.Argument argument, int arity,
                                               String operation, String role) {
         Value raw = underlying(argument.value());
@@ -2054,14 +2166,6 @@ final class Interpreter {
         boolean named = !elements.isEmpty() && elements.stream().allMatch(element -> element.name() != null);
         boolean positional = elements.stream().noneMatch(element -> element.name() != null);
         if (!named && !positional) return null;
-        LinkedHashMap<String, SourceSpan> names = new LinkedHashMap<>();
-        for (CollectionConstructorDescriptor.Element element : elements) {
-            if (element.name() == null) continue;
-            SourceSpan first = names.putIfAbsent(element.name(), element.span());
-            if (first != null) throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
-                    Diagnostic.Codes.DUPLICATE_FIELD, "Duplicate field: " + element.name(), element.span(),
-                    List.of(new Diagnostic.Related("First field named " + element.name(), first))));
-        }
         return new CollectionConstructorDescriptor.CollectionNode(named, elements, literal.span());
     }
 

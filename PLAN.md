@@ -300,14 +300,14 @@ queries, matching reflection fields, `Natural`, and shape-neutral empty facts ar
 The steps below describe the remaining contextual, template, and representation work.
 The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
 records the newer #55/#59 decisions and takes precedence over legacy implementation targets
-for its covered behavior. The common protocol foundation is implemented; the remaining decisions
-are still planned and require their own runtime evidence.
+for its covered behavior. The common protocol, Field tuple, contextual shape, and settlement
+foundations are implemented; the remaining decisions are planned and require their own evidence.
 
 ### Agreed collection revision and deferrals
 
 - Preserve implemented ordinary keys/values/fields/size access, guarantee queries and reflective
-  equivalents, Natural size contracts, and shape-neutral empty facts while adding keyed/keyless and
-  Set/dictionary shapes plus Field-contract tuples.
+  equivalents, Natural size contracts, shape-neutral empty facts, keyed/keyless and Set/Dictionary
+  contextual shapes, Field-contract tuples, and first-key settlement.
 - Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
   first-entry duplicate handling, two-input zip tuples and zipWithKeys keyed construction.
 - Retain internal construction and settlement without exposing unfinished Collections. Public
@@ -744,9 +744,10 @@ allowances and callable-value constraints; unknown higher-order invocation rejec
 aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
 explicit higher-order arrow contracts, and the initial static operator matrix are settled.
 Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
-item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction and the
-Phase 4 common Collection protocol are complete; implement Field tuples, contextual shapes,
-general keyed Collections, and internal settlement next. `with`/`outer` wait for the public named-member protocol
+item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction, Phase 4
+common Collection protocol, Field tuples, contextual shapes, general keyed Collections, and
+internal settlement are complete; implement unified dot/bracket/`getElement` access next.
+`with`/`outer` wait for the public named-member protocol
 rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals

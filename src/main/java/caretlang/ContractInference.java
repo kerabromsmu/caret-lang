@@ -346,7 +346,7 @@ final class ContractInference {
         for (Stmt statement : function.body()) {
             result = switch (statement) {
                 case Assign assign -> {
-                    Shape value = expression(assign.value(), parameters, locals, requirements, visible);
+                    Shape value = assignmentExpression(assign, parameters, locals, requirements, visible);
                     constrain(value, clause(assign.contracts()), requirements, assign.span());
                     locals.put(assign.name(), value);
                     yield value;
@@ -1108,7 +1108,7 @@ final class ContractInference {
         List<Map.Entry<Assign, Shape>> pending = new ArrayList<>();
         for (Stmt statement : statements) {
             if (statement instanceof Assign assign) {
-                Shape shape = expression(assign.value(), Map.of(), locals, List.of(), visible);
+                Shape shape = assignmentExpression(assign, Map.of(), locals, List.of(), visible);
                 constrain(shape, clause(assign.contracts()), List.of(), assign.value().span());
                 locals.put(assign.name(), shape);
                 pending.add(Map.entry(assign, shape));
@@ -1125,6 +1125,19 @@ final class ContractInference {
                         "Ambiguous contract at use: binding " + assign.name(), assign.value().span());
             }
         }
+    }
+
+    private Shape assignmentExpression(Assign assign, Map<String, Integer> parameters,
+                                       Map<String, Shape> locals,
+                                       List<EnumSet<BuiltinContract>> requirements,
+                                       Map<String, FunctionContract> visible) {
+        Set<BuiltinContract> declared = clause(assign.contracts());
+        if (assign.value() instanceof CollectionLiteral && declared.stream().anyMatch(contract ->
+                contract == BuiltinContract.SEQUENCE || contract == BuiltinContract.DICTIONARY
+                        || contract == BuiltinContract.SET || contract == BuiltinContract.COLLECTION)) {
+            return Shape.generic();
+        }
+        return expression(assign.value(), parameters, locals, requirements, visible);
     }
 
     private Expr printExpression(PrintLine line) {

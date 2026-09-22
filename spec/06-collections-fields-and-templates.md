@@ -8,9 +8,10 @@
 
 This section records the decisions from issues #55 and #59 and their joint design discussion.
 The common `keys`/`values`/`fields`/`size` protocol, Boolean-or-missing guarantee queries,
-matching reflection fields, `Natural`, and the shape-neutral empty facts are implemented. The
-remaining lazy, shape, transform, equality, state, scoped-lookup, materialization, and template
-work in this revision is planned. For the subjects covered here the revision
+matching reflection fields, `Natural`, contextual Field/Set/Dictionary/keyless shapes, first-key
+settlement, and shape-neutral empty facts are implemented. The remaining lazy, access-sugar,
+transform, equality, state, scoped-lookup, materialization, and template work in this revision is
+planned. For the subjects covered here the revision
 supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
 eager transforms, a distinct non-Collection Field representation, and earlier collection-equality
 assumptions. Existing tests and the implemented baseline remain valid descriptions of the current
@@ -206,6 +207,11 @@ Adding a repeated key refers to the existing entry: its new value is ignored and
 position is retained. This is distinct from an explicit replacement operation in unpublished
 construction. A value ignored because its key is already present need not be forced; effects
 already performed to produce an eager value cannot be undone.
+
+The prototype implements this boundary internally for literals and structural collection
+constructors. It evaluates literal expressions eagerly, interprets Field parts under the selected
+result contract, retains the first equal key, and publishes only the settled value. No builder or
+unfinished Collection is exposed as a Caret value.
 
 ### Element operations during construction and after settlement
 

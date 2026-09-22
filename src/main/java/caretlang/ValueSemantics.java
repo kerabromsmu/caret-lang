@@ -26,6 +26,15 @@ final class ValueSemantics {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("kind", new Value.Str(kind(value)));
         switch (value) {
+            case Value.Field field -> {
+                fields.put("key", field.key());
+                fields.put("value", field.value());
+            }
+            case Value.KeyedCollection collection -> {
+                fields.put("shape", new Value.Str(collection.shape() == Value.KeyedCollection.Shape.SET
+                        ? "set" : "keyed"));
+                fields.put("size", new Value.Num(collection.entries().size()));
+            }
             case Value.EmptyCollection ignored -> {
                 fields.put("shape", new Value.Str("empty"));
                 fields.put("size", new Value.Num(0));
@@ -88,10 +97,10 @@ final class ValueSemantics {
                         || x.semanticIdentity() != y.semanticIdentity()) return false;
                 continue;
             }
-            if (a instanceof Value.Field(String key, Value value) && b instanceof Value.Field(
-                    String key1, Value value1
+            if (a instanceof Value.Field(Value key, Value value) && b instanceof Value.Field(
+                    Value key1, Value value1
             )) {
-                if (!key.equals(key1)) return false;
+                pending.push(new Pair(key, key1));
                 pending.push(new Pair(value, value1));
                 continue;
             }
@@ -115,6 +124,12 @@ final class ValueSemantics {
                 var xs = x.iterator();
                 var ys = y.iterator();
                 while (xs.hasNext()) pending.push(new Pair(xs.next(), ys.next()));
+            } else if (a instanceof Value.KeyedCollection x && b instanceof Value.KeyedCollection y) {
+                if (x.shape() != y.shape() || x.entries().size() != y.entries().size()) return false;
+                for (int index = 0; index < x.entries().size(); index++) {
+                    pending.push(new Pair(x.entries().get(index).key(), y.entries().get(index).key()));
+                    pending.push(new Pair(x.entries().get(index).value(), y.entries().get(index).value()));
+                }
             } else if (!Objects.equals(a, b)) {
                 return false;
             }
@@ -128,7 +143,16 @@ final class ValueSemantics {
         while (!pending.isEmpty()) {
             Value value = underlying(pending.pop());
             if (value instanceof Value.Callable) return false;
-            if (value instanceof Value.Field field) pending.push(field.value());
+            if (value instanceof Value.Field field) {
+                pending.push(field.key());
+                pending.push(field.value());
+            }
+            else if (value instanceof Value.KeyedCollection collection) {
+                collection.entries().forEach(entry -> {
+                    pending.push(entry.key());
+                    pending.push(entry.value());
+                });
+            }
             else if (value instanceof Value.Dictionary dictionary) {
                 dictionary.entries().values().forEach(pending::push);
             } else if (value instanceof Value.ProjectedDictionary dictionary) {
@@ -229,7 +253,32 @@ final class ValueSemantics {
                 }
                 case RenderValue(Value.Field field, int indent, boolean ignoredQuote) -> {
                     pending.push(new RenderValue(field.value(), indent, true));
-                    pending.push(quoted(field.key()) + " = ");
+                    if (ValueSemantics.underlying(field.key()) instanceof Value.Str(String key)) {
+                        pending.push(quoted(key) + " = ");
+                    } else {
+                        pending.push(" ");
+                        pending.push(new RenderValue(field.key(), indent, true));
+                        pending.push("field ");
+                    }
+                }
+                case RenderValue(Value.KeyedCollection collection, int indent, boolean ignoredQuote) -> {
+                    if (collection.entries().isEmpty()) {
+                        output.append("[]");
+                        continue;
+                    }
+                    pending.push("\n" + spaces(indent) + "]");
+                    for (int index = collection.entries().size() - 1; index >= 0; index--) {
+                        Value.KeyedCollection.Entry entry = collection.entries().get(index);
+                        if (index + 1 < collection.entries().size()) pending.push("\n");
+                        if (collection.shape() == Value.KeyedCollection.Shape.SET) {
+                            pending.push(new RenderValue(entry.key(), indent + 2, true));
+                        } else {
+                            pending.push(new RenderValue(new Value.Field(entry.key(), entry.value()),
+                                    indent + 2, true));
+                        }
+                        pending.push(spaces(indent + 2));
+                    }
+                    pending.push("[\n");
                 }
                 case RenderValue(Value value, int ignoredIndent, boolean ignoredQuote) -> output.append(value);
                 default -> throw new IllegalStateException("Unknown render task: " + item);
@@ -240,7 +289,8 @@ final class ValueSemantics {
 
     private static boolean isCollection(Value value) {
         value = underlying(value);
-        return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary || value instanceof Value.Seq;
+        return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary
+                || value instanceof Value.Seq || value instanceof Value.KeyedCollection;
     }
 
     private static String spaces(int count) { return " ".repeat(count); }

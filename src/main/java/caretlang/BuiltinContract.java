@@ -48,6 +48,16 @@ enum BuiltinContract implements ContractDescriptor {
         }
         @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
         @Override public int parameterArity() { return 2; }
+    },
+    SET("Set") {
+        @Override public boolean accepts(Value value) {
+            value = ValueSemantics.underlying(value);
+            return value instanceof Value.EmptyCollection
+                    || value instanceof Value.KeyedCollection collection
+                    && collection.shape() == Value.KeyedCollection.Shape.SET;
+        }
+        @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
+        @Override public int parameterArity() { return 1; }
     };
 
     private final String publicName;

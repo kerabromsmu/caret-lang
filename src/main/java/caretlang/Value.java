@@ -7,7 +7,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Field, Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
+        Value.Field, Value.KeyedCollection, Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
         public Attributed {
@@ -53,12 +53,81 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return "~"; }
     }
 
-    record Field(String key, Value value) implements Value {
+    record Field(Value key, Value value) implements Value, CollectionRuntime.Provider {
         public Field {
             Objects.requireNonNull(key, "field key");
             Objects.requireNonNull(value, "field value");
         }
+        @Override public Value getElement(Value index) {
+            return ValueSemantics.underlying(index) instanceof Num(double number)
+                    ? number == 0 ? key : number == 1 ? value : Missing.INSTANCE
+                    : Missing.INSTANCE;
+        }
+        @Override public Value keys() { return new Seq(List.of(new Num(0), new Num(1))); }
+        @Override public Value valueEntries() { return new Seq(List.of(key, value)); }
+        @Override public Value fieldEntries() { return valueEntries(); }
+        @Override public Value size() { return new Num(2); }
+        @Override public CollectionRuntime.Facts facts() {
+            return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                    CollectionRuntime.Guarantee.TRUE);
+        }
         @Override public @NotNull String toString() { return ValueSemantics.render(this); }
+    }
+
+    /** Settled keyed content whose keys need not be Java Strings. */
+    final class KeyedCollection implements Value, CollectionRuntime.Provider {
+        enum Shape { GENERAL, DICTIONARY, SET }
+        record Entry(Value key, Value value) {
+            Entry { Objects.requireNonNull(key); Objects.requireNonNull(value); }
+        }
+
+        private final Shape shape;
+        private final List<Entry> entries;
+
+        KeyedCollection(Shape shape, Collection<Entry> entries) {
+            this.shape = Objects.requireNonNull(shape);
+            this.entries = List.copyOf(entries);
+        }
+
+        Shape shape() { return shape; }
+        List<Entry> entries() { return entries; }
+
+        @Override public Value getElement(Value key) {
+            for (Entry entry : entries) {
+                if (ValueSemantics.equal(entry.key(), key)) {
+                    return shape == Shape.SET ? entry.key() : entry.value();
+                }
+            }
+            return Missing.INSTANCE;
+        }
+
+        @Override public Value keys() {
+            return new Seq(entries.stream().map(Entry::key).toList());
+        }
+
+        @Override public Value valueEntries() {
+            return shape == Shape.SET ? Missing.INSTANCE
+                    : new Seq(entries.stream().map(Entry::value).toList());
+        }
+
+        @Override public Value fieldEntries() {
+            return new Seq(entries.stream().map(entry -> (Value) new Field(entry.key(),
+                    shape == Shape.SET ? Missing.INSTANCE : entry.value())).toList());
+        }
+
+        @Override public Value size() { return new Num(entries.size()); }
+
+        @Override public CollectionRuntime.Facts facts() {
+            return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                    CollectionRuntime.Guarantee.TRUE,
+                    shape == Shape.SET ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
+                    shape == Shape.SET ? CollectionRuntime.Guarantee.FALSE : CollectionRuntime.Guarantee.TRUE);
+        }
+
+        @Override public String toString() { return ValueSemantics.render(this); }
     }
 
     /** The single shape-neutral empty collection literal. */

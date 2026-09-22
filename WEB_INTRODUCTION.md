@@ -42,15 +42,20 @@ in order, recursively, leaving mutable containers and stored functions intact. I
 reflection references with empty Collections and reports cyclic containment or known-infinite
 input. Unknown finiteness may mean it never completes.
 
-Keyed traversal uses `Field` tuples; keyless traversal uses plain values. A Set is keyed without
-associated values. Transforms can change Collection shape when contracts determine their output.
+Keyed traversal uses `Field` tuples; keyless traversal uses plain values. Fields are two-position
+Collections carrying `Field K V`; `keys` returns `[ 0 1 ]`, and reflection exposes `key` and
+`value`. A Set is keyed without associated values, and `Set K` context selects member semantics for
+plain values or key-only Fields. Missing-key Fields contribute keyless values, while fully omitted
+Fields contribute nothing. Transforms can change Collection shape when contracts determine their output.
 Dot and bracket access will share `getElement` semantics: absent valid keys yield missing,
 invalid keys are errors, and keys may be composite values supporting equality.
 
-Dictionaries retain sorted keys of one type; general keyed Collections need only comparable
-keys. Planned `zip` pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
+Dictionaries retain sorted keys of one sortable type; general keyed Collections need only equality
+keys and retain their established entry order. Repeated keys retain the first entry. Planned `zip`
+pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
-Dictionary construction. Field tuples support positional key/value access.
+Dictionary construction. Field positional access is available through the common provider;
+surface bracket and `getElement` lowering follows in the access slice.
 
 Public `addElement`, `removeElement`, and `replaceElement`, their construction-selection
 interface, and additional immutable-update syntax are deferred beyond Phase 4. Their design is

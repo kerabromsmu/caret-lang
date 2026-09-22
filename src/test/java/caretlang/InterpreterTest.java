@@ -1807,16 +1807,17 @@ final class InterpreterTest {
     }
 
     @Test
-    void rejectsMixedAndDuplicateNamedCollectionElements() {
+    void rejectsIncompatibleShapesAndRetainsFirstDuplicateEntry() {
         LangException mixed = assertThrows(LangException.class,
                 () -> execute("value = [1 ^name = 2]"));
         assertEquals(Diagnostic.Codes.MIXED_COLLECTION_SHAPE, mixed.diagnostic().code());
-        assertEquals(Diagnostic.Phase.SEMANTIC, mixed.diagnostic().phase());
-
-        LangException duplicate = assertThrows(LangException.class,
-                () -> execute("value = [^name = 1 ^name = 2]"));
-        assertEquals(Diagnostic.Codes.DUPLICATE_FIELD, duplicate.diagnostic().code());
-        assertEquals(1, duplicate.diagnostic().related().size());
+        assertEquals(Diagnostic.Phase.RUNTIME, mixed.diagnostic().phase());
+        assertEquals("1\n1\n", execute("""
+                static = [^name = 1 ^name = 2]
+                dynamic = [(field "name" 1) (field "name" 2)]
+                print static.name
+                print dynamic.name
+                """));
     }
 
     @Test
@@ -1850,23 +1851,79 @@ final class InterpreterTest {
     }
 
     @Test
-    void fieldCollectionsRejectMixedDuplicateAndNonStringKeys() {
+    void fieldCollectionsSupportContextualShapesMissingPartsAndGeneralKeys() {
         LangException mixed = assertThrows(LangException.class,
                 () -> execute("makeField = field\nvalue = [(makeField \"name\" 1) 2]"));
         assertEquals(Diagnostic.Codes.MIXED_COLLECTION_SHAPE, mixed.diagnostic().code());
         assertEquals(Diagnostic.Phase.RUNTIME, mixed.diagnostic().phase());
 
-        LangException duplicate = assertThrows(LangException.class,
-                () -> execute("value = [(field \"name\" 1) (field \"name\" 2)]"));
-        assertEquals(Diagnostic.Codes.DUPLICATE_FIELD, duplicate.diagnostic().code());
-        assertEquals(1, duplicate.diagnostic().related().size());
+        assertEquals("""
+                true
+                true
+                [ 0 1 ]
+                [ "name" 2 ]
+                name
+                2
+                false
+                [ 1 2 3 ]
+                [ 3 1 2 ]
+                ~
+                true
+                true
+                [ 1 2 ]
+                [
+                  [ 1 ]
+                  [ 2 ]
+                ]
+                1
+                true
+                """, execute("""
+                item = field "name" 2
+                pair = ["name" 2]
+                print Field String Number item
+                print Collection item
+                print keys item
+                print values item
+                print (@item).key
+                print (@item).value
+                print Field pair
+                keyless = [(field ~ 1) 2 (field ~ 3) (field ~ ~)]
+                print keyless
+                (Set Number) members = [3 1 3 (field 2 ~)]
+                print keys members
+                print values members
+                print Set members
+                (Dictionary String Any) stored = [(field "present" 1) (field "missing" ~)]
+                print dictHas stored "missing"
+                (Dictionary Number String) ordered = [(field 2 "b") (field 1 "a")]
+                print keys ordered
+                general = [(field [1] "a") (field [2] "b")]
+                print keys general
+                duplicate = [(field "same" 1) (field "same" 2)]
+                print duplicate.same
+                print field 1 2 == field 1 2
+                """));
 
-        LangException crossFormDuplicate = assertThrows(LangException.class,
-                () -> execute("value = [(field \"name\" 2) ^name = 1]"));
-        assertEquals(Diagnostic.Codes.DUPLICATE_FIELD, crossFormDuplicate.diagnostic().code());
-        assertEquals(1, crossFormDuplicate.diagnostic().related().size());
+        assertDiagnostic("value = [(field 1 ~)]",
+                "Fields without values require a Set or Dictionary contract", 1, 9);
+        assertDiagnostic("(Dictionary Any Any) value = [(field 1 1) (field \"two\" 2)]",
+                "Dictionary keys must have one homogeneous sortable type", 1, 30);
+    }
 
-        assertDiagnostic("print field 1 2", "Dictionary key must be a string, got: 1", 1, 13);
+    @Test
+    void internalFieldAndCollectionSettlementPreservePersistentValues() {
+        Value.Field field = new Value.Field(new Value.Str("key"), Value.Missing.INSTANCE);
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(field).orElseThrow();
+        assertEquals(new Value.Str("key"), provider.getElement(new Value.Num(0)));
+        assertSame(Value.Missing.INSTANCE, provider.getElement(new Value.Num(1)));
+        assertSame(Value.Missing.INSTANCE, provider.getElement(new Value.Num(2)));
+
+        assertEquals("[ 1 2 ]\n[ 1 2 3 ]\n", execute("""
+                original = [1 2]
+                updated = seqAdd original 3
+                print original
+                print updated
+                """));
     }
 
     @Test

@@ -372,7 +372,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
 
     private static boolean knownDisjoint(String left, String right) {
         Set<String> closed = Set.of("Number", "String", "Boolean", "Null", "Missing", "Function",
-                "Sequence", "Dictionary", "Field");
+                "Sequence", "Dictionary", "Field", "Set");
         return closed.contains(left) && closed.contains(right) && !left.equals(right);
     }
 
@@ -608,6 +608,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
             case SEQUENCE -> "Sequence";
             case DICTIONARY -> "Dictionary";
             case FIELD -> "Field";
+            case SET -> "Set";
             default -> "Any";
         });
     }

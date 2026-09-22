@@ -53,6 +53,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `CORE-RENDER-001`, `CORE-RENDER-002` | `features/rendering.caret`; overload selection and recursive default rendering |
 | `DATA-COLL-001`, `DATA-001`, `DATA-002`, `DATA-005`, `DATA-COLL-002`, `DATA-COLL-007`, `DATA-COLL-004` | Collection sections in the master test, `features/collection_order.caret`, and the mixed-shape error fixture |
 | `COLL-PROTOCOL-001`, `DATA-COLL-003` | `features/collection_protocol.caret`; common enumeration, size, guarantees, reflection, `Natural`, and shape-neutral empty behavior; `errors/expected_collection.caret` |
+| `COLL-SHAPE-001`, `COLL-CONSTRUCT-001`, `COLL-DICT-ORDER-001`, `COLL-FIELD-ACCESS-001`, `DATA-003`, `DATA-004` | `features/field_shapes.caret`; Field tuples, missing-part interpretation, Sets, general keyed Collections, contextual shapes, settlement, first-key retention, and sorted Dictionaries; `errors/mixed_collection_shape.caret`; `errors/ambiguous_collection_shape.caret` |
 
 Run all examples with:
 
