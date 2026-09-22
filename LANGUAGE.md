@@ -41,6 +41,10 @@ initial implementation target.
    staging follow the ordinary function model; specialized behavior belongs to the resolved
    language-owned callable identity and to the values it consumes or produces, not to its lexical
    spelling.
+10. A contextual named Collection literal governed by one unambiguous structural template still
+    produces every declared field. An omitted field whose hole directly uses `T~` or `T?~` is
+    materialized with value `~` when the full field clause accepts missing; template membership and
+    explicit conversion never synthesize fields in an already established Collection.
 
 This invariant does not imply that every language facility is a function. Established syntax such
 as `->`, `[...]`, container braces, contract clauses, `#`, `@`, `$`, layout markers, and module-ID
@@ -104,6 +108,18 @@ These links replace the major anchors of the former monolithic document:
 - [`with`, `outer`, and `$`](spec/07-state-containers-and-scoped-lookup.md#with-outer-and-low-precedence-application)
 - [Compile-time execution](spec/14-staging-compilation-and-compatibility.md#compile-time-execution-and-separate-compilation)
 - [Compiler compatibility](spec/14-staging-compilation-and-compatibility.md#compiler-target-and-compatibility)
+
+## Approved Phase 4 numeric and packed additions
+
+The [numeric revision](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned),
+[numeric contracts and explicit conversion](spec/04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-planned),
+[conversion syntax and div](spec/03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-and-div-planned),
+and [packed layouts](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
+record the approved #77/#78 design and its numeric (#82) and conversion (#83) prerequisites. These are planned
+semantics, including an explicit change to parenthesized contract application, not runtime support.
+Declarations and directly contracted holes remain checks. The shared
+[acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix)
+defines evidence required before claiming implementation.
 
 ## Deferred specification work
 

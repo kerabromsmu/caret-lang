@@ -38,6 +38,26 @@ final class JLineReplTest {
         assertTrue(errorBytes.toString(StandardCharsets.UTF_8).contains("Unknown name: missing"));
         assertFalse(errorBytes.toString(StandardCharsets.UTF_8).contains("Duplicate definition: x"));
     }
+
+    @Test
+    void lambdaRefinementEligibilityPersistsAcrossReplSubmissions() {
+        ByteArrayOutputStream outputBytes = new ByteArrayOutputStream();
+        ByteArrayOutputStream errorBytes = new ByteArrayOutputStream();
+        PrintStream output = new PrintStream(outputBytes, true, StandardCharsets.UTF_8);
+        PrintStream error = new PrintStream(errorBytes, true, StandardCharsets.UTF_8);
+        Iterator<String> lines = List.of(
+                "positive = value -> value > 0",
+                "alias = positive",
+                "(alias) count = 2",
+                "print count",
+                "exit").iterator();
+
+        JLineRepl.runLoop(() -> lines.hasNext() ? lines.next() : null,
+                new Interpreter(output), output, error);
+
+        assertEquals("2\n", outputBytes.toString(StandardCharsets.UTF_8));
+        assertEquals("", errorBytes.toString(StandardCharsets.UTF_8));
+    }
     @TempDir Path temporaryDirectory;
 
     @Test

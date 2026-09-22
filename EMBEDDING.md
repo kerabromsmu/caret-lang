@@ -4,6 +4,15 @@ Caret provides a Java 21 API for running one Caret script inside a host-controll
 `caretlang.embedding.CaretSandbox`. The API exposes language-owned values and diagnostics without
 exposing interpreter, parser, AST, lexical-scope, or Java-reflection implementation objects.
 
+## Planned Phase 4 additions
+
+The approved [numeric and conversion design](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+will add an exact arbitrary-precision integer carrier alongside the current finite-double
+`NumberValue`, including lossless exports, arguments, nested data, and callback round trips.
+Load, execution, and invocation results will expose nonfatal precision warnings separately from
+failure diagnostics. These APIs are not implemented yet; the examples below describe the current
+SDK. Packed storage will not expose host buffers or change sandbox authority.
+
 ## Get the SDK
 
 Download `caret-java-sdk-<version>.zip` from the

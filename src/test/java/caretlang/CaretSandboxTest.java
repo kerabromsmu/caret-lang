@@ -10,10 +10,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -50,6 +47,25 @@ class CaretSandboxTest {
             CaretEmbeddingException repeated = assertThrows(CaretEmbeddingException.class,
                     () -> sandbox.execute(program));
             assertEquals(CaretEmbeddingException.Code.HANDLE_CONSUMED, repeated.code());
+        }
+    }
+
+    @Test
+    void embeddingValidationAndExecutionPreserveLambdaRefinementEligibility() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("lambda-refinement.caret", """
+                    minimum = 0
+                    predicate = value -> value > minimum
+                    alias = predicate
+                    Positive = contract [Number alias]
+                    (Positive) answer = 2
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code());
+
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code());
+            assertEquals(CaretValue.number(2),
+                    executed.value().orElseThrow().find("answer").orElseThrow());
         }
     }
 
@@ -333,9 +349,7 @@ class CaretSandboxTest {
 
     @Test
     void invalidHostUseHasStableExceptionCodes() {
-        CaretSandbox first = sandbox(CaretEnvironment.builder().build());
-        CaretSandbox second = sandbox(CaretEnvironment.builder().build());
-        try {
+        try (CaretSandbox first = sandbox(CaretEnvironment.builder().build()); CaretSandbox second = sandbox(CaretEnvironment.builder().build())) {
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT, () -> first.load(null));
             LoadedProgram program = first.load(CaretSource.text("host-use.caret", "identity value = value"))
                     .value().orElseThrow();
@@ -347,12 +361,9 @@ class CaretSandboxTest {
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
                     () -> first.invoke(identity, null));
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
-                    () -> first.invoke(identity, Arrays.asList((CaretValue) null)));
+                    () -> first.invoke(identity, Collections.singletonList((CaretValue) null)));
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
                     () -> first.swapEnvironment(null));
-        } finally {
-            first.close();
-            second.close();
         }
     }
 

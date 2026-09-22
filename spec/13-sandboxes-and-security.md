@@ -905,6 +905,24 @@ without weakening Caret's reflection model.
 <a id="java-embedding"></a>
 ## Java embedding sandbox
 
+### Planned Phase 4 numeric and diagnostic integration
+
+The [numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+requires an exact arbitrary-precision integer carrier in the public `CaretValue` model alongside
+the existing finite-double `NumberValue`. Integer literals, exports, arguments, host providers,
+nested Collections, and both directions of callbacks must round-trip without intermediate double
+conversion. Keep existing floating-point construction available; a new Java carrier does not
+create a distinct public Caret runtime kind or expose interpreter objects.
+
+Loading, execution, and invocation results must expose nonfatal precision warnings separately
+from failure diagnostics, including on otherwise successful operations. Warnings do not trigger
+rollback; errors retain ordinary transaction semantics. Preserve existing environment visibility,
+callback authority, handle ownership, revocation, and diagnostic sanitization. Conversions cannot
+manufacture capabilities or expose packed buffers. These additions are planned; the existing
+implemented boundary described below has a finite-double-only numeric carrier.
+
+### Implemented boundary
+
 The Java 21 prototype exposes `caretlang.embedding` as its initial implemented sandbox boundary.
 An embedded sandbox has a host-controlled environment, private Caret state, and exactly one script
 source. Loading and executing are separate operations: the first `load` call permanently claims the

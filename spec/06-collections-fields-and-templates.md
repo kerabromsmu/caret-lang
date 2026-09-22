@@ -18,7 +18,10 @@ are conceptual/planned.
 Phase 4 includes the common protocol, built-in lazy transforms, collection-value `eager`,
 and their contracts, effects, reflection, and diagnostics. Public custom-provider construction,
 its registration/constructor syntax, general computations, concurrency/synchronization, resumable
-failure handling, callable forms of `eager`, and contextual template invocation are deferred.
+failure handling, callable forms of `eager`, and context-dependent template invocation are deferred.
+Phase 4 does include expected-template completion of named Collection literals as specified under
+[named fields](#named-fields); that rule does not change ordinary template application into a
+constructor.
 Built-in laziness must not depend on exposing those deferred APIs.
 
 Public `addElement`, `removeElement`, and `replaceElement`, their construction-selection
@@ -424,6 +427,128 @@ values, equality order/infinite cases, eager key/value traversal, reflection rem
 containers/functions, alias sharing, containment cycles, and all located failures. Update the
 diagnostic inventory with exact codes and locations when implementation chooses them.
 Do not claim the new protocol implemented based on tests of legacy Sequence/Dictionary behavior.
+
+## Phase 4 packed layouts (planned)
+
+This approved design resolves the packed-storage decisions for issues #77 and #78. Exact numeric
+foundations (#82) and explicit contract conversion (#83) are separate prerequisite implementation tasks.
+Nothing in this section claims existing packed runtime support. It takes precedence over less
+specific packed illustrations later in this document. Packed storage remains a Phase 4 completion
+gate; SIMD execution, formats, and native buffer APIs remain later work.
+
+### Supported layouts and membership
+
+`Packed T` is an ordinary contract constructor describing a finite positional sequence with a
+selected, uniform element layout. It derives the ordinary Sequence/Collection capabilities;
+indices are consecutive from zero. Membership requires selected layout, not just values that
+could fit it. For example, an ordinary nonempty `[1 2]` does not satisfy `Packed Int8` until
+contextual construction or explicit conversion selects that representation. Shape-neutral `[]`
+retains its contextual-empty exception; a selected packed empty retains `T` and its layout.
+
+Supported scalar layouts are `Int8`/`UInt8` (one byte), `Int16`/`UInt16` (two), `Int32`/`UInt32`
+(four), `Int64`/`UInt64` (eight), `Float` (four), `Double` (eight), and `Boolean` (one byte, 0 or 1).
+The [numeric contracts](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-planned)
+own their ranges, membership, and aliases. `Byte` selects UInt8, `Float32` selects Float, and
+`Float64` selects Double. `Int` means format-independent Integer and supplies no packed layout.
+
+Support exact fixed-size structural templates whose scalar positions recursively have
+unambiguous concrete formats. This includes fixed members, nested positional/named templates,
+and checked holes. Fixed-value and repeated-hole constraints still apply. Derivation/refinement
+must preserve the selected layout and ordinary semantic validation; broad or conflicting layout
+requirements are not resolved by sampling values or guessing a width. Preserve concrete-format
+requirements in structural descriptors even though several numeric contracts may accept a value.
+
+Positional fields follow index order. Named fields follow the template's declaration order,
+recursively, independently of sorted Dictionary enumeration. Equivalent named semantic shapes
+can consequently have different physical layouts. A template constructed from a concrete
+Collection without declaration-order provenance uses that Collection's enumeration order.
+
+Element payloads occupy a contiguous block with shared internal layout metadata. Semantic
+contracts must survive packing and element access independently of physical storage. Do not
+expose host objects, addresses, buffers, offsets, stride, alignment, or byte order through Caret
+reflection. Public metadata exposes selected semantic contracts through the ordinary reflective
+interface; a template is not thereby an external serialization `Format`.
+
+Nullable/optional elements and fields, missing/null payloads, variable-size fields, String payloads,
+arbitrary-precision Integer payloads without a concrete format, references, packed Sets, packed
+dictionaries, and bit fields are excluded. Do not reserve a valid numeric bit pattern as a missing
+sentinel. A uniform fixed layout cannot be inferred from `Number`, `Real`, `Integer`, or `Natural`
+alone, including for an empty value. Ordinary Collections retain all their broader capabilities.
+
+### Construction, conversion, and operations
+
+Contextual literal construction selects the requested layout and validates values. A declaration
+does not silently convert an already-established ordinary sequence into packed storage.
+Explicit `(Packed T) source` conversion recursively converts elements to `T`, using the
+[built-in conversion rules](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned).
+After conversion, every element must satisfy its structural and scalar requirements. Incompatible
+shape, unsupported layout, and out-of-range values are located errors; do not expose a partial
+packed result. A fixed-width append is validation, not an implicit explicit-conversion request.
+
+<!-- caret-example: planned -->
+```caret
+(Packed Int8) small = [1 2]
+converted = (Packed Int8) [1.9 2.1]  // explicitly truncates elements to [1 2]
+ordinary = (Sequence Number) small  // explicitly selects ordinary sequence storage
+extended = seqAdd ordinary 300
+// seqAdd small 300                 // error: incompatible Int8 element
+
+Point = template [(Float) _ (Float) _]
+(Packed Point) points = [[1.0 2.0] [3.0 4.0]]
+```
+
+Direct positional conversion accepts keyless input and preserves enumeration order. A keyed
+source first needs an explicit `keys`, `values`, or `fields` projection; conversion never discards
+keys implicitly. Completely consume a lazy source before exposing a packed result, propagating
+all demanded effects. Reject a declared-infinite source; unknown finiteness can require an
+enumeration that never terminates. Conversion does not invoke `eager`'s reflection-removal rule
+as a hidden coercion or bypass ordinary lexical lazy establishment.
+
+Successful persistent append preserves `Packed T` and the selected layout; incompatible values
+are errors. Preserve every existing alias and the source on success or failure. An explicit
+ordinary-sequence conversion permits later operations under a wider element domain. No new
+builder or public element-update API is added by this design.
+
+Integrate `keys`, `values`, `fields`, `size`, guarantees, numeric access, templates, and ordinary
+reflection. Packed sequences are finite, ordered, sequential, keyless, and have values. Value
+uniqueness follows established facts rather than packed storage alone. Equality follows the
+Collection revision: physical layout/order of record storage alone cannot change logical value
+equality. Selected-layout membership is preserved with storage optimizations disabled; automatic
+storage optimization must not add or remove observable contract membership.
+
+`map` and `filter` keep their lazy behavior and do not silently repack results. Repacking uses
+explicit conversion. `eager` preserves compatible selected contracts and materializes according to
+its existing specified traversal; it does not infer new packed contracts merely from uniform
+values. Optimized and optimization-disabled execution must agree on values, membership, effects,
+reflection, equality, diagnostics, and persistent updates.
+
+### Packed and prerequisite acceptance matrix
+
+This is required future evidence, not a list of existing passing tests. Supply exact expected
+outputs and diagnostic phase/code/physical line/column when each implementation lands.
+
+| Area | Required acceptance cases |
+| --- | --- |
+| Each signed width 8/16/32/64 | Minimum, maximum, zero, −1; min−1/max+1 rejection; exact literals, conversion, append, extraction, and reflection. |
+| Each unsigned width 8/16/32/64 | Zero, maximum, −1/max+1 rejection; full UInt64 values without intermediate double rounding. |
+| Abstract numeric domains | Arbitrary-precision Integer/Natural arithmetic; aliases; overlapping representability membership; broad domains rejected as packed layouts. |
+| Float/Double | Exact/non-exact representability, ties-to-even conversion, contextual literal selection, small/subnormal values, finite boundaries, overflow, and signed-zero consistency. |
+| Numeric operations | Exact cross-format equality/order; true division, div, remainder, all sign combinations, zero divisors, operator precedence, aliases, holes, and large quotients. |
+| Precision diagnostics | Static and dynamic implicit loss; broad warning versus strict error; explicit conversion and ordinary rounding without warnings; declared function boundaries. |
+| Conversion grammar | Predicate versus conversion, computed/aliased targets, non-contract grouping, precedence, Collection boundaries, lambdas/$/postfix access, checked and repeated numbered holes. |
+| Conversion values | Integer truncation before range checks; unsupported text/truthiness conversion; String overloads/effects; strict declarations; recursive structural conversion and shape/fixed-value failures. |
+| Boolean/layout | One-byte Boolean; nested and mixed fixed-format records; declaration order distinct from Dictionary enumeration; concrete-template fallback order. |
+| Invalid layouts | Nullable/optional fields even with present data; missing/null, broad/unconstrained/conflicting formats, variable-size/reference fields, and unsupported keyed outer shapes. |
+| Construction | Contextual empty, shaped packed empty, selected-layout predicate versus ordinary sequence, eager/lazy inputs, known-infinite rejection, effects, and explicit keyed projections. |
+| Persistence/protocol | Compatible append and failed append; aliases, ownership reuse, keys/values/fields/size, access, guarantees, equality, templates, eager, and lazy transforms. |
+| Metadata/parity | Preserved semantic contracts, no physical or host metadata exposure, shared layouts, and all observable behavior with optimizations enabled/disabled. |
+| Embedding | Exact integer input/output/callback round trips; retained double carrier; separate nonfatal warnings for load, execute, and invoke. |
+
+Numeric, conversion, and packed implementation cards must each add representative runnable
+`.caret` examples with golden output and `test.sh` execution. Negative fixtures or focused Java
+tests cover every diagnostic; parser/resolver/inference/runtime tests cover static-versus-dynamic
+discovery and locations. Run the full baseline suites, corpus/navigation and conformance checks,
+example-coverage script, and `git diff --check` before claiming implementation completion.
 
 <a id="immutable-collections"></a>
 ## Immutable collections (implemented baseline)
@@ -1161,7 +1286,7 @@ Even:
 (Collection Int) values
 ```
 
-need not necessarily promise a particular physical width or layout if `Int` has implementation-dependent representation.
+does not promise a physical width or layout: `Int` aliases the format-independent `Integer`.
 
 By contrast:
 
@@ -1307,22 +1432,28 @@ The initial implementation should support at minimum:
 2. Base/tag contracts:
 
 ```caret
-Eq = contract ~
+Marker = contract ~
 ```
 
 3. Contract derivation:
 
 ```caret
-Number = contract [Eq Comparable]
+Readable = contract Marker
 ```
 
-4. Multiple derivation.
+4. Multiple derivation:
+
+```caret
+Writable = contract Marker
+ReadWrite = contract [Readable Writable]
+```
+
 5. Contracts usable as membership predicates.
 6. Ordinary pure predicates used as refinements.
 7. Derived refinement contracts:
 
 ```caret
-PositiveInt = contract [Int positive]
+PositiveNumber = contract [Number positive]
 ```
 
 8. Separate function definitions for operations.
@@ -1545,19 +1676,21 @@ constructor is not invoked during membership testing.
 
 The resulting value may be used anywhere an ordinary contract may be used.
 
-The prototype implements this exact structural template model for concrete Collections and
+The prototype implements this exact structural membership model for concrete Collections and
 reifiable collection constructors. Positional and named shape, comparable fixed values,
 unconstrained and contracted holes, repeated numbered-hole equality, direct nesting, and dynamic
 field keys participate in membership. Dynamic keys and fixed expressions are evaluated once during
 constructor creation. Template contracts compose with aliases, null/missing modifiers,
 parameterized collection contracts, conservative implication, overload dispatch, and ordinary
-contract reflection. Optional field values use ordinary `T~` contracts while every declared field
-remains required. Focused evidence for this combination is tracked by `TEMPLATE-OPTIONAL-001`.
+contract reflection. Every field remains required during membership. The planned
+`TEMPLATE-OPTIONAL-001` rule adds contextual literal completion without weakening that exact
+membership rule.
 
 Reflection retains kind `Contract` and adds language-owned `shape`, `size`, and `elements` metadata.
 Element metadata identifies its public `id`, constraint kind, zero-based repeated-hole parameter,
 and public requirement identifiers without exposing captures, source spans, Java objects, or executable
-descriptor internals.
+descriptor internals. Phase 4 adds a Boolean `defaultsMissing` element field so construction
+behavior remains observable without exposing source syntax or executable internals.
 
 For example:
 
@@ -1861,22 +1994,64 @@ exact set of field names and the field ordering defined by the universal collect
 additional, or reordered fields are incompatible whenever that ordering is observable for the
 candidate collection.
 
-Every field declared by a template must be present in a matching Collection. An optional field
-has an optional value contract such as `T~`: its value may be `~`, but the field cannot be omitted.
-Null is a separate value and requires a nullable contract such as `T?` or `T?~`. Undeclared fields
-remain incompatible. No separate optional-member declaration syntax or omittable-member descriptor
-is introduced. This rule supersedes the earlier proposal permitting optional fields to be omitted.
+Every field declared by a template must be present in a matching Collection. Phase 4 contextual
+construction may create that present field from an omission in a named Collection literal. A field
+is eligible only when its hole clause contains a directly written `T~` or `T?~` term and the full
+conjunction accepts missing. The constructed field receives value `~`; `T?~` additionally permits
+an explicitly supplied null but never changes the omission default to null.
+
+The direct suffix is construction metadata, not an accepted-set inference. An alias whose resolved
+contract accepts missing permits an explicitly supplied `~`, but does not make omission defaultable.
+A fixed `~` element, an unconstrained hole, or a clause whose remaining requirements reject missing
+does not enable omission. No separate optional-member syntax is introduced.
 
 For example, using existing template syntax:
 
 ```caret
-Person = template [^name = (String) _ ^phone = (String~) _]
+Person = template [
+  ^name = (String) _
+  ^phone = (String~) _
+  ^nickname = (String?~) _
+]
+
+(Person) ada = [^name = "Ada"]
 ```
 
-A candidate with `name = "Caret"` and `phone = ~` matches. A candidate containing only `name`
-does not. A numeric or null `phone` does not satisfy `String~`. Reflection describes the declared
-field and its ordinary value contract, including its missing/null alternatives; it must not imply
-permission to omit that field. `RuleDefinition` follows the same rule for its CATEN fields.
+The annotated initializer supplies one unambiguous expected template, so `ada` contains explicit
+`phone = ~` and `nickname = ~` fields. Both fields participate normally in enumeration, access,
+reflection, equality, and subsequent membership. A numeric or null `phone` does not satisfy
+`String~`; an explicit null `nickname` does satisfy `String?~`.
+
+Expected-template context propagates through an annotated binding initializer, an argument to a
+statically known template-constrained parameter, a declared function result, a recursively expected
+nested literal, and exported-block shorthand. Dynamic template keys are resolved once when the
+template is created and supply the corresponding expected field names. Context is available only
+when analysis identifies one template shape unambiguously. Competing overload/template shapes do
+not insert fields to decide their own selection.
+
+Only Collection constructors receive this context. Ordinary template application remains a pure
+Boolean membership predicate, and explicit conversion requires the source's established exact
+shape even when its operand is written as a literal:
+
+<!-- caret-example: planned -->
+```caret
+candidate = [^name = "Ada"]
+
+Person candidate             // false
+(Person) candidate           // contract violation
+(Person) [^name = "Ada"]     // contract violation: explicit conversion
+```
+
+The candidate is not mutated and no field is synthesized. Undeclared fields remain incompatible.
+For an omitted required or nondefaultable field, report `CONTRACT_VIOLATION` at the literal and
+retain the template field declaration as related context. Explicit field initializers keep ordinary
+evaluate-once and source-order behavior; inserting `~` evaluates no expression, and the completed
+Dictionary retains its ordinary canonical field ordering.
+
+Reflected element metadata sets `defaultsMissing` to true exactly for an eligible named field hole
+and false otherwise. Contract membership and implication compare accepted values and exact shape;
+they ignore this construction-only flag. `RuleDefinition` uses the same general mechanism for
+directly supplied definition literals.
 
 The template system does not require a separate record-schema syntax.
 
@@ -2718,9 +2893,11 @@ fields, and malformed contracted holes.
 
 23. Identical observable behavior with shared-template and packed-layout optimizations disabled.
 
-24. Required named fields with optional value contracts such as `T~`, including reflection of the
-value contract, for structural contracts such as `RuleDefinition`. Test explicit missing values,
-omitted fields, nullability, extra fields, wrong values, and nested templates using existing syntax.
+24. Contextual completion of required named fields whose holes directly use `T~` or `T?~`, including
+`defaultsMissing` reflection, for structural contracts such as `RuleDefinition`. Test bindings,
+known parameters, results, nested literals, exported blocks, dynamic keys, aliases, explicit missing
+and null values, nondefaultable omissions, extra fields, wrong values, ambiguous contexts, pure
+membership, explicit conversion, evaluation order, and located failures using existing syntax.
 
 The initial implementation may postpone:
 

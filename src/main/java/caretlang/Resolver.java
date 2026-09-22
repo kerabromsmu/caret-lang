@@ -140,8 +140,8 @@ final class Resolver {
                 arity = definition.params().size();
             } else {
                 Assign assign = (Assign) statement;
-                arity = assign.value() instanceof Lambda lambda
-                ? lambda.params().size() : null;
+                Lambda lambda = assignedLambda(assign.value());
+                arity = lambda == null ? null : lambda.params().size();
             }
             if (original != null) {
                 if (function && original.declaration() == null && original.callableArity() != null
@@ -492,13 +492,19 @@ final class Resolver {
     }
 
     private ContractState contractState(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
         if (expression instanceof ArrowContract) return ContractState.CONTRACT;
         if (expression instanceof Apply apply && apply.function() instanceof Name name
                 && name.name().equals("contract")) return ContractState.CONTRACT;
-        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral || expression instanceof Lambda) {
+        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral) {
             return ContractState.NON_CONTRACT;
         }
         return ContractState.UNKNOWN;
+    }
+
+    private static Lambda assignedLambda(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
+        return expression instanceof Lambda lambda ? lambda : null;
     }
 
     private void resolveExpr(Expr expression, Scope scope, boolean functionBody, boolean deferred) {

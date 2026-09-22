@@ -281,15 +281,17 @@ collection of records. Caret plans to make contracts the basis of its type syste
 pure predicate over values, and derivation means logical inclusion:
 
 ```caret
-Number = contract Comparable Arithmetic
-Int = contract [Number Integral]
+ComparableValue = contract ~
+ArithmeticValue = contract ~
+NumericValue = contract [ComparableValue ArithmeticValue]
+IntegralValue = contract NumericValue
 ```
 
-An `Int` therefore satisfies `Number` and its other base contracts. This is a graph, not an
-object-layout hierarchy. Contracts contain no methods. Behavior lives in ordinary functions, and
-multiple definitions can specialize several parameter contracts. A call selects the unique most
-specific applicable definition; incomparable matches are an ambiguity, not an invitation to choose
-by source order.
+An `IntegralValue` therefore satisfies `NumericValue`, `ComparableValue`, and `ArithmeticValue`.
+This is a graph, not an object-layout hierarchy. Contracts contain no methods. Behavior lives in
+ordinary functions, and multiple definitions can specialize several parameter contracts. A call
+selects the unique most specific applicable definition; incomparable matches are an ambiguity, not
+an invitation to choose by source order.
 
 Templates build exact structural contracts from collections. A collection expression containing
 holes is itself a function whose parameters complete the collection. Passing that reifiable

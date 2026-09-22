@@ -342,6 +342,28 @@ final class ContractInferenceTest {
     }
 
     @Test
+    void validatesLambdaRefinementsWithTheOrdinaryCallableProof() {
+        List<Ast.Stmt> program = new Parser("""
+                pure = value -> value > 0
+                nullary = -> true
+                binary = left right -> left == right
+                nonBoolean = value -> value + 1
+                effectful = value ->
+                  print value
+                  value > 0
+                unknown = value -> dynamic value == true
+                """).parseProgram();
+        ContractInference inference = ContractInference.analyze(program);
+
+        boolean[] expected = {true, false, false, false, false, false};
+        for (int index = 0; index < program.size(); index++) {
+            Ast.Lambda lambda = assertInstanceOf(Ast.Lambda.class,
+                    ((Ast.Assign) program.get(index)).value());
+            assertEquals(expected[index], inference.isRefinementEligible(lambda));
+        }
+    }
+
+    @Test
     void lexicalShadowsNeverInheritOuterCallablePurity() {
         List<Ast.Stmt> program = new Parser("""
                 known value = value > 0

@@ -39,7 +39,10 @@ E  Effect
 N  Name (string-literal ID)
 ```
 
-All CATEN fields must be present. Their values may be `~` to select the documented defaults.
+Every constructed RuleDefinition contains all CATEN fields. A directly contextual definition
+literal may omit a field whose template requirement directly uses `T~` or `T?~`; construction then
+materializes the field with `~` to select the documented default. Established Collections still
+require the complete exact shape.
 
 `rule` is an ordinary unary Caret function:
 
@@ -95,10 +98,12 @@ capture = rule [
 ```
 
 The example uses ordinary first-class phase functions rather than hidden unevaluated syntax.
-`RuleDefinition` uses the general exact-template model: every CATEN field is present, and an
-explicit `~` selects its default. The exact first-class contracts for deferred `C`, `T`, and `E`
-values remain unresolved dependencies. Implementations must not substitute a rule-specific AST,
-lazy-expression wrapper, or parser exception. `C` must retain the persistent/context behavior
+`RuleDefinition` uses the general exact-template model: every CATEN field is present, and `~`
+selects its default. Because the ordinary unary `rule` callable has a statically known
+`RuleDefinition` parameter, a directly supplied literal receives the expected template and
+materializes eligible omitted fields as `~`. The exact first-class contracts for deferred `C`, `T`,
+and `E` values remain unresolved dependencies. Implementations must not substitute a rule-specific
+AST, lazy-expression wrapper, or parser exception. `C` must retain the persistent/context behavior
 below, `T` must remain observable and reevaluable, and `E` executes only when the rule is applied.
 
 The components are:
@@ -472,7 +477,8 @@ rule [
 ]
 ```
 
-Assignment does not supply `N` implicitly:
+Assignment does not derive `N` from the binding name. A contextual RuleDefinition literal may omit
+`N`, in which case its direct missing-capable template requirement supplies `~`:
 
 ```caret
 capture = rule [
@@ -480,7 +486,6 @@ capture = rule [
   ^A = ~
   ^T = validCaptureTrigger
   ^E = capturePiece
-  ^N = ~
 ]
 ```
 
@@ -506,9 +511,16 @@ r = rule [
 <a id="optional-caten-components"></a>
 ### Optional CATEN components
 
-Every CATEN field is required by the general exact-template contract. Optionality belongs to its
-value: explicitly supplying `~` selects the default below. Omitting a field fails membership;
-the `rule` callable does not insert omitted fields. Null does not select these defaults.
+Every CATEN field is required by the general exact-template contract and exists in the completed
+RuleDefinition value. A directly supplied Collection literal is constructed under the known
+`RuleDefinition` parameter template, so omission of an eligible direct `T~` or `T?~` field
+materializes that field with `~`. Explicitly supplying `~` selects the same default. Null does not
+select these defaults.
+
+This is ordinary expected-template literal construction, not special behavior in `rule`. An
+already established Collection with an absent CATEN field fails RuleDefinition membership, and the
+`rule` callable never mutates or completes it. Aliases that merely accept missing do not enable
+literal omission.
 
 Recommended defaults are:
 

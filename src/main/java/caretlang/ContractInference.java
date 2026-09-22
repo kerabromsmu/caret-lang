@@ -186,6 +186,12 @@ final class ContractInference {
                 && effect.isProvenPure();
     }
 
+    boolean isRefinementEligible(Lambda lambda) {
+        FunctionDef function = lambdaFunctions.get(lambda);
+        if (function == null) throw new IllegalArgumentException("Lambda was not analyzed");
+        return isRefinementEligible(function);
+    }
+
     void validateRefinement(FunctionDef function) {
         FunctionContract contract = contracts.get(function);
         EffectSummary effect = effects.get(function);
@@ -1006,30 +1012,71 @@ final class ContractInference {
             if (statement instanceof FunctionDef function) {
                 functions.put(resolution.symbolId(function.span()), function);
                 collectRefinementBindings(function.body(), functions, aliases, eligibility);
-            } else if (statement instanceof Assign assign && assign.value() instanceof Name target) {
-                Resolution.Binding targetBinding = resolution.binding(target);
+            } else if (statement instanceof Assign assign) {
                 Integer aliasId = resolution.symbolId(assign.span());
-                if (aliasId != null && targetBinding != null) {
-                    aliases.put(aliasId, targetBinding.symbolId());
-                    if (targetBinding.refinementEligible() != null) {
-                        eligibility.put(targetBinding.symbolId(), targetBinding.refinementEligible());
+                Expr initializer = ungroup(assign.value());
+                if (aliasId != null && initializer instanceof Lambda lambda) {
+                    FunctionDef function = lambdaFunctions.get(lambda);
+                    if (function != null) functions.put(aliasId, function);
+                } else if (aliasId != null && initializer instanceof Name target) {
+                    Resolution.Binding targetBinding = resolution.binding(target);
+                    if (targetBinding != null) {
+                        aliases.put(aliasId, targetBinding.symbolId());
+                        if (targetBinding.refinementEligible() != null) {
+                            eligibility.put(targetBinding.symbolId(), targetBinding.refinementEligible());
+                        }
                     }
                 }
+                collectRefinementBindings(assign.value(), functions, aliases, eligibility);
+            } else if (statement instanceof ExprStmt expression) {
+                collectRefinementBindings(expression.expression(), functions, aliases, eligibility);
+            } else if (statement instanceof PrintLine line) {
+                collectRefinementBindings(printExpression(line), functions, aliases, eligibility);
             }
+        }
+    }
+
+    private void collectRefinementBindings(Expr expression, Map<Integer, FunctionDef> functions,
+                                           Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        if (expression instanceof Lambda lambda) {
+            collectRefinementBindings(lambda.body(), functions, aliases, eligibility);
+            return;
+        }
+        for (Expr child : AstTraversal.children(expression)) {
+            collectRefinementBindings(child, functions, aliases, eligibility);
         }
     }
 
     private void validateClauses(List<Stmt> statements, Map<Integer, FunctionDef> functions,
                                  Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
         for (Stmt statement : statements) {
-            if (statement instanceof Assign assign) validateClause(assign.contracts(), functions, aliases, eligibility);
-            else if (statement instanceof PrintLine ignored) { }
+            if (statement instanceof Assign assign) {
+                validateClause(assign.contracts(), functions, aliases, eligibility);
+                validateClauses(assign.value(), functions, aliases, eligibility);
+            } else if (statement instanceof ExprStmt expression) {
+                validateClauses(expression.expression(), functions, aliases, eligibility);
+            } else if (statement instanceof PrintLine line) {
+                validateClauses(printExpression(line), functions, aliases, eligibility);
+            }
             else if (statement instanceof FunctionDef function) {
                 validateClause(function.resultContracts(), functions, aliases, eligibility);
                 function.params().forEach(parameter -> validateClause(
                         parameter.contracts(), functions, aliases, eligibility));
                 validateClauses(function.body(), functions, aliases, eligibility);
             }
+        }
+    }
+
+    private void validateClauses(Expr expression, Map<Integer, FunctionDef> functions,
+                                 Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        if (expression instanceof Lambda lambda) {
+            lambda.params().forEach(parameter -> validateClause(
+                    parameter.contracts(), functions, aliases, eligibility));
+            validateClauses(lambda.body(), functions, aliases, eligibility);
+            return;
+        }
+        for (Expr child : AstTraversal.children(expression)) {
+            validateClauses(child, functions, aliases, eligibility);
         }
     }
 
@@ -1083,6 +1130,11 @@ final class ContractInference {
     private Expr printExpression(PrintLine line) {
         return resolution.usesBuiltinPrint(line)
                 ? new Apply(line.target(), line.builtinArgument(), line.span()) : line.ordinaryCall();
+    }
+
+    private static Expr ungroup(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
+        return expression;
     }
 
     private static boolean containsHole(Expr expression) {
