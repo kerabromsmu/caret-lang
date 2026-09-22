@@ -32,6 +32,9 @@ final class ParameterizedContract implements ContractDescriptor {
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
             return sequence.values().stream().allMatch(arguments.getFirst()::accepts);
         }
+        if (base == BuiltinContract.SEQUENCE && value instanceof Value.LazySeq sequence) {
+            return sequence.materialize().stream().allMatch(arguments.getFirst()::accepts);
+        }
         if (base == BuiltinContract.FIELD && value instanceof Value.Field(Value key, Value fieldValue)) {
             return arguments.get(0).accepts(key) && arguments.get(1).accepts(fieldValue);
         }
@@ -60,6 +63,11 @@ final class ParameterizedContract implements ContractDescriptor {
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
             ContractDescriptor element = arguments.getFirst();
             return sequence.values().stream().allMatch(
+                    elementValue -> element.acceptsRequirement(elementValue, span));
+        }
+        if (base == BuiltinContract.SEQUENCE && value instanceof Value.LazySeq sequence) {
+            ContractDescriptor element = arguments.getFirst();
+            return sequence.materialize().stream().allMatch(
                     elementValue -> element.acceptsRequirement(elementValue, span));
         }
         if (base == BuiltinContract.FIELD && value instanceof Value.Field(Value key1, Value value1)) {

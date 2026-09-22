@@ -4,15 +4,18 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="values"></a>
-## Planned lazy values and lexical contexts
+<a id="planned-lazy-values-and-lexical-contexts"></a>
+## Lazy values and lexical contexts (partially implemented)
 
-This planned general rule applies to lazy values throughout the language, including Collection
+This general rule applies to lazy values throughout the language, including Collection
 access and reflection. It is not specific to handlers, `eager`, or any one runtime kind.
 
 First access computes or obtains the specific value; it is not fixed before access. Once obtained,
 the value stays fixed in that lexical context. Nested contexts using the same inherited established
 binding share it. A fresh invocation creating a new lazy access/binding may obtain a different
-value, even for the same provider and key. Do not impose permanent Collection-wide memoization or
+value, even for the same provider and key. The built-in keyless `map` adapter implements this
+establishment model: an alias shares demanded positions, while a fresh map invocation creates a
+fresh result context. Do not impose permanent Collection-wide memoization or
 a special `eager` context. Stronger provider contracts, such as sequential stability, still apply.
 The Collection protocol is owned by the
 [Phase 4 revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned).

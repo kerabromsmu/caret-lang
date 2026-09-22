@@ -9,8 +9,9 @@
 This section records the decisions from issues #55 and #59 and their joint design discussion.
 The common `keys`/`values`/`fields`/`size` protocol, Boolean-or-missing guarantee queries,
 matching reflection fields, `Natural`, contextual Field/Set/Dictionary/keyless shapes, first-key
-settlement, and shape-neutral empty facts are implemented. The remaining lazy, access-sugar,
-transform, equality, state, scoped-lookup, materialization, and template work in this revision is
+settlement, unified access, the keyless lazy-map foundation, and shape-neutral empty facts are
+implemented. The remaining generalized transform, equality, state, scoped-lookup, materialization,
+and template work in this revision is
 planned. For the subjects covered here the revision
 supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
 eager transforms, a distinct non-Collection Field representation, and earlier collection-equality

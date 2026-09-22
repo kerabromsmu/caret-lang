@@ -486,11 +486,8 @@ final class Interpreter {
         @Override public Value apply(Value.Argument argument, SourceSpan callSpan) {
             if (transform == null) return new MapCallable(unaryMapTransform(argument));
             Value.Seq values = sequence(argument);
-            ArrayList<Value> mapped = new ArrayList<>(values.size());
-            for (Value value : values) {
-                mapped.add(invoke(transform, new Value.Argument(value, argument.span()), callSpan));
-            }
-            return ownership.fresh(new Value.Seq(mapped));
+            return ownership.fresh(new Value.LazySeq(values.size(), index -> invoke(transform,
+                    new Value.Argument(values.find(index).orElseThrow(), argument.span()), callSpan)));
         }
 
         @Override public int remainingArity() { return transform == null ? 2 : 1; }
@@ -1820,6 +1817,7 @@ final class Interpreter {
         Value raw = underlying(argument.value());
         if (raw instanceof Value.EmptyCollection) return ownership.fresh(new Value.Seq(List.of()));
         if (raw instanceof Value.Seq sequence) return sequence;
+        if (raw instanceof Value.LazySeq sequence) return ownership.fresh(new Value.Seq(sequence.materialize()));
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
     }

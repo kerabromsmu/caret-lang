@@ -746,8 +746,8 @@ explicit higher-order arrow contracts, and the initial static operator matrix ar
 Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
 item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction, Phase 4
 common Collection protocol, Field tuples, contextual shapes, general keyed Collections, internal
-settlement, and unified dot/bracket/`getElement` access are complete; implement lexical lazy
-establishment and provider effect propagation next.
+settlement, unified dot/bracket/`getElement` access, and lexical lazy establishment are complete;
+generalize lazy transforms and strict Collection consumers next.
 `with`/`outer` wait for the public named-member protocol
 rather than introducing a separate exported Scope value model.
 

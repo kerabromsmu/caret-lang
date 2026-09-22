@@ -2632,11 +2632,46 @@ final class InterpreterTest {
         assertDiagnostic("add left right = left\nmap add [1]", "exactly one argument", 2, 5);
         assertDiagnostic("map numberText [^value = 1]", "Expected sequence", 1, 16);
 
-        LangException element = expectDiagnostic("map numberText [1 \"bad\"]", "Expected number", 1, 16);
+        LangException element = expectDiagnostic("mapped = map numberText [1 \"bad\"]\nprint mapped",
+                "Expected number", 1, 25);
         assertEquals(Diagnostic.Codes.EXPECTED_NUMBER, element.diagnostic().code());
 
         LangException effects = expectDiagnostic("(pure) mapper = map", "known effect upper bound", 1, 17);
         assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, effects.diagnostic().code());
+    }
+
+    @Test
+    void lazyMapEstablishesDemandedValuesOncePerResultAndKeepsSizePure() {
+        assertEquals("""
+                made
+                2
+                1
+                10
+                10
+                2
+                20
+                3
+                30
+                3
+                30
+                """, execute("""
+                (Output Number) traced (Number) value =
+                  print value
+                  value * 10
+                mapped = map traced [1 2]
+                alias = mapped
+                print "made"
+                print size mapped
+                print mapped[0]
+                print alias[0]
+                print mapped[1]
+
+                (Output Collection) make ignored = map traced [3]
+                first = make 0
+                second = make 0
+                print first[0]
+                print second[0]
+                """));
     }
 
     @Test

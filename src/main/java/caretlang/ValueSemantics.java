@@ -51,6 +51,7 @@ final class ValueSemantics {
                 fields.put("ids", new Value.Str(String.join(",", projected.keySet())));
             }
             case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
+            case Value.LazySeq sequence -> fields.put("size", new Value.Num(sequence.length()));
             case Value.Reflective reflective -> fields.putAll(reflective instanceof Value.ProjectedDictionary projected
                     ? projected.fields(context) : reflective.fields());
             default -> { }
@@ -124,6 +125,15 @@ final class ValueSemantics {
                 var xs = x.iterator();
                 var ys = y.iterator();
                 while (xs.hasNext()) pending.push(new Pair(xs.next(), ys.next()));
+            } else if (a instanceof Value.LazySeq x && b instanceof Value.LazySeq y) {
+                if (x.length() != y.length()) return false;
+                for (int index = 0; index < x.length(); index++) pending.push(new Pair(x.at(index), y.at(index)));
+            } else if (a instanceof Value.LazySeq x && b instanceof Value.Seq y) {
+                if (x.length() != y.size()) return false;
+                for (int index = 0; index < x.length(); index++) pending.push(new Pair(x.at(index), y.find(index).orElseThrow()));
+            } else if (a instanceof Value.Seq x && b instanceof Value.LazySeq y) {
+                if (x.size() != y.length()) return false;
+                for (int index = 0; index < x.size(); index++) pending.push(new Pair(x.find(index).orElseThrow(), y.at(index)));
             } else if (a instanceof Value.KeyedCollection x && b instanceof Value.KeyedCollection y) {
                 if (x.shape() != y.shape() || x.entries().size() != y.entries().size()) return false;
                 for (int index = 0; index < x.entries().size(); index++) {
@@ -159,6 +169,8 @@ final class ValueSemantics {
                 dictionary.fields(ReflectionContext.defining()).values().forEach(pending::push);
             } else if (value instanceof Value.Seq sequence) {
                 sequence.values().forEach(pending::push);
+            } else if (value instanceof Value.LazySeq sequence) {
+                sequence.materialize().forEach(pending::push);
             }
         }
         return true;
@@ -261,6 +273,8 @@ final class ValueSemantics {
                         pending.push("field ");
                     }
                 }
+                case RenderValue(Value.LazySeq sequence, int indent, boolean quote) ->
+                        pending.push(new RenderValue(new Value.Seq(sequence.materialize()), indent, quote));
                 case RenderValue(Value.KeyedCollection collection, int indent, boolean ignoredQuote) -> {
                     if (collection.entries().isEmpty()) {
                         output.append("[]");
@@ -290,7 +304,8 @@ final class ValueSemantics {
     private static boolean isCollection(Value value) {
         value = underlying(value);
         return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary
-                || value instanceof Value.Seq || value instanceof Value.KeyedCollection;
+                || value instanceof Value.Seq || value instanceof Value.LazySeq
+                || value instanceof Value.KeyedCollection;
     }
 
     private static String spaces(int count) { return " ".repeat(count); }
@@ -317,6 +332,7 @@ final class ValueSemantics {
     private static boolean isEmptyCollection(Value value) {
         return value instanceof Value.EmptyCollection
                 || value instanceof Value.Seq sequence && sequence.size() == 0
+                || value instanceof Value.LazySeq sequence && sequence.length() == 0
                 || value instanceof Value.Dictionary dictionary && dictionary.size() == 0;
     }
 

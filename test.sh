@@ -125,6 +125,9 @@ diff -u examples/features/field_shapes.expected "$CARET_TEST_TMP/field-shapes-ou
 "$CARET_LAUNCHER" examples/features/collection_access.caret > "$CARET_TEST_TMP/collection-access-output.txt"
 diff -u examples/features/collection_access.expected "$CARET_TEST_TMP/collection-access-output.txt"
 
+"$CARET_LAUNCHER" examples/features/lazy_collection.caret > "$CARET_TEST_TMP/lazy-collection-output.txt"
+diff -u examples/features/lazy_collection.expected "$CARET_TEST_TMP/lazy-collection-output.txt"
+
 "$CARET_LAUNCHER" examples/features/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
 diff -u examples/features/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
 

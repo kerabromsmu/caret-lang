@@ -55,6 +55,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `COLL-PROTOCOL-001`, `DATA-COLL-003` | `features/collection_protocol.caret`; common enumeration, size, guarantees, reflection, `Natural`, and shape-neutral empty behavior; `errors/expected_collection.caret` |
 | `COLL-SHAPE-001`, `COLL-CONSTRUCT-001`, `COLL-DICT-ORDER-001`, `COLL-FIELD-ACCESS-001`, `DATA-003`, `DATA-004` | `features/field_shapes.caret`; Field tuples, missing-part interpretation, Sets, general keyed Collections, contextual shapes, settlement, first-key retention, and sorted Dictionaries; `errors/mixed_collection_shape.caret`; `errors/ambiguous_collection_shape.caret` |
 | `COLL-ACCESS-001`, `COLL-FIELD-ACCESS-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | `features/collection_access.caret`; equivalent dot/bracket/getElement lookup, composite/null keys, Set and Field access, lexical shadowing, and partials; `errors/invalid_collection_key.caret` |
+| `COLL-LAZY-001` | `features/lazy_collection.caret`; lazy keyless map demand, alias sharing, known size without forcing, and fresh invocation results with effect traces |
 
 Run all examples with:
 

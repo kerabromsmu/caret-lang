@@ -36,8 +36,11 @@ print (@record).keyed       // true
 print size []               // 0
 ```
 
-Planned `map` and `filter` produce lazy results even from eager inputs. Values are obtained when
-demanded; their function contracts describe any effects. `eager` materializes enumerated content
+The implemented keyless `map` adapter produces a lazy sequential result even from eager input.
+Each demanded position establishes once for aliases of that result, while a fresh invocation gets
+a fresh result; known size and guarantees do not force values. General shape-changing map/filter
+integration remains planned. Values are obtained when demanded, and their function contracts
+describe any effects. `eager` materializes enumerated content
 in order, recursively, leaving mutable containers and stored functions intact. It replaces
 reflection references with empty Collections and reports cyclic containment or known-infinite
 input. Unknown finiteness may mean it never completes.

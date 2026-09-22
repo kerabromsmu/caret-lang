@@ -330,8 +330,8 @@ now has its common enumeration/guarantee foundation and contextual shape constru
 `values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
 two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,
 first-key settlement, shape-neutral empty facts, and unified missing-returning
-dot/bracket/`getElement` access are implemented. Lazy map/filter, revised equality, and
-collection-value `eager` remain planned.
+dot/bracket/`getElement` access and the keyless lazy-map foundation are implemented. Generalized
+lazy map/filter, revised equality, and collection-value `eager` remain planned.
 Phase 4 includes expected-template
 completion for Collection literals but
 does not add a context-dependent `Template value` constructor call: ordinary template application

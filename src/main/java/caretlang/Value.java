@@ -7,7 +7,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Field, Value.KeyedCollection, Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
+        Value.Field, Value.KeyedCollection, Value.LazySeq, Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
         public Attributed {
@@ -304,6 +304,61 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() {
             return ValueSemantics.render(this);
         }
+    }
+
+    /** Language-owned lazy sequential adapter; each position establishes once in this result context. */
+    final class LazySeq implements Value, CollectionRuntime.Provider {
+        private final int size;
+        private final java.util.function.IntFunction<Value> producer;
+        private final Value[] established;
+        private final RuntimeException[] failures;
+        private final boolean[] demanded;
+
+        LazySeq(int size, java.util.function.IntFunction<Value> producer) {
+            if (size < 0) throw new IllegalArgumentException("negative lazy sequence size");
+            this.size = size;
+            this.producer = Objects.requireNonNull(producer);
+            this.established = new Value[size];
+            this.failures = new RuntimeException[size];
+            this.demanded = new boolean[size];
+        }
+
+        int length() { return size; }
+        synchronized Value at(int index) {
+            if (index < 0 || index >= size) return Missing.INSTANCE;
+            if (!demanded[index]) {
+                demanded[index] = true;
+                try { established[index] = Objects.requireNonNull(producer.apply(index)); }
+                catch (RuntimeException failure) { failures[index] = failure; }
+            }
+            if (failures[index] != null) throw failures[index];
+            return established[index];
+        }
+        List<Value> materialize() {
+            ArrayList<Value> values = new ArrayList<>(size);
+            for (int index = 0; index < size; index++) values.add(at(index));
+            return List.copyOf(values);
+        }
+        @Override public Value getElement(Value key) {
+            if (!(ValueSemantics.underlying(key) instanceof Num(double number))
+                    || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) return Missing.INSTANCE;
+            return at((int) number);
+        }
+        @Override public Value keys() {
+            ArrayList<Value> keys = new ArrayList<>(size);
+            for (int index = 0; index < size; index++) keys.add(new Num(index));
+            return new Seq(keys);
+        }
+        @Override public Value valueEntries() { return new Seq(materialize()); }
+        @Override public Value fieldEntries() { return valueEntries(); }
+        @Override public Value size() { return new Num(size); }
+        @Override public CollectionRuntime.Facts facts() {
+            return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                    CollectionRuntime.Guarantee.TRUE);
+        }
+        @Override public String toString() { return ValueSemantics.render(this); }
     }
 
     final class Dictionary implements Reflective {

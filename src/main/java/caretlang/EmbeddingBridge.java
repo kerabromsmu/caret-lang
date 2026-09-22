@@ -160,6 +160,7 @@ public final class EmbeddingBridge {
                     collection.entries().stream().map(entry -> (CaretValue) new CaretValue.FieldValue(
                             ValueSemantics.render(entry.key()), external(entry.value()))).toList());
             case Value.Seq sequence -> new CaretValue.SequenceValue(sequence.values().stream().map(this::external).toList());
+            case Value.LazySeq sequence -> new CaretValue.SequenceValue(sequence.materialize().stream().map(this::external).toList());
             case Value.Dictionary dictionary -> collection(dictionary.entries());
             case Value.EmptyCollection ignored -> new CaretValue.CollectionValue(Map.of());
             case Value.ProjectedDictionary dictionary -> collection(dictionary.fields());
