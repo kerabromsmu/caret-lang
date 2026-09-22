@@ -60,6 +60,8 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String EXPECTED_STRING = "EXPECTED_STRING";
         static final String EXPECTED_SEQUENCE = "EXPECTED_SEQUENCE";
         static final String EXPECTED_DICTIONARY = "EXPECTED_DICTIONARY";
+        static final String EXPECTED_COLLECTION = "EXPECTED_COLLECTION";
+        static final String CONTRADICTORY_COLLECTION_GUARANTEES = "CONTRADICTORY_COLLECTION_GUARANTEES";
         static final String INVALID_DICTIONARY_KEY = "INVALID_DICTIONARY_KEY";
         static final String DIVISION_BY_ZERO = "DIVISION_BY_ZERO";
         static final String NON_FINITE_RESULT = "NON_FINITE_RESULT";

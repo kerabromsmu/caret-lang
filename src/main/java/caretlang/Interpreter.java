@@ -6,7 +6,8 @@ import java.io.PrintStream;
 import java.util.*;
 
 final class Interpreter {
-    private final Environment globals = new Environment(null);
+    private final Environment builtins = new Environment(null);
+    private final Environment globals = new Environment(builtins);
     private final PrintStream output;
     private final java.util.function.BooleanSupplier outputAllowed;
     private final CallableDispatcher calls = new CallableDispatcher();
@@ -71,11 +72,11 @@ final class Interpreter {
     }
 
     void defineEmbeddingValue(String name, java.util.function.Supplier<Value> supplier) {
-        globals.defineLazy(name, supplier);
+        builtins.defineLazy(name, supplier);
     }
 
     void resetEmbeddingValue(String name, java.util.function.Supplier<Value> supplier) {
-        globals.resetLazy(name, supplier);
+        builtins.resetLazy(name, supplier);
     }
 
     void defineEmbeddingCallable(String name, int arity,
@@ -83,7 +84,7 @@ final class Interpreter {
                                  List<String> effects) {
         List<String> parameters = java.util.stream.IntStream.range(0, arity)
                 .mapToObj(index -> "arg" + (index + 1)).toList();
-        globals.define(name, new Value.FunctionValue(name, parameters,
+        builtins.define(name, new Value.FunctionValue(name, parameters,
                 (arguments, ignored) -> callback.apply(arguments.stream().map(Value.Argument::value).toList()),
                 false, CallableSignature.builtin(parameters, effects)));
         embeddingCallables.put(name, new ContractInference.ExternalCallable(arity, Set.copyOf(effects)));
@@ -348,7 +349,11 @@ final class Interpreter {
         for (var entry : groups.entrySet()) {
             ArrayList<OverloadVariant> variants = new ArrayList<>();
             Value existing = env.localValue(entry.getKey());
+            Value inheritedBuiltin = env == globals ? env.inheritedValue(entry.getKey()) : null;
             if (existing instanceof Value.Callable callable && !(existing instanceof Value.ContractValue)) {
+                variants.add(new OverloadVariant(null, callable));
+            } else if (inheritedBuiltin instanceof Value.Callable callable
+                    && !(inheritedBuiltin instanceof Value.ContractValue)) {
                 variants.add(new OverloadVariant(null, callable));
             }
             for (FunctionDef function : entry.getValue()) {
@@ -1571,9 +1576,9 @@ final class Interpreter {
 
     private void installBuiltins() {
         for (BuiltinContract contract : BuiltinContract.values()) {
-            globals.define(contract.publicName(), new Value.ContractValue(contract));
+            builtins.define(contract.publicName(), new Value.ContractValue(contract));
         }
-        globals.define("contract", locatedFunction("contract", List.of("bases"), (args, span) -> {
+        builtins.define("contract", locatedFunction("contract", List.of("bases"), (args, span) -> {
             Value argument = underlying(args.getFirst().value());
             List<ContractDescriptor> bases = new ArrayList<>();
             List<Value.Callable> refinements = new ArrayList<>();
@@ -1609,7 +1614,7 @@ final class Interpreter {
                     (callable, refinementArgument) -> invoke(callable, refinementArgument,
                             refinementArgument.span())));
         }));
-        globals.define("template", locatedFunction("template", List.of("specimen"), (args, span) -> {
+        builtins.define("template", locatedFunction("template", List.of("specimen"), (args, span) -> {
             Value specimen = underlying(args.getFirst().value());
             CollectionConstructorDescriptor descriptor;
             if (specimen instanceof CollectionConstructorCallable constructor) {
@@ -1632,10 +1637,10 @@ final class Interpreter {
         }));
         for (LanguageSyntax.BinaryOperator descriptor : LanguageSyntax.binaryOperators()) {
             String operator = descriptor.spelling();
-            globals.define(operator, new BuiltinOperatorCallable(operator));
+            builtins.define(operator, new BuiltinOperatorCallable(operator));
         }
 
-        globals.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {
+        builtins.define("print", new Value.FunctionValue("print", List.of("value"), (args, ignoredSpan) -> {
             if (!outputAllowed.getAsBoolean()) {
                 throw runtime(Diagnostic.Codes.INTERNAL_ERROR, "Output is not available in the current environment");
             }
@@ -1643,10 +1648,10 @@ final class Interpreter {
             return args.getFirst().value();
         }, false, CallableSignature.builtin(List.of("value"), List.of("Output"))));
 
-        globals.define("type", new Value.FunctionValue("type", List.of("value"),
+        builtins.define("type", new Value.FunctionValue("type", List.of("value"),
                 args -> new Value.Str(ValueSemantics.kind(args.getFirst()))));
 
-        globals.define("toString", locatedFunction("toString", List.of("value"), (args, span) -> {
+        builtins.define("toString", locatedFunction("toString", List.of("value"), (args, span) -> {
             Value value = underlying(args.getFirst().value());
             if (value instanceof Value.Callable) {
                 throw runtime(Diagnostic.Codes.CALLABLE_RENDERING,
@@ -1664,11 +1669,11 @@ final class Interpreter {
             }, reflectionContext));
         }));
 
-        globals.define("textSize", locatedFunction("textSize", List.of("text"), (args, ignored) -> {
+        builtins.define("textSize", locatedFunction("textSize", List.of("text"), (args, ignored) -> {
             String value = text(args.getFirst());
             return new Value.Num(value.codePointCount(0, value.length()));
         }));
-        globals.define("textAt", locatedFunction("textAt", List.of("text", "index"), (args, ignored) -> {
+        builtins.define("textAt", locatedFunction("textAt", List.of("text", "index"), (args, ignored) -> {
             String value = text(args.get(0));
             OptionalInt index = index(args.get(1));
             int size = value.codePointCount(0, value.length());
@@ -1676,7 +1681,7 @@ final class Interpreter {
             int offset = value.offsetByCodePoints(0, index.getAsInt());
             return new Value.Str(new String(Character.toChars(value.codePointAt(offset))));
         }));
-        globals.define("textSlice", locatedFunction("textSlice", List.of("text", "start", "end"), (args, ignored) -> {
+        builtins.define("textSlice", locatedFunction("textSlice", List.of("text", "start", "end"), (args, ignored) -> {
             String value = text(args.get(0));
             OptionalInt start = index(args.get(1));
             OptionalInt end = index(args.get(2));
@@ -1687,7 +1692,7 @@ final class Interpreter {
             int to = value.offsetByCodePoints(0, end.getAsInt());
             return new Value.Str(value.substring(from, to));
         }));
-        globals.define("textNumber", locatedFunction("textNumber", List.of("text"), (args, ignored) -> {
+        builtins.define("textNumber", locatedFunction("textNumber", List.of("text"), (args, ignored) -> {
             try {
                 double number = Double.parseDouble(text(args.getFirst()));
                 return Double.isFinite(number) ? new Value.Num(number) : Value.Missing.INSTANCE;
@@ -1695,48 +1700,67 @@ final class Interpreter {
                 return Value.Missing.INSTANCE;
             }
         }));
-        globals.define("numberText", locatedFunction("numberText", List.of("number"), (args, ignored) ->
+        builtins.define("numberText", locatedFunction("numberText", List.of("number"), (args, ignored) ->
                 new Value.Str(new Value.Num(number(args.getFirst())).toString())));
 
-        globals.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
+        builtins.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
                 new Value.Field(requiredDictionaryKey(args.getFirst()), args.get(1).value())));
 
-        globals.define("seqEmpty", function("seqEmpty", List.of(), args -> ownership.fresh(new Value.Seq(List.of()))));
-        globals.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) ->
+        builtins.define("keys", collectionFunction("keys", BuiltinContract.COLLECTION, true,
+                (args, ignored) -> collectionEnumeration(
+                        collection(args.getFirst()).keys(), "keys", args.getFirst().span())));
+        builtins.define("values", collectionFunction("values", BuiltinContract.COLLECTION, true,
+                (args, ignored) -> collectionEnumeration(
+                        collection(args.getFirst()).valueEntries(), "values", args.getFirst().span())));
+        builtins.define("fields", collectionFunction("fields", BuiltinContract.COLLECTION, false,
+                (args, ignored) -> collectionEnumeration(
+                        collection(args.getFirst()).fieldEntries(), "fields", args.getFirst().span())));
+        builtins.define("size", collectionFunction("size", BuiltinContract.NATURAL, true,
+                (args, ignored) -> collectionSize(collection(args.getFirst()), args.getFirst().span())));
+        builtins.define("isSequential", collectionGuarantee("isSequential",
+                CollectionRuntime.Facts::sequential));
+        builtins.define("isOrdered", collectionGuarantee("isOrdered", CollectionRuntime.Facts::ordered));
+        builtins.define("isUnique", collectionGuarantee("isUnique", CollectionRuntime.Facts::unique));
+        builtins.define("isFinite", collectionGuarantee("isFinite", CollectionRuntime.Facts::finite));
+        builtins.define("isKeyed", collectionGuarantee("isKeyed", CollectionRuntime.Facts::keyed));
+        builtins.define("hasValues", collectionGuarantee("hasValues", CollectionRuntime.Facts::hasValues));
+
+        builtins.define("seqEmpty", function("seqEmpty", List.of(), args -> ownership.fresh(new Value.Seq(List.of()))));
+        builtins.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) ->
                 ownership.append(sequence(args.getFirst()), args.get(1).value())));
-        globals.define("seqGet", locatedFunction("seqGet", List.of("sequence", "index"), (args, ignored) -> {
+        builtins.define("seqGet", locatedFunction("seqGet", List.of("sequence", "index"), (args, ignored) -> {
             Value.Seq values = sequence(args.get(0));
             OptionalInt index = index(args.get(1));
             return index.isPresent() ? values.find(index.getAsInt()).orElse(Value.Missing.INSTANCE)
                     : Value.Missing.INSTANCE;
         }));
-        globals.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
+        builtins.define("seqSize", locatedFunction("seqSize", List.of("sequence"), (args, ignored) ->
                 new Value.Num(sequence(args.getFirst()).size())));
-        globals.define("map", new MapCallable());
-        globals.define("filter", new SequenceOperationCallable(SequenceOperation.FILTER));
-        globals.define("fold", new SequenceOperationCallable(SequenceOperation.FOLD));
-        globals.define("any", new SequenceOperationCallable(SequenceOperation.ANY));
-        globals.define("all", new SequenceOperationCallable(SequenceOperation.ALL));
+        builtins.define("map", new MapCallable());
+        builtins.define("filter", new SequenceOperationCallable(SequenceOperation.FILTER));
+        builtins.define("fold", new SequenceOperationCallable(SequenceOperation.FOLD));
+        builtins.define("any", new SequenceOperationCallable(SequenceOperation.ANY));
+        builtins.define("all", new SequenceOperationCallable(SequenceOperation.ALL));
 
-        globals.define("dictEmpty", function("dictEmpty", List.of(), args ->
+        builtins.define("dictEmpty", function("dictEmpty", List.of(), args ->
                 ownership.fresh(new Value.Dictionary(Map.of()))));
-        globals.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
+        builtins.define("dictPut", locatedFunction("dictPut", List.of("dictionary", "key", "value"), (args, ignored) ->
                 ownership.put(dictionary(args.getFirst()), requiredDictionaryKey(args.get(1)), args.get(2).value())));
-        globals.define("dictGet", locatedFunction("dictGet", List.of("dictionary", "key"), (args, ignored) -> {
+        builtins.define("dictGet", locatedFunction("dictGet", List.of("dictionary", "key"), (args, ignored) -> {
             String key = dictionaryKey(args.get(1));
             return key == null ? Value.Missing.INSTANCE
                     : dictionary(args.get(0)).find(key).orElse(Value.Missing.INSTANCE);
         }));
-        globals.define("dictHas", locatedFunction("dictHas", List.of("dictionary", "key"), (args, ignored) -> {
+        builtins.define("dictHas", locatedFunction("dictHas", List.of("dictionary", "key"), (args, ignored) -> {
             String key = dictionaryKey(args.get(1));
             return new Value.Bool(key != null && dictionary(args.get(0)).containsKey(key));
         }));
-        globals.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> ownership.fresh(
+        builtins.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> ownership.fresh(
                 new Value.Seq(dictionary(args.getFirst()).entries().keySet().stream().map(Value.Str::new).toList()))));
     }
 
     private void installTestBuiltins(TestReporter reporter) {
-        globals.define("assert", new Value.FunctionValue("assert", List.of("name", "condition"),
+        builtins.define("assert", new Value.FunctionValue("assert", List.of("name", "condition"),
                 (args, span) -> {
                     String name = text(args.get(0));
                     Value conditionValue = underlying(args.get(1).value());
@@ -1748,7 +1772,7 @@ final class Interpreter {
                     reporter.record(name, condition, new Value.Bool(true), condition.value(), span);
                     return Value.Missing.INSTANCE;
                 }, false, CallableSignature.builtin(List.of("name", "condition"), List.of("TestReport"))));
-        globals.define("assertEqual", new Value.FunctionValue("assertEqual", List.of("name", "actual", "expected"),
+        builtins.define("assertEqual", new Value.FunctionValue("assertEqual", List.of("name", "actual", "expected"),
                 (args, span) -> {
                     String name = text(args.get(0));
                     Value actual = args.get(1).value();
@@ -1828,6 +1852,49 @@ final class Interpreter {
         if (raw instanceof Value.Seq sequence) return sequence;
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
+    }
+
+    private CollectionRuntime.Provider collection(Value.Argument argument) {
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(argument.value()).orElseThrow(() ->
+                runtime(Diagnostic.Codes.EXPECTED_COLLECTION,
+                        "Expected Collection, got: " + argument.value(), argument.span()));
+        provider.facts().validate(argument.span());
+        return provider;
+    }
+
+    private Value collectionEnumeration(Value result, String operation, SourceSpan span) {
+        Value raw = underlying(result);
+        if (raw == Value.Missing.INSTANCE || CollectionRuntime.isCollection(raw)) return result;
+        throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                "Contract violation for " + operation + " provider: expected Collection or missing", span);
+    }
+
+    private Value collectionSize(CollectionRuntime.Provider provider, SourceSpan span) {
+        Value result = provider.size();
+        Value raw = underlying(result);
+        if (raw == Value.Missing.INSTANCE || BuiltinContract.NATURAL.accepts(raw)) return result;
+        throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                "Contract violation for size provider: expected Natural or missing", span);
+    }
+
+    private Value.FunctionValue collectionGuarantee(
+            String name, java.util.function.Function<CollectionRuntime.Facts, CollectionRuntime.Guarantee> query) {
+        return collectionFunction(name, BuiltinContract.BOOLEAN, true, (arguments, ignored) -> {
+            CollectionRuntime.Provider provider = collection(arguments.getFirst());
+            return query.apply(provider.facts()).value();
+        });
+    }
+
+    private Value.FunctionValue collectionFunction(
+            String name, BuiltinContract result, boolean optional,
+            java.util.function.BiFunction<List<Value.Argument>, SourceSpan, Value> implementation) {
+        CallableSignature.ContractTerm collection = new CallableSignature.NamedRef(
+                BuiltinContract.COLLECTION, BuiltinContract.COLLECTION.publicName());
+        CallableSignature.ContractTerm resultTerm = new CallableSignature.NamedRef(result, result.publicName());
+        if (optional) resultTerm = new CallableSignature.ModifiedRef(resultTerm, false, true);
+        CallableSignature signature = CallableSignature.builtin(List.of("collection"),
+                List.of(List.of(collection)), List.of(resultTerm), List.of());
+        return new Value.FunctionValue(name, List.of("collection"), implementation, false, signature);
     }
 
     private Value.Callable unaryMapTransform(Value.Argument argument) {

@@ -65,6 +65,18 @@ final class Environment {
         this.captures = Map.copyOf(captures);
     }
 
+    Environment parent() { return parent; }
+
+    Value inheritedValue(String name) {
+        return parent == null ? null : parent.findInitialized(name);
+    }
+
+    private Value findInitialized(String name) {
+        Binding binding = values.get(name);
+        if (binding != null && binding.initialized) return binding.read();
+        return parent == null ? null : parent.findInitialized(name);
+    }
+
     void define(String name, Value value) {
         declare(name);
         initialize(name, value);

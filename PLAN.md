@@ -295,15 +295,19 @@ and direct declaration clauses.
 Current foundation: `Collection` is implemented as the general contract for Sequences and
 Dictionaries. Static `^name`, ordinary `field "name" value`, exported blocks, and `dictPut` share
 one String-keyed `Dictionary K V` representation; mixed shapes and duplicate keys are diagnosed.
+The common provider-backed `keys`/`values`/`fields`/`size` operations, Boolean-or-missing guarantee
+queries, matching reflection fields, `Natural`, and shape-neutral empty facts are implemented.
 The steps below describe the remaining contextual, template, and representation work.
 The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
 records the newer #55/#59 decisions and takes precedence over legacy implementation targets
-for its covered behavior. These decisions are planned, not implemented by the existing tests.
+for its covered behavior. The common protocol foundation is implemented; the remaining decisions
+are still planned and require their own runtime evidence.
 
 ### Agreed collection revision and deferrals
 
-- Implement ordinary keys/values/fields/size access, guarantee queries and reflective equivalents,
-  Natural size contracts, keyed/keyless and Set/dictionary shapes, and Field-contract tuples.
+- Preserve implemented ordinary keys/values/fields/size access, guarantee queries and reflective
+  equivalents, Natural size contracts, and shape-neutral empty facts while adding keyed/keyless and
+  Set/dictionary shapes plus Field-contract tuples.
 - Implement lazy map/filter, strict fold and short-circuit any/all, shape-changing transforms,
   first-entry duplicate handling, two-input zip tuples and zipWithKeys keyed construction.
 - Retain internal construction and settlement without exposing unfinished Collections. Public
@@ -740,9 +744,9 @@ allowances and callable-value constraints; unknown higher-order invocation rejec
 aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
 explicit higher-order arrow contracts, and the initial static operator matrix are settled.
 Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
-item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction
-`CONTRACT-LAMBDA-REFINE-001` is complete; implement the settled Phase 4 universal collection and
-field foundations next. `with`/`outer` wait for the Phase 4 public named-member protocol
+item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction and the
+Phase 4 common Collection protocol are complete; implement Field tuples, contextual shapes,
+general keyed Collections, and internal settlement next. `with`/`outer` wait for the public named-member protocol
 rather than introducing a separate exported Scope value model.
 
 ## Explicit assumptions and allowed deferrals

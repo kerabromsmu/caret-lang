@@ -87,10 +87,16 @@ final class MainTest {
                 ~
                 10
                 [
+                  "finite" = true
+                  "hasValues" = true
                   "ids" = "count,name"
+                  "keyed" = true
                   "kind" = "Dictionary"
+                  "ordered" = true
+                  "sequential" = false
                   "shape" = "named"
                   "size" = 2
+                  "unique" = ~
                 ]
                 """, invocation.output());
         assertEquals("", invocation.error());

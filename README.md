@@ -23,6 +23,8 @@ The current prototype supports:
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
 - persistent sequences and canonically ordered Dictionaries with structural equality;
+- ordinary Collection `keys`, `values`, `fields`, `size`, Boolean-or-missing guarantee queries,
+  matching reflection fields, and the non-negative integer `Natural` contract;
 - higher-order Sequence `map`, `filter`, strict left `fold`, `any`, and `all` through named,
   partial, composed, and lambda callables;
 - polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
@@ -314,7 +316,8 @@ shadows this builtin-only grouping and follows ordinary application rules.
 
 The approved [Phase 4 numeric and packed design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
 also remains unimplemented. It adds exact arbitrary-precision integers, signed/unsigned formats
-through 64 bits, `Float`/`Double`, true `/` alongside truncating integer `div`, and precision
+through 64 bits, upgrades the current `Natural` size predicate to that exact numeric foundation,
+adds `Float`/`Double`, true `/` alongside truncating integer `div`, and precision
 warnings or errors according to explicit result requirements. Planned `(Contract) expression`
 converts a value; declarations and directly contracted holes remain checks. Packed storage will
 cover finite positional sequences of fixed-format scalars or fixed-size templates, preserving
@@ -322,11 +325,12 @@ template declaration order. Nullable payloads, bit fields, custom conversions, a
 conversion through this new syntax are deferred. See the canonical
 [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
 
-The newly settled [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
-is not implemented yet. It adds the common enumeration/guarantee protocol, lazy map/filter,
-Field tuples and Sets, unified missing-returning dot/bracket lookup, revised equality, and
-collection-value `eager`. The implementation descriptions and runnable examples below describe
-the existing prototype. Phase 4 includes expected-template completion for Collection literals but
+The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
+now has its common enumeration/guarantee foundation: `keys`, `values`, `fields`, `size`, the six
+guarantee queries, matching reflection fields, `Natural`, and shape-neutral empty facts are
+implemented. Lazy map/filter, Field tuples and Sets, unified missing-returning dot/bracket lookup,
+revised equality, and collection-value `eager` remain planned. Phase 4 includes expected-template
+completion for Collection literals but
 does not add a context-dependent `Template value` constructor call: ordinary template application
 remains a membership predicate. General computations, custom providers, resumable failure handlers,
 template constructor/predicate invocation, and callable `eager` forms are deferred beyond Phase 4.

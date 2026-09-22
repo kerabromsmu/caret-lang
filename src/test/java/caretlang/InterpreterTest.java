@@ -6,6 +6,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -1635,6 +1637,160 @@ final class InterpreterTest {
                 print first.with
                 print first == second
                 """));
+    }
+
+    @Test
+    void commonCollectionProtocolEnumeratesValuesAndProjectsGuarantees() {
+        assertEquals("""
+                true
+                false
+                false
+                [ 0 1 2 ]
+                [ 1 ~ 3 ]
+                [ 1 ~ 3 ]
+                3
+                true
+                true
+                ~
+                true
+                false
+                true
+                [ \"a\" \"missing\" \"z\" ]
+                [ 1 ~ 3 ]
+                [ \"a\" = 1 \"missing\" = ~ \"z\" = 3 ]
+                3
+                false
+                true
+                ~
+                true
+                true
+                true
+                []
+                []
+                []
+                0
+                ~
+                ~
+                true
+                true
+                ~
+                ~
+                true
+                true
+                true
+                3
+                [ \"a\" \"missing\" \"z\" ]
+                local
+                Collection
+                Natural
+                true
+                0
+                """, execute("""
+                positional = [1 ~ 3]
+                named = [^z = 3 ^a = 1 ^missing = ~]
+                empty = []
+
+                print Natural 0
+                print Natural (-1)
+                print Natural 1.5
+
+                print keys positional
+                print values positional
+                print fields positional
+                print size positional
+                print isSequential positional
+                print isOrdered positional
+                print isUnique positional
+                print isFinite positional
+                print isKeyed positional
+                print hasValues positional
+
+                print keys named
+                print values named
+                print fields named
+                print size named
+                print isSequential named
+                print isOrdered named
+                print isUnique named
+                print isFinite named
+                print isKeyed named
+                print hasValues named
+
+                print keys empty
+                print values empty
+                print fields empty
+                print size empty
+                print isSequential empty
+                print isOrdered empty
+                print isUnique empty
+                print isFinite empty
+                print isKeyed empty
+                print hasValues empty
+
+                print (@positional).sequential
+                print (@named).ordered
+                print (@empty).finite
+                print (@named).size
+
+                namedKeys = keys _
+                print namedKeys named
+
+                locallyShadow collection =
+                  keys value = "local"
+                  keys collection
+                print locallyShadow named
+
+                sizeParameter = seqGet (@size).signature.parameters 0
+                print (seqGet sizeParameter.requirements 0).id
+                sizeResult = seqGet (@size).signature.result.guarantees 0
+                print sizeResult.base.id
+                print sizeResult.optional
+                print seqSize (@size).signature.effects.upperBound
+                """));
+    }
+
+    @Test
+    void internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent() {
+        class TestProvider implements Value.Reflective, CollectionRuntime.Provider {
+            int reads;
+            private final CollectionRuntime.Facts facts;
+            TestProvider(CollectionRuntime.Facts facts) { this.facts = facts; }
+            @Override public Value getElement(Value key) { reads++; return Value.Missing.INSTANCE; }
+            @Override public Value keys() { reads++; return Value.EmptyCollection.INSTANCE; }
+            @Override public Value valueEntries() { reads++; return Value.EmptyCollection.INSTANCE; }
+            @Override public Value fieldEntries() { reads++; return Value.EmptyCollection.INSTANCE; }
+            @Override public Value size() { reads++; return Value.Missing.INSTANCE; }
+            @Override public CollectionRuntime.Facts facts() { return facts; }
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+        }
+
+        TestProvider provider = new TestProvider(new CollectionRuntime.Facts(
+                CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.UNKNOWN,
+                CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE));
+        SourceSpan span = SourceSpan.point(new SourcePosition(8, 2, 4));
+        LangException error = assertThrows(LangException.class, () ->
+                CollectionRuntime.provider(provider).orElseThrow().facts().validate(span));
+        assertEquals(Diagnostic.Codes.CONTRADICTORY_COLLECTION_GUARANTEES, error.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
+        assertEquals(span, error.diagnostic().primarySpan());
+        assertEquals(0, provider.reads);
+        assertEquals(ValueKind.COLLECTION, ValueKind.of(provider));
+        assertTrue(BuiltinContract.COLLECTION.accepts(provider));
+
+        TestProvider valid = new TestProvider(new CollectionRuntime.Facts(
+                CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.UNKNOWN,
+                CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE));
+        assertSame(Value.EmptyCollection.INSTANCE,
+                CollectionRuntime.provider(valid).orElseThrow().keys());
+        assertEquals(1, valid.reads);
+        Map<String, Value> reflected = ValueSemantics.reflectionFields(valid);
+        assertSame(Value.Missing.INSTANCE, reflected.get("size"));
+        assertEquals(new Value.Bool(false), reflected.get("sequential"));
+        assertSame(Value.Missing.INSTANCE, reflected.get("ordered"));
+        assertEquals(2, valid.reads);
     }
 
     @Test

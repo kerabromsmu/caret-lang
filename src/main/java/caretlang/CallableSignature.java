@@ -95,6 +95,18 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
                 new Result(List.of(), null, null), new Effects(effectRefs(effects), null, effectRefs(effects)), List.of());
     }
 
+    static CallableSignature builtin(List<String> names, List<List<ContractTerm>> requirements,
+                                     List<ContractTerm> results, List<String> effects) {
+        if (names.size() != requirements.size()) {
+            throw new IllegalArgumentException("Builtin parameter names and requirements must align");
+        }
+        return new CallableSignature(java.util.stream.IntStream.range(0, names.size())
+                .mapToObj(index -> new Parameter(names.get(index), requirements.get(index), null,
+                        requirements.get(index))).toList(),
+                new Result(results, null, results),
+                new Effects(effectRefs(effects), null, effectRefs(effects)), List.of());
+    }
+
     static CallableSignature operator(List<String> parameterContracts, String resultContract) {
         List<Parameter> parameters = java.util.stream.IntStream.range(0, parameterContracts.size())
                 .mapToObj(index -> new Parameter(index == 0 ? "left" : "right",

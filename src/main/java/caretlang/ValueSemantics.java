@@ -46,6 +46,17 @@ final class ValueSemantics {
                     ? projected.fields(context) : reflective.fields());
             default -> { }
         }
+        CollectionRuntime.provider(value).ifPresent(provider -> {
+            CollectionRuntime.Facts facts = provider.facts();
+            facts.validate(null);
+            fields.put("sequential", facts.sequential().value());
+            fields.put("ordered", facts.ordered().value());
+            fields.put("unique", facts.unique().value());
+            fields.put("finite", facts.finite().value());
+            fields.put("keyed", facts.keyed().value());
+            fields.put("hasValues", facts.hasValues().value());
+            fields.put("size", provider.size());
+        });
         return fields;
     }
 

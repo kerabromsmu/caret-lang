@@ -6,6 +6,13 @@ import java.util.Optional;
 enum BuiltinContract implements ContractDescriptor {
     ANY("Any") { @Override public boolean accepts(Value value) { return true; } },
     NUMBER("Number") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.NUMBER); } },
+    NATURAL("Natural") {
+        @Override public boolean accepts(Value value) {
+            value = ValueSemantics.underlying(value);
+            return value instanceof Value.Num(double number) && number >= 0 && number == Math.rint(number);
+        }
+        @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(NUMBER); }
+    },
     STRING("String") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.STRING); } },
     BOOLEAN("Boolean") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.BOOLEAN); } },
     EQ("Eq") { @Override public boolean accepts(Value value) { return ValueSemantics.equalityEligible(value); } },
@@ -19,9 +26,7 @@ enum BuiltinContract implements ContractDescriptor {
     },
     COLLECTION("Collection") {
         @Override public boolean accepts(Value value) {
-            value = ValueSemantics.underlying(value);
-            return value instanceof Value.Dictionary || value instanceof Value.EmptyCollection
-                    || value instanceof Value.Seq;
+            return CollectionRuntime.isCollection(value);
         }
     },
     SEQUENCE("Sequence") {

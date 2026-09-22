@@ -15,6 +15,7 @@ enum ValueKind {
     static ValueKind of(Value input) {
         Objects.requireNonNull(input);
         Value value = ValueSemantics.underlying(input);
+        if (value instanceof CollectionRuntime.Provider) return COLLECTION;
         return switch (value) {
             case Value.Num ignored -> NUMBER;
             case Value.Str ignored -> STRING;

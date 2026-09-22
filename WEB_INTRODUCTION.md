@@ -17,13 +17,24 @@ remaining predictable, statically analyzable, and pleasant to work with?
 
 ## Designed around expressions
 
-### Planned Collection evolution
+### Collection evolution
 
-Phase 4's [Collection protocol](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
-is specified but not implemented. Ordinary `keys`, `values`, `fields`, and `size` operations
-will work across Collection shapes, with reflective queries for ordering, sequentiality,
-uniqueness, finiteness, keyedness, and value support. `Natural` describes non-negative integer
-sizes; an unknown size is missing.
+Phase 4's [Collection protocol](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
+now provides ordinary `keys`, `values`, `fields`, and `size` operations for the implemented
+Collection shapes, with `isOrdered`, `isSequential`, `isUnique`, `isFinite`, `isKeyed`, and
+`hasValues` queries and matching reflection fields. `Natural` describes non-negative integer
+sizes; an unknown size is missing. A guarantee returns `true`, `false`, or `~` when unknown.
+
+```caret
+items = [10 ~ 30]
+record = [^name = "Ada" ^age = 42]
+
+print keys items            // [ 0 1 2 ]
+print values record         // [ 42 "Ada" ] in Dictionary key order
+print isSequential items    // true
+print (@record).keyed       // true
+print size []               // 0
+```
 
 Planned `map` and `filter` produce lazy results even from eager inputs. Values are obtained when
 demanded; their function contracts describe any effects. `eager` materializes enumerated content
@@ -50,8 +61,7 @@ Planned `with` analyzes the names used in its body and binds them against enumer
 before executing the body. Member values remain lazy; a present missing value shadows outer
 bindings, while an absent name resolves outward. Explicit `outer.name` accesses the outer binding.
 
-These are future semantics; the executable examples elsewhere in this introduction still describe
-the current interpreter. Phase 4 also plans expected-template completion for Collection literals.
+The later behavior in this section remains planned. Phase 4 also plans expected-template completion for Collection literals.
 This does not turn ordinary `Template value` application into construction; template
 constructor/predicate invocation, custom provider construction, completely deferred computation
 syntax, resumable failure handling, and callable forms of `eager` remain later work.
@@ -77,8 +87,9 @@ null.
 
 ### Planned numbers, conversions, and packed data
 
-The approved Phase 4 design makes `Number`, `Real`, `Integer`, and `Natural` common domains without
-prescribing storage formats. Integers will remain exact at arbitrary size. Concrete formats include
+The current protocol provides `Natural` as the non-negative integer predicate for collection sizes.
+The approved numeric revision makes `Number`, `Real`, `Integer`, and `Natural` common domains without
+prescribing storage formats and gives `Natural` the exact integer foundation. Integers will remain exact at arbitrary size. Concrete formats include
 signed and unsigned 8/16/32/64-bit integers, `Float` (binary32), and `Double` (binary64).
 `Int`, `Byte`, `Float32`, and `Float64` alias `Integer`, `UInt8`, `Float`, and `Double` respectively.
 These contracts test exact representability, so their memberships can overlap.

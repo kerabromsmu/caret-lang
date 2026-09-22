@@ -76,22 +76,27 @@ final class Resolver {
 
     static Resolution resolve(List<Stmt> program, Environment globals, EffectCatalog effectCatalog) {
         Resolver resolver = new Resolver(effectCatalog);
-        Scope root = new Scope(null);
-        for (Environment.LocalBinding binding : globals.localBindings()) {
-            ContractState state = BuiltinContract.named(binding.name()).isPresent()
-                    ? ContractState.CONTRACT : ContractState.UNKNOWN;
-            int symbolId = resolver.nextSymbolId++;
-            root.symbols.put(binding.name(), new Symbol(binding.slot(), symbolId, null, true,
-                    binding.callableArity(), state, binding.contractParameterArity(), binding.refinementEligible(), false));
-            if (binding.name().equals("Any") && state == ContractState.CONTRACT) {
-                resolver.anyContractSymbol = symbolId;
-            }
-            root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
-        }
+        Scope root = resolver.environmentScope(globals);
         resolver.resolveBlock(program, root, false);
         return new Resolution(resolver.names, resolver.clauses, resolver.calls,
                 resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.resolvedLambdaUpvalues(),
                 resolver.analyzedArrows, resolver.declarations);
+    }
+
+    private Scope environmentScope(Environment environment) {
+        Scope scope = new Scope(environment.parent() == null ? null : environmentScope(environment.parent()));
+        for (Environment.LocalBinding binding : environment.localBindings()) {
+            ContractState state = binding.contractParameterArity() != null
+                    ? ContractState.CONTRACT : ContractState.UNKNOWN;
+            int symbolId = nextSymbolId++;
+            scope.symbols.put(binding.name(), new Symbol(binding.slot(), symbolId, null, true,
+                    binding.callableArity(), state, binding.contractParameterArity(), binding.refinementEligible(), false));
+            if (binding.name().equals("Any") && state == ContractState.CONTRACT) {
+                anyContractSymbol = symbolId;
+            }
+            scope.nextSlot = Math.max(scope.nextSlot, binding.slot() + 1);
+        }
+        return scope;
     }
 
     static Resolution resolve(List<Stmt> program, Environment globals) {

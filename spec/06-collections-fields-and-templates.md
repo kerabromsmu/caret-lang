@@ -3,15 +3,19 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
-## Phase 4 Collection protocol revision (planned)
+<a id="phase-4-collection-protocol-revision-planned"></a>
+## Phase 4 Collection protocol revision (partially implemented)
 
 This section records the decisions from issues #55 and #59 and their joint design discussion.
-It specifies planned behavior, not current interpreter support. For the subjects covered here it
+The common `keys`/`values`/`fields`/`size` protocol, Boolean-or-missing guarantee queries,
+matching reflection fields, `Natural`, and the shape-neutral empty facts are implemented. The
+remaining lazy, shape, transform, equality, state, scoped-lookup, materialization, and template
+work in this revision is planned. For the subjects covered here the revision
 supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
 eager transforms, a distinct non-Collection Field representation, and earlier collection-equality
 assumptions. Existing tests and the implemented baseline remain valid descriptions of the current
-prototype until their corresponding implementation changes land. All examples in this section
-are conceptual/planned.
+prototype until their corresponding implementation changes land. Examples for unfinished slices
+remain conceptual/planned.
 
 ### Scope and custom-provider deferral
 

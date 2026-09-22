@@ -123,9 +123,10 @@ defines evidence required before claiming implementation.
 
 ## Deferred specification work
 
-The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
-records the joint #55/#59 decisions, their explicit precedence over affected legacy target behavior,
-and unresolved integration points. General
+The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
+records the joint #55/#59 decisions and their explicit precedence over affected legacy target behavior.
+Its common enumeration, size, guarantee, reflection, `Natural`, and empty-Collection foundation is
+implemented; the remaining integration points are planned. General
 [lazy-value evaluation](spec/02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts)
 belongs to the evaluation specification; deferred
 [resumable failure handling](spec/05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)

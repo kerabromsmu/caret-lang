@@ -116,6 +116,9 @@ diff -u examples/features/inference.expected "$CARET_TEST_TMP/inference-output.t
 "$CARET_LAUNCHER" examples/features/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
 diff -u examples/features/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
 
+"$CARET_LAUNCHER" examples/features/collection_protocol.caret > "$CARET_TEST_TMP/collection-protocol-output.txt"
+diff -u examples/features/collection_protocol.expected "$CARET_TEST_TMP/collection-protocol-output.txt"
+
 "$CARET_LAUNCHER" examples/features/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
 diff -u examples/features/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
 
@@ -265,6 +268,7 @@ expect_failure examples/errors/expected_number.caret unused
 expect_failure examples/errors/expected_string.caret unused
 expect_failure examples/errors/expected_sequence.caret unused
 expect_failure examples/errors/expected_dictionary.caret unused
+expect_failure examples/errors/expected_collection.caret unused
 expect_failure examples/errors/invalid_dictionary_key.caret unused
 expect_failure examples/errors/invalid_field_target.caret unused
 expect_failure examples/errors/missing_reflected_field.caret unused
