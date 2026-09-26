@@ -119,6 +119,9 @@ diff -u examples/features/collection_order.expected "$CARET_TEST_TMP/collection-
 "$CARET_LAUNCHER" examples/features/collection_protocol.caret > "$CARET_TEST_TMP/collection-protocol-output.txt"
 diff -u examples/features/collection_protocol.expected "$CARET_TEST_TMP/collection-protocol-output.txt"
 
+"$CARET_LAUNCHER" examples/features/eager.caret > "$CARET_TEST_TMP/eager-output.txt"
+diff -u examples/features/eager.expected "$CARET_TEST_TMP/eager-output.txt"
+
 "$CARET_LAUNCHER" examples/features/field_shapes.caret > "$CARET_TEST_TMP/field-shapes-output.txt"
 diff -u examples/features/field_shapes.expected "$CARET_TEST_TMP/field-shapes-output.txt"
 

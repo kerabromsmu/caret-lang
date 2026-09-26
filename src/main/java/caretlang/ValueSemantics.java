@@ -38,6 +38,7 @@ final class ValueSemantics {
                         ? "set" : "keyed"));
                 fields.put("size", new Value.Num(collection.entries().size()));
             }
+            case Value.SettledCollection collection -> fields.put("size", collection.size());
             case Value.EmptyCollection ignored -> {
                 fields.put("shape", new Value.Str("empty"));
                 fields.put("size", new Value.Num(0));
@@ -267,6 +268,11 @@ final class ValueSemantics {
             return new CollectionView(facts, index -> collection.entryAt(index)
                     .map(entry -> new CollectionEntry(entry.key(), entry.value())));
         }
+        if (value instanceof Value.SettledCollection collection) {
+            return new CollectionView(facts, index -> index >= 0 && index < collection.entries().size()
+                    ? Optional.of(new CollectionEntry(collection.entries().get(index).key(),
+                    collection.entries().get(index).value())) : Optional.empty());
+        }
         if (value instanceof Value.KeyedCollection collection) {
             return new CollectionView(facts, index -> index >= 0 && index < collection.entries().size()
                     ? Optional.of(new CollectionEntry(collection.entries().get(index).key(),
@@ -319,6 +325,12 @@ final class ValueSemantics {
             else if (value instanceof Value.KeyedCollection collection) {
                 collection.entries().forEach(entry -> {
                     pending.push(entry.key());
+                    pending.push(entry.value());
+                });
+            }
+            else if (value instanceof Value.SettledCollection collection) {
+                collection.entries().forEach(entry -> {
+                    if (collection.facts().keyed() == CollectionRuntime.Guarantee.TRUE) pending.push(entry.key());
                     pending.push(entry.value());
                 });
             }
@@ -438,6 +450,20 @@ final class ValueSemantics {
                         pending.push(new RenderValue(new Value.Seq(sequence.materialize()), indent, quote));
                 case RenderValue(Value.LazyCollection collection, int indent, boolean quote) ->
                         pending.push(new RenderValue(collection.materializedValue(), indent, quote));
+                case RenderValue(Value.SettledCollection collection, int indent, boolean quote) -> {
+                    if (collection.facts().keyed() == CollectionRuntime.Guarantee.TRUE) {
+                        Value.KeyedCollection.Shape shape = collection.facts().hasValues()
+                                == CollectionRuntime.Guarantee.FALSE ? Value.KeyedCollection.Shape.SET
+                                : Value.KeyedCollection.Shape.GENERAL;
+                        pending.push(new RenderValue(new Value.KeyedCollection(shape,
+                                collection.entries().stream().map(entry ->
+                                        new Value.KeyedCollection.Entry(entry.key(), entry.value())).toList()),
+                                indent, quote));
+                    } else {
+                        pending.push(new RenderValue(new Value.Seq(collection.entries().stream()
+                                .map(Value.SettledCollection.Entry::value).toList()), indent, quote));
+                    }
+                }
                 case RenderValue(Value.KeyedCollection collection, int indent, boolean ignoredQuote) -> {
                     if (collection.entries().isEmpty()) {
                         output.append("[]");
@@ -468,7 +494,8 @@ final class ValueSemantics {
         value = underlying(value);
         return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary
                 || value instanceof Value.Seq || value instanceof Value.LazySeq
-                || value instanceof Value.LazyCollection || value instanceof Value.KeyedCollection;
+                || value instanceof Value.LazyCollection || value instanceof Value.KeyedCollection
+                || value instanceof Value.SettledCollection;
     }
 
     private static String spaces(int count) { return " ".repeat(count); }

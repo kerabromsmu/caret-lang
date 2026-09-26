@@ -1,0 +1,19 @@
+identity value = value
+source = map identity [1 2]
+copy = eager source
+print copy
+print source
+print isFinite copy
+print size copy
+print seqGet copy 1
+
+named = [^name = "Ada" ^phone = ~]
+print fields (eager named)
+print getElement (eager [42 (@named)]) 1
+
+cell = { (Number) 3 }
+stored = eager [cell]
+print (getElement stored 0) == cell
+print (getElement stored 0){}
+print eager ?
+print eager ~

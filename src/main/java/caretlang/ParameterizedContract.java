@@ -30,6 +30,18 @@ final class ParameterizedContract implements ContractDescriptor {
         if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
         if (parameterArity() > 0 || !base.accepts(value)) return false;
         if (value instanceof Value.EmptyCollection) return true;
+        if (value instanceof Value.SettledCollection collection) {
+            return switch (base) {
+                case BuiltinContract.SEQUENCE -> collection.entries().stream()
+                        .allMatch(entry -> arguments.getFirst().accepts(entry.value()));
+                case BuiltinContract.DICTIONARY -> collection.entries().stream()
+                        .allMatch(entry -> arguments.get(0).accepts(entry.key())
+                                && arguments.get(1).accepts(entry.value()));
+                case BuiltinContract.SET -> collection.entries().stream()
+                        .allMatch(entry -> arguments.getFirst().accepts(entry.key()));
+                default -> false;
+            };
+        }
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
             return sequence.values().stream().allMatch(arguments.getFirst()::accepts);
         }
@@ -65,6 +77,18 @@ final class ParameterizedContract implements ContractDescriptor {
         if (parameterArity() > 0) return false;
         if (!base.test(value, span)) return false;
         if (value instanceof Value.EmptyCollection) return true;
+        if (value instanceof Value.SettledCollection collection) {
+            return switch (base) {
+                case BuiltinContract.SEQUENCE -> collection.entries().stream()
+                        .allMatch(entry -> arguments.getFirst().acceptsRequirement(entry.value(), span));
+                case BuiltinContract.DICTIONARY -> collection.entries().stream()
+                        .allMatch(entry -> arguments.get(0).acceptsRequirement(entry.key(), span)
+                                && arguments.get(1).acceptsRequirement(entry.value(), span));
+                case BuiltinContract.SET -> collection.entries().stream()
+                        .allMatch(entry -> arguments.getFirst().acceptsRequirement(entry.key(), span));
+                default -> false;
+            };
+        }
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
             ContractDescriptor element = arguments.getFirst();
             return sequence.values().stream().allMatch(

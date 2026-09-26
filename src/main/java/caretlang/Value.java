@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
         Value.Field, Value.Container, Value.KeyedCollection, Value.LazyCollection, Value.LazySeq,
-        Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
+        Value.Reflective, Value.Seq, Value.Callable, Value.Attributed, Value.SettledCollection {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
         public Attributed {
@@ -165,6 +165,54 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return ValueSemantics.render(this); }
     }
 
+    /** Fully materialized provider snapshot; keeps source access and guarantee distinctions. */
+    final class SettledCollection implements Value, CollectionRuntime.Provider {
+        record Entry(Value key, Value value) {}
+        private final List<Entry> entries;
+        private final CollectionRuntime.Facts facts;
+        private final boolean keysAvailable;
+        private final ValueKind kind;
+
+        SettledCollection(List<Entry> entries, CollectionRuntime.Facts facts, boolean keysAvailable,
+                          ValueKind kind) {
+            this.entries = List.copyOf(entries);
+            this.facts = facts;
+            this.keysAvailable = keysAvailable;
+            this.kind = kind;
+        }
+
+        List<Entry> entries() { return entries; }
+        ValueKind kind() { return kind; }
+        @Override public Value getElement(Value key) {
+            if (!keysAvailable) return Missing.INSTANCE;
+            for (Entry entry : entries) {
+                if (ValueSemantics.equal(entry.key(), key)) {
+                    return facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                            ? entry.key() : entry.value();
+                }
+            }
+            return Missing.INSTANCE;
+        }
+        @Override public Value keys() {
+            return keysAvailable ? new Seq(entries.stream().map(Entry::key).toList()) : Missing.INSTANCE;
+        }
+        @Override public Value valueEntries() {
+            return facts.hasValues() == CollectionRuntime.Guarantee.FALSE ? Missing.INSTANCE
+                    : new Seq(entries.stream().map(Entry::value).toList());
+        }
+        @Override public Value fieldEntries() {
+            if (facts.keyed() != CollectionRuntime.Guarantee.TRUE) {
+                return new Seq(entries.stream().map(Entry::value).toList());
+            }
+            return new Seq(entries.stream().map(entry -> (Value) new Field(entry.key(),
+                    facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                            ? Missing.INSTANCE : entry.value())).toList());
+        }
+        @Override public Value size() { return new Num(entries.size()); }
+        @Override public CollectionRuntime.Facts facts() { return facts; }
+        @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
     /** The single shape-neutral empty collection literal. */
     enum EmptyCollection implements Reflective {
         INSTANCE;
@@ -207,6 +255,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return reflectedTarget != null && effective(observer).dereference()
                     ? Optional.of(reflectedTarget) : Optional.empty();
         }
+        boolean isReflection() { return reflectedTarget != null; }
         Object semanticIdentity() { return semanticIdentity; }
         @Override public String toString() { return ValueSemantics.render(this); }
     }
@@ -658,6 +707,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return reflectedTarget != null && reflectionContext.intersect(Objects.requireNonNull(observer)).dereference()
                     ? Optional.of(reflectedTarget) : Optional.empty();
         }
+        boolean isReflection() { return reflectedTarget != null; }
 
         public Map<String, Value> entries() {
             Map<String, Value> result = materialized;

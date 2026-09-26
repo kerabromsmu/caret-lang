@@ -162,6 +162,13 @@ public final class EmbeddingBridge {
             case Value.KeyedCollection collection -> new CaretValue.SequenceValue(
                     collection.entries().stream().map(entry -> (CaretValue) new CaretValue.FieldValue(
                             ValueSemantics.render(entry.key()), external(entry.value()))).toList());
+            case Value.SettledCollection collection -> collection.facts().keyed()
+                    == CollectionRuntime.Guarantee.TRUE
+                    ? new CaretValue.SequenceValue(collection.entries().stream().map(entry -> (CaretValue)
+                            new CaretValue.FieldValue(ValueSemantics.render(entry.key()),
+                                    external(entry.value()))).toList())
+                    : new CaretValue.SequenceValue(collection.entries().stream().map(
+                            entry -> external(entry.value())).toList());
             case Value.Seq sequence -> new CaretValue.SequenceValue(sequence.values().stream().map(this::external).toList());
             case Value.LazySeq sequence -> new CaretValue.SequenceValue(sequence.materialize().stream().map(this::external).toList());
             case Value.LazyCollection collection -> {

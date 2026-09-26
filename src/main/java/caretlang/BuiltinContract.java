@@ -61,7 +61,9 @@ enum BuiltinContract implements ContractDescriptor {
             if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
             return value instanceof Value.EmptyCollection
                     || value instanceof Value.KeyedCollection collection
-                    && collection.shape() == Value.KeyedCollection.Shape.SET;
+                    && collection.shape() == Value.KeyedCollection.Shape.SET
+                    || value instanceof Value.SettledCollection collection
+                    && collection.kind() == ValueKind.SET;
         }
         @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(COLLECTION); }
         @Override public int parameterArity() { return 1; }

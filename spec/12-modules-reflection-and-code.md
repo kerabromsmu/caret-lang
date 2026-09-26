@@ -24,7 +24,7 @@ The [planned Collection protocol](06-collections-fields-and-templates.md#phase-4
 exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
 an ordinary protocol operation, not restricted to metadata access.
 
-Planned `eager` replaces a reflection reference with the empty Collection without traversing its
+Implemented Collection-value `eager` replaces a reflection reference with the empty Collection without traversing its
 metadata, including nested references. It does not snapshot the reflective target or recover
 anything hidden by an environment boundary. This behavior leaves ordinary reflection intact.
 

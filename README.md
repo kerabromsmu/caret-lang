@@ -333,8 +333,9 @@ now has its common enumeration/guarantee foundation and contextual shape constru
 two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,
 first-key settlement, shape-neutral empty facts, and unified missing-returning
 dot/bracket/`getElement` access, lazy shape-aware map/filter, strict Field-based consumers,
-two-input `zip`/`zipWithKeys` construction, and contract/order-sensitive Collection equality are
-implemented. Collection-value `eager` remains planned.
+two-input `zip`/`zipWithKeys` construction, contract/order-sensitive Collection equality, and
+Collection-value `eager` are implemented. `eager` snapshots enumerated content, recursively
+replaces reflection references with `[]`, and preserves mutable container identity.
 Phase 4 includes expected-template
 completion for Collection literals but
 does not add a context-dependent `Template value` constructor call: ordinary template application

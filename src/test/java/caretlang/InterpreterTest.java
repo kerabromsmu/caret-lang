@@ -3409,6 +3409,162 @@ final class InterpreterTest {
                 """));
     }
 
+    @Test
+    void eagerMaterializesCaretValuesAndPreservesContainersAndCallables() {
+        assertEquals("""
+                [ 1 2 ]
+                [ 1 2 ]
+                []
+                true
+                """, execute("""
+                identity value = value
+                source = map identity [1 2]
+                result = eager source
+                print result
+                print source
+                print getElement (eager [42 (@source)]) 1
+                cell = { (Number) 3 }
+                print (getElement (eager [cell]) 0) == cell
+                """));
+        assertEquals("true\n", execute("""
+                (Sequence Number) result = eager [1 2]
+                print (Sequence Number) result
+                """));
+        assertEquals("1\n2\n[ 1 2 ]\n", execute("""
+                (Output Number) emit value =
+                  print value
+                  value
+                source = map emit [1 2]
+                print eager source
+                """));
+        Value.Callable callable = new Value.FunctionValue("identity", List.of("value"),
+                (args, ignored) -> args.getFirst().value());
+        assertSame(callable, EagerRuntime.materialize(callable, null));
+    }
+
+    @Test
+    void eagerEnumeratesBeforeDepthFirstTraversalAndDropsUneumeratedAccess() {
+        class TracedProvider implements Value.Reflective, CollectionRuntime.Provider {
+            final List<String> trace;
+            final String name;
+            final List<Value> values;
+            TracedProvider(List<String> trace, String name, List<Value> values) {
+                this.trace = trace; this.name = name; this.values = values;
+            }
+            @Override public Optional<Value> find(String key) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { return new Value.Num(999); }
+            @Override public Value keys() { trace.add(name + ":keys"); return new Value.Seq(List.of(new Value.Num(0))); }
+            @Override public Value valueEntries() { trace.add(name + ":values"); return new Value.Seq(values); }
+            @Override public Value fieldEntries() { return valueEntries(); }
+            @Override public Value size() { return new Value.Num(values.size()); }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        List<String> trace = new java.util.ArrayList<>();
+        TracedProvider nested = new TracedProvider(trace, "nested", List.of(new Value.Num(7)));
+        TracedProvider root = new TracedProvider(trace, "root", List.of(nested));
+        Value result = EagerRuntime.materialize(root, new SourceSpan(new SourcePosition(0, 1, 1),
+                new SourcePosition(5, 1, 6)));
+        assertEquals(List.of("root:keys", "root:values", "nested:keys", "nested:values"), trace);
+        assertSame(Value.Missing.INSTANCE, ((CollectionRuntime.Provider) result).getElement(new Value.Num(2)));
+        assertEquals(new Value.Num(999), root.getElement(new Value.Num(2)));
+    }
+
+    @Test
+    void eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors() {
+        Value.Seq cycle = new Value.Seq(List.of());
+        cycle.appendOwned(cycle);
+        SourceSpan span = new SourceSpan(new SourcePosition(14, 3, 5), new SourcePosition(19, 3, 10));
+        LangException cyclic = assertThrows(LangException.class, () -> EagerRuntime.materialize(cycle, span));
+        assertEquals(Diagnostic.Codes.EAGER_CYCLE, cyclic.diagnostic().code());
+        assertEquals(3, cyclic.span().start().line());
+        assertEquals(5, cyclic.span().start().column());
+        class InfiniteProvider implements Value.Reflective, CollectionRuntime.Provider {
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { return Value.Missing.INSTANCE; }
+            @Override public Value keys() { throw new AssertionError("Infinite source must not enumerate"); }
+            @Override public Value valueEntries() { throw new AssertionError("Infinite source must not enumerate"); }
+            @Override public Value fieldEntries() { throw new AssertionError("Infinite source must not enumerate"); }
+            @Override public Value size() { return Value.Missing.INSTANCE; }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.UNKNOWN,
+                        CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        LangException infinite = assertThrows(LangException.class,
+                () -> EagerRuntime.materialize(new InfiniteProvider(), span));
+        assertEquals(Diagnostic.Codes.EAGER_INFINITE, infinite.diagnostic().code());
+        assertEquals(3, infinite.span().start().line());
+    }
+
+    @Test
+    void eagerMaterializedKeyCollisionsSkipIgnoredValuesAndKeepSharedDag() {
+        Value.Dictionary firstKey = Value.Dictionary.reflection(Map.of("id", new Value.Num(1)),
+                new Value.Num(1), ReflectionContext.defining());
+        Value.Dictionary secondKey = Value.Dictionary.reflection(Map.of("id", new Value.Num(2)),
+                new Value.Num(2), ReflectionContext.defining());
+        Value.Seq ignoredCycle = new Value.Seq(List.of());
+        ignoredCycle.appendOwned(ignoredCycle);
+        Value.KeyedCollection source = new Value.KeyedCollection(Value.KeyedCollection.Shape.GENERAL,
+                List.of(new Value.KeyedCollection.Entry(firstKey, new Value.Num(10)),
+                        new Value.KeyedCollection.Entry(secondKey, ignoredCycle)));
+        Value.SettledCollection result = (Value.SettledCollection) EagerRuntime.materialize(source, null);
+        assertEquals(1, result.entries().size());
+        assertSame(Value.EmptyCollection.INSTANCE, result.entries().getFirst().key());
+        assertEquals(new Value.Num(10), result.entries().getFirst().value());
+        assertEquals(2, source.entries().size());
+
+        Value.Seq shared = new Value.Seq(List.of(new Value.Num(5)));
+        Value.SettledCollection dag = (Value.SettledCollection) EagerRuntime.materialize(
+                new Value.Seq(List.of(shared, shared)), null);
+        assertSame(dag.entries().get(0).value(), dag.entries().get(1).value());
+        Value.Field sharedField = new Value.Field(new Value.Str("x"), shared);
+        Value.SettledCollection fieldDag = (Value.SettledCollection) EagerRuntime.materialize(
+                new Value.Seq(List.of(sharedField, sharedField)), null);
+        assertSame(fieldDag.entries().get(0).value(), fieldDag.entries().get(1).value());
+    }
+
+    @Test
+    void eagerPreservesUnavailableKeysAndAdaptsInvalidatedContracts() {
+        class KeylessProvider implements Value.Reflective, CollectionRuntime.Provider {
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { return new Value.Num(99); }
+            @Override public Value keys() { return Value.Missing.INSTANCE; }
+            @Override public Value valueEntries() { return new Value.Seq(List.of(new Value.Num(1))); }
+            @Override public Value fieldEntries() { return valueEntries(); }
+            @Override public Value size() { return new Value.Num(1); }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.TRUE,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        KeylessProvider source = new KeylessProvider();
+        CollectionRuntime.Provider result = (CollectionRuntime.Provider) EagerRuntime.materialize(source, null);
+        assertSame(Value.Missing.INSTANCE, result.keys());
+        assertSame(Value.Missing.INSTANCE, result.getElement(new Value.Num(0)));
+        assertEquals(new Value.Num(99), source.getElement(new Value.Num(0)));
+        assertEquals(CollectionRuntime.Guarantee.UNKNOWN, result.facts().unique());
+
+        ContractDescriptor numbers = BuiltinContract.SEQUENCE.parameterize(List.of(BuiltinContract.NUMBER));
+        Value.Attributed attributed = new Value.Attributed(new Value.Seq(List.of(new Value.Num(1))),
+                Set.of(numbers));
+        Value materialized = EagerRuntime.materialize(attributed, null);
+        assertTrue(materialized instanceof Value.Attributed);
+        assertTrue(((Value.Attributed) materialized).contracts().contains(numbers));
+        assertTrue(numbers.accepts(materialized));
+    }
+
     private record ModeExecution(String output, int reuseCount) {}
     private record ModeFailure(String output, String code, int line, int reuseCount) {}
 

@@ -41,10 +41,16 @@ keyless, keyed, and Set Collections. Each demanded entry establishes once for al
 result, while a fresh invocation gets a fresh result. Keyed transforms consume Field tuples,
 filtered key enumeration performs the predicate work needed to discover retained entries, and
 strict `fold`, `any`, and `all` traverse the same field stream. Values are obtained when demanded,
-and their function contracts describe any effects. `eager` materializes enumerated content
+and their function contracts describe any effects. The implemented `eager` materializes enumerated content
 in order, recursively, leaving mutable containers and stored functions intact. It replaces
 reflection references with empty Collections and reports cyclic containment or known-infinite
 input. Unknown finiteness may mean it never completes.
+
+```caret
+source = map (value -> value + 1) [1 2]
+snapshot = eager source
+print snapshot  // [ 2 3 ]
+```
 
 Keyed traversal uses `Field` tuples; keyless traversal uses plain values. Fields are two-position
 Collections carrying `Field K V`; `keys` returns `[ 0 1 ]`, and reflection exposes `key` and

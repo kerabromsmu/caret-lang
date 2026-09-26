@@ -1833,6 +1833,14 @@ final class Interpreter {
                         collection(args.getFirst()).fieldEntries(), "fields", args.getFirst().span())));
         builtins.define("size", collectionFunction("size", BuiltinContract.NATURAL, true,
                 (args, ignored) -> collectionSize(collection(args.getFirst()), args.getFirst().span())));
+        CallableSignature eagerSignature = new CallableSignature(
+                List.of(new CallableSignature.Parameter("value", List.of(), null, null)),
+                new CallableSignature.Result(List.of(), null, null),
+                new CallableSignature.Effects(List.of("Output", "StateRead", "StateWrite", "TestReport")
+                        .stream().map(CallableSignature.EffectRef::new).toList(), null, null), List.of());
+        builtins.define("eager", new Value.FunctionValue("eager", List.of("value"),
+                (args, ignored) -> EagerRuntime.materialize(args.getFirst().value(), args.getFirst().span()),
+                false, eagerSignature));
         builtins.define("isSequential", collectionGuarantee("isSequential",
                 CollectionRuntime.Facts::sequential));
         builtins.define("isOrdered", collectionGuarantee("isOrdered", CollectionRuntime.Facts::ordered));
@@ -2007,6 +2015,13 @@ final class Interpreter {
         if (raw instanceof Value.LazySeq sequence) return ownership.fresh(new Value.Seq(sequence.materialize()));
         if (raw instanceof Value.LazyCollection collection
                 && collection.materializedValue() instanceof Value.Seq sequence) return ownership.fresh(sequence);
+        if (raw instanceof Value.SettledCollection collection
+                && collection.kind() == ValueKind.SEQUENCE
+                && collection.facts().sequential() == CollectionRuntime.Guarantee.TRUE
+                && collection.keys() != Value.Missing.INSTANCE) {
+            return ownership.fresh(new Value.Seq(collection.entries().stream()
+                    .map(Value.SettledCollection.Entry::value).toList()));
+        }
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
     }

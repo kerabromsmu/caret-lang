@@ -73,6 +73,8 @@ successful direct `T~`/`T?~` default insertion is silent.
 | RUNTIME-EXPECTED-COLLECTION | public | EXPECTED_COLLECTION | `examples/errors/expected_collection.caret` |
 | RUNTIME-EXPECTED-CONTAINER | public | EXPECTED_CONTAINER | `examples/errors/expected_container.caret`; `InterpreterTest#containerReadsAndWritesRejectNonContainersAtLocatedOperands` |
 | RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES | public | CONTRADICTORY_COLLECTION_GUARANTEES | `InterpreterTest#internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent` |
+| RUNTIME-EAGER-INFINITE | public | EAGER_INFINITE | `InterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |
+| RUNTIME-EAGER-CYCLE | public | EAGER_CYCLE | `InterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |
 | RUNTIME-INVALID-DICTIONARY-KEY | public | INVALID_DICTIONARY_KEY | `examples/errors/invalid_dictionary_key.caret` |
 | RUNTIME-INVALID-COLLECTION-KEY | public | INVALID_COLLECTION_KEY | `examples/errors/invalid_collection_key.caret`; `InterpreterTest#unifiedCollectionAccessSupportsSugarContractsCompositeKeysAndPartials` |
 | RUNTIME-AMBIGUOUS-COLLECTION-SHAPE | public | AMBIGUOUS_COLLECTION_SHAPE | `examples/errors/ambiguous_collection_shape.caret` |

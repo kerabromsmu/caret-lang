@@ -355,7 +355,7 @@ There is no mandatory preview limit; developers can overload conversion.
 
 ### Collection materialization with eager
 
-Phase 4 `eager value` materializes Collection values. It follows ordinary lexical evaluation;
+Implemented Phase 4 `eager value` materializes Collection values. It follows ordinary lexical evaluation;
 there is no special traversal-wide cache/context overriding fresh versus inherited bindings.
 
 1. Reject a Collection declared infinite immediately with a located error. For unknown finiteness,
@@ -390,6 +390,10 @@ cycle detection. Do not traverse container contents or reflected metadata to dis
 Phase 4 uses existing failure behavior, not the deferred resumable-handler design.
 There is no `eagerWithRetry` and no automatic cross-field failed-computation cache.
 Recovery policy belongs to general failure handlers when that later facility exists.
+The current callable signature advertises a conservative upper bound containing all current
+observable effects, so a function with a narrower declared allowance cannot invoke `eager` even
+when a particular supplied value would be pure. Traversal itself uses ordinary provider and
+callable operations, so demanded effects are still subject to those call boundaries.
 
 ### Collection equality (forcing policy provisional)
 
