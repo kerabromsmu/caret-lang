@@ -13,6 +13,8 @@ final class AstTraversal {
         return switch (expression) {
             case Literal ignored -> List.of();
             case Name ignored -> List.of();
+            case OuterPath ignored -> List.of();
+            case With with -> List.of(with.target());
             case Hole ignored -> List.of();
             case ContractVariable ignored -> List.of();
             case Unary unary -> List.of(unary.operand());
@@ -52,6 +54,8 @@ final class AstTraversal {
         return switch (expression) {
             case Literal literal -> literal;
             case Name name -> name;
+            case OuterPath path -> path;
+            case With with -> new With(children.getFirst(), with.body(), with.span());
             case Hole hole -> hole;
             case ContractVariable variable -> variable;
             case Unary unary -> new Unary(unary.operator(), children.get(0), unary.span());

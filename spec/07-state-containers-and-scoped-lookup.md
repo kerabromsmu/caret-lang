@@ -21,7 +21,7 @@ These public operations, their construction-selection interface, and additional 
 syntax are outside Phase 4, with no later phase assigned. Internal construction/settlement and
 existing persistent primitives remain available; this deferral does not postpone containers or `put`.
 
-### Planned with binding over lazy Collections
+### Implemented with binding over lazy Collections
 
 During compilation or interpreter analysis, identify unqualified names in the block that need
 lookup through `with`. Exclude names resolved to local declarations and explicit `outer` paths.
@@ -45,7 +45,7 @@ For example, conceptually a target that enumerates only `"name"` but also permit
 of `"age"` does not shadow an outer `age` binding. Conversely, enumerating `"age"` shadows it
 even when that member's value is missing. `outer.age` remains the explicit enclosing path.
 
-These planned binding rules refine the runtime selection of dynamic members described below;
+These implemented binding rules refine the runtime selection of dynamic members described below;
 the complete target shape need not be statically known. Resolver-only, export, and sandbox
 restrictions on `with`/`outer` remain authoritative. Custom provider construction is deferred; these lookup rules also guide
 the implementation of built-in lazy Collections.
@@ -1371,7 +1371,7 @@ Its accessible named members participate directly in name resolution throughout 
 The target must expose a public named-member interface; otherwise evaluation produces a located
 diagnostic. Analysis identifies the names requiring member lookup. Runtime binding against
 enumerated public keys completes before body execution, as specified in
-[planned with binding](#planned-with-binding-over-lazy-collections), without weakening ordinary
+[implemented with binding](#implemented-with-binding-over-lazy-collections), without weakening ordinary
 lexical or visibility rules.
 
 ---

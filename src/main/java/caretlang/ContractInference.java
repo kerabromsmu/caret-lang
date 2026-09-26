@@ -279,6 +279,17 @@ final class ContractInference {
             effects.put(function, inferredEffects);
             analyzeBlock(function.body(), visible, withConstrainedParameters(function, visibleEffects), false);
         }
+        for (Stmt statement : statements) {
+            Expr expression = switch (statement) {
+                case Assign assign -> assign.value();
+                case ExprStmt line -> line.expression();
+                case PrintLine line -> printExpression(line);
+                case FunctionDef ignored -> null;
+            };
+            if (expression != null) AstTraversal.walkPreOrder(expression, candidate -> {
+                if (candidate instanceof With with) analyzeBlock(with.body(), visible, visibleEffects, false);
+            });
+        }
         analyzeLambdas(statements, visible, visibleEffects);
         if (analyzeOrdinaryBindings) analyzeOrdinaryBindings(statements, visible);
     }
@@ -314,6 +325,11 @@ final class ContractInference {
 
     private void analyzeLambdas(Expr expression, Map<String, FunctionContract> visible,
                                 Map<String, CallableEffects> visibleEffects) {
+        if (expression instanceof With with) {
+            analyzeLambdas(with.target(), visible, visibleEffects);
+            analyzeLambdas(with.body(), visible, visibleEffects);
+            return;
+        }
         if (expression instanceof Lambda lambda) {
             if (lambdaFunctions.containsKey(lambda)) return;
             FunctionDef function = new FunctionDef("<lambda>", null, lambda.params(), lambda.body(), lambda.span());
@@ -386,6 +402,11 @@ final class ContractInference {
             case Name name -> parameters.containsKey(name.name())
                     ? parameterShape(parameters.get(name.name()), requirements)
                     : locals.getOrDefault(name.name(), Shape.unknown());
+            case OuterPath ignored -> Shape.unknown();
+            case With with -> {
+                expression(with.target(), parameters, locals, requirements, visible);
+                yield Shape.unknown();
+            }
             case Group group -> expression(group.expression(), parameters, locals, requirements, visible);
             case Unary unary -> {
                 Shape operand = expression(unary.operand(), parameters, locals, requirements, visible);
@@ -902,6 +923,8 @@ final class ContractInference {
                 CallableEffects callable = resolvedCallable(name, visible);
                 yield callable != null && callable.arity() == 0 ? callable.summary() : EffectSummary.PURE;
             }
+            case OuterPath ignored -> EffectSummary.PURE;
+            case With with -> expressionEffects(with.target(), visible).plus(inferEffects(with.body(), visible));
             case Group group -> expressionEffects(group.expression(), visible);
             case Unary unary -> expressionEffects(unary.operand(), visible);
             case Binary binary -> expressionEffects(binary.left(), visible)
@@ -1057,6 +1080,11 @@ final class ContractInference {
 
     private void collectRefinementBindings(Expr expression, Map<Integer, FunctionDef> functions,
                                            Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        if (expression instanceof With with) {
+            collectRefinementBindings(with.target(), functions, aliases, eligibility);
+            collectRefinementBindings(with.body(), functions, aliases, eligibility);
+            return;
+        }
         if (expression instanceof Lambda lambda) {
             collectRefinementBindings(lambda.body(), functions, aliases, eligibility);
             return;
@@ -1088,6 +1116,11 @@ final class ContractInference {
 
     private void validateClauses(Expr expression, Map<Integer, FunctionDef> functions,
                                  Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        if (expression instanceof With with) {
+            validateClauses(with.target(), functions, aliases, eligibility);
+            validateClauses(with.body(), functions, aliases, eligibility);
+            return;
+        }
         if (expression instanceof Lambda lambda) {
             lambda.params().forEach(parameter -> validateClause(
                     parameter.contracts(), functions, aliases, eligibility));
@@ -1198,6 +1231,8 @@ final class ContractInference {
             case Lambda ignored -> false;
             case Literal ignored -> false;
             case Name ignored -> false;
+            case OuterPath ignored -> false;
+            case With with -> containsHole(with.target());
         };
     }
 }

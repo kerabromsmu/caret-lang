@@ -72,6 +72,8 @@ successful direct `T~`/`T?~` default insertion is silent.
 | RUNTIME-EXPECTED-DICTIONARY | public | EXPECTED_DICTIONARY | `examples/errors/expected_dictionary.caret` |
 | RUNTIME-EXPECTED-COLLECTION | public | EXPECTED_COLLECTION | `examples/errors/expected_collection.caret` |
 | RUNTIME-EXPECTED-CONTAINER | public | EXPECTED_CONTAINER | `examples/errors/expected_container.caret`; `InterpreterTest#containerReadsAndWritesRejectNonContainersAtLocatedOperands` |
+| RUNTIME-EXPECTED-WITH-TARGET | public | EXPECTED_WITH_TARGET | `InterpreterTest#withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue` |
+| SEMANTIC-INVALID-OUTER-PATH | public | INVALID_OUTER_PATH | `InterpreterTest#withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue` |
 | RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES | public | CONTRADICTORY_COLLECTION_GUARANTEES | `InterpreterTest#internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent` |
 | RUNTIME-EAGER-INFINITE | public | EAGER_INFINITE | `InterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |
 | RUNTIME-EAGER-CYCLE | public | EAGER_CYCLE | `InterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |

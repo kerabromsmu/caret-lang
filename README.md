@@ -90,10 +90,11 @@ otherwise immutable fields and collections; reads and writes participate in effe
 Field-binding reification and container metadata remain planned.
 
 Right-associative `$` supplies application below composition, conditionals, and ordinary expressions
-(`print $ calculate value`). Planned `with value` expressions will make a value's public named
+(`print $ calculate value`). Implemented `with value` expressions make a value's public named
 members available for lexical lookup without copying them, while resolver-only paths such as
 `outer.name` recover shadowed enclosing names without exposing lexical environments as values.
-`with` and `outer` are specified but not implemented by the current prototype.
+`with` and `outer` preserve local declaration precedence and bind only enumerated public keys;
+see [the runnable example](examples/features/with_outer.caret).
 
 Layout markers `\\` and `\*` remap physical indentation to effective logical indentation
 before ordinary layout parsing. `\\` establishes an adjusted baseline for a following

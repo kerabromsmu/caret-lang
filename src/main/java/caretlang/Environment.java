@@ -136,6 +136,20 @@ final class Environment {
         Binding binding = values.get(name);
         return binding == null || !binding.initialized ? null : binding.read();
     }
+    boolean hasLocal(String name) { return values.containsKey(name); }
+    Value readLocal(String name) {
+        Binding binding = values.get(name);
+        if (binding == null) throw new IllegalStateException("Missing local binding: " + name);
+        return binding.read();
+    }
+    Environment ancestor(int depth) {
+        Environment current = this;
+        for (int index = 0; index < depth; index++) {
+            if (current.parent == null) throw new IllegalStateException("Invalid lexical depth");
+            current = current.parent;
+        }
+        return current;
+    }
 
     void replace(String name, Value value) {
         Binding binding = values.get(name);

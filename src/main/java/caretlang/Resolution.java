@@ -16,6 +16,9 @@ final class Resolution {
                    boolean captured, Boolean refinementEligible) {}
     record Upvalue(int index, int symbolId, int lexicalDepth, int slot,
                    SourceSpan declarationSpan, SourceSpan firstUseSpan) {}
+    record Lookup(List<Integer> withDepths, int fallbackDepth, Binding fallback) {
+        Lookup { withDepths = List.copyOf(withDepths); }
+    }
     record ContractBinding(String name, Binding binding, java.util.List<ContractBinding> arguments,
                            boolean nullable, boolean optional, Ast.Expr inline, SourceSpan span) {
         ContractBinding(String name, Binding binding, java.util.List<ContractBinding> arguments,
@@ -32,6 +35,8 @@ final class Resolution {
     }
 
     private final IdentityHashMap<Name, Binding> names;
+    private final IdentityHashMap<Expr, Lookup> scopedLookups;
+    private final IdentityHashMap<Ast.With, List<String>> withNames;
     private final IdentityHashMap<Expr, Binding> accessors;
     private final IdentityHashMap<ContractClause, AnalyzedClause> clauses;
     private final IdentityHashMap<AmbiguousCall, CallMode> calls;
@@ -42,6 +47,8 @@ final class Resolution {
     private final java.util.Map<SourceSpan, Integer> declarations;
 
     Resolution(IdentityHashMap<Name, Binding> names,
+               IdentityHashMap<Expr, Lookup> scopedLookups,
+               IdentityHashMap<Ast.With, List<String>> withNames,
                IdentityHashMap<Expr, Binding> accessors,
                IdentityHashMap<ContractClause, AnalyzedClause> clauses,
                IdentityHashMap<AmbiguousCall, CallMode> calls,
@@ -51,6 +58,8 @@ final class Resolution {
                IdentityHashMap<Ast.ArrowContract, Ast.ArrowContract> analyzedArrows,
                java.util.Map<SourceSpan, Integer> declarations) {
         this.names = new IdentityHashMap<>(names);
+        this.scopedLookups = new IdentityHashMap<>(scopedLookups);
+        this.withNames = new IdentityHashMap<>(withNames);
         this.accessors = new IdentityHashMap<>(accessors);
         this.clauses = new IdentityHashMap<>(clauses);
         this.calls = new IdentityHashMap<>(calls);
@@ -66,6 +75,8 @@ final class Resolution {
     Binding binding(Name name) {
         return names.get(name);
     }
+    Lookup scopedLookup(Expr expression) { return scopedLookups.get(expression); }
+    List<String> withNames(Ast.With expression) { return withNames.getOrDefault(expression, List.of()); }
 
     Binding accessor(Expr expression) { return accessors.get(expression); }
 

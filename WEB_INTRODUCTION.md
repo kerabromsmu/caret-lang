@@ -75,9 +75,17 @@ interface, and additional immutable-update syntax are deferred beyond Phase 4. T
 retained in the specification. Internal construction/settlement, existing persistent collection
 primitives, and mutable containers with `put` remain in scope.
 
-Planned `with` analyzes the names used in its body and binds them against enumerated public keys
+Implemented `with` analyzes the names used in its body and binds them against enumerated public keys
 before executing the body. Member values remain lazy; a present missing value shadows outer
 bindings, while an absent name resolves outward. Explicit `outer.name` accesses the outer binding.
+
+```caret
+age = 20
+person = [^age = 42]
+with person
+  print age        // 42
+  print outer.age  // 20
+```
 
 The later behavior in this section remains planned. Phase 4 also plans expected-template completion for Collection literals.
 This does not turn ordinary `Template value` application into construction; template

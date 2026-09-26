@@ -3565,6 +3565,161 @@ final class InterpreterTest {
         assertTrue(numbers.accepts(materialized));
     }
 
+    @Test
+    void withReturnsBodyResultAndOuterTraversesNestedMemberLayers() {
+        assertEquals("""
+                2
+                1
+                3
+                2
+                1
+                5
+                """, execute("""
+                x = 1
+                a = [^x = 2 ^z = 3]
+                b = [^x = 3]
+                result = with a
+                  print x
+                  print outer.x
+                  with b
+                    print x
+                    print outer.x
+                    print outer.outer.x
+                  z + 2
+                print result
+                """));
+        assertEquals("2\ntrue\n", execute("""
+                cell = { (Number) 2 }
+                a = [^cell = cell]
+                with a
+                  print cell{}
+                  print cell == outer.cell
+                """));
+        assertEquals("2\n", execute("""
+                x = 1
+                a = [^x = 2]
+                with a
+                  (Output StateRead StateWrite) getter ignored = x
+                  with [^x = 3]
+                    print getter 0
+                """));
+        assertEquals("2\n2\n1\n", execute("""
+                calls = { (Number) 0 }
+                (StateRead StateWrite) make ignored =
+                  put calls (calls{} + 1)
+                  [^x = 2]
+                with make 0
+                  print x
+                  print x
+                print calls{}
+                """));
+        assertEquals("7\n", execute("""
+                custom receiver key = 7
+                record = [^getElement = custom ^target = [^x = 1]]
+                with record
+                  print target.x
+                """));
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(output));
+        Value shadowedPrint = interpreter.execute(new Parser("""
+                increment value = value + 1
+                record = [^print = increment]
+                with record
+                  print 4
+                """).parseProgram());
+        assertEquals(new Value.Num(5), shadowedPrint);
+        assertEquals("", output.toString());
+    }
+
+    @Test
+    void withBindsOnlyEnumeratedNamesBeforeBodyAndKeepsMembersLazy() {
+        List<String> trace = new java.util.ArrayList<>();
+        class NamedProvider implements Value.Reflective, CollectionRuntime.Provider {
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) {
+                String name = ((Value.Str) key).value();
+                trace.add("read:" + name);
+                return name.equals("a") ? Value.Missing.INSTANCE : new Value.Num(20);
+            }
+            @Override public Value keys() {
+                trace.add("keys");
+                return new Value.LazySeq(3, index -> {
+                    trace.add("key:" + index);
+                    return new Value.Str(List.of("a", "b", "later").get(index));
+                });
+            }
+            @Override public Value valueEntries() { throw new AssertionError(); }
+            @Override public Value fieldEntries() { throw new AssertionError(); }
+            @Override public Value size() { return new Value.Num(3); }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        Interpreter interpreter = new Interpreter(new PrintStream(new ByteArrayOutputStream()));
+        interpreter.defineEmbeddingValue("target", NamedProvider::new);
+        Value result = interpreter.execute(new Parser("""
+                a = 9
+                with target
+                  a
+                  b
+                """).parseProgram());
+        assertEquals(new Value.Num(20), result);
+        assertEquals(List.of("keys", "key:0", "key:1", "read:a", "read:b"), trace);
+
+        trace.clear();
+        Interpreter missing = new Interpreter(new PrintStream(new ByteArrayOutputStream()));
+        missing.defineEmbeddingValue("target", NamedProvider::new);
+        Value shadowed = missing.execute(new Parser("""
+                a = 9
+                with target
+                  a
+                """).parseProgram());
+        assertSame(Value.Missing.INSTANCE, shadowed);
+        assertEquals(List.of("keys", "key:0", "read:a"), trace);
+
+        trace.clear();
+        Interpreter absent = new Interpreter(new PrintStream(new ByteArrayOutputStream()));
+        absent.defineEmbeddingValue("target", NamedProvider::new);
+        Value fallback = absent.execute(new Parser("""
+                age = 9
+                with target
+                  age
+                """).parseProgram());
+        assertEquals(new Value.Num(9), fallback);
+        assertEquals(List.of("keys", "key:0", "key:1", "key:2"), trace);
+    }
+
+    @Test
+    void withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue() {
+        LangException target = expectDiagnostic("with [1]\n  2", "with target must expose", 1, 6);
+        assertEquals(Diagnostic.Codes.EXPECTED_WITH_TARGET, target.diagnostic().code());
+        for (String source : List.of("value = outer", "value = @outer", "value = outer[\"x\"]",
+                "with [^x = 1]\n  outer.outer.x")) {
+            LangException failure = assertThrows(LangException.class, () -> execute(source));
+            assertEquals(Diagnostic.Codes.INVALID_OUTER_PATH, failure.diagnostic().code());
+            assertNotNull(failure.span());
+        }
+        LangException privateName = expectDiagnostic("""
+                make ignored =
+                  internal = 1
+                  ^public = 2
+                person = make 0
+                with person
+                  internal
+                """, "Unknown name: internal", 6, 3);
+        assertEquals(Diagnostic.Codes.UNKNOWN_NAME, privateName.diagnostic().code());
+        LangException local = expectDiagnostic("""
+                record = [^x = 2]
+                with record
+                  x = x
+                """, "Binding read before initialization", 3, 7);
+        assertEquals(Diagnostic.Codes.READ_BEFORE_INITIALIZATION, local.diagnostic().code());
+    }
+
     private record ModeExecution(String output, int reuseCount) {}
     private record ModeFailure(String output, String code, int line, int reuseCount) {}
 

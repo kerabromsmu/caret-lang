@@ -166,6 +166,20 @@ final class Parser {
     }
 
     private Expr parseExpression(List<Token> tokens, SourcePosition end, int baseIndent) {
+        if (!tokens.isEmpty() && tokens.getFirst().kind() == Kind.IDENT
+                && tokens.getFirst().text().equals("with")) {
+            if (tokens.size() == 1) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                        "with requires a target value", tokens.getFirst().span());
+            }
+            if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= baseIndent) {
+                throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_SYNTAX,
+                        "with body must be indented", tokens.getFirst().span());
+            }
+            Expr target = new ExprParser(tokens.subList(1, tokens.size()), end).parse();
+            List<Stmt> body = parseBlock(lines.get(lineIndex).indent());
+            return new With(target, body, SourceSpan.cover(tokens.getFirst().span(), body.getLast().span()));
+        }
         int lambdaArrow = lastTopLevelLambdaArrow(tokens);
         if (lambdaArrow == tokens.size() - 1) {
             if (lineIndex >= lines.size() || lines.get(lineIndex).indent() <= baseIndent) {
@@ -820,6 +834,20 @@ final class Parser {
                     Token name = consume(Kind.IDENT, "Expected field name after '.'");
                     boolean optional = match("~");
                     SourceSpan end = optional ? previous().span() : name.span();
+                    if (expr instanceof Name root && root.name().equals("outer")
+                            || expr instanceof OuterPath) {
+                        if (optional) throw error(Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                                "outer paths do not support optional access");
+                        int hops = expr instanceof OuterPath path ? path.hops() : 1;
+                        if (expr instanceof OuterPath path && path.name() != null) {
+                            expr = new Field(expr, name.text(), false, SourceSpan.cover(expr.span(), end));
+                        } else {
+                            expr = new OuterPath(name.text().equals("outer") ? hops + 1 : hops,
+                                    name.text().equals("outer") ? null : name.text(),
+                                    SourceSpan.cover(expr.span(), end));
+                        }
+                        continue;
+                    }
                     expr = new Field(expr, name.text(), optional, SourceSpan.cover(expr.span(), end));
                     continue;
                 }

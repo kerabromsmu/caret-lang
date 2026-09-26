@@ -1,0 +1,25 @@
+number = 11
+record = [^number = 10 ^name = "Ada"]
+result = with record
+  print number
+  print outer.number
+  name
+print result
+
+with record
+  number = 20
+  print number
+  print outer.number
+
+inner = [^number = 30]
+with record
+  with inner
+    print number
+    print outer.number
+    print outer.outer.number
+
+cell = { (Number) 4 }
+holder = [^cell = cell]
+with holder
+  print cell == outer.cell
+  print cell{}

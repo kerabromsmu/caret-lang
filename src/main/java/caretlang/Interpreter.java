@@ -143,7 +143,18 @@ final class Interpreter {
 
     private void validateEffectAllowances(List<Stmt> statements, Resolution resolution) {
         for (Stmt statement : statements) {
-            if (!(statement instanceof FunctionDef function)) continue;
+            if (!(statement instanceof FunctionDef function)) {
+                Expr expression = switch (statement) {
+                    case Assign assign -> assign.value();
+                    case ExprStmt line -> line.expression();
+                    case PrintLine line -> line.builtinArgument();
+                    case FunctionDef ignored -> null;
+                };
+                if (expression != null) AstTraversal.walkPreOrder(expression, candidate -> {
+                    if (candidate instanceof With with) validateEffectAllowances(with.body(), resolution);
+                });
+                continue;
+            }
             Resolution.AnalyzedClause clause = resolution.clause(function.resultContracts());
             Set<String> allowed = clause == null || clause.effectAllowance() == null
                     ? Set.of() : clause.effectAllowance().stream().map(EffectDescriptor::canonicalName)
@@ -176,11 +187,22 @@ final class Interpreter {
     private void collectFunctionSignatures(List<Stmt> statements, Resolution resolution,
                                            Map<Integer, List<CallableSignature>> signatures) {
         for (Stmt statement : statements) {
-            if (!(statement instanceof FunctionDef function)) continue;
-            Integer symbol = resolution.symbolId(function.span());
-            if (symbol != null) signatures.computeIfAbsent(symbol, ignored -> new ArrayList<>())
-                    .add(CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
-            collectFunctionSignatures(function.body(), resolution, signatures);
+            if (statement instanceof FunctionDef function) {
+                Integer symbol = resolution.symbolId(function.span());
+                if (symbol != null) signatures.computeIfAbsent(symbol, ignored -> new ArrayList<>())
+                        .add(CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
+                collectFunctionSignatures(function.body(), resolution, signatures);
+            } else {
+                Expr expression = switch (statement) {
+                    case Assign assign -> assign.value();
+                    case ExprStmt line -> line.expression();
+                    case PrintLine line -> line.builtinArgument();
+                    case FunctionDef ignored -> null;
+                };
+                if (expression != null) AstTraversal.walkPreOrder(expression, candidate -> {
+                    if (candidate instanceof With with) collectFunctionSignatures(with.body(), resolution, signatures);
+                });
+            }
         }
     }
 
@@ -198,6 +220,11 @@ final class Interpreter {
 
     private void validateCompositionCompatibility(Expr expression, Resolution resolution,
                                                   Map<Integer, CallableSignature> signatures) {
+        if (expression instanceof With with) {
+            validateCompositionCompatibility(with.target(), resolution, signatures);
+            validateCompositionCompatibility(with.body(), resolution, signatures);
+            return;
+        }
         for (Expr child : AstTraversal.children(expression)) {
             validateCompositionCompatibility(child, resolution, signatures);
         }
@@ -277,7 +304,7 @@ final class Interpreter {
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
                 last = eval(expression, env, null, resolution);
             } else if (statement instanceof PrintLine line) {
-                last = eval(resolution.usesBuiltinPrint(line)
+                last = eval(usesBuiltinPrint(line, env, resolution)
                         ? new Apply(line.target(), line.builtinArgument(), line.span())
                         : line.ordinaryCall(), env, null, resolution);
             } else if (statement instanceof FunctionDef(String name, ContractClause resultContracts,
@@ -1299,9 +1326,15 @@ final class Interpreter {
 
     private Value evalInnerUnchecked(Expr expr, Environment env, Resolution resolution) {
         if (expr instanceof Literal(Value value1, SourceSpan ignored)) return value1;
+        if (expr instanceof With with) return evaluateWith(with, env, resolution);
+        if (expr instanceof OuterPath path) {
+            Value value = readScoped(path, path.name(), env, resolution);
+            Value raw = underlying(value);
+            return raw instanceof Value.Callable callable && callable.remainingArity() == 0
+                    ? invokeZero(callable, expr.span()) : value;
+        }
         if (expr instanceof Name nameExpression) {
-            Resolution.Binding binding = resolution.binding(nameExpression);
-            Value value = binding == null ? env.get(nameExpression.name()) : env.getResolved(binding);
+            Value value = readScoped(nameExpression, nameExpression.name(), env, resolution);
             Value callableValue = underlying(value);
             if (callableValue instanceof Value.Callable callable && callable.remainingArity() == 0) {
                 return invokeZero(callable, expr.span());
@@ -1423,8 +1456,7 @@ final class Interpreter {
             // without triggering the normal implicit invocation on name reads.
             Value targetValue;
             if (target instanceof Name nameExpression) {
-                Resolution.Binding binding = resolution.binding(nameExpression);
-                targetValue = binding == null ? env.get(nameExpression.name()) : env.getResolved(binding);
+                targetValue = readScoped(nameExpression, nameExpression.name(), env, resolution);
             } else {
                 targetValue = evalInner(target, env, resolution);
             }
@@ -1562,8 +1594,83 @@ final class Interpreter {
     }
 
     private Value bindingValue(Name expression, Environment env, Resolution resolution) {
-        Resolution.Binding binding = resolution.binding(expression);
-        return binding == null ? env.get(expression.name()) : env.getResolved(binding);
+        return readScoped(expression, expression.name(), env, resolution);
+    }
+
+    private Value readScoped(Expr expression, String name, Environment env, Resolution resolution) {
+        Resolution.Lookup lookup = resolution.scopedLookup(expression);
+        if (lookup != null) {
+            for (int depth : lookup.withDepths()) {
+                Environment layer = env.ancestor(depth);
+                if (layer.hasLocal(name)) return layer.readLocal(name);
+            }
+            if (lookup.fallback() != null) return env.getResolved(lookup.fallback());
+            return env.ancestor(lookup.fallbackDepth()).get(name);
+        }
+        if (expression instanceof Name lexical) {
+            Resolution.Binding binding = resolution.binding(lexical);
+            return binding == null ? env.get(name) : env.getResolved(binding);
+        }
+        throw new IllegalStateException("Unresolved outer path");
+    }
+
+    private Value evaluateWith(With with, Environment env, Resolution resolution) {
+        Value target = evalInner(with.target(), env, resolution);
+        Value raw = underlying(target);
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(raw).orElse(null);
+        if (provider == null || provider.facts().keyed() == CollectionRuntime.Guarantee.FALSE) {
+            throw runtime(Diagnostic.Codes.EXPECTED_WITH_TARGET,
+                    "with target must expose public named members", with.target().span());
+        }
+        provider.facts().validate(with.target().span());
+        Environment layer = new Environment(env);
+        LinkedHashSet<String> needed = new LinkedHashSet<>(resolution.withNames(with));
+        if (!needed.isEmpty()) {
+            Value enumeration = raw instanceof Value.ProjectedDictionary projected
+                    ? new Value.Seq(projected.fields(reflectionContext).keySet().stream()
+                    .map(name -> (Value) new Value.Str(name)).toList())
+                    : raw instanceof Value.LazyCollection ? null : provider.keys();
+            int index = 0;
+            while (!needed.isEmpty()) {
+                int current = index;
+                Optional<Value> next = raw instanceof Value.LazyCollection lazy
+                        ? lazy.entryAt(current).map(entry -> entry.key() == null
+                        ? new Value.Num(current) : entry.key())
+                        : enumeratedValue(enumeration, index);
+                if (next.isEmpty()) break;
+                index++;
+                if (!(underlying(next.get()) instanceof Value.Str(String name)) || !needed.remove(name)) continue;
+                ReflectionContext observer = reflectionContext;
+                layer.defineLazy(name, () -> raw instanceof Value.ProjectedDictionary projected
+                        ? projected.find(name, observer).orElse(Value.Missing.INSTANCE)
+                        : provider.getElement(new Value.Str(name)));
+            }
+        }
+        return executeBlock(with.body(), new Environment(layer), resolution);
+    }
+
+    private boolean usesBuiltinPrint(PrintLine line, Environment env, Resolution resolution) {
+        Resolution.Lookup lookup = resolution.scopedLookup(line.target());
+        if (lookup != null) {
+            for (int depth : lookup.withDepths()) {
+                if (env.ancestor(depth).hasLocal("print")) return false;
+            }
+        }
+        return resolution.usesBuiltinPrint(line);
+    }
+
+    private Optional<Value> enumeratedValue(Value enumeration, int index) {
+        Value raw = underlying(enumeration);
+        if (raw == Value.Missing.INSTANCE || raw == Value.EmptyCollection.INSTANCE) return Optional.empty();
+        if (raw instanceof Value.Seq sequence) return sequence.find(index);
+        if (raw instanceof Value.LazySeq sequence) return index < sequence.length()
+                ? Optional.of(sequence.at(index)) : Optional.empty();
+        if (raw instanceof Value.LazyCollection collection) return collection.entryAt(index)
+                .map(Value.LazyCollection.Produced::value);
+        if (raw instanceof Value.SettledCollection collection) return index < collection.entries().size()
+                ? Optional.of(collection.entries().get(index).value()) : Optional.empty();
+        throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                "Contract violation for with key provider: expected enumerable Collection");
     }
 
     private Value invoke(Value.Callable callable, Value.Argument argument, SourceSpan span) {
@@ -2563,7 +2670,9 @@ final class Interpreter {
                                  Value key, SourceSpan keySpan, Environment env,
                                  Resolution resolution) {
         Resolution.Binding binding = resolution.accessor(expression);
-        Value resolved = binding == null ? env.get("getElement") : env.getResolved(binding);
+        Value resolved = resolution.scopedLookup(expression) != null
+                ? readScoped(expression, "getElement", env, resolution)
+                : binding == null ? env.get("getElement") : env.getResolved(binding);
         Value raw = underlying(resolved);
         if (!(raw instanceof Value.Callable callable)) {
             throw runtime(Diagnostic.Codes.NOT_CALLABLE,

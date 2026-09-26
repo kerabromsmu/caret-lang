@@ -62,6 +62,8 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String EXPECTED_DICTIONARY = "EXPECTED_DICTIONARY";
         static final String EXPECTED_COLLECTION = "EXPECTED_COLLECTION";
         static final String EXPECTED_CONTAINER = "EXPECTED_CONTAINER";
+        static final String EXPECTED_WITH_TARGET = "EXPECTED_WITH_TARGET";
+        static final String INVALID_OUTER_PATH = "INVALID_OUTER_PATH";
         static final String CONTRADICTORY_COLLECTION_GUARANTEES = "CONTRADICTORY_COLLECTION_GUARANTEES";
         static final String EAGER_INFINITE = "EAGER_INFINITE";
         static final String EAGER_CYCLE = "EAGER_CYCLE";

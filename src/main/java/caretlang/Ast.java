@@ -22,11 +22,16 @@ final class Ast {
     record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
                        List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Dereference, ContainerRead, ContainerLiteral, ContractModifier, ContractTerms, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract, Lambda {
+    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Dereference, ContainerRead, ContainerLiteral, ContractModifier, ContractTerms, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract, Lambda, With, OuterPath {
         SourceSpan span();
     }
     record Literal(Value value, SourceSpan span) implements Expr {}
     record Name(String name, SourceSpan span) implements Expr {}
+    record With(Expr target, List<Stmt> body, SourceSpan span) implements Expr {
+        With { body = List.copyOf(body); }
+    }
+    /** Resolver-owned path; null name represents an incomplete sequence of outer hops. */
+    record OuterPath(int hops, String name, SourceSpan span) implements Expr {}
     record Unary(String operator, Expr operand, SourceSpan span) implements Expr {}
     record Binary(String operator, Expr left, Expr right, SourceSpan span) implements Expr {}
     record Compose(Expr left, Expr right, SourceSpan span) implements Expr {}
