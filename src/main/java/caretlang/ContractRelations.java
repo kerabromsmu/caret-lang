@@ -27,6 +27,24 @@ final class ContractRelations {
         return !l.optional || acceptsMissing(r);
     }
 
+    static boolean sameInvariantArgument(ContractDescriptor left, ContractDescriptor right) {
+        if (left == right) return true;
+        if (left instanceof ModifiedContract a && right instanceof ModifiedContract b) {
+            return a.nullable() == b.nullable() && a.optional() == b.optional()
+                    && sameInvariantArgument(a.base(), b.base());
+        }
+        if (left instanceof ParameterizedContract a && right instanceof ParameterizedContract b) {
+            if (!sameInvariantArgument(a.base(), b.base()) || a.arguments().size() != b.arguments().size()) {
+                return false;
+            }
+            for (int i = 0; i < a.arguments().size(); i++) {
+                if (!sameInvariantArgument(a.arguments().get(i), b.arguments().get(i))) return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
     private static boolean baseImpliesDomain(ContractDescriptor left, Absence right) {
         if (left == BuiltinContract.NULL && right.nullable) return true;
         if (left == BuiltinContract.MISSING && right.optional) return true;
@@ -46,6 +64,12 @@ final class ContractRelations {
 
         if (left instanceof ParameterizedContract lp && right instanceof ParameterizedContract rp) {
             if (lp.base() != rp.base() || lp.arguments().size() != rp.arguments().size()) return false;
+            if (lp.base() == BuiltinContract.CONTAINER) {
+                for (int i = 0; i < lp.arguments().size(); i++) {
+                    if (!sameInvariantArgument(lp.arguments().get(i), rp.arguments().get(i))) return false;
+                }
+                return true;
+            }
             for (int i = 0; i < lp.arguments().size(); i++) {
                 if (!implies(lp.arguments().get(i), rp.arguments().get(i))) return false;
             }

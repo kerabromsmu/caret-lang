@@ -61,6 +61,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String EXPECTED_SEQUENCE = "EXPECTED_SEQUENCE";
         static final String EXPECTED_DICTIONARY = "EXPECTED_DICTIONARY";
         static final String EXPECTED_COLLECTION = "EXPECTED_COLLECTION";
+        static final String EXPECTED_CONTAINER = "EXPECTED_CONTAINER";
         static final String CONTRADICTORY_COLLECTION_GUARANTEES = "CONTRADICTORY_COLLECTION_GUARANTEES";
         static final String INVALID_DICTIONARY_KEY = "INVALID_DICTIONARY_KEY";
         static final String INVALID_COLLECTION_KEY = "INVALID_COLLECTION_KEY";

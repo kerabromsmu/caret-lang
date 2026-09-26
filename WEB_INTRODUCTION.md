@@ -552,28 +552,26 @@ effect facts in stable source order; `~` means that a fact is unavailable rather
 
 ## Contained mutability
 
-Caret values remain immutable by default. Planned mutability is introduced only through an explicit
+Caret values remain immutable by default. Mutable state is introduced through an explicit
 stable-identity container:
 
 ```text
-health = { (Int) 100 }
+health = { (Number) 100 }
 player =
   ^health = health
 
 print player.health{}  // read the shared current value
-put health 80          // replace it after checking the Int contract
+put health 80          // replace it after checking the Number contract
 ```
 
-`player.health` returns the container itself, while `player.health{}` reads its contents and
-`player.@health` reifies the field binding. Sharing the container does not make `player` mutable and
-does not require special reference-assignment syntax. Container identity uses ordinary equality;
-comparing current contents requires explicit reads.
+`player.health` returns the container itself, while `player.health{}` reads its contents.
+`player.@health` is planned field-binding reification. Sharing the container does not make `player`
+mutable and does not require special reference-assignment syntax. Container identity uses ordinary
+equality; comparing current contents requires explicit reads.
 
-The planned effect system names content observation `StateRead` and replacement `StateWrite`.
-Passing or inspecting the container reference remains pure, and declaring an effect never grants
-authority over a container. Rule cycles can track explicit reads as reactive dependencies, while
-sandboxes may expose a real container, a restricted projection, or an immutable snapshot. These
-features are specified future work and are not available in the prototype.
+The effect system infers `StateRead` for content observation and `StateWrite` for replacement.
+Passing the container reference remains pure, and declaring an effect never grants authority over
+a container. Rule-cycle dependencies and sandbox projections remain planned.
 
 ## Environment-relative reflection
 
@@ -626,7 +624,7 @@ not visible to Caret, and an optimization-disabled reference mode is covered by 
 Parameterized contracts for later value kinds, contextual collection representations, modules,
 root reification, sandboxing,
 compile-time execution, separate compilation roots,
-mutability containers, and a compiler backend remain future work. The prototype exists to
+field reification, and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 
 To explore the implementation, syntax reference, and runnable examples, see the project

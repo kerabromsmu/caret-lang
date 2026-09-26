@@ -22,7 +22,7 @@ final class Ast {
     record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
                        List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Dereference, ContractModifier, ContractTerms, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract, Lambda {
+    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Dereference, ContainerRead, ContainerLiteral, ContractModifier, ContractTerms, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract, Lambda {
         SourceSpan span();
     }
     record Literal(Value value, SourceSpan span) implements Expr {}
@@ -39,6 +39,8 @@ final class Ast {
     record DynamicField(Expr target, Expr name, boolean optional, SourceSpan span) implements Expr {}
     record Reflect(Expr target, SourceSpan span) implements Expr {}
     record Dereference(Expr target, SourceSpan span) implements Expr {}
+    record ContainerRead(Expr target, SourceSpan span) implements Expr {}
+    record ContainerLiteral(ContractClause contracts, Expr value, SourceSpan span) implements Expr {}
     record ContractModifier(Expr target, boolean nullable, boolean optional, SourceSpan span) implements Expr {}
     /** Parser-retained adjacent arrow-result terms; semantic resolution associates constructor arguments. */
     record ContractTerms(List<Expr> terms, SourceSpan span) implements Expr {

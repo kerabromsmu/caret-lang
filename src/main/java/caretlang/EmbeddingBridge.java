@@ -153,6 +153,9 @@ public final class EmbeddingBridge {
             case Value.Bool bool -> new CaretValue.BooleanValue(bool.value());
             case Value.Null ignored -> CaretValue.NullValue.INSTANCE;
             case Value.Missing ignored -> CaretValue.MissingValue.INSTANCE;
+            case Value.Container ignored -> throw new CaretEmbeddingException(
+                    CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    "Mutable Container values cannot cross the Java embedding boundary");
             case Value.Field field -> new CaretValue.FieldValue(
                     field.key() instanceof Value.Str(String name) ? name : ValueSemantics.render(field.key()),
                     external(field.value()));

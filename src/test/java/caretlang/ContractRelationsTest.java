@@ -31,5 +31,22 @@ final class ContractRelationsTest {
                 BuiltinContract.SEQUENCE, List.of(BuiltinContract.ANY));
         assertTrue(ContractRelations.implies(numbers, anyValues));
         assertFalse(ContractRelations.implies(anyValues, numbers));
+
+        ContractDescriptor numberContainer = new ParameterizedContract(
+                BuiltinContract.CONTAINER, List.of(BuiltinContract.NUMBER));
+        ContractDescriptor anyContainer = new ParameterizedContract(
+                BuiltinContract.CONTAINER, List.of(BuiltinContract.ANY));
+        assertTrue(ContractRelations.implies(numberContainer, numberContainer));
+        assertFalse(ContractRelations.implies(numberContainer, anyContainer));
+        assertFalse(ContractRelations.implies(anyContainer, numberContainer));
+
+        ContractDescriptor nested = new ParameterizedContract(BuiltinContract.CONTAINER,
+                List.of(new ParameterizedContract(BuiltinContract.SEQUENCE, List.of(BuiltinContract.NUMBER))));
+        ContractDescriptor sameNested = new ParameterizedContract(BuiltinContract.CONTAINER,
+                List.of(new ParameterizedContract(BuiltinContract.SEQUENCE, List.of(BuiltinContract.NUMBER))));
+        ContractDescriptor broadNested = new ParameterizedContract(BuiltinContract.CONTAINER,
+                List.of(new ParameterizedContract(BuiltinContract.SEQUENCE, List.of(BuiltinContract.ANY))));
+        assertTrue(ContractRelations.implies(nested, sameNested));
+        assertFalse(ContractRelations.implies(nested, broadNested));
     }
 }

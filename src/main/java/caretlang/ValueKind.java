@@ -6,7 +6,7 @@ import java.util.Objects;
 enum ValueKind {
     NUMBER("Number"), STRING("String"), BOOLEAN("Boolean"), NULL("Null"), MISSING("Missing"),
     COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), SET("Set"), FUNCTION("Function"),
-    FIELD("Field"), CONTRACT("Contract"), REFLECTIVE("Reflective");
+    FIELD("Field"), CONTAINER("Container"), CONTRACT("Contract"), REFLECTIVE("Reflective");
 
     private final String publicName;
     ValueKind(String publicName) { this.publicName = publicName; }
@@ -25,6 +25,7 @@ enum ValueKind {
             case Value.Null ignored -> NULL;
             case Value.Missing ignored -> MISSING;
             case Value.Field ignored -> FIELD;
+            case Value.Container ignored -> CONTAINER;
             case Value.KeyedCollection collection -> switch (collection.shape()) {
                 case DICTIONARY -> DICTIONARY;
                 case SET -> SET;

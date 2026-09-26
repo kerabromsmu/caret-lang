@@ -1443,6 +1443,36 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.NOT_DEREFERENCEABLE,
                     "Value is not dereferenceable: " + reference, expr.span());
         }
+        if (expr instanceof ContainerRead(Expr target, SourceSpan ignored)) {
+            Value value = underlying(evalInner(target, env, resolution));
+            if (!(value instanceof Value.Container container)) {
+                throw runtime(Diagnostic.Codes.EXPECTED_CONTAINER,
+                        "Expected Container, got: " + ValueSemantics.kind(value), target.span());
+            }
+            return container.current();
+        }
+        if (expr instanceof ContainerLiteral(ContractClause contracts, Expr initial, SourceSpan ignored)) {
+            Value value = evalInner(initial, env, resolution);
+            if (contracts == null) {
+                List<ContractDescriptor> inferred = inferredContainerContracts(value);
+                return new Value.Container(value, inferred, inferred.size() == 1, (candidate, span) -> {
+                    for (ContractDescriptor contract : inferred) {
+                        if (contract.test(candidate, span)) continue;
+                        throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                                "Contract violation for container content: expected " + contract.publicName()
+                                        + ", got " + ValueSemantics.kind(candidate), span);
+                    }
+                    return candidate;
+                });
+            }
+            Value checked = validateContracts(value, initial.span(), contracts, resolution, env,
+                    "container content");
+            List<ContractDescriptor> descriptors = containerContractDescriptors(contracts, env, resolution);
+            boolean single = valueRequirements(resolution.clause(contracts)).size() == 1
+                    && descriptors.size() == 1;
+            return new Value.Container(checked, descriptors, single, (candidate, span) ->
+                    validateContracts(candidate, span, contracts, resolution, env, "container content"));
+        }
         if (expr instanceof ContractModifier(Expr target, boolean nullable, boolean optional,
                                              SourceSpan ignored)) {
             Value value = underlying(evalInner(target, env, resolution));
@@ -1777,6 +1807,21 @@ final class Interpreter {
 
         builtins.define("getElement", getElementFunction());
 
+        CallableSignature.ContractTerm containerTerm = new CallableSignature.NamedRef(
+                BuiltinContract.CONTAINER, BuiltinContract.CONTAINER.publicName());
+        CallableSignature.ContractTerm anyTerm = new CallableSignature.NamedRef(
+                BuiltinContract.ANY, BuiltinContract.ANY.publicName());
+        CallableSignature putSignature = CallableSignature.builtin(List.of("container", "value"),
+                List.of(List.of(containerTerm), List.of(anyTerm)), List.of(anyTerm), List.of("StateWrite"));
+        builtins.define("put", new Value.FunctionValue("put", List.of("container", "value"), (args, ignored) -> {
+            Value target = underlying(args.getFirst().value());
+            if (!(target instanceof Value.Container container)) {
+                throw runtime(Diagnostic.Codes.EXPECTED_CONTAINER,
+                        "Expected Container, got: " + ValueSemantics.kind(target), args.getFirst().span());
+            }
+            return container.replace(args.get(1).value(), args.get(1).span());
+        }, false, putSignature));
+
         builtins.define("keys", collectionFunction("keys", BuiltinContract.COLLECTION, true,
                 (args, ignored) -> collectionEnumeration(
                         collection(args.getFirst()).keys(), "keys", args.getFirst().span())));
@@ -1830,6 +1875,42 @@ final class Interpreter {
         }));
         builtins.define("dictKeys", locatedFunction("dictKeys", List.of("dictionary"), (args, ignored) -> ownership.fresh(
                 new Value.Seq(dictionary(args.getFirst()).entries().keySet().stream().map(Value.Str::new).toList()))));
+    }
+
+    private List<ContractDescriptor> inferredContainerContracts(Value value) {
+        if (value instanceof Value.Attributed attributed && !attributed.contracts().isEmpty()) {
+            return List.copyOf(attributed.contracts());
+        }
+        ContractDescriptor inferred = switch (ValueKind.of(value)) {
+            case NUMBER -> BuiltinContract.NUMBER;
+            case STRING -> BuiltinContract.STRING;
+            case BOOLEAN -> BuiltinContract.BOOLEAN;
+            case NULL -> BuiltinContract.NULL;
+            case MISSING -> BuiltinContract.MISSING;
+            case FUNCTION -> BuiltinContract.FUNCTION;
+            case FIELD -> BuiltinContract.FIELD;
+            case CONTAINER -> BuiltinContract.CONTAINER;
+            case SEQUENCE -> BuiltinContract.SEQUENCE;
+            case DICTIONARY -> BuiltinContract.DICTIONARY;
+            case SET -> BuiltinContract.SET;
+            case COLLECTION -> BuiltinContract.COLLECTION;
+            case CONTRACT -> BuiltinContract.ANY;
+            case REFLECTIVE -> BuiltinContract.ANY;
+        };
+        return List.of(inferred);
+    }
+
+    private List<ContractDescriptor> containerContractDescriptors(ContractClause clause, Environment env,
+                                                                  Resolution resolution) {
+        ArrayList<ContractDescriptor> descriptors = new ArrayList<>();
+        for (Resolution.ContractBinding binding : valueRequirements(resolution.clause(clause))) {
+            try {
+                descriptors.add(resolveContractDescriptor(binding, env, resolution));
+            } catch (LangException error) {
+                if (!error.diagnostic().code().equals(Diagnostic.Codes.NOT_A_CONTRACT)) throw error;
+            }
+        }
+        return List.copyOf(descriptors);
     }
 
     private void installTestBuiltins(TestReporter reporter) {

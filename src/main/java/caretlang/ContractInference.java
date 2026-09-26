@@ -19,7 +19,7 @@ import java.util.Set;
  * empty; a parameter/result flow is retained explicitly rather than being collapsed to Any.
  */
 final class ContractInference {
-    enum BuiltinEffect { OUTPUT, TEST_REPORT }
+    enum BuiltinEffect { OUTPUT, STATE_READ, STATE_WRITE, TEST_REPORT }
 
     record EffectSummary(Set<BuiltinEffect> effects, Set<String> symbolicEffects, boolean unknownDynamicCall) {
         static final EffectSummary PURE = new EffectSummary(Set.of(), Set.of(), false);
@@ -28,6 +28,8 @@ final class ContractInference {
         EffectSummary(Set<BuiltinEffect> effects, boolean unknownDynamicCall) {
             this(effects, effects.stream().map(effect -> switch (effect) {
                 case OUTPUT -> "Output";
+                case STATE_READ -> "StateRead";
+                case STATE_WRITE -> "StateWrite";
                 case TEST_REPORT -> "TestReport";
             }).collect(java.util.stream.Collectors.toSet()), unknownDynamicCall);
         }
@@ -153,6 +155,8 @@ final class ContractInference {
         externalCallables.forEach((name, callable) -> {
             Set<BuiltinEffect> known = callable.effects().stream().map(effect -> switch (effect) {
                 case "Output" -> BuiltinEffect.OUTPUT;
+                case "StateRead" -> BuiltinEffect.STATE_READ;
+                case "StateWrite" -> BuiltinEffect.STATE_WRITE;
                 case "TestReport" -> BuiltinEffect.TEST_REPORT;
                 default -> null;
             }).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
@@ -421,6 +425,8 @@ final class ContractInference {
             case DynamicField ignored -> Shape.unknown();
             case Reflect ignored -> Shape.unknown();
             case Dereference ignored -> Shape.unknown();
+            case ContainerRead ignored -> Shape.unknown();
+            case ContainerLiteral ignored -> Shape.concrete(BuiltinContract.CONTAINER);
             case ContractModifier ignored -> Shape.unknown();
             case ContractTerms ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
@@ -565,6 +571,7 @@ final class ContractInference {
             case SEQUENCE -> Shape.concrete(BuiltinContract.SEQUENCE);
             case DICTIONARY -> Shape.concrete(BuiltinContract.DICTIONARY);
             case FIELD -> Shape.concrete(BuiltinContract.FIELD);
+            case CONTAINER -> Shape.concrete(BuiltinContract.CONTAINER);
             default -> Shape.unknown();
         };
     }
@@ -711,6 +718,7 @@ final class ContractInference {
         result.put("dictKeys", builtin(1, EffectSummary.PURE));
         result.put("field", builtin(2, EffectSummary.PURE));
         result.put("getElement", builtin(2, EffectSummary.PURE));
+        result.put("put", builtin(2, new EffectSummary(Set.of(BuiltinEffect.STATE_WRITE), false)));
         result.put("assert", builtin(2, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         result.put("assertEqual", builtin(3, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         return Map.copyOf(result);
@@ -752,6 +760,8 @@ final class ContractInference {
             EnumSet<BuiltinEffect> effects = EnumSet.noneOf(BuiltinEffect.class);
             for (EffectDescriptor effect : allowance) {
                 if (effect == EffectCatalog.OUTPUT) effects.add(BuiltinEffect.OUTPUT);
+                if (effect == EffectCatalog.STATE_READ) effects.add(BuiltinEffect.STATE_READ);
+                if (effect == EffectCatalog.STATE_WRITE) effects.add(BuiltinEffect.STATE_WRITE);
                 if (effect == EffectCatalog.TEST_REPORT) effects.add(BuiltinEffect.TEST_REPORT);
             }
             visible.put(parameter.name(), new CallableEffects(
@@ -911,6 +921,9 @@ final class ContractInference {
             case Reflect reflect -> reflect.target() instanceof Name
                     ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
             case Dereference dereference -> expressionEffects(dereference.target(), visible);
+            case ContainerRead read -> expressionEffects(read.target(), visible)
+                    .plus(new EffectSummary(Set.of(BuiltinEffect.STATE_READ), false));
+            case ContainerLiteral container -> expressionEffects(container.value(), visible);
             case ContractModifier modifier -> expressionEffects(modifier.target(), visible);
             case ContractTerms terms -> terms.terms().stream().map(term -> expressionEffects(term, visible))
                     .reduce(EffectSummary.PURE, EffectSummary::plus);
@@ -1174,6 +1187,8 @@ final class ContractInference {
             case DynamicField field -> containsHole(field.target()) || containsHole(field.name());
             case Reflect reflect -> containsHole(reflect.target());
             case Dereference dereference -> containsHole(dereference.target());
+            case ContainerRead read -> containsHole(read.target());
+            case ContainerLiteral container -> containsHole(container.value());
             case ContractModifier modifier -> containsHole(modifier.target());
             case ContractTerms terms -> terms.terms().stream().anyMatch(ContractInference::containsHole);
             case Group group -> containsHole(group.expression());

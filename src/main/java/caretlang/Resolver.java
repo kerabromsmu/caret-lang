@@ -566,6 +566,11 @@ final class Resolver {
             }
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
             case Dereference dereference -> resolveExpr(dereference.target(), scope, functionBody, deferred);
+            case Ast.ContainerRead read -> resolveExpr(read.target(), scope, functionBody, deferred);
+            case Ast.ContainerLiteral container -> {
+                resolverContracts(container.contracts(), scope);
+                resolveExpr(container.value(), scope, functionBody, deferred);
+            }
             case ContractModifier modifier -> {
                 resolveExpr(modifier.target(), scope, functionBody, deferred);
                 if (knownContractState(modifier.target(), scope) == ContractState.NON_CONTRACT) {
@@ -705,7 +710,8 @@ final class Resolver {
         if (expression instanceof ContractModifier) return ContractState.CONTRACT;
         if (expression instanceof Apply apply && apply.function() instanceof Name name
                 && name.name().equals("contract")) return ContractState.CONTRACT;
-        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral) {
+        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral
+                || expression instanceof Ast.ContainerLiteral) {
             return ContractState.NON_CONTRACT;
         }
         if (!(expression instanceof Name name)) return ContractState.UNKNOWN;

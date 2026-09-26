@@ -42,7 +42,9 @@ The current prototype supports:
 - first-class pure callable arrow contracts such as `[Number] -> Number`, including exact arity,
   structural predicate checks, inline higher-order clauses, and declaration-wide numbered variables.
 - environment-relative effect identities and mixed declaration clauses, including explicit function
-  allowances, callable-value constraints, and effectful arrow contracts.
+  allowances, callable-value constraints, and effectful arrow contracts;
+- stable-identity mutable containers with fixed content contracts, explicit reads and writes,
+  identity equality, and `StateRead`/`StateWrite` effect inference.
 
 This is deliberately a language experiment, not a production compiler. The
 [language specification index](LANGUAGE.md) and its linked canonical feature documents describe
@@ -81,11 +83,11 @@ application, partial application, aliasing, dispatch, effects, reflection, and c
 execution rules, even though they may consume or produce specialized semantic values. The
 prototype implements `contract` and `template`; the other listed facilities remain planned.
 
-Explicit mutability is planned through stable-identity containers rather than mutable bindings or
-deeply mutable objects. `{ (Int) 100 }` constructs a container, `container{}` reads its current
-content, and `put container value` performs a contract-checked replacement. Containers can be
-shared through otherwise immutable fields and collections; reads and writes participate in the
-planned effect system. This syntax is specified but not implemented by the current prototype.
+Explicit mutability uses stable-identity containers rather than mutable bindings or deeply mutable
+objects. `{ (Number) 100 }` constructs a container, `container{}` reads its current content, and
+`put container value` performs a contract-checked replacement. Containers can be shared through
+otherwise immutable fields and collections; reads and writes participate in effect inference.
+Field-binding reification and container metadata remain planned.
 
 Right-associative `$` supplies application below composition, conditionals, and ordinary expressions
 (`print $ calculate value`). Planned `with value` expressions will make a value's public named
@@ -356,8 +358,8 @@ template constructor/predicate invocation, and callable `eager` forms are deferr
   planned headers become eligible as their syntax is implemented.
 - Higher-order Sequence operations propagate known callback effects; generalized collection
   element/result variables remain planned.
-- Mutability containers are specified but not implemented. Public `addElement`, `removeElement`,
-  `replaceElement`, their construction-selection interface, and additional immutable-update syntax
+- Field-binding reification and extended container metadata remain planned. Public `addElement`,
+  `removeElement`, `replaceElement`, their construction-selection interface, and additional immutable-update syntax
   are deferred beyond Phase 4. There is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
   observable persistent semantics.

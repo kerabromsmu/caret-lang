@@ -71,6 +71,7 @@ successful direct `T~`/`T?~` default insertion is silent.
 | RUNTIME-EXPECTED-SEQUENCE | public | EXPECTED_SEQUENCE | `examples/errors/expected_sequence.caret` |
 | RUNTIME-EXPECTED-DICTIONARY | public | EXPECTED_DICTIONARY | `examples/errors/expected_dictionary.caret` |
 | RUNTIME-EXPECTED-COLLECTION | public | EXPECTED_COLLECTION | `examples/errors/expected_collection.caret` |
+| RUNTIME-EXPECTED-CONTAINER | public | EXPECTED_CONTAINER | `examples/errors/expected_container.caret`; `InterpreterTest#containerReadsAndWritesRejectNonContainersAtLocatedOperands` |
 | RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES | public | CONTRADICTORY_COLLECTION_GUARANTEES | `InterpreterTest#internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent` |
 | RUNTIME-INVALID-DICTIONARY-KEY | public | INVALID_DICTIONARY_KEY | `examples/errors/invalid_dictionary_key.caret` |
 | RUNTIME-INVALID-COLLECTION-KEY | public | INVALID_COLLECTION_KEY | `examples/errors/invalid_collection_key.caret`; `InterpreterTest#unifiedCollectionAccessSupportsSugarContractsCompositeKeysAndPartials` |

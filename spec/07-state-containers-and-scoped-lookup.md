@@ -53,6 +53,17 @@ the implementation of built-in lazy Collections.
 <a id="mutability-containers"></a>
 ## Mutability Containers
 
+The Java 21 prototype implements `{ value }`, `{ (Contract...) value }`, `Container T`,
+postfix `container{}`, and ordinary `put container value`. The inferred or explicit content
+requirements remain fixed for the life of the container; replacement validates before mutation.
+`Container T` matches a cell with one equivalent invariant content descriptor. A conjunction or
+additional refinement remains enforced on writes but cannot be widened to one of its components.
+Aliases, captures, calls, and immutable Collections share its stable identity. `==` compares that
+identity, while observing the content requires an explicit read. Reads and writes contribute
+`StateRead` and `StateWrite` to callable inference and pure-function checks. `object.@field`,
+container reflection metadata, rules, and sandbox projections remain later work. Java embedding
+does not export mutable container values through its immutable `CaretValue` carrier.
+
 <a id="overview"></a>
 ### Overview
 

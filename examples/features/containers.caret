@@ -1,0 +1,16 @@
+health = { (Number) 100 }
+alias = health
+player = [^health = health]
+
+print type health
+print health == alias
+print health{}
+print put player.health 80
+print alias{}
+print (Container Number) player.health
+
+(StateRead Number) read (Container Number) cell = cell{}
+(StateWrite Number) store (Container Number) cell (Number) value = put cell value
+print read health
+print store health 75
+print player.health{}

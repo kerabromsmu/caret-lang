@@ -70,6 +70,33 @@ class CaretSandboxTest {
     }
 
     @Test
+    void embeddedCallablesSharePrivateContainerStateWithoutExportingTheReference() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("container.caret", """
+                    make ignored =
+                      cell = { (Number) 1 }
+                      (StateRead Number) read unused = cell{}
+                      (StateWrite Number) write (Number) value = put cell value
+                      ^get = read
+                      ^set = write
+                    api = make 0
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code());
+            CaretValue.CollectionValue exports = executed.value().orElseThrow();
+            CaretValue.CollectionValue api = (CaretValue.CollectionValue) exports.find("api").orElseThrow();
+            CaretCallable read = (CaretCallable) api.find("get").orElseThrow();
+            CaretCallable write = (CaretCallable) api.find("set").orElseThrow();
+            assertTrue(exports.find("cell").isEmpty());
+            assertTrue(api.find("cell").isEmpty());
+            assertEquals(CaretValue.number(1), read.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+            assertEquals(CaretValue.number(2), write.invoke(List.of(CaretValue.number(2))).value().orElseThrow());
+            assertEquals(CaretValue.number(2), read.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+        }
+    }
+
+    @Test
     void invalidSourceIsAResultAndStillConsumesTheLoadSlot() {
         try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
             CaretLoadResult result = sandbox.load(CaretSource.text("bad.caret", "value ="));

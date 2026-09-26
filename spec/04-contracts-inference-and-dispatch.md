@@ -449,7 +449,7 @@ implemented; no sealing syntax is implemented yet.
 equality operators. Scalar values, null, missing, contract values by descriptor identity,
 structurally comparable metadata dictionaries, and language-owned metadata descriptors
 satisfy it. Immutable collections satisfy `Eq` only when every recursively reachable
-member does. Planned containers satisfy it by stable container identity, without reading their
+member does. Containers satisfy it by stable container identity, without reading their
 contents.
 
 A live callable does not satisfy `Eq`, and neither does a structure containing one. A statically
@@ -569,10 +569,10 @@ imply one another unless their argument descriptors are identical. No constructo
 covariant merely because its current implementation appears read-only.
 
 The prototype's static implication foundation implements descriptor identity, transitive nominal
-derivation, null/missing accepted-set inclusion, and covariance for the implemented immutable
-`Sequence` constructor. Parameter conjunction ordering uses those proofs, normalizes duplicate and
+derivation, null/missing accepted-set inclusion, covariance for immutable `Sequence`, and invariance
+for mutable `Container`. Parameter conjunction ordering uses those proofs, normalizes duplicate and
 `Any` requirements, and keeps null and missing alternatives distinct. Unknown relationships remain
-incomparable. Mutable `Container` variance remains tied to that later value-kind implementation.
+incomparable.
 
 ---
 

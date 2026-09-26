@@ -2152,6 +2152,191 @@ final class InterpreterTest {
     }
 
     @Test
+    void containersPreserveIdentityContractsAndExplicitReadWriteBehavior() {
+        assertEquals("""
+                Container
+                true
+                true
+                false
+                true
+                false
+                1
+                2
+                2
+                3
+                3
+                3
+                4
+                4
+                ?
+                5
+                """, execute("""
+                inferred = { 1 }
+                alias = inferred
+                explicit = { (Number) 10 }
+                print type inferred
+                print Container inferred
+                print (Container Number) inferred
+                print (Container Any) inferred
+                print inferred == alias
+                print inferred == explicit
+                print inferred{}
+                print put alias 2
+                print inferred{}
+
+                holder = [^cell = inferred]
+                print put holder.cell 3
+                print holder.cell{}
+
+                (StateRead Number) read (Container Number) cell = cell{}
+                (StateWrite Number) write (Container Number) cell (Number) value = put cell value
+                print read inferred
+                print write inferred 4
+                print inferred{}
+
+                nullable = { (Number?) ? }
+                optional = { (Number~) ~ }
+                print nullable{}
+                print put optional 5
+                """));
+    }
+
+    @Test
+    void containerParameterizedMembershipPreservesInvariantNestedContentContracts() {
+        assertEquals("true\nfalse\n[ 3 4 ]\nfalse\nfalse\n", execute("""
+                holder = { (Sequence Number) [1 2] }
+                print (Container (Sequence Number)) holder
+                print (Container (Sequence Any)) holder
+                print put holder [3 4]
+
+                (Boolean) positive (Number) value = value > 0
+                guarded = { (Number positive) 1 }
+                both = { (Number Natural) 1 }
+                print (Container Number) guarded
+                print (Container Number) both
+                """));
+    }
+
+    @Test
+    void failedContainerWritesLeavePriorContentAndPureFunctionsRejectStateEffects() {
+        LangException initial = expectDiagnostic("cell = { (Number) \"bad\" }",
+                "Contract violation for container content", 1, 19);
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, initial.diagnostic().code());
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("cell = { (Number) 1 }").parseProgram());
+        LangException failure = assertThrows(LangException.class,
+                () -> interpreter.execute(new Parser("put cell \"bad\"").parseProgram()));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, failure.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, failure.diagnostic().phase());
+        assertEquals(1, failure.span().start().line());
+        assertEquals(10, failure.span().start().column());
+        interpreter.execute(new Parser("print cell{}").parseProgram());
+        assertEquals("1\n", bytes.toString(StandardCharsets.UTF_8));
+
+        LangException read = assertThrows(LangException.class, () -> execute("""
+                cell = { 1 }
+                (pure Number) invalid (Container Number) value = value{}
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, read.diagnostic().code());
+        assertTrue(read.getMessage().contains("StateRead"));
+
+        LangException write = assertThrows(LangException.class, () -> execute("""
+                cell = { 1 }
+                (pure Number) invalid (Container Number) value = put value 2
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, write.diagnostic().code());
+        assertTrue(write.getMessage().contains("StateWrite"));
+    }
+
+    @Test
+    void containerEffectsPropagateThroughAliasesPartialsCompositionAndHigherOrderCalls() {
+        assertEquals("""
+                1
+                2
+                3
+                [ 3 ]
+                Container
+                """, execute("""
+                cell = { (Number) 1 }
+                (StateRead Number) read (Container Number) value = value{}
+                (StateWrite Number) store (Container Number) value (Number) next = put value next
+                reader = read
+                writer = store cell _
+                composed = reader >> (value -> value + 1)
+                print reader cell
+                print composed cell
+                print writer 3
+                print map reader [cell]
+                (pure Collection) inspect (Container Number) value = @value
+                print (inspect cell).kind
+                """));
+
+        LangException higherOrder = assertThrows(LangException.class, () -> execute("""
+                cell = { 1 }
+                read value = value{}
+                (pure Sequence Number) invalid = map read [cell]
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, higherOrder.diagnostic().code());
+        assertTrue(higherOrder.getMessage().contains("StateRead"));
+    }
+
+    @Test
+    void containersShareThroughClosuresNestedCollectionsAndCallsWithoutDeepMutation() {
+        assertEquals("""
+                true
+                true
+                8
+                8
+                8
+                9
+                """, execute("""
+                cell = { (Number) 7 }
+                wrap value = [value]
+                capture value = (ignored -> value)
+                nested = [(wrap cell)]
+                get = capture cell
+                print (seqGet (seqGet nested 0) 0) == cell
+                print get 0 == cell
+                print put (get 0) 8
+                print (seqGet (seqGet nested 0) 0){}
+                print cell{}
+                replacement = seqAdd (seqGet nested 0) { (Number) 9 }
+                print (seqGet replacement 1){}
+                """));
+    }
+
+    @Test
+    void containerIdentityAndPersistentSurroundingsMatchOptimizationDisabledExecution() {
+        String program = """
+                cell = { (Number) 1 }
+                first = [cell]
+                second = seqAdd first { (Number) 9 }
+                print first == second
+                print (seqGet first 0) == cell
+                print (seqGet second 0) == cell
+                print put (seqGet first 0) 2
+                print (seqGet second 0){}
+                print (seqGet second 1){}
+                """;
+        ModeExecution enabled = execute(program, OwnershipTracker.Mode.ENABLED);
+        ModeExecution disabled = execute(program, OwnershipTracker.Mode.DISABLED);
+        assertEquals(disabled.output(), enabled.output());
+        assertEquals("false\ntrue\ntrue\n2\n2\n9\n", enabled.output());
+    }
+
+    @Test
+    void containerReadsAndWritesRejectNonContainersAtLocatedOperands() {
+        LangException read = expectDiagnostic("value = 1\nprint value{}",
+                "Expected Container, got: Number", 2, 7);
+        assertEquals(Diagnostic.Codes.EXPECTED_CONTAINER, read.diagnostic().code());
+        LangException write = expectDiagnostic("put 1 2",
+                "Expected Container, got: Number", 1, 5);
+        assertEquals(Diagnostic.Codes.EXPECTED_CONTAINER, write.diagnostic().code());
+    }
+
+    @Test
     void evaluatesGroupedMultilineCallsAndLookups() {
         assertEquals("6\n42\n", execute("""
                 add a b = a + b

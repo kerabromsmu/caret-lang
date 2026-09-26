@@ -449,6 +449,8 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
     private static EffectRef effect(ContractInference.BuiltinEffect effect) {
         return switch (effect) {
             case OUTPUT -> new EffectRef(EffectCatalog.OUTPUT, "Output");
+            case STATE_READ -> new EffectRef(EffectCatalog.STATE_READ, "StateRead");
+            case STATE_WRITE -> new EffectRef(EffectCatalog.STATE_WRITE, "StateWrite");
             case TEST_REPORT -> new EffectRef(EffectCatalog.TEST_REPORT, "TestReport");
         };
     }
@@ -608,6 +610,7 @@ public record CallableSignature(List<Parameter> parameters, Result result, Effec
             case SEQUENCE -> "Sequence";
             case DICTIONARY -> "Dictionary";
             case FIELD -> "Field";
+            case CONTAINER -> "Container";
             case SET -> "Set";
             default -> "Any";
         });

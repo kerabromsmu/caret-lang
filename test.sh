@@ -137,6 +137,9 @@ diff -u examples/features/zip.expected "$CARET_TEST_TMP/zip-output.txt"
 "$CARET_LAUNCHER" examples/features/collection_equality.caret > "$CARET_TEST_TMP/collection-equality-output.txt"
 diff -u examples/features/collection_equality.expected "$CARET_TEST_TMP/collection-equality-output.txt"
 
+"$CARET_LAUNCHER" examples/features/containers.caret > "$CARET_TEST_TMP/containers-output.txt"
+diff -u examples/features/containers.expected "$CARET_TEST_TMP/containers-output.txt"
+
 "$CARET_LAUNCHER" examples/features/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
 diff -u examples/features/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
 
@@ -288,6 +291,7 @@ expect_failure examples/errors/expected_string.caret unused
 expect_failure examples/errors/expected_sequence.caret unused
 expect_failure examples/errors/expected_dictionary.caret unused
 expect_failure examples/errors/expected_collection.caret unused
+expect_failure examples/errors/expected_container.caret unused
 expect_failure examples/errors/invalid_dictionary_key.caret unused
 expect_test_failure examples/errors/invalid_assertion.caret
 expect_failure examples/errors/incomplete_escape.caret unused

@@ -7,7 +7,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Field, Value.KeyedCollection, Value.LazyCollection, Value.LazySeq,
+        Value.Field, Value.Container, Value.KeyedCollection, Value.LazyCollection, Value.LazySeq,
         Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
@@ -52,6 +52,40 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
     enum Missing implements Value {
         INSTANCE;
         @Override public String toString() { return "~"; }
+    }
+
+    @FunctionalInterface
+    interface ContainerValidator {
+        Value validate(Value candidate, SourceSpan span);
+    }
+
+    /** Stable-identity mutable cell. Reading and replacement remain explicit language operations. */
+    final class Container implements Value {
+        private Value content;
+        private final List<ContractDescriptor> contentContracts;
+        private final boolean singleContentContract;
+        private final ContainerValidator validator;
+
+        Container(Value content, List<ContractDescriptor> contentContracts, boolean singleContentContract,
+                  ContainerValidator validator) {
+            this.content = Objects.requireNonNull(content);
+            this.contentContracts = List.copyOf(contentContracts);
+            this.singleContentContract = singleContentContract;
+            this.validator = Objects.requireNonNull(validator);
+        }
+
+        synchronized Value current() { return content; }
+        synchronized Value replace(Value candidate, SourceSpan span) {
+            Value validated = Objects.requireNonNull(validator.validate(candidate, span));
+            content = validated;
+            return validated;
+        }
+        List<ContractDescriptor> contentContracts() { return contentContracts; }
+        boolean acceptsContentContract(ContractDescriptor required) {
+            return singleContentContract && contentContracts.size() == 1
+                    && ContractRelations.sameInvariantArgument(contentContracts.getFirst(), required);
+        }
+        @Override public String toString() { return "<container>"; }
     }
 
     record Field(Value key, Value value) implements Value, CollectionRuntime.Provider {

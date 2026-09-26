@@ -127,8 +127,8 @@ final class Lexer {
             }
             if (c == '"') string = true;
             else if (c == '/' && i + 1 < source.length() && source.charAt(i + 1) == '/') break;
-            else if (c == '(' || c == '[') depth++;
-            else if (c == ')' || c == ']') depth--;
+            else if (c == '(' || c == '[' || c == '{') depth++;
+            else if (c == ')' || c == ']' || c == '}') depth--;
         }
         return depth;
     }

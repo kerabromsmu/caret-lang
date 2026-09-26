@@ -19,6 +19,10 @@ enum BuiltinContract implements ContractDescriptor {
     ERROR_TEMPLATE("ErrorTemplate") { @Override public boolean accepts(Value value) { return ErrorValues.isError(value); } },
     NULL("Null") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.NULL); } },
     MISSING("Missing") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.MISSING); } },
+    CONTAINER("Container") {
+        @Override public boolean accepts(Value value) { return kind(value, ValueKind.CONTAINER); }
+        @Override public int parameterArity() { return 1; }
+    },
     FUNCTION("Function") { @Override public boolean accepts(Value value) { return kind(value, ValueKind.FUNCTION); } },
     FIELD("Field") {
         @Override public boolean accepts(Value value) { return kind(value, ValueKind.FIELD); }

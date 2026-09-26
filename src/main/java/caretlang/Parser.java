@@ -216,8 +216,8 @@ final class Parser {
         int depth = 0;
         for (int index = 0; index < tokens.size(); index++) {
             String text = tokens.get(index).text();
-            if (text.equals("(") || text.equals("[")) depth++;
-            else if (text.equals(")") || text.equals("]")) depth--;
+            if (text.equals("(") || text.equals("[") || text.equals("{")) depth++;
+            else if (text.equals(")") || text.equals("]") || text.equals("}")) depth--;
             else if (text.equals(spelling) && depth == 0) return index;
         }
         return -1;
@@ -227,8 +227,8 @@ final class Parser {
         int depth = 0;
         for (int index = 0; index < tokens.size(); index++) {
             String text = tokens.get(index).text();
-            if (text.equals("(") || text.equals("[")) depth++;
-            else if (text.equals(")") || text.equals("]")) depth--;
+            if (text.equals("(") || text.equals("[") || text.equals("{")) depth++;
+            else if (text.equals(")") || text.equals("]") || text.equals("}")) depth--;
             else if (text.equals("->") && depth == 0) return index;
         }
         return -1;
@@ -239,8 +239,8 @@ final class Parser {
         int result = -1;
         for (int index = 0; index < tokens.size(); index++) {
             String text = tokens.get(index).text();
-            if (text.equals("(") || text.equals("[")) depth++;
-            else if (text.equals(")") || text.equals("]")) depth--;
+            if (text.equals("(") || text.equals("[") || text.equals("{")) depth++;
+            else if (text.equals(")") || text.equals("]") || text.equals("}")) depth--;
             else if (text.equals("->") && depth == 0) result = index;
         }
         return result;
@@ -445,8 +445,8 @@ final class Parser {
         int depth = 0;
         for (int i = 0; i < tokens.size() - 1; i++) {
             String t = tokens.get(i).text();
-            if (t.equals("(") || t.equals("[")) depth++;
-            else if (t.equals(")") || t.equals("]")) depth--;
+            if (t.equals("(") || t.equals("[") || t.equals("{")) depth++;
+            else if (t.equals(")") || t.equals("]") || t.equals("}")) depth--;
             else if (t.equals("=") && depth == 0) return i;
         }
         return -1;
@@ -565,8 +565,8 @@ final class Parser {
             int depth = 0;
             for (int index = start; index < tokens.size(); index++) {
                 String text = tokens.get(index).text();
-                if (text.equals("[") || text.equals("(")) depth++;
-                else if (text.equals("]") || text.equals(")")) {
+                if (text.equals("[") || text.equals("(") || text.equals("{")) depth++;
+                else if (text.equals("]") || text.equals(")") || text.equals("}")) {
                     depth--;
                     if (depth == 0) {
                         return text.equals("]") && index + 1 < tokens.size()
@@ -829,6 +829,14 @@ final class Parser {
                     expr = new Dereference(expr, SourceSpan.cover(expr.span(), previous().span()));
                     continue;
                 }
+                if (peek().text().equals("{")
+                        && expr.span().end().offset() == peek().span().start().offset()) {
+                    match("{");
+                    Token open = previous();
+                    consume("}", "Expected '}' after container read");
+                    expr = new ContainerRead(expr, SourceSpan.cover(expr.span(), previous().span()));
+                    continue;
+                }
                 if (peek().text().equals("[")
                         && expr.span().end().offset() == peek().span().start().offset() && match("[")) {
                     if (atEnd()) {
@@ -889,6 +897,32 @@ final class Parser {
             if (matchIdent("false")) return new Literal(new Value.Bool(false), previous().span());
             if (match("?")) return new Literal(Value.Null.INSTANCE, previous().span());
             if (match("~")) return new Literal(Value.Missing.INSTANCE, previous().span());
+            if (match("{")) {
+                Token open = previous();
+                int close = matchingClose(current - 1, "{", "}");
+                if (close < 0) throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, "Expected '}'");
+                List<Token> contents = tokens.subList(current, close);
+                if (contents.isEmpty()) {
+                    throw error(Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                            "Container literal requires an initial value");
+                }
+                ContractClause contracts = null;
+                int valueStart = 0;
+                if (contents.getFirst().text().equals("(")
+                        && matchingClose(contents, 0, "(", ")") < contents.size() - 1) {
+                    ContractParse clause = contractClause(contents, 0);
+                    contracts = clause.clause();
+                    valueStart = clause.next();
+                }
+                if (valueStart >= contents.size()) {
+                    throw error(Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
+                            "Container literal requires an initial value");
+                }
+                Expr value = new ExprParser(contents.subList(valueStart, contents.size()),
+                        tokens.get(close).span().start()).parse();
+                current = close + 1;
+                return new ContainerLiteral(contracts, value, SourceSpan.cover(open.span(), tokens.get(close).span()));
+            }
             if (match("[")) {
                 Token open = previous();
                 boolean multiline = collectionCloseLine() > open.span().start().line();
@@ -957,7 +991,7 @@ final class Parser {
                     || token.kind() == Kind.STRING || token.text().equals("true")
                     || token.text().equals("false") || token.text().equals("?")
                     || token.text().equals("~") || token.text().equals("(")
-                    || token.text().equals("[");
+                    || token.text().equals("[") || token.text().equals("{");
             if (!allowed) {
                 throw error(Diagnostic.Codes.PARSE_INVALID_EXPRESSION,
                         "Expected an identifier, literal, or parenthesized expression after '@'");
@@ -969,8 +1003,8 @@ final class Parser {
             int depth = 0;
             for (int index = current; index < tokens.size(); index++) {
                 String text = tokens.get(index).text();
-                if (text.equals("[") || text.equals("(")) depth++;
-                else if (text.equals("]") || text.equals(")")) {
+                if (text.equals("[") || text.equals("(") || text.equals("{")) depth++;
+                else if (text.equals("]") || text.equals(")") || text.equals("}")) {
                     if (depth == 0 && text.equals("]")) return tokens.get(index).span().start().line();
                     depth--;
                 }
@@ -990,8 +1024,8 @@ final class Parser {
                     if (end > start
                             && token.span().start().line() > tokens.get(end - 1).span().end().line()) break;
                 }
-                if (text.equals("[") || text.equals("(")) depth++;
-                else if (text.equals("]") || text.equals(")")) depth--;
+                if (text.equals("[") || text.equals("(") || text.equals("{")) depth++;
+                else if (text.equals("]") || text.equals(")") || text.equals("}")) depth--;
             }
             if (end == start) throw error("Expected collection element expression");
             SourcePosition expressionEnd = tokens.get(end - 1).span().end();
@@ -1008,8 +1042,8 @@ final class Parser {
             int depth = 0;
             for (int index = current; index < tokens.size(); index++) {
                 String text = tokens.get(index).text();
-                if (text.equals("(") || text.equals("[")) depth++;
-                else if (text.equals(")") || text.equals("]")) {
+                if (text.equals("(") || text.equals("[") || text.equals("{")) depth++;
+                else if (text.equals(")") || text.equals("]") || text.equals("}")) {
                     if (depth == 0) return false;
                     depth--;
                 } else if (depth == 0 && (text.equals("$") || text.equals("&") || text.equals(">>")
@@ -1039,7 +1073,7 @@ final class Parser {
             if (token.kind() == Kind.IDENT) {
                 return LanguageSyntax.canStartApplicationArgument(token.text());
             }
-            return Set.of("(", "[", "?", "~", "@").contains(token.text());
+            return Set.of("(", "[", "{", "?", "~", "@").contains(token.text());
         }
 
         private boolean prefixOrReferenceMinus() {
@@ -1074,6 +1108,17 @@ final class Parser {
                     else if (text.equals(")")) depth--;
                 }
                 if (depth != 0) return index;
+            } else if (token.text().equals("{") || token.text().equals("[")) {
+                String open = token.text();
+                String close = open.equals("{") ? "}" : "]";
+                int depth = 1;
+                end = index + 1;
+                while (end < tokens.size() && depth > 0) {
+                    String text = tokens.get(end++).text();
+                    if (text.equals(open)) depth++;
+                    else if (text.equals(close)) depth--;
+                }
+                if (depth != 0) return index;
             } else if (canStartAtom(token)) {
                 end = index + 1;
             } else {
@@ -1093,6 +1138,9 @@ final class Parser {
                     }
                     if (depth != 0) return index;
                     if (end < tokens.size() && tokens.get(end).text().equals("~")) end++;
+                } else if (tokens.get(end).text().equals("{") && end + 1 < tokens.size()
+                        && tokens.get(end + 1).text().equals("}")) {
+                    end += 2;
                 } else {
                     break;
                 }
@@ -1134,8 +1182,23 @@ final class Parser {
 
         private String codeForExpectedDelimiter(String message) {
             return message.startsWith("Expected ')'") || message.startsWith("Expected ']'")
+                    || message.startsWith("Expected '}'")
                     ? Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER
                     : Diagnostic.Codes.PARSE_INVALID_EXPRESSION;
+        }
+
+        private int matchingClose(int open, String opening, String closing) {
+            return matchingClose(tokens, open, opening, closing);
+        }
+
+        private static int matchingClose(List<Token> source, int open, String opening, String closing) {
+            int depth = 0;
+            for (int index = open; index < source.size(); index++) {
+                String text = source.get(index).text();
+                if (text.equals(opening)) depth++;
+                else if (text.equals(closing) && --depth == 0) return index;
+            }
+            return -1;
         }
 
         private Token peek() { return tokens.get(current); }

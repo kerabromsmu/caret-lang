@@ -39,6 +39,9 @@ final class ParameterizedContract implements ContractDescriptor {
         if (base == BuiltinContract.FIELD && value instanceof Value.Field(Value key, Value fieldValue)) {
             return arguments.get(0).accepts(key) && arguments.get(1).accepts(fieldValue);
         }
+        if (base == BuiltinContract.CONTAINER && value instanceof Value.Container container) {
+            return container.acceptsContentContract(arguments.getFirst());
+        }
         if (base == BuiltinContract.DICTIONARY && value instanceof Value.Dictionary dictionary) {
             return dictionary.entries().entrySet().stream().allMatch(entry ->
                     arguments.getFirst().accepts(new Value.Str(entry.getKey()))
@@ -75,6 +78,9 @@ final class ParameterizedContract implements ContractDescriptor {
         if (base == BuiltinContract.FIELD && value instanceof Value.Field(Value key1, Value value1)) {
             return arguments.get(0).acceptsRequirement(key1, span)
                     && arguments.get(1).acceptsRequirement(value1, span);
+        }
+        if (base == BuiltinContract.CONTAINER && value instanceof Value.Container container) {
+            return container.acceptsContentContract(arguments.getFirst());
         }
         if (base == BuiltinContract.DICTIONARY && value instanceof Value.Dictionary dictionary) {
             ContractDescriptor key = arguments.get(0);

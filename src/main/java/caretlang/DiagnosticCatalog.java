@@ -95,6 +95,8 @@ enum DiagnosticCatalog {
     EXPECTED_DICTIONARY("RUNTIME-EXPECTED-DICTIONARY", Diagnostic.Phase.RUNTIME, Diagnostic.Codes.EXPECTED_DICTIONARY, "Expected dictionary, got: .*", PUBLIC),
     EXPECTED_COLLECTION("RUNTIME-EXPECTED-COLLECTION", Diagnostic.Phase.RUNTIME,
             Diagnostic.Codes.EXPECTED_COLLECTION, "Expected Collection, got: .*", PUBLIC),
+    EXPECTED_CONTAINER("RUNTIME-EXPECTED-CONTAINER", Diagnostic.Phase.RUNTIME,
+            Diagnostic.Codes.EXPECTED_CONTAINER, "Expected Container, got: .*", PUBLIC),
     CONTRADICTORY_COLLECTION_GUARANTEES("RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES",
             Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CONTRADICTORY_COLLECTION_GUARANTEES,
             "A sequential Collection cannot declare (ordered|hasValues) as false", PUBLIC),
