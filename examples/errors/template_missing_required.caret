@@ -1,0 +1,2 @@
+Person = template [^name = (String) _ ^phone = (String~) _]
+(Person) ada = []

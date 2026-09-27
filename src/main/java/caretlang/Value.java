@@ -986,24 +986,34 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Callable target;
         private final int parameterIndex;
         private final java.util.function.BiFunction<Integer, Argument, Argument> validator;
+        private final java.util.function.IntFunction<TemplateContract> expectedTemplate;
 
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator) {
-            this(target, 0, validator);
+            this(target, validator, ignored -> null);
+        }
+
+        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
+                           java.util.function.IntFunction<TemplateContract> expectedTemplate) {
+            this(target, 0, validator, expectedTemplate);
         }
 
         private ContractedCallable(Callable target, int parameterIndex,
-                                   java.util.function.BiFunction<Integer, Argument, Argument> validator) {
+                                   java.util.function.BiFunction<Integer, Argument, Argument> validator,
+                                   java.util.function.IntFunction<TemplateContract> expectedTemplate) {
             this.target = Objects.requireNonNull(target);
             this.parameterIndex = parameterIndex;
             this.validator = Objects.requireNonNull(validator);
+            this.expectedTemplate = Objects.requireNonNull(expectedTemplate);
         }
+
+        TemplateContract expectedTemplate() { return expectedTemplate.apply(parameterIndex); }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             argument = validator.apply(parameterIndex, argument);
             int before = target.remainingArity();
             Value result = target.apply(argument, callSpan);
             return before > 1 && result instanceof Callable callable
-                    ? new ContractedCallable(callable, parameterIndex + 1, validator) : result;
+                    ? new ContractedCallable(callable, parameterIndex + 1, validator, expectedTemplate) : result;
         }
 
         @Override public int remainingArity() { return target.remainingArity(); }

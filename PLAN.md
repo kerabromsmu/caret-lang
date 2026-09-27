@@ -413,7 +413,7 @@ named fixed formats, packed keyed Collections, and bit fields remain deferred.
 
 - Implement unconstrained and contracted holes, equality-checked fixed values, exact positional and
   named shape, dynamic field names, and recursive nested collection shapes.
-- Implement [contextual completion of required fields](spec/06-collections-fields-and-templates.md#named-fields)
+- Preserve implemented [contextual completion of required fields](spec/06-collections-fields-and-templates.md#named-fields)
   as `TEMPLATE-OPTIONAL-001`: every constructed value contains every declared field. In a named
   Collection constructor with one unambiguous expected template, omitted holes directly written
   with `T~` or `T?~` materialize as `~` when their full clauses accept missing. Propagate context

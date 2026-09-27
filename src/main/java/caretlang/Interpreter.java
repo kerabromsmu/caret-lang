@@ -263,6 +263,11 @@ final class Interpreter {
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
+        return executeBlock(statements, env, resolution, null);
+    }
+
+    private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution,
+                               TemplateContract resultTemplate) {
         LinkedHashMap<String, Value.Field> exports = new LinkedHashMap<>();
         IdentityHashMap<FunctionDef, Value.Callable> functions = prepareDeclarations(statements, env, resolution);
         IdentityHashMap<Assign, UserContract> contractPlaceholders = prepareContractDeclarations(statements, env);
@@ -271,11 +276,19 @@ final class Interpreter {
         for (Stmt statement : statements) {
             if (statement instanceof Assign(String name, boolean exported, ContractClause contracts,
                                             Expr value1, SourceSpan ignored)) {
-                Value value = value1 instanceof CollectionLiteral collection
-                        && analyzeCollectionHoles(collection).indexes().isEmpty()
-                        ? evaluateCollection(collection, env, resolution,
-                        expectedCollectionShape(contracts, env, resolution))
-                        : eval(value1, env, null, resolution);
+                Value value;
+                if (value1 instanceof CollectionLiteral collection
+                        && analyzeCollectionHoles(collection).indexes().isEmpty()) {
+                    TemplateContract template = expectedTemplate(contracts, env, resolution);
+                    if (template == null && !exported && statement == statements.getLast()) {
+                        template = resultTemplate;
+                    }
+                    CollectionShape shape = expectedCollectionShape(contracts, env, resolution);
+                    if (shape == CollectionShape.INFER && template != null && template.descriptor().root().named()) {
+                        shape = CollectionShape.DICTIONARY;
+                    }
+                    value = evaluateCollection(collection, env, resolution, shape, template);
+                } else value = eval(value1, env, null, resolution);
                 ArrayList<ContractDescriptor> exportedContracts = exported ? new ArrayList<>() : null;
                 value = validateContracts(value, value1.span(), contracts, resolution, env,
                         "binding " + name, true, exportedContracts);
@@ -304,7 +317,13 @@ final class Interpreter {
                 }
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
-                last = eval(expression, env, null, resolution);
+                if (statement == statements.getLast() && resultTemplate != null
+                        && expression instanceof CollectionLiteral collection
+                        && analyzeCollectionHoles(collection).indexes().isEmpty()) {
+                    last = evaluateCollection(collection, env, resolution,
+                            resultTemplate.descriptor().root().named()
+                                    ? CollectionShape.DICTIONARY : CollectionShape.KEYLESS, resultTemplate);
+                } else last = eval(expression, env, null, resolution);
             } else if (statement instanceof PrintLine line) {
                 last = eval(usesBuiltinPrint(line, env, resolution)
                         ? new Apply(line.target(), line.builtinArgument(), line.span())
@@ -316,7 +335,23 @@ final class Interpreter {
             }
         }
 
-        return exports.isEmpty() ? last : ownership.fresh(Value.Dictionary.fromFields(exports));
+        if (exports.isEmpty()) return last;
+        if (resultTemplate != null && resultTemplate.descriptor().root().named()) {
+            SourceSpan block = SourceSpan.cover(statements.getFirst().span(), statements.getLast().span());
+            for (CollectionConstructorDescriptor.Element element : resultTemplate.descriptor().root().elements()) {
+                if (exports.containsKey(element.name())) continue;
+                if (element.defaultsMissing()) {
+                    exports.put(element.name(), new Value.Field(new Value.Str(element.name()),
+                            Value.Missing.INSTANCE));
+                } else {
+                    throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                            Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "Contract violation for exported block: missing field " + element.name(),
+                            block, List.of(new Diagnostic.Related("Template field declared here", element.span()))));
+                }
+            }
+        }
+        return ownership.fresh(Value.Dictionary.fromFields(exports));
     }
 
     private IdentityHashMap<Assign, UserContract> prepareContractDeclarations(List<Stmt> statements,
@@ -403,7 +438,7 @@ final class Interpreter {
                             Value checked = validateContracts(argument.value(), argument.span(),
                                     parameter.contracts(), resolution, env, "parameter " + parameter.name());
                             return new Value.Argument(checked, argument.span());
-                        });
+                        }, index -> expectedTemplate(function.params().get(index).contracts(), env, resolution));
                 if (existing == null) env.initialize(entry.getKey(), value);
                 else env.replace(entry.getKey(), value);
                 functions.put(function, value);
@@ -434,7 +469,8 @@ final class Interpreter {
                 ownership.share(value);
                 parameters.define(function.params().get(i).name(), value);
             }
-            Value result = executeBlock(function.body(), new Environment(parameters), resolution);
+            Value result = executeBlock(function.body(), new Environment(parameters), resolution,
+                    expectedTemplate(function.resultContracts(), env, resolution));
             return validateContracts(result, function.body().getLast().span(),
                     function.resultContracts(), resolution, env, "result of " + function.name(), false);
         }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
@@ -462,7 +498,7 @@ final class Interpreter {
             Value checked = validateContracts(argument.value(), argument.span(), parameter.contracts(),
                     resolution, env, "parameter " + parameter.name());
             return new Value.Argument(checked, argument.span());
-        });
+        }, index -> expectedTemplate(lambda.params().get(index).contracts(), env, resolution));
     }
 
     private record OverloadVariant(FunctionDef definition, Value.Callable function) {}
@@ -764,6 +800,19 @@ final class Interpreter {
             int position = 0;
             while (arguments.containsKey(position)) position++;
             return bind(position, argument, callSpan);
+        }
+
+        TemplateContract expectedTemplate() {
+            int position = 0;
+            while (arguments.containsKey(position)) position++;
+            TemplateContract selected = null;
+            for (OverloadVariant variant : viable) {
+                TemplateContract candidate = Interpreter.this.expectedTemplate(
+                        variantClause(variant, position), contractEnvironment, resolution);
+                if (candidate == null || selected != null && selected != candidate) return null;
+                selected = candidate;
+            }
+            return selected;
         }
 
         private Value bind(int position, Value.Argument argument, SourceSpan callSpan) {
@@ -1419,14 +1468,14 @@ final class Interpreter {
                 if (!(first instanceof Value.Callable callable)) {
                     throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + first);
                 }
-                Value middle = evalInner(middleExpression, env, resolution);
+                Value middle = argumentValue(middleExpression, callable, env, resolution);
                 Value partial = invoke(callable,
                         new Value.Argument(middle, middleExpression.span()), expr.span());
                 if (!(partial instanceof Value.Callable remaining)) {
                     throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.TOO_MANY_ARGUMENTS,
                             "Callable accepts fewer than two arguments", lastExpression.span());
                 }
-                Value last = evalInner(lastExpression, env, resolution);
+                Value last = argumentValue(lastExpression, remaining, env, resolution);
                 return invoke(remaining, new Value.Argument(last, lastExpression.span()), expr.span());
             }
             Value left = first instanceof Value.Callable callable ? invokeZero(callable, firstExpression.span()) : first;
@@ -1443,11 +1492,10 @@ final class Interpreter {
         }
         if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
             Value fn = underlying(evalInner(function, env, resolution));
-            Value argument = argument1 instanceof CollectionLiteral
-                    ? eval(argument1, env, null, resolution) : evalInner(argument1, env, resolution);
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
             }
+            Value argument = argumentValue(argument1, callable, env, resolution);
             return invoke(callable, new Value.Argument(argument, argument1.span()), expr.span());
         }
         if (expr instanceof Field(Expr target2, String field, boolean ignoredOptional, SourceSpan ignored)) {
@@ -2521,14 +2569,75 @@ final class Interpreter {
         return CollectionShape.INFER;
     }
 
+    private TemplateContract expectedTemplate(ContractClause clause, Environment env, Resolution resolution) {
+        TemplateContract selected = null;
+        for (Resolution.ContractBinding reference : valueRequirements(resolution.clause(clause))) {
+            if (reference.inline() != null || !reference.arguments().isEmpty()) continue;
+            Value resolved;
+            try {
+                resolved = underlying(reference.binding() == null ? globals.get(reference.name())
+                        : env.getResolved(reference.binding()));
+            } catch (LangException unavailable) {
+                return null;
+            }
+            if (!(resolved instanceof Value.ContractValue contract)) continue;
+            ContractDescriptor descriptor = contract.descriptor();
+            if (descriptor instanceof ModifiedContract modified) descriptor = modified.base();
+            if (!(descriptor instanceof TemplateContract template)) continue;
+            if (selected != null && selected != template) return null;
+            selected = template;
+        }
+        return selected;
+    }
+
     private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
                                      CollectionShape expected) {
-        if (literal.elements().isEmpty()) return Value.EmptyCollection.INSTANCE;
+        return evaluateCollection(literal, env, resolution, expected,
+                (CollectionConstructorDescriptor.CollectionNode) null);
+    }
+
+    private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
+                                     CollectionShape expected, TemplateContract template) {
+        return evaluateCollection(literal, env, resolution, expected,
+                template == null ? null : template.descriptor().root());
+    }
+
+    private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
+                                     CollectionShape expected,
+                                     CollectionConstructorDescriptor.CollectionNode shape) {
+        if (literal.elements().isEmpty() && (shape == null || !shape.named())) {
+            return Value.EmptyCollection.INSTANCE;
+        }
         ArrayList<Value> values = new ArrayList<>(literal.elements().size());
         for (CollectionElement element : literal.elements()) {
-            Value value = evalInner(element.value(), env, resolution);
+            CollectionConstructorDescriptor.CollectionNode nested = element instanceof NamedElement named
+                    ? nestedExpected(shape, named.name()) : null;
+            Value value = element.value() instanceof CollectionLiteral collection && nested != null
+                    ? evaluateCollection(collection, env, resolution,
+                    nested.named() ? CollectionShape.DICTIONARY : CollectionShape.KEYLESS, nested)
+                    : evalInner(element.value(), env, resolution);
             values.add(element instanceof NamedElement named
                     ? new Value.Field(new Value.Str(named.name()), value) : value);
+        }
+
+        if (shape != null && shape.named()) {
+            Set<String> present = new HashSet<>();
+            for (Value value : values) {
+                if (underlying(value) instanceof Value.Field field
+                        && underlying(field.key()) instanceof Value.Str(String name)) present.add(name);
+            }
+            for (CollectionConstructorDescriptor.Element element : shape.elements()) {
+                if (present.contains(element.name())) continue;
+                if (element.defaultsMissing()) {
+                    values.add(new Value.Field(new Value.Str(element.name()), Value.Missing.INSTANCE));
+                } else {
+                    throw new LangException(new Diagnostic(Diagnostic.Phase.RUNTIME,
+                            Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "Contract violation for collection literal: missing field " + element.name(),
+                            literal.span(), List.of(new Diagnostic.Related(
+                            "Template field declared here", element.span()))));
+                }
+            }
         }
 
         ArrayList<Value> keyless = new ArrayList<>();
@@ -2538,7 +2647,8 @@ final class Interpreter {
         boolean sawAssociatedValue = false;
         for (int index = 0; index < values.size(); index++) {
             Value value = ValueSemantics.underlying(values.get(index));
-            SourceSpan span = literal.elements().get(index).span();
+            SourceSpan span = index < literal.elements().size()
+                    ? literal.elements().get(index).span() : literal.span();
             if (expected == CollectionShape.SET && !(value instanceof Value.Field)) {
                 if (value == Value.Missing.INSTANCE) {
                     throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_DICTIONARY_KEY,
@@ -2613,6 +2723,16 @@ final class Interpreter {
         }
         return ownership.fresh(new Value.KeyedCollection(dictionary
                 ? Value.KeyedCollection.Shape.DICTIONARY : Value.KeyedCollection.Shape.GENERAL, keyed));
+    }
+
+    private static CollectionConstructorDescriptor.CollectionNode nestedExpected(
+            CollectionConstructorDescriptor.CollectionNode shape, String name) {
+        if (shape == null || !shape.named()) return null;
+        for (CollectionConstructorDescriptor.Element element : shape.elements()) {
+            if (name.equals(element.name())
+                    && element.value() instanceof CollectionConstructorDescriptor.CollectionNode nested) return nested;
+        }
+        return null;
     }
 
     private void addFirst(List<Value.KeyedCollection.Entry> entries, Value key, Value value) {
@@ -2712,6 +2832,18 @@ final class Interpreter {
                     "Callable accepts fewer than two arguments", keySpan);
         }
         return invoke(remaining, new Value.Argument(key, keySpan), expression.span());
+    }
+
+    private Value argumentValue(Expr argument, Value.Callable callable,
+                                Environment env, Resolution resolution) {
+        if (!(argument instanceof CollectionLiteral literal)) return evalInner(argument, env, resolution);
+        if (!analyzeCollectionHoles(literal).indexes().isEmpty()) return eval(argument, env, null, resolution);
+        TemplateContract template = callable instanceof Value.ContractedCallable contracted
+                ? contracted.expectedTemplate() : callable instanceof OverloadCallable overload
+                ? overload.expectedTemplate() : null;
+        CollectionShape shape = template != null && template.descriptor().root().named()
+                ? CollectionShape.DICTIONARY : CollectionShape.INFER;
+        return evaluateCollection(literal, env, resolution, shape, template);
     }
 
     private Value reflect(Value value) {
@@ -2819,7 +2951,8 @@ final class Interpreter {
             }
             requirements.set(hole.parameter(), List.copyOf(combined));
         }
-        return new CollectionConstructorDescriptor(root, requirements);
+        return new CollectionConstructorDescriptor(eligibleDefaults(root, requirements, new HashMap<>()),
+                requirements);
     }
 
     private static final class ConstructorBuild {
@@ -2845,8 +2978,10 @@ final class Interpreter {
             CollectionConstructorDescriptor.Node node = constructorNode(
                     element.value(), env, resolution, build);
             if (node == null) return null;
+            boolean defaultMissing = element instanceof NamedElement
+                    && directlyDefaultsMissing(element.value(), node);
             elements.add(new CollectionConstructorDescriptor.Element(
-                    element instanceof NamedElement field ? field.name() : null, node, element.span()));
+                    element instanceof NamedElement field ? field.name() : null, node, element.span(), defaultMissing));
         }
         boolean named = !elements.isEmpty() && elements.stream().allMatch(element -> element.name() != null);
         boolean positional = elements.stream().noneMatch(element -> element.name() != null);
@@ -2890,7 +3025,8 @@ final class Interpreter {
         CollectionConstructorDescriptor.Node value = constructorNode(
                 valueExpression, env, resolution, build);
         if (value == null) return null;
-        return new CollectionConstructorDescriptor.Element(fieldName, value, span);
+        return new CollectionConstructorDescriptor.Element(fieldName, value, span,
+                directlyDefaultsMissing(valueExpression, value));
     }
 
     private CollectionConstructorDescriptor.Node constructorNode(Expr expression, Environment env,
@@ -2918,6 +3054,53 @@ final class Interpreter {
                 build.parameter(hole), requirements, hole.span());
         build.holes.add(node);
         return node;
+    }
+
+    private boolean directlyDefaultsMissing(Expr expression, CollectionConstructorDescriptor.Node node) {
+        if (!(node instanceof CollectionConstructorDescriptor.HoleNode)) return false;
+        while (expression instanceof Group group) expression = group.expression();
+        if (!(expression instanceof Apply apply) || !(apply.argument() instanceof Hole)) return false;
+        ArrayList<Expr> terms = new ArrayList<>();
+        if (!flattenConstructorRequirements(apply.function(), terms)) return false;
+        return terms.stream().anyMatch(term ->
+                term instanceof ContractModifier modifier && modifier.optional());
+    }
+
+    private CollectionConstructorDescriptor.CollectionNode eligibleDefaults(
+            CollectionConstructorDescriptor.CollectionNode node, List<List<Object>> requirements,
+            Map<Integer, Boolean> missingAcceptance) {
+        ArrayList<CollectionConstructorDescriptor.Element> elements = new ArrayList<>();
+        for (CollectionConstructorDescriptor.Element element : node.elements()) {
+            CollectionConstructorDescriptor.Node value = element.value();
+            if (value instanceof CollectionConstructorDescriptor.CollectionNode nested) {
+                value = eligibleDefaults(nested, requirements, missingAcceptance);
+            }
+            boolean defaults = element.defaultsMissing();
+            if (defaults && value instanceof CollectionConstructorDescriptor.HoleNode hole) {
+                defaults = missingAcceptance.computeIfAbsent(hole.parameter(), index ->
+                        requirementsAcceptMissing(requirements.get(index), hole.span()));
+            }
+            elements.add(new CollectionConstructorDescriptor.Element(
+                    element.name(), value, element.span(), defaults));
+        }
+        return new CollectionConstructorDescriptor.CollectionNode(node.named(), elements, node.span());
+    }
+
+    private boolean requirementsAcceptMissing(List<Object> requirements, SourceSpan span) {
+        for (Object requirement : requirements) {
+            try {
+                if (requirement instanceof ContractDescriptor contract) {
+                    if (!contract.accepts(Value.Missing.INSTANCE)) return false;
+                } else {
+                    Value result = underlying(invoke((Value.Callable) requirement,
+                            new Value.Argument(Value.Missing.INSTANCE, span), span));
+                    if (!(result instanceof Value.Bool(boolean accepted)) || !accepted) return false;
+                }
+            } catch (LangException rejectedMissing) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private List<Object> constructorRequirements(Expr expression, Environment env,

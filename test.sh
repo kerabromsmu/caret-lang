@@ -321,6 +321,7 @@ expect_failure examples/errors/incompatible_declared_inference.caret unused
 expect_failure examples/errors/contract_derivation_cycle.caret unused
 expect_failure examples/errors/template_invalid_constructor.caret unused
 expect_failure examples/errors/template_noncomparable_fixed.caret unused
+expect_failure examples/errors/template_missing_required.caret unused
 expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
 expect_failure examples/errors/invalid_refinement.caret unused

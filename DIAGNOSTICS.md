@@ -11,9 +11,11 @@ Their implementation must add exact evidence for implicit-precision warnings ver
 unsupported conversions, range failures, invalid layouts, and zero-divisor/operator paths.
 No catalog code or message below is claimed to implement those planned diagnostics. Warnings must
 remain separate from program output and embedded failure diagnostics.
-Expected-template literal completion also remains planned: omitted required or nondefaultable
-fields reuse `CONTRACT_VIOLATION` at the literal with the template field as related context, while
-successful direct `T~`/`T?~` default insertion is silent.
+Expected-template literal completion is implemented: omitted required or nondefaultable fields
+reuse `CONTRACT_VIOLATION` at the literal with the template field as related context, while
+successful direct `T~`/`T?~` default insertion is silent. See
+`examples/errors/template_missing_required.caret` and
+`InterpreterTest#templateCompletionRejectsNondefaultableAndWrongShapesWithLocations`.
 
 | Variant ID | Category | Code | Evidence |
 |---|---|---|---|
@@ -89,7 +91,7 @@ successful direct `T~`/`T?~` default insertion is silent.
 | RUNTIME-CALLABLE-RENDERING | public | CALLABLE_RENDERING | `InterpreterTest#toStringRejectsUnsupportedCallablesAndNonStringSpecializationResults` |
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
-| RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret` |
+| RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret`; `examples/errors/template_missing_required.caret`; `InterpreterTest#templateCompletionRejectsNondefaultableAndWrongShapesWithLocations` |
 | RUNTIME-EFFECT-CONSTRAINT-REQUIRES-CALLABLE | public | EFFECT_CONSTRAINT_REQUIRES_CALLABLE | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | RUNTIME-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | RUNTIME-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |

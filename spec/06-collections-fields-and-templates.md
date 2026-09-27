@@ -13,8 +13,8 @@ settlement, unified access, lazy shape-aware transforms, strict consumers, paire
 revised Collection equality,
 and shape-neutral empty facts are
 implemented. The remaining state, scoped-lookup, materialization,
-and template work in this revision is
-planned. For the subjects covered here the revision
+and packed-layout work in this revision is
+planned. Expected-template completion for named literals is implemented. For the subjects covered here the revision
 supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
 eager transforms, a distinct non-Collection Field representation, and earlier collection-equality
 assumptions. Existing tests and the implemented baseline remain valid descriptions of the current
@@ -2024,10 +2024,11 @@ exact set of field names and the field ordering defined by the universal collect
 additional, or reordered fields are incompatible whenever that ordering is observable for the
 candidate collection.
 
-Every field declared by a template must be present in a matching Collection. Phase 4 contextual
+Every field declared by a template must be present in a matching Collection. Implemented Phase 4 contextual
 construction may create that present field from an omission in a named Collection literal. A field
 is eligible only when its hole clause contains a directly written `T~` or `T?~` term and the full
-conjunction accepts missing. The constructed field receives value `~`; `T?~` additionally permits
+conjunction accepts missing, including constraints contributed by other occurrences of a numbered
+hole. The constructed field receives value `~`; `T?~` additionally permits
 an explicitly supplied null but never changes the omission default to null.
 
 The direct suffix is construction metadata, not an accepted-set inference. An alias whose resolved
@@ -2060,8 +2061,8 @@ when analysis identifies one template shape unambiguously. Competing overload/te
 not insert fields to decide their own selection.
 
 Only Collection constructors receive this context. Ordinary template application remains a pure
-Boolean membership predicate, and explicit conversion requires the source's established exact
-shape even when its operand is written as a literal:
+Boolean membership predicate. Explicit conversion is a later language feature and will require
+the source's established exact shape even when its operand is written as a literal:
 
 <!-- caret-example: planned -->
 ```caret
@@ -2081,7 +2082,9 @@ Dictionary retains its ordinary canonical field ordering.
 Reflected element metadata sets `defaultsMissing` to true exactly for an eligible named field hole
 and false otherwise. Contract membership and implication compare accepted values and exact shape;
 they ignore this construction-only flag. `RuleDefinition` uses the same general mechanism for
-directly supplied definition literals.
+directly supplied definition literals once that contract is defined. The template descriptor stores
+logical element shape and constraints independently of physical Collection layout; contextual
+completion creates ordinary Dictionary fields and does not imply a packed representation.
 
 The template system does not require a separate record-schema syntax.
 

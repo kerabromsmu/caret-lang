@@ -136,6 +136,11 @@ final class TemplateContract implements ContractDescriptor {
             case CollectionConstructorDescriptor.FixedNode ignored -> "fixed";
             case CollectionConstructorDescriptor.HoleNode ignored -> "hole";
         }));
+        fields.put("defaultsMissing", new Value.Bool(element.defaultsMissing()));
+        if (element.value() instanceof CollectionConstructorDescriptor.CollectionNode nested) {
+            fields.put("shape", new Value.Str(nested.named() ? "named" : "positional"));
+            fields.put("elements", new Value.Seq(nested.elements().stream().map(this::elementMetadata).toList()));
+        }
         if (element.value() instanceof CollectionConstructorDescriptor.HoleNode hole) {
             fields.put("parameter", new Value.Num(hole.parameter()));
             fields.put("requirements", new Value.Seq(hole.requirements().stream().map(requirement ->

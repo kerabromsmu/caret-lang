@@ -18,3 +18,12 @@ print (@Person).size
 print (seqGet (@Person).elements 0).constraint
 print (seqGet (@Person).elements 0).id
 print (seqGet (@Person).elements 0).name~
+
+Contact = template [^name = (String) _ ^phone = (String~) _]
+(Contact) ada = [^name = "Ada"]
+identity (Contact) value = value
+print ada.phone
+print Contact ada
+print Contact [^name = "Ada"]
+print (identity [^name = "Bo"]).phone
+print (seqGet @Contact.elements 1).defaultsMissing

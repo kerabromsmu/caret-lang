@@ -14,6 +14,175 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void contextualNamedTemplateBindingCompletesOnlyDirectMissingModifiers() {
+        assertEquals("~\ntrue\ntrue\nfalse\n", execute("""
+                Person = template [^name = (String) _ ^phone = (String~) _ ^alias = (String?~) _]
+                (Person) person = [^name = "Ada"]
+                print person.phone
+                print Person person
+                print (seqGet @Person.elements 1).defaultsMissing
+                print (seqGet @Person.elements 0).defaultsMissing
+                """));
+
+        LangException absent = assertThrows(LangException.class, () -> execute("""
+                OptionalText = String~
+                Person = template [^name = (String) _ ^phone = (OptionalText) _]
+                (Person) person = [^name = "Ada"]
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, absent.diagnostic().code());
+    }
+
+    @Test
+    void expectedTemplatesCompleteKnownArgumentsAndNestedLiterals() {
+        assertEquals("~\n~\ntrue\n", execute("""
+                Person = template [^name = (String) _ ^phone = (String~) _]
+                identity (Person) value = value
+                print (identity [^name = "Ada"]).phone
+                Nested = template [^person = [^name = (String) _ ^phone = (String~) _]]
+                (Nested) nested = [^person = [^name = "Bo"]]
+                print nested.person.phone
+                print (seqGet (seqGet @Nested.elements 0).elements 1).defaultsMissing
+                """));
+    }
+
+    @Test
+    void declaredTemplateResultsCompleteLiteralsAndExportedBlocks() {
+        assertEquals("~\n~\n", execute("""
+                Person = template [^name = (String) _ ^phone = (String~) _]
+                (Person) make (String) name = [^name = name]
+                (Person) export (String) name =
+                  ^name = name
+                print (make "Ada").phone
+                print (export "Bo").phone
+                """));
+    }
+
+    @Test
+    void dynamicTemplateKeysAndNullableOptionalTermsCompleteWithoutChangingPredicates() {
+        assertEquals("~\ntrue\nfalse\ntrue\ntrue\nfalse\n", execute("""
+                key = "phone"
+                Phone = template [
+                  field key (String?~) _
+                ]
+                (Phone) person = []
+                print person.phone
+                print Phone person
+                print Phone []
+                print Phone [^phone = ?]
+                print (seqGet @Phone.elements 0).defaultsMissing
+                Rejected = template [^value = (String~ Number) _]
+                print (seqGet @Rejected.elements 0).defaultsMissing
+                """));
+    }
+
+    @Test
+    void templateCompletionPreservesExplicitValuesAndExistingCollections() {
+        assertEquals("second\nfirst\n?\ntrue\ntrue\ntrue\ntrue\ntrue\nfalse\n", execute("""
+                Person = template [^name = (String) _ ^phone = (String?~) _]
+                (Output Any) mark label value =
+                  print label
+                  value
+                (Person) person = [^phone = (mark "second" ?) ^name = (mark "first" "Ada")]
+                print person.phone
+                print Person person
+                print Person [^phone = ? ^name = "Ada"]
+                (Person) omitted = [^name = "Ada"]
+                print omitted.phone == ~
+                print size (fields omitted) == 2
+                print omitted == [^name = "Ada" ^phone = ~]
+                existing = [^name = "Ada"]
+                print Person existing
+                """));
+    }
+
+    @Test
+    void templateCompletionRejectsNondefaultableAndWrongShapesWithLocations() {
+        LangException required = assertThrows(LangException.class, () -> execute("""
+                Person = template [^name = (String) _ ^phone = (String~) _]
+                (Person) person = []
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, required.diagnostic().code());
+        assertEquals(2, required.diagnostic().primarySpan().start().line());
+        assertEquals(1, required.diagnostic().related().size());
+        assertEquals(1, required.diagnostic().related().getFirst().span().start().line());
+
+        LangException wrong = assertThrows(LangException.class, () -> execute("""
+                Person = template [^name = (String) _ ^phone = (String~) _]
+                (Person) person = [^name = 1]
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, wrong.diagnostic().code());
+
+        LangException extra = assertThrows(LangException.class, () -> execute("""
+                Person = template [^name = (String) _ ^phone = (String~) _]
+                (Person) person = [^name = "Ada" ^extra = 1]
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, extra.diagnostic().code());
+
+        LangException fixed = assertThrows(LangException.class, () -> execute("""
+                Fixed = template [^name = (String) _ ^phone = ~]
+                (Fixed) person = [^name = "Ada"]
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, fixed.diagnostic().code());
+
+        LangException hole = assertThrows(LangException.class, () -> execute("""
+                Hole = template [^name = (String) _ ^phone = _]
+                (Hole) person = [^name = "Ada"]
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, hole.diagnostic().code());
+    }
+
+    @Test
+    void competingTemplateOverloadsCannotSelectByCompletingAnArgument() {
+        LangException failure = assertThrows(LangException.class, () -> execute("""
+                A = template [^name = (String) _ ^a = (String~) _]
+                B = template [^name = (String) _ ^b = (String~) _]
+                choose (A) value = "a"
+                choose (B) value = "b"
+                print choose [^name = "Ada"]
+                """));
+        assertEquals(Diagnostic.Codes.NO_APPLICABLE_OVERLOAD, failure.diagnostic().code());
+    }
+
+    @Test
+    void templateCompletionMetadataIsIndependentOfStorageReuse() {
+        String program = """
+                Person = template [^name = (String) _ ^phone = (String~) _]
+                (Person) ada = [^name = "Ada"]
+                print ada == [^name = "Ada" ^phone = ~]
+                print (seqGet @Person.elements 1).defaultsMissing
+                print Person ada
+                """;
+        ModeExecution enabled = execute(program, OwnershipTracker.Mode.ENABLED);
+        ModeExecution disabled = execute(program, OwnershipTracker.Mode.DISABLED);
+        assertEquals("true\ntrue\ntrue\n", enabled.output());
+        assertEquals(enabled.output(), disabled.output());
+    }
+
+    @Test
+    void sharedNumberedHoleRequirementsCanDisableAVisibleDefault() {
+        assertEquals("false\n", execute("""
+                Shared = template [^optional = (String~) _1 ^required = (String) _1]
+                print (seqGet @Shared.elements 0).defaultsMissing
+                """));
+        LangException absent = assertThrows(LangException.class, () -> execute("""
+                Shared = template [^optional = (String~) _1 ^required = (String) _1]
+                (Shared) value = [^required = "Ada"]
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, absent.diagnostic().code());
+        assertEquals(2, absent.diagnostic().primarySpan().start().line());
+    }
+
+    @Test
+    void duplicateLiteralFieldsRetainFirstEntryBeforeTemplateValidation() {
+        assertEquals("Ada\n~\ntrue\n", execute("""
+                Person = template [^name = (String) _ ^phone = (String~) _]
+                (Person) person = [^name = "Ada" ^name = 17]
+                print person.name
+                print person.phone
+                print Person person
+                """));
+    }
+    @Test
     void reifiesFieldBindingsWithoutReadingContainerContents() {
         assertEquals("FieldBinding\nhealth\nfalse\ntrue\nhealth,name\ntrue\ntrue\ntrue\ntrue\n5\n6\n6\n~\n", execute("""
                 cell = { (Number) 5 }

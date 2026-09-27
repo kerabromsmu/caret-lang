@@ -71,7 +71,7 @@ ordinary function whose parameters complete that collection. Passing such a reif
 or a concrete fixed collection, to the implemented `template` function creates an exact structural
 contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
 generic three-field `Result` contract remains the planned public success/failure envelope.
-Every value satisfying a template contains every declared field. In the planned contextual-literal
+Every value satisfying a template contains every declared field. In the implemented contextual-literal
 rule, omitting a field whose template hole directly uses `T~` or `T?~` materializes that field with
 value `~`; `T?~` also permits an explicitly supplied null. Aliases of those contracts accept an
 explicit `~` but do not enable omission. Existing Collections remain exact-shape values: template

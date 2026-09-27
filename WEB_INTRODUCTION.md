@@ -91,8 +91,21 @@ with person
   print outer.age  // 20
 ```
 
-The later behavior in this section remains planned. Phase 4 also plans expected-template completion for Collection literals.
-This does not turn ordinary `Template value` application into construction; template
+The later behavior in this section remains planned. Phase 4 implements expected-template completion for named Collection literals:
+
+```caret
+Person = template [^name = (String) _ ^phone = (String~) _]
+(Person) ada = [^name = "Ada"]
+print ada.phone       // ~ (the field is present)
+print Person ada       // true
+print Person [^name = "Ada"] // false: ordinary membership is exact
+```
+
+The reflected template element metadata reports `defaultsMissing`. An alias of `String~` accepts
+an explicit missing value but does not make omission defaultable. Context also propagates through
+known function arguments, declared results, nested literals, and exported blocks; it inserts only
+eligible missing fields and preserves explicit field evaluation order. This does not turn ordinary
+`Template value` application into construction; template
 constructor/predicate invocation, custom provider construction, completely deferred computation
 syntax, resumable failure handling, and callable forms of `eager` remain later work.
 
