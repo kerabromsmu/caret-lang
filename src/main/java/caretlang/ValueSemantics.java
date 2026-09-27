@@ -33,6 +33,11 @@ final class ValueSemantics {
                 fields.put("key", field.key());
                 fields.put("value", field.value());
             }
+            case Value.Container container -> fields.put("contentContracts", new Value.Seq(
+                    container.contentContracts().stream().filter(context::names).map(contract -> {
+                        Value.ContractValue target = new Value.ContractValue(contract);
+                        return (Value) Value.Dictionary.reflection(reflectionFields(target, context), target, context);
+                    }).toList()));
             case Value.KeyedCollection collection -> {
                 fields.put("shape", new Value.Str(collection.shape() == Value.KeyedCollection.Shape.SET
                         ? "set" : "keyed"));

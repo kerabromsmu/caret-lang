@@ -1056,6 +1056,8 @@ thing1 == thing2 // true
 
 Both reflect with the `Dictionary` kind, named shape, field names, and field metadata. Lexical
 scopes do not appear as reflectable values merely because the source block contains declarations.
+Field-binding reification uses the same public field interface in either form; semantic owner
+references are described in the [state specification](07-state-containers-and-scoped-lookup.md#field-reification).
 
 ---
 

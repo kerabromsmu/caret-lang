@@ -66,10 +66,10 @@ final class CollectionRuntime {
         if (value == Value.EmptyCollection.INSTANCE) return Optional.of(EmptyProvider.INSTANCE);
         if (value instanceof Value.Seq sequence) return Optional.of(new SequenceProvider(sequence));
         if (value instanceof Value.Dictionary dictionary) {
-            return Optional.of(new DictionaryProvider(dictionary.entries()));
+            return Optional.of(new DictionaryProvider(dictionary.entries(), dictionary.fieldBindings()));
         }
         if (value instanceof Value.ProjectedDictionary projected) {
-            return Optional.of(new DictionaryProvider(projected.fields(ReflectionContext.defining())));
+            return Optional.of(new DictionaryProvider(projected.fields(ReflectionContext.defining()), Map.of()));
         }
         return Optional.empty();
     }
@@ -114,12 +114,13 @@ final class CollectionRuntime {
         @Override public Facts facts() { return FACTS; }
     }
 
-    private record DictionaryProvider(Map<String, Value> entries) implements Provider {
+    private record DictionaryProvider(Map<String, Value> entries, Map<String, Value.Field> bindings) implements Provider {
         private static final Facts FACTS = new Facts(Guarantee.FALSE, Guarantee.TRUE,
                 Guarantee.UNKNOWN, Guarantee.TRUE, Guarantee.TRUE, Guarantee.TRUE);
 
         private DictionaryProvider {
             entries = Map.copyOf(entries);
+            bindings = Map.copyOf(bindings);
         }
 
         @Override public Value getElement(Value key) {
@@ -139,7 +140,9 @@ final class CollectionRuntime {
 
         @Override public Value fieldEntries() {
             return new Value.Seq(orderedEntries().stream()
-                    .map(entry -> (Value) new Value.Field(new Value.Str(entry.getKey()), entry.getValue())).toList());
+                    .map(entry -> (Value) (bindings.containsKey(entry.getKey())
+                            ? bindings.get(entry.getKey())
+                            : new Value.Field(new Value.Str(entry.getKey()), entry.getValue()))).toList());
         }
 
         @Override public Value size() { return new Value.Num(entries.size()); }

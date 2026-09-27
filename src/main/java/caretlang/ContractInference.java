@@ -135,9 +135,17 @@ final class ContractInference {
     private final IdentityHashMap<List<EnumSet<BuiltinContract>>, DeclaredParameters>
             declaredParameterDomains = new IdentityHashMap<>();
     private final Resolution resolution;
+    private final EffectSummary providerEffects;
 
-    private ContractInference(Resolution resolution) {
+    private ContractInference(Resolution resolution, EffectCatalog catalog) {
         this.resolution = Objects.requireNonNull(resolution);
+        Set<String> names = catalog.canonicalNames();
+        EnumSet<BuiltinEffect> portable = EnumSet.noneOf(BuiltinEffect.class);
+        if (names.contains("Output")) portable.add(BuiltinEffect.OUTPUT);
+        if (names.contains("StateRead")) portable.add(BuiltinEffect.STATE_READ);
+        if (names.contains("StateWrite")) portable.add(BuiltinEffect.STATE_WRITE);
+        if (names.contains("TestReport")) portable.add(BuiltinEffect.TEST_REPORT);
+        this.providerEffects = new EffectSummary(portable, names, false);
     }
 
     static ContractInference analyze(List<Stmt> program) {
@@ -150,7 +158,13 @@ final class ContractInference {
 
     static ContractInference analyze(List<Stmt> program, Resolution resolution,
                                      Map<String, ExternalCallable> externalCallables) {
-        ContractInference inference = new ContractInference(resolution);
+        return analyze(program, resolution, externalCallables, EffectCatalog.standard(false));
+    }
+
+    static ContractInference analyze(List<Stmt> program, Resolution resolution,
+                                     Map<String, ExternalCallable> externalCallables,
+                                     EffectCatalog catalog) {
+        ContractInference inference = new ContractInference(resolution, catalog);
         HashMap<String, CallableEffects> visible = new HashMap<>(BUILTIN_EFFECTS);
         externalCallables.forEach((name, callable) -> {
             Set<BuiltinEffect> known = callable.effects().stream().map(effect -> switch (effect) {
@@ -924,7 +938,8 @@ final class ContractInference {
                 yield callable != null && callable.arity() == 0 ? callable.summary() : EffectSummary.PURE;
             }
             case OuterPath ignored -> EffectSummary.PURE;
-            case With with -> expressionEffects(with.target(), visible).plus(inferEffects(with.body(), visible));
+            case With with -> expressionEffects(with.target(), visible)
+                    .plus(inferEffects(with.body(), visible)).plus(providerEffects);
             case Group group -> expressionEffects(group.expression(), visible);
             case Unary unary -> expressionEffects(unary.operand(), visible);
             case Binary binary -> expressionEffects(binary.left(), visible)
@@ -941,8 +956,13 @@ final class ContractInference {
             case Field field -> expressionEffects(field.target(), visible).plus(accessorEffects(visible));
             case DynamicField field -> expressionEffects(field.target(), visible)
                     .plus(expressionEffects(field.name(), visible)).plus(accessorEffects(visible));
-            case Reflect reflect -> reflect.target() instanceof Name
-                    ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
+            case Reflect reflect -> reflect.target() instanceof Name || reflect.target() instanceof OuterPath
+                    ? resolution.scopedLookup(reflect.target()) == null
+                    || resolution.scopedLookup(reflect.target()).withDepths().isEmpty()
+                    ? EffectSummary.PURE : providerEffects
+                    : reflect.target() instanceof Field field
+                    ? expressionEffects(field.target(), visible).plus(providerEffects)
+                    : expressionEffects(reflect.target(), visible);
             case Dereference dereference -> expressionEffects(dereference.target(), visible);
             case ContainerRead read -> expressionEffects(read.target(), visible)
                     .plus(new EffectSummary(Set.of(BuiltinEffect.STATE_READ), false));

@@ -23,6 +23,33 @@ class CaretSandboxTest {
     Path temporaryDirectory;
 
     @Test
+    void embeddingProjectsFieldAndContainerMetadataWithoutExposingMutableContents() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("field-metadata.caret", """
+                    (Output StateRead StateWrite) make ignored =
+                      cell = { (Number) 1 }
+                      record = [^cell = cell]
+                      ^fieldInfo = record.@cell
+                      ^cellInfo = @cell
+                    data = make 0
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            CaretValue.CollectionValue data = (CaretValue.CollectionValue)
+                    executed.value().orElseThrow().find("data").orElseThrow();
+            CaretValue.CollectionValue field = (CaretValue.CollectionValue) data.find("fieldInfo").orElseThrow();
+            CaretValue.CollectionValue container = (CaretValue.CollectionValue) data.find("cellInfo").orElseThrow();
+            assertEquals(CaretValue.text("FieldBinding"), field.find("kind").orElseThrow());
+            assertTrue(field.find("value").isEmpty());
+            assertInstanceOf(CaretValue.CollectionValue.class, field.find("owner").orElseThrow());
+            assertEquals(CaretValue.text("Container"), container.find("kind").orElseThrow());
+            assertTrue(container.find("content").isEmpty());
+            assertInstanceOf(CaretValue.SequenceValue.class, container.find("contentContracts").orElseThrow());
+        }
+    }
+
+    @Test
     void loadsExecutesRegistersAndInvokesOneScript() {
         try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
                 .enableCallbackRegistration().build())) {

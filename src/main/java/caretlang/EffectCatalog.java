@@ -48,6 +48,10 @@ final class EffectCatalog {
 
     Optional<EffectDescriptor> resolve(String name) { return Optional.ofNullable(entries.get(name)); }
     boolean visible(EffectDescriptor effect) { return entries.get(effect.canonicalName()) == effect; }
+    java.util.Set<String> canonicalNames() {
+        return entries.values().stream().map(EffectDescriptor::canonicalName)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
 
     private static EffectDescriptor portable(String name) {
         return switch (name) {

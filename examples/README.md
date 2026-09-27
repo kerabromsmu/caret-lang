@@ -28,6 +28,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `CORE-SCOPE-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | Named Collection export and lookup sections; missing-field and invalid-key fixtures |
 | `CORE-EQ-001` | Named Collection and positional collection equality sections; `errors/callable_equality.caret` |
 | `CORE-REFLECT-001` | Collection, scalar, operator, and function reflection section |
+| `CONTAINER-FIELD-001` | `features/field_reification.caret`; value lookup, explicit content read, stable field binding reference, owner and container metadata |
 | `CORE-INFIX-001` | Named infix precedence, associativity, partial, and callable-parameter examples; invalid-target/arity fixtures |
 | `CORE-INFIX-002` | Symbolic prefix, infix, grouped subtraction, and symbolic partial examples |
 | `CORE-COMP-001` | Left-to-right pipelines, chaining, partial left operands, reflection, and invalid operand/arity fixtures |

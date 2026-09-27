@@ -54,7 +54,7 @@ final class Interpreter {
         Environment.Checkpoint checkpoint = globals.checkpoint();
         try {
             Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
-            inference = ContractInference.analyze(program, resolution, embeddingCallables);
+            inference = ContractInference.analyze(program, resolution, embeddingCallables, effectCatalog);
             validateEffectAllowances(program, resolution);
             validateCompositionCompatibility(program, resolution);
             return executeBlock(program, globals, resolution);
@@ -66,7 +66,7 @@ final class Interpreter {
 
     void validate(List<Stmt> program) {
         Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
-        inference = ContractInference.analyze(program, resolution, embeddingCallables);
+        inference = ContractInference.analyze(program, resolution, embeddingCallables, effectCatalog);
         validateEffectAllowances(program, resolution);
         validateCompositionCompatibility(program, resolution);
     }
@@ -135,7 +135,7 @@ final class Interpreter {
 
     String inspect(List<Stmt> program) {
         Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
-        inference = ContractInference.analyze(program, resolution, embeddingCallables);
+        inference = ContractInference.analyze(program, resolution, embeddingCallables, effectCatalog);
         validateEffectAllowances(program, resolution);
         validateCompositionCompatibility(program, resolution);
         return InferenceReporter.render(program, inference, resolution);
@@ -263,7 +263,7 @@ final class Interpreter {
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
-        LinkedHashMap<String, Value> exports = new LinkedHashMap<>();
+        LinkedHashMap<String, Value.Field> exports = new LinkedHashMap<>();
         IdentityHashMap<FunctionDef, Value.Callable> functions = prepareDeclarations(statements, env, resolution);
         IdentityHashMap<Assign, UserContract> contractPlaceholders = prepareContractDeclarations(statements, env);
         Value last = Value.Missing.INSTANCE;
@@ -276,7 +276,9 @@ final class Interpreter {
                         ? evaluateCollection(collection, env, resolution,
                         expectedCollectionShape(contracts, env, resolution))
                         : eval(value1, env, null, resolution);
-                value = validateContracts(value, value1.span(), contracts, resolution, env, "binding " + name);
+                ArrayList<ContractDescriptor> exportedContracts = exported ? new ArrayList<>() : null;
+                value = validateContracts(value, value1.span(), contracts, resolution, env,
+                        "binding " + name, true, exportedContracts);
                 UserContract placeholder = contractPlaceholders.get(statement);
                 if (placeholder != null && value instanceof Value.ContractValue contract
                         && contract.descriptor() instanceof UserContract constructed) {
@@ -298,7 +300,7 @@ final class Interpreter {
                 }
                 if (exported) {
                     ownership.share(value);
-                    exports.put(name, value);
+                    exports.put(name, new Value.Field(new Value.Str(name), value, exportedContracts));
                 }
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
@@ -314,7 +316,7 @@ final class Interpreter {
             }
         }
 
-        return exports.isEmpty() ? last : ownership.fresh(new Value.Dictionary(exports));
+        return exports.isEmpty() ? last : ownership.fresh(Value.Dictionary.fromFields(exports));
     }
 
     private IdentityHashMap<Assign, UserContract> prepareContractDeclarations(List<Stmt> statements,
@@ -952,6 +954,13 @@ final class Interpreter {
     private Value validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
                                    Resolution resolution, Environment contractEnvironment, String subject,
                                    boolean constrainCallableEffects) {
+        return validateContracts(value, valueSpan, clause, resolution, contractEnvironment, subject,
+                constrainCallableEffects, null);
+    }
+
+    private Value validateContracts(Value value, SourceSpan valueSpan, ContractClause clause,
+                                   Resolution resolution, Environment contractEnvironment, String subject,
+                                   boolean constrainCallableEffects, List<ContractDescriptor> observedContracts) {
         LinkedHashSet<ContractDescriptor> acquired = new LinkedHashSet<>();
         Resolution.AnalyzedClause analyzed = resolution.clause(clause);
         for (Resolution.ContractBinding reference : valueRequirements(analyzed)) {
@@ -999,6 +1008,7 @@ final class Interpreter {
             }
             ContractDescriptor contract = modifiedContract(contractValue.descriptor(),
                     reference.nullable(), reference.optional());
+            if (observedContracts != null) observedContracts.add(contract);
             Value underlyingValue = underlying(value);
             if (underlyingValue == Value.Null.INSTANCE && contract.accepts(value)) continue;
             if (underlyingValue == Value.Missing.INSTANCE && contract.accepts(value)) continue;
@@ -1455,8 +1465,22 @@ final class Interpreter {
             // this is the escape hatch for referring to a zero-argument function
             // without triggering the normal implicit invocation on name reads.
             Value targetValue;
-            if (target instanceof Name nameExpression) {
-                targetValue = readScoped(nameExpression, nameExpression.name(), env, resolution);
+            if (target instanceof Field field) {
+                Value owner = evalInner(field.target(), env, resolution);
+                return reifyField(owner, field.field());
+            }
+            if (target instanceof Name || target instanceof OuterPath) {
+                String name = target instanceof Name lexical ? lexical.name() : ((OuterPath) target).name();
+                Resolution.Lookup lookup = resolution.scopedLookup(target);
+                if (lookup != null) {
+                    for (int depth : lookup.withDepths()) {
+                        Environment layer = env.ancestor(depth);
+                        if (layer.hasLocal(name) && layer.memberOwner() != null) {
+                            return reifyField(layer.memberOwner(), name);
+                        }
+                    }
+                }
+                targetValue = readScoped(target, name, env, resolution);
             } else {
                 targetValue = evalInner(target, env, resolution);
             }
@@ -1624,6 +1648,7 @@ final class Interpreter {
         }
         provider.facts().validate(with.target().span());
         Environment layer = new Environment(env);
+        layer.memberOwner(raw);
         LinkedHashSet<String> needed = new LinkedHashSet<>(resolution.withNames(with));
         if (!needed.isEmpty()) {
             Value enumeration = raw instanceof Value.ProjectedDictionary projected
@@ -2275,7 +2300,7 @@ final class Interpreter {
         if (raw instanceof Value.Dictionary dictionary) {
             List<Value> fields = dictionary.entries().entrySet().stream()
                     .sorted(Map.Entry.comparingByKey(CollectionRuntime.FIELD_ORDER))
-                    .map(entry -> (Value) new Value.Field(new Value.Str(entry.getKey()), entry.getValue())).toList();
+                    .map(entry -> (Value) dictionary.fieldBinding(entry.getKey())).toList();
             return indexed(fields, provider.facts());
         }
         if (raw instanceof Value.ProjectedDictionary dictionary) {
@@ -2577,11 +2602,14 @@ final class Interpreter {
         }
         if (dictionary) keyed.sort((left, right) -> compareDictionaryKeys(left.key(), right.key()));
         if (dictionary && keyed.stream().allMatch(entry -> ValueSemantics.underlying(entry.key()) instanceof Value.Str)) {
-            LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
-            for (Value.KeyedCollection.Entry entry : keyed) {
-                fields.put(((Value.Str) ValueSemantics.underlying(entry.key())).value(), entry.value());
+            LinkedHashMap<String, Value.Field> fields = new LinkedHashMap<>();
+            for (Value candidate : values) {
+                if (ValueSemantics.underlying(candidate) instanceof Value.Field field
+                        && ValueSemantics.underlying(field.key()) instanceof Value.Str(String name)) {
+                    fields.putIfAbsent(name, field);
+                }
             }
-            return ownership.fresh(new Value.Dictionary(fields));
+            return ownership.fresh(Value.Dictionary.fromFields(fields));
         }
         return ownership.fresh(new Value.KeyedCollection(dictionary
                 ? Value.KeyedCollection.Shape.DICTIONARY : Value.KeyedCollection.Shape.GENERAL, keyed));
@@ -2692,8 +2720,62 @@ final class Interpreter {
         if (reflected instanceof Value.Callable callable && !(reflected instanceof Value.Reflective)) {
             return Value.CallableMetadata.reflection(callable, reflectionContext);
         }
+        if (reflected instanceof Value.Container container) {
+            return new Value.ProjectedDictionary(
+                    context -> ValueSemantics.reflectionFields(container, context),
+                    reflectionContext, value, container);
+        }
         Map<String, Value> fields = ValueSemantics.reflectionFields(reflected, reflectionContext);
         return Value.Dictionary.reflection(fields, value, reflectionContext);
+    }
+
+    private Value reifyField(Value owner, String name) {
+        ownership.share(owner);
+        Value raw = underlying(owner);
+        Value.Field field = raw instanceof Value.Dictionary dictionary ? dictionary.fieldBinding(name)
+                : providerField(raw, name);
+        if (field == null) return Value.Missing.INSTANCE;
+        field.addOwner(raw);
+        return new Value.ProjectedDictionary(context -> {
+            LinkedHashMap<String, Value> facts = new LinkedHashMap<>();
+            facts.put("kind", new Value.Str("FieldBinding"));
+            facts.put("key", field.key());
+            facts.put("mutable", new Value.Bool(false));
+            facts.put("exported", new Value.Bool(true));
+            List<ContractDescriptor> visibleContracts = field.contracts().stream().filter(context::names).toList();
+            facts.put("contracts", visibleContracts.isEmpty() ? Value.EmptyCollection.INSTANCE
+                    : new Value.Seq(visibleContracts.stream().map(contract -> contractReference(contract, context)).toList()));
+            facts.put("nullable", field.contracts().isEmpty()
+                    || visibleContracts.size() != field.contracts().size() ? Value.Missing.INSTANCE
+                    : new Value.Bool(field.contracts().stream().allMatch(contract ->
+                    contract instanceof ModifiedContract modified && modified.nullable()
+                            || contract == BuiltinContract.ANY || contract == BuiltinContract.NULL)));
+            facts.put("optional", field.contracts().isEmpty()
+                    || visibleContracts.size() != field.contracts().size() ? Value.Missing.INSTANCE
+                    : new Value.Bool(field.contracts().stream().allMatch(contract ->
+                    contract instanceof ModifiedContract modified && modified.optional()
+                            || contract == BuiltinContract.ANY || contract == BuiltinContract.MISSING)));
+            List<Value> owners = field.owners().stream().filter(context::names)
+                    .map(candidate -> (Value) new Value.ProjectedDictionary(
+                            observer -> ValueSemantics.reflectionFields(candidate, observer),
+                            context, candidate, candidate))
+                    .toList();
+            facts.put("owner", owners.isEmpty() ? Value.Missing.INSTANCE
+                    : owners.size() == 1 ? owners.getFirst() : new Value.Seq(owners));
+            return facts;
+        }, reflectionContext, field, field);
+    }
+
+    private Value.Field providerField(Value owner, String name) {
+        if (owner instanceof Value.KeyedCollection keyed) return keyed.fieldBinding(name);
+        if (owner instanceof Value.SettledCollection settled) return settled.fieldBinding(name);
+        if (owner instanceof Value.LazyCollection lazy) return lazy.fieldBinding(name);
+        return null;
+    }
+
+    private static Value contractReference(ContractDescriptor descriptor, ReflectionContext context) {
+        Value.ContractValue contract = new Value.ContractValue(descriptor);
+        return Value.Dictionary.reflection(ValueSemantics.reflectionFields(contract, context), contract, context);
     }
 
     private ContractDescriptor modifiedContract(ContractDescriptor base, boolean nullable, boolean optional) {

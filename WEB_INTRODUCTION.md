@@ -57,6 +57,10 @@ Collections carrying `Field K V`; `keys` returns `[ 0 1 ]`, and reflection expos
 `value`. A Set is keyed without associated values, and `Set K` context selects member semantics for
 plain values or key-only Fields. Missing-key Fields contribute keyless values, while fully omitted
 Fields contribute nothing. Transforms can change Collection shape when contracts determine their output.
+For a named Collection, `object.@field` instead reifies the field binding: its metadata retains
+binding identity and visible owner references without evaluating a mutable container's content.
+The binding remains immutable even when its value is a container. `@container.contentContracts`
+exposes its permitted content contracts; an explicit `container{}` performs the state read.
 Dot and bracket access share implemented `getElement` semantics: absent valid keys yield missing,
 invalid keys are errors, and keys may be composite values supporting equality.
 
@@ -632,13 +636,14 @@ Closure analysis records deterministic, source-spanned upvalues by stable bindin
 closures use those same internal descriptors without exposing captures or lexical environments
 through reflection.
 An internal conservative ownership tracker may reuse ephemeral Sequence or Dictionary storage, but
-bindings, calls, captures, exports, nesting, and reflection force persistent updates. Ownership is
-not visible to Caret, and an optimization-disabled reference mode is covered by differential tests.
+bindings, calls, captures, exports, nesting, and reflection force persistent updates. Storage-reuse
+ownership is not visible to Caret; field metadata's owner references instead name visible containing
+Collections. An optimization-disabled reference mode is covered by differential tests.
 
 Parameterized contracts for later value kinds, contextual collection representations, modules,
 root reification, sandboxing,
 compile-time execution, separate compilation roots,
-field reification, and a compiler backend remain future work. The prototype exists to
+and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 
 To explore the implementation, syntax reference, and runnable examples, see the project

@@ -14,6 +14,120 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void reifiesFieldBindingsWithoutReadingContainerContents() {
+        assertEquals("FieldBinding\nhealth\nfalse\ntrue\nhealth,name\ntrue\ntrue\ntrue\ntrue\n5\n6\n6\n~\n", execute("""
+                cell = { (Number) 5 }
+                person = [^health = cell ^name = "Ada"]
+                alias = person
+                reference = person.@health
+                print reference.kind
+                print reference.key
+                print reference.mutable
+                print reference.exported
+                print reference.owner.ids
+                print reference == alias.@health
+                print reference: == (fields person)[0]
+                print @cell.kind == "Container"
+                print size @cell.contentContracts == 1
+                print person.health{}
+                print put cell 6
+                print person.health{}
+                print person.@absent
+                """));
+    }
+
+    @Test
+    void reificationPreservesSharedFieldsAndNestedWithOwners() {
+        assertEquals("true\n2\ntrue\ntrue\n~\n", execute("""
+                common = field "x" 10
+                first = [common]
+                second = [common]
+                left = first.@x
+                right = second.@x
+                print left == right
+                print size left.owner
+                with first
+                  print @x == first.@x
+                  with second
+                    print outer.@x == first.@x
+                make =
+                  hidden = 1
+                  ^shown = 2
+                print make.@hidden
+                """));
+    }
+
+    @Test
+    void fieldAndContainerMetadataRespectVisibilityAndDeclaredContracts() {
+        assertEquals("true\nfalse\nNumber?\nNumber\n", execute("""
+                make =
+                  ^(Number?) nullable = ?
+                ref = make.@nullable
+                print ref.nullable
+                print ref.optional
+                print (seqGet ref.contracts 0).id
+                cell = { (Number) 2 }
+                print (seqGet @cell.contentContracts 0).id
+                """));
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("object = [^public = 1]\nreference = object.@public").parseProgram());
+        interpreter.reflectionContext(ReflectionContext.restricted(false, false, false, Set.of()));
+        interpreter.execute(new Parser("print reference.owner").parseProgram());
+        LangException denied = assertThrows(LangException.class,
+                () -> interpreter.execute(new Parser("print reference:").parseProgram()));
+        assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, denied.diagnostic().code());
+        assertEquals("~\n", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void lazyMemberReificationUsesEstablishedProviderEntriesAndRemainsPureForContainers() {
+        assertEquals("FieldBinding\ntrue\ntrue\nContainer\nFieldBinding\n", execute("""
+                source = [^x = 1 ^y = 2]
+                lazy = map (entry -> entry) source
+                reference = lazy.@x
+                print reference.kind
+                print reference == lazy.@x
+                with lazy
+                  print @x == reference
+                cell = { (Number) 3 }
+                holder = [^cell = cell]
+                (pure Dictionary) inspect (Container Number) target = @target
+                print (inspect cell).kind
+                (Output StateRead StateWrite Dictionary) describe (Dictionary) target = target.@cell
+                print (describe holder).kind
+                """));
+
+        LangException unknownProviderEffects = assertThrows(LangException.class, () -> execute("""
+                holder = [^cell = { (Number) 1 }]
+                (pure Dictionary) describe (Dictionary) target = target.@cell
+                print describe holder
+                """));
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, unknownProviderEffects.diagnostic().code());
+        assertEquals(Diagnostic.Phase.SEMANTIC, unknownProviderEffects.diagnostic().phase());
+        assertEquals(2, unknownProviderEffects.span().start().line());
+        assertEquals(1, unknownProviderEffects.span().start().column());
+    }
+
+    @Test
+    void fieldOwnerMetadataIsIndependentOfStorageReuse() {
+        String program = """
+                first = [^x = 1]
+                second = dictPut first "y" 2
+                left = first.@x
+                right = second.@x
+                print left == right
+                print size left.owner
+                print first.x
+                print second.y
+                """;
+        ModeExecution enabled = execute(program, OwnershipTracker.Mode.ENABLED);
+        ModeExecution disabled = execute(program, OwnershipTracker.Mode.DISABLED);
+        assertEquals("true\n2\n1\n2\n", enabled.output());
+        assertEquals(enabled.output(), disabled.output());
+    }
+    @Test
     void arrowContractsInspectCallableSignaturesWithoutInvokingCandidates() {
         assertEquals("true\nfalse\ntrue\nfalse\ntrue\n", execute("""
                 (Number) double (Number) value = value + value
@@ -1393,7 +1507,7 @@ final class InterpreterTest {
 
     @Test
     void dereferencesReflectionDictionariesForFunctionsValuesAndMembers() {
-        assertEquals("Dictionary\nFunction\n5\n7\nNumber\n9\n9\nSequence\n", execute("""
+        assertEquals("Dictionary\nFunction\n5\n7\nNumber\n\"field\" = 9\n9\nSequence\n", execute("""
                 add left right = left + right
                 metadata = @add
                 alias = metadata:

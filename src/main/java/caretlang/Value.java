@@ -88,11 +88,34 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return "<container>"; }
     }
 
-    record Field(Value key, Value value) implements Value, CollectionRuntime.Provider {
-        public Field {
-            Objects.requireNonNull(key, "field key");
-            Objects.requireNonNull(value, "field value");
+    final class Field implements Value, CollectionRuntime.Provider {
+        private final Value key;
+        private final Value value;
+        private final List<ContractDescriptor> contracts;
+        private final List<Value> owners = new ArrayList<>();
+
+        public Field(Value key, Value value) {
+            this(key, value, List.of());
         }
+
+        Field(Value key, Value value, List<ContractDescriptor> contracts) {
+            this.key = Objects.requireNonNull(key, "field key");
+            this.value = Objects.requireNonNull(value, "field value");
+            this.contracts = List.copyOf(contracts);
+        }
+
+        public Value key() { return key; }
+        public Value value() { return value; }
+        List<ContractDescriptor> contracts() { return contracts; }
+        synchronized void addOwner(Value owner) {
+            for (Value existing : owners) if (existing == owner) return;
+            owners.add(owner);
+        }
+        synchronized List<Value> owners() { return List.copyOf(owners); }
+        @Override public boolean equals(Object other) {
+            return other instanceof Field field && key.equals(field.key) && value.equals(field.value);
+        }
+        @Override public int hashCode() { return Objects.hash(key, value); }
         @Override public Value getElement(Value index) {
             return ValueSemantics.underlying(index) instanceof Num(double number)
                     ? number == 0 ? key : number == 1 ? value : Missing.INSTANCE
@@ -120,6 +143,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         private final Shape shape;
         private final List<Entry> entries;
+        private final Map<String, Field> fieldBindings = new HashMap<>();
 
         KeyedCollection(Shape shape, Collection<Entry> entries) {
             this.shape = Objects.requireNonNull(shape);
@@ -128,6 +152,19 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         Shape shape() { return shape; }
         List<Entry> entries() { return entries; }
+
+        synchronized Field fieldBinding(String name) {
+            Field cached = fieldBindings.get(name);
+            if (cached != null) return cached;
+            for (Entry entry : entries) {
+                if (ValueSemantics.underlying(entry.key()) instanceof Str(String key) && key.equals(name)) {
+                    Field field = new Field(new Str(name), shape == Shape.SET ? Missing.INSTANCE : entry.value());
+                    fieldBindings.put(name, field);
+                    return field;
+                }
+            }
+            return null;
+        }
 
         @Override public Value getElement(Value key) {
             for (Entry entry : entries) {
@@ -148,8 +185,11 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
 
         @Override public Value fieldEntries() {
-            return new Seq(entries.stream().map(entry -> (Value) new Field(entry.key(),
-                    shape == Shape.SET ? Missing.INSTANCE : entry.value())).toList());
+            return new Seq(entries.stream().map(entry -> {
+                Value key = ValueSemantics.underlying(entry.key());
+                return (Value) (key instanceof Str(String name) ? fieldBinding(name)
+                        : new Field(entry.key(), shape == Shape.SET ? Missing.INSTANCE : entry.value()));
+            }).toList());
         }
 
         @Override public Value size() { return new Num(entries.size()); }
@@ -172,6 +212,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final CollectionRuntime.Facts facts;
         private final boolean keysAvailable;
         private final ValueKind kind;
+        private final Map<String, Field> fieldBindings = new HashMap<>();
 
         SettledCollection(List<Entry> entries, CollectionRuntime.Facts facts, boolean keysAvailable,
                           ValueKind kind) {
@@ -183,6 +224,23 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         List<Entry> entries() { return entries; }
         ValueKind kind() { return kind; }
+        boolean keysAvailable() { return keysAvailable; }
+
+        synchronized Field fieldBinding(String name) {
+            if (!keysAvailable) return null;
+            Field cached = fieldBindings.get(name);
+            if (cached != null) return cached;
+            for (Entry entry : entries) {
+                if (entry.key() != null && ValueSemantics.underlying(entry.key()) instanceof Str(String key)
+                        && key.equals(name)) {
+                    Field field = new Field(new Str(name), facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                            ? Missing.INSTANCE : entry.value());
+                    fieldBindings.put(name, field);
+                    return field;
+                }
+            }
+            return null;
+        }
         @Override public Value getElement(Value key) {
             if (!keysAvailable) return Missing.INSTANCE;
             for (Entry entry : entries) {
@@ -204,9 +262,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             if (facts.keyed() != CollectionRuntime.Guarantee.TRUE) {
                 return new Seq(entries.stream().map(Entry::value).toList());
             }
-            return new Seq(entries.stream().map(entry -> (Value) new Field(entry.key(),
-                    facts.hasValues() == CollectionRuntime.Guarantee.FALSE
-                            ? Missing.INSTANCE : entry.value())).toList());
+            return new Seq(entries.stream().map(entry -> {
+                Value key = entry.key() == null ? null : ValueSemantics.underlying(entry.key());
+                return (Value) (key instanceof Str(String name) && keysAvailable ? fieldBinding(name)
+                        : new Field(entry.key(), facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                        ? Missing.INSTANCE : entry.value()));
+            }).toList());
         }
         @Override public Value size() { return new Num(entries.size()); }
         @Override public CollectionRuntime.Facts facts() { return facts; }
@@ -473,6 +534,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private boolean dictionarySelected;
         private boolean shapeLocked;
         private final ArrayList<Produced> established = new ArrayList<>();
+        private final Map<String, Field> fieldBindings = new HashMap<>();
         private RuntimeException failure;
         private boolean exhausted;
 
@@ -492,6 +554,23 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             while (established.size() <= index && !exhausted) establishNext();
             if (failure != null) throw failure;
             return index < established.size() ? Optional.of(established.get(index)) : Optional.empty();
+        }
+
+        synchronized Field fieldBinding(String name) {
+            Field cached = fieldBindings.get(name);
+            if (cached != null) return cached;
+            for (int index = 0; ; index++) {
+                Optional<Produced> entry = entryAt(index);
+                if (entry.isEmpty()) return null;
+                Value key = entry.get().key();
+                if (key != null && ValueSemantics.underlying(key) instanceof Str(String identifier)
+                        && identifier.equals(name)) {
+                    Field field = new Field(new Str(name), entry.get().shape() == Shape.SET
+                            ? Missing.INSTANCE : entry.get().value());
+                    fieldBindings.put(name, field);
+                    return field;
+                }
+            }
         }
 
         synchronized List<Produced> materializeEntries() {
@@ -628,7 +707,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             if (resolvedShape() == Shape.KEYLESS || resolvedShape() == Shape.INFER) {
                 return new Seq(entries.stream().map(Produced::value).toList());
             }
-            return ((CollectionRuntime.Provider) materializedValue()).fieldEntries();
+            return new Seq(entries.stream().map(entry -> {
+                Value key = ValueSemantics.underlying(entry.key());
+                return (Value) (key instanceof Str(String name) ? fieldBinding(name)
+                        : new Field(entry.key(), entry.shape() == Shape.SET
+                        ? Missing.INSTANCE : entry.value()));
+            }).toList());
         }
 
         @Override public Value size() {
@@ -672,6 +756,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private int size;
         private final Value reflectedTarget;
         private final ReflectionContext reflectionContext;
+        private final Map<String, Field> fieldBindings;
         private volatile Map<String, Value> materialized;
 
         public Dictionary(Map<String, Value> entries) {
@@ -684,24 +769,45 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.size = checked.size();
             this.reflectedTarget = null;
             this.reflectionContext = null;
+            this.fieldBindings = bindingsFor(checked);
         }
 
-        private Dictionary(Tree root, int size) {
-            this(root, size, null, null);
+        private Dictionary(Tree root, int size, Map<String, Field> bindings) {
+            this(root, size, null, null, bindings);
         }
 
-        private Dictionary(Tree root, int size, Value reflectedTarget, ReflectionContext reflectionContext) {
+        private Dictionary(Tree root, int size, Value reflectedTarget, ReflectionContext reflectionContext,
+                           Map<String, Field> bindings) {
             this.root = Objects.requireNonNull(root);
             this.size = size;
             this.reflectedTarget = reflectedTarget;
             this.reflectionContext = reflectionContext;
+            this.fieldBindings = new LinkedHashMap<>(bindings);
         }
 
         static Dictionary reflection(Map<String, Value> entries, Value target, ReflectionContext context) {
             Dictionary dictionary = new Dictionary(entries);
             return new Dictionary(dictionary.root, dictionary.size, Objects.requireNonNull(target),
-                    Objects.requireNonNull(context));
+                    Objects.requireNonNull(context), dictionary.fieldBindings);
         }
+
+        private static Map<String, Field> bindingsFor(Map<String, Value> entries) {
+            LinkedHashMap<String, Field> bindings = new LinkedHashMap<>();
+            entries.forEach((key, value) -> bindings.put(key, new Field(new Str(key), value)));
+            return bindings;
+        }
+
+        static Dictionary fromFields(Map<String, Field> fields) {
+            LinkedHashMap<String, Value> values = new LinkedHashMap<>();
+            fields.forEach((key, field) -> values.put(key, field.value()));
+            Dictionary dictionary = new Dictionary(values);
+            dictionary.fieldBindings.clear();
+            dictionary.fieldBindings.putAll(fields);
+            return dictionary;
+        }
+
+        Field fieldBinding(String key) { return fieldBindings.get(key); }
+        Map<String, Field> fieldBindings() { return Collections.unmodifiableMap(fieldBindings); }
 
         Optional<Value> reflectedTarget(ReflectionContext observer) {
             return reflectedTarget != null && reflectionContext.intersect(Objects.requireNonNull(observer)).dereference()
@@ -736,7 +842,9 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Objects.requireNonNull(key);
             Objects.requireNonNull(value);
             boolean present = containsKey(key);
-            return new Dictionary(putNode(root, key, value), present ? size : size + 1);
+            LinkedHashMap<String, Field> bindings = new LinkedHashMap<>(fieldBindings);
+            bindings.put(key, new Field(new Str(key), value));
+            return new Dictionary(putNode(root, key, value), present ? size : size + 1, bindings);
         }
 
         void putOwned(String key, Value value) {
@@ -745,6 +853,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             boolean present = containsKey(key);
             root = putNode(root, key, value);
             if (!present) size++;
+            Field field = new Field(new Str(key), value);
+            fieldBindings.put(key, field);
             materialized = null;
         }
 

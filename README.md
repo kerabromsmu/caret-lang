@@ -87,7 +87,10 @@ Explicit mutability uses stable-identity containers rather than mutable bindings
 objects. `{ (Number) 100 }` constructs a container, `container{}` reads its current content, and
 `put container value` performs a contract-checked replacement. Containers can be shared through
 otherwise immutable fields and collections; reads and writes participate in effect inference.
-Field-binding reification and container metadata remain planned.
+`object.@field` reifies a named Collection field binding without reading a container's content.
+The resulting metadata records its key, declared contracts, immutable binding status, and visible
+owner references; `@container.contentContracts` describes a container without reading it. See
+[the runnable field-reification example](examples/features/field_reification.caret).
 
 Right-associative `$` supplies application below composition, conditionals, and ordinary expressions
 (`print $ calculate value`). Implemented `with value` expressions make a value's public named
@@ -360,7 +363,8 @@ template constructor/predicate invocation, and callable `eager` forms are deferr
   planned headers become eligible as their syntax is implemented.
 - Higher-order Sequence operations propagate known callback effects; generalized collection
   element/result variables remain planned.
-- Field-binding reification and extended container metadata remain planned. Public `addElement`,
+- Field-binding reification and container content-contract metadata are implemented for the current
+  named-Collection and container subset. Public `addElement`,
   `removeElement`, `replaceElement`, their construction-selection interface, and additional immutable-update syntax
   are deferred beyond Phase 4. There is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing

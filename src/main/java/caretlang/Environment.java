@@ -51,6 +51,7 @@ final class Environment {
     }
 
     private final Environment parent;
+    private Value memberOwner;
     private final Map<String, Binding> values = new LinkedHashMap<>();
     private final List<Binding> slots = new ArrayList<>();
     private final List<String> slotNames = new ArrayList<>();
@@ -66,6 +67,8 @@ final class Environment {
     }
 
     Environment parent() { return parent; }
+    void memberOwner(Value owner) { memberOwner = owner; }
+    Value memberOwner() { return memberOwner; }
 
     Value inheritedValue(String name) {
         return parent == null ? null : parent.findInitialized(name);

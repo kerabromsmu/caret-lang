@@ -105,7 +105,7 @@ successful direct `T~`/`T?~` default insertion is silent.
 | SEMANTIC-CONFLICTING-EFFECT-ALLOWANCE | public | CONFLICTING_EFFECT_ALLOWANCE | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-INVALID-EFFECT-MODIFIER | public | INVALID_EFFECT_MODIFIER | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-EFFECT-AS-CONTRACT-ARGUMENT | public | EFFECT_AS_CONTRACT_ARGUMENT | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
-| SEMANTIC-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `InterpreterTest#lazyMemberReificationUsesEstablishedProviderEntriesAndRemainsPureForContainers` |
 | SEMANTIC-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | SEMANTIC-INCONSISTENT-OVERLOAD-ARITY | public | INCONSISTENT_OVERLOAD_ARITY | `examples/errors/inconsistent_overload_arity.caret` |
 | RUNTIME-NO-APPLICABLE-OVERLOAD | public | NO_APPLICABLE_OVERLOAD | `examples/errors/no_applicable_overload.caret` |

@@ -137,7 +137,7 @@ passing into an interpreted function, capture by a closure or partial, export, r
 insertion beneath a shared collection conservatively end uniqueness. Unknown ownership always uses
 persistent allocation.
 
-Ownership is neither a Caret value nor reflective metadata, and it does not affect equality,
+Storage-reuse ownership is neither a Caret value nor reflective metadata, and it does not affect equality,
 ordering, diagnostics, or effects. The prototype has an internal optimization-disabled mode whose
 persistent behavior is authoritative. Its enabled mode currently reuses proven-unique ephemeral
 Sequence and Dictionary storage for `seqAdd` and `dictPut`; both modes must produce identical
@@ -233,6 +233,9 @@ Current metadata:
 
 - all values: `kind`
 - named Collections: `shape = "named"`, `size`, `ids`
+- field bindings: stable `FieldBinding` identity, key, declared contracts, immutable binding status,
+  nullability/optionality, export status, and visible owner metadata references
+- containers: stable reflective identity and visible `contentContracts` references without reading content
 - function metadata: `kind = "Function"`, visible declaration `id` or `~`, `remaining`,
   language-owned `signature`, and surviving overload `variants`
 

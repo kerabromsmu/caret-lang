@@ -60,8 +60,9 @@ requirements remain fixed for the life of the container; replacement validates b
 additional refinement remains enforced on writes but cannot be widened to one of its components.
 Aliases, captures, calls, and immutable Collections share its stable identity. `==` compares that
 identity, while observing the content requires an explicit read. Reads and writes contribute
-`StateRead` and `StateWrite` to callable inference and pure-function checks. `object.@field`,
-container reflection metadata, rules, and sandbox projections remain later work. Java embedding
+`StateRead` and `StateWrite` to callable inference and pure-function checks. Field-binding
+reification and container content-contract metadata are implemented for current Collection kinds;
+rules and sandbox projections remain later work. Java embedding
 does not export mutable container values through its immutable `CaretValue` carrier.
 
 <a id="overview"></a>
@@ -444,6 +445,33 @@ player.@health
 is the reified field.
 
 These are three distinct values and must not be conflated.
+
+In the implemented named-Collection subset, `object.@field` is a projected, language-owned
+`FieldBinding` metadata reference. Its `key`, `mutable`, `exported`, `contracts`, `nullable`,
+`optional`, and `owner` facts describe the binding without reading a container's content.
+`mutable` is false for an immutable field even when its value is a mutable container. A
+contracted exported field exposes its declared contract references; an unconstrained field uses
+`~` for unknown nullability and optionality. The opaque reference's adjacent `:` recovers the
+same `Field` tuple when dereference authority permits it. Ordinary `@fieldTuple` reflection keeps
+its existing `key` and `value` fields.
+
+Field identity follows the actual Field instance. Reusing that Field in another Collection
+preserves identity; constructing a new Field from the same key and value does not. The `owner`
+fact is `~` until an owner is known, one metadata reference for one visible owner, or a Collection
+of references for multiple visible owners. Owner discovery occurs when that Field is reified
+through an owner. Observation may add another known owner but cannot disclose owners hidden from
+the observing environment. Field order belongs to each owner's public enumeration metadata,
+not to the Field. Ownership here means semantic containment, not the interpreter's private
+storage-reuse/uniqueness tracker.
+
+`@container` exposes stable identity and visible `contentContracts` references, never current
+content or host storage. A container's content changes only through `put`; metadata inspection
+needs neither `StateRead` nor `StateWrite`. Root/module/sandbox projection kinds remain planned.
+Reifying a field through a lazy keyed Collection demands only the entries needed to find its key;
+it uses that provider's ordinary effects and caches the established Field. In the current
+interpreter, functions that may perform provider lookup receive a conservative upper bound of
+all effects visible in their environment. This bound does not mean reification itself reads
+container content or grants those effects as authority.
 
 ---
 

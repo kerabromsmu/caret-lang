@@ -827,6 +827,13 @@ final class Parser {
                     if (match("@")) {
                         Token marker = previous();
                         Token name = consume(Kind.IDENT, "Expected field name after '.@'");
+                        if (expr instanceof Name root && root.name().equals("outer")
+                                || expr instanceof OuterPath path && path.name() == null) {
+                            int hops = expr instanceof OuterPath path ? path.hops() : 1;
+                            Expr path = new OuterPath(hops, name.text(), SourceSpan.cover(expr.span(), name.span()));
+                            expr = new Reflect(path, SourceSpan.cover(expr.span(), name.span()));
+                            continue;
+                        }
                         Expr field = new Field(expr, name.text(), false, SourceSpan.cover(expr.span(), name.span()));
                         expr = new Reflect(field, SourceSpan.cover(expr.span(), name.span()));
                         continue;
