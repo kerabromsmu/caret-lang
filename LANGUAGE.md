@@ -111,12 +111,13 @@ These links replace the major anchors of the former monolithic document:
 
 ## Approved Phase 4 numeric and packed additions
 
-The [numeric revision](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned),
-[numeric contracts and explicit conversion](spec/04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-planned),
-[conversion syntax and div](spec/03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-and-div-planned),
+The [numeric revision](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented),
+[numeric contracts and explicit conversion](spec/04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-implemented),
+[conversion syntax and div](spec/03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-planned-and-div-implemented),
 and [packed layouts](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
-record the approved #77/#78 design and its numeric (#82) and conversion (#83) prerequisites. These are planned
-semantics, including an explicit change to parenthesized contract application, not runtime support.
+record the approved #77/#78 design and its numeric (#82) and conversion (#83) prerequisites. Numeric
+domains, literals, arithmetic, and warnings are implemented; explicit conversion and packed layouts
+remain planned. The conversion design changes parenthesized contract application.
 Declarations and directly contracted holes remain checks. The shared
 [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix)
 defines evidence required before claiming implementation.

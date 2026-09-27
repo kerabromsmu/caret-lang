@@ -15,6 +15,14 @@ final class Interpreter {
     private final EffectCatalog effectCatalog;
     private final OwnershipTracker ownership;
     private ReflectionContext reflectionContext = ReflectionContext.defining();
+    private enum NumericPolicy { BROAD, STRICT }
+    private NumericPolicy numericPolicy = NumericPolicy.BROAD;
+    private final ArrayList<Diagnostic> warnings = new ArrayList<>();
+    private final Set<SourceSpan> staticallyReportedPrecisionLosses = new HashSet<>();
+    private List<Stmt> staticallyAnalyzedProgram;
+    private boolean pendingValidatedProgram;
+
+    List<Diagnostic> warnings() { return List.copyOf(warnings); }
     private final IdentityHashMap<ContractDescriptor, Map<Integer, ContractDescriptor>> modifiedContracts =
             new IdentityHashMap<>();
     private final Map<String, ContractInference.ExternalCallable> embeddingCallables = new LinkedHashMap<>();
@@ -51,12 +59,16 @@ final class Interpreter {
     }
 
     Value execute(List<Stmt> program) {
+        warnings.clear();
         Environment.Checkpoint checkpoint = globals.checkpoint();
         try {
             Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
             inference = ContractInference.analyze(program, resolution, embeddingCallables, effectCatalog);
             validateEffectAllowances(program, resolution);
             validateCompositionCompatibility(program, resolution);
+            if (!pendingValidatedProgram || program != staticallyAnalyzedProgram)
+                analyzeStaticPrecision(program);
+            pendingValidatedProgram = false;
             return executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
             globals.rollbackTo(checkpoint);
@@ -65,10 +77,14 @@ final class Interpreter {
     }
 
     void validate(List<Stmt> program) {
+        warnings.clear();
+        pendingValidatedProgram = false;
         Resolution resolution = Resolver.resolve(program, globals, effectCatalog);
         inference = ContractInference.analyze(program, resolution, embeddingCallables, effectCatalog);
         validateEffectAllowances(program, resolution);
         validateCompositionCompatibility(program, resolution);
+        analyzeStaticPrecision(program);
+        pendingValidatedProgram = true;
     }
 
     void defineEmbeddingValue(String name, java.util.function.Supplier<Value> supplier) {
@@ -91,6 +107,7 @@ final class Interpreter {
     }
 
     Value invokeEmbedding(Value.Callable callable, List<Value> arguments) {
+        warnings.clear();
         Environment.Checkpoint checkpoint = globals.checkpoint();
         try {
             Value result = callable;
@@ -263,11 +280,11 @@ final class Interpreter {
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
-        return executeBlock(statements, env, resolution, null);
+        return executeBlock(statements, env, resolution, null, null);
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution,
-                               TemplateContract resultTemplate) {
+                               TemplateContract resultTemplate, BuiltinContract resultFormat) {
         LinkedHashMap<String, Value.Field> exports = new LinkedHashMap<>();
         IdentityHashMap<FunctionDef, Value.Callable> functions = prepareDeclarations(statements, env, resolution);
         IdentityHashMap<Assign, UserContract> contractPlaceholders = prepareContractDeclarations(statements, env);
@@ -277,18 +294,28 @@ final class Interpreter {
             if (statement instanceof Assign(String name, boolean exported, ContractClause contracts,
                                             Expr value1, SourceSpan ignored)) {
                 Value value;
-                if (value1 instanceof CollectionLiteral collection
-                        && analyzeCollectionHoles(collection).indexes().isEmpty()) {
-                    TemplateContract template = expectedTemplate(contracts, env, resolution);
-                    if (template == null && !exported && statement == statements.getLast()) {
-                        template = resultTemplate;
-                    }
-                    CollectionShape shape = expectedCollectionShape(contracts, env, resolution);
-                    if (shape == CollectionShape.INFER && template != null && template.descriptor().root().named()) {
-                        shape = CollectionShape.DICTIONARY;
-                    }
-                    value = evaluateCollection(collection, env, resolution, shape, template);
-                } else value = eval(value1, env, null, resolution);
+                NumericPolicy previousPolicy = numericPolicy;
+                numericPolicy = numericPolicy(contracts, env, resolution, previousPolicy);
+                try {
+                    if (value1 instanceof CollectionLiteral collection
+                            && analyzeCollectionHoles(collection).indexes().isEmpty()) {
+                        TemplateContract template = expectedTemplate(contracts, env, resolution);
+                        if (template == null && !exported && statement == statements.getLast()) {
+                            template = resultTemplate;
+                        }
+                        CollectionShape shape = expectedCollectionShape(contracts, env, resolution);
+                        if (shape == CollectionShape.INFER && template != null && template.descriptor().root().named()) {
+                            shape = CollectionShape.DICTIONARY;
+                        }
+                        value = evaluateCollection(collection, env, resolution, shape, template);
+                    } else if (ungroup(value1) instanceof Literal(Value.Num number, SourceSpan span)) {
+                        value = contextualNumericLiteral(number, span,
+                                contracts == null && !exported && statement == statements.getLast()
+                                        ? resultFormat : expectedNumericFormat(contracts, env, resolution));
+                    } else value = eval(value1, env, null, resolution);
+                } finally {
+                    numericPolicy = previousPolicy;
+                }
                 ArrayList<ContractDescriptor> exportedContracts = exported ? new ArrayList<>() : null;
                 value = validateContracts(value, value1.span(), contracts, resolution, env,
                         "binding " + name, true, exportedContracts);
@@ -323,6 +350,9 @@ final class Interpreter {
                     last = evaluateCollection(collection, env, resolution,
                             resultTemplate.descriptor().root().named()
                                     ? CollectionShape.DICTIONARY : CollectionShape.KEYLESS, resultTemplate);
+                } else if (statement == statements.getLast() && resultFormat != null
+                        && ungroup(expression) instanceof Literal(Value.Num number, SourceSpan span)) {
+                    last = contextualNumericLiteral(number, span, resultFormat);
                 } else last = eval(expression, env, null, resolution);
             } else if (statement instanceof PrintLine line) {
                 last = eval(usesBuiltinPrint(line, env, resolution)
@@ -438,7 +468,11 @@ final class Interpreter {
                             Value checked = validateContracts(argument.value(), argument.span(),
                                     parameter.contracts(), resolution, env, "parameter " + parameter.name());
                             return new Value.Argument(checked, argument.span());
-                        }, index -> expectedTemplate(function.params().get(index).contracts(), env, resolution));
+                        }, index -> expectedTemplate(function.params().get(index).contracts(), env, resolution),
+                                index -> expectedNumericFormat(function.params().get(index).contracts(),
+                                        env, resolution),
+                                index -> numericPolicy(function.params().get(index).contracts(), env, resolution,
+                                        NumericPolicy.BROAD) == NumericPolicy.STRICT);
                 if (existing == null) env.initialize(entry.getKey(), value);
                 else env.replace(entry.getKey(), value);
                 functions.put(function, value);
@@ -469,8 +503,16 @@ final class Interpreter {
                 ownership.share(value);
                 parameters.define(function.params().get(i).name(), value);
             }
-            Value result = executeBlock(function.body(), new Environment(parameters), resolution,
-                    expectedTemplate(function.resultContracts(), env, resolution));
+            NumericPolicy previousPolicy = numericPolicy;
+            numericPolicy = numericPolicy(function.resultContracts(), env, resolution, NumericPolicy.BROAD);
+            Value result;
+            try {
+                result = executeBlock(function.body(), new Environment(parameters), resolution,
+                        expectedTemplate(function.resultContracts(), env, resolution),
+                        expectedNumericFormat(function.resultContracts(), env, resolution));
+            } finally {
+                numericPolicy = previousPolicy;
+            }
             return validateContracts(result, function.body().getLast().span(),
                     function.resultContracts(), resolution, env, "result of " + function.name(), false);
         }, refinementEligible, CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
@@ -498,7 +540,10 @@ final class Interpreter {
             Value checked = validateContracts(argument.value(), argument.span(), parameter.contracts(),
                     resolution, env, "parameter " + parameter.name());
             return new Value.Argument(checked, argument.span());
-        }, index -> expectedTemplate(lambda.params().get(index).contracts(), env, resolution));
+        }, index -> expectedTemplate(lambda.params().get(index).contracts(), env, resolution),
+                index -> expectedNumericFormat(lambda.params().get(index).contracts(), env, resolution),
+                index -> numericPolicy(lambda.params().get(index).contracts(), env, resolution,
+                        NumericPolicy.BROAD) == NumericPolicy.STRICT);
     }
 
     private record OverloadVariant(FunctionDef definition, Value.Callable function) {}
@@ -760,6 +805,8 @@ final class Interpreter {
     }
 
     private static List<CallableSignature> operatorSignatures(String operator) {
+        if (operator.equals("div")) return List.of(CallableSignature.operator(
+                List.of("Integer", "Integer"), "Integer"));
         if (operator.equals("+")) return List.of(
                 CallableSignature.operator(List.of("Number", "Number"), "Number"),
                 CallableSignature.operator(List.of("String", "String"), "String"),
@@ -813,6 +860,28 @@ final class Interpreter {
                 selected = candidate;
             }
             return selected;
+        }
+
+        BuiltinContract expectedNumericFormat() {
+            int position = 0;
+            while (arguments.containsKey(position)) position++;
+            BuiltinContract selected = null;
+            for (OverloadVariant variant : viable) {
+                BuiltinContract candidate = Interpreter.this.expectedNumericFormat(
+                        variantClause(variant, position), contractEnvironment, resolution);
+                if (candidate == null || selected != null && selected != candidate) return null;
+                selected = candidate;
+            }
+            return selected;
+        }
+
+        boolean strictNumeric() {
+            int position = 0;
+            while (arguments.containsKey(position)) position++;
+            int parameter = position;
+            return !viable.isEmpty() && viable.stream().allMatch(variant ->
+                    Interpreter.this.numericPolicy(variantClause(variant, parameter), contractEnvironment, resolution,
+                            NumericPolicy.BROAD) == NumericPolicy.STRICT);
         }
 
         private Value bind(int position, Value.Argument argument, SourceSpan callSpan) {
@@ -1409,7 +1478,18 @@ final class Interpreter {
         if (expr instanceof Unary(String operator1, Expr operand, SourceSpan ignored)) {
             Value value = evalInner(operand, env, resolution);
             return switch (operator1) {
-                case "-" -> finiteNumber(-number(value), "Numeric result is not finite");
+                case "-" -> {
+                    Value raw = underlying(value);
+                    if (!(raw instanceof Value.Num numeric)) {
+                        throw runtime(Diagnostic.Codes.EXPECTED_NUMBER, "Expected number, got: " + raw,
+                                operand.span());
+                    }
+                    java.math.BigInteger integer = NumericValues.integral(numeric);
+                    yield numeric.exactInteger() == null && numeric.value() == 0.0
+                            ? new Value.Num(-numeric.value())
+                            : integer != null ? new Value.Num(integer.negate())
+                            : finiteNumber(-numeric.value(), "Numeric result is not finite");
+                }
                 case "not" -> new Value.Bool(!truth(value));
                 default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR,
                         "Unknown unary operator: " + operator1);
@@ -1783,31 +1863,65 @@ final class Interpreter {
                             : concatenateText(rightArgument, callSpan);
                     yield new Value.Str(leftText + rightText);
                 }
-                yield finiteNumber(number(leftArgument) + number(rightArgument),
+                yield numericBinary(leftArgument, rightArgument, java.math.BigInteger::add,
+                        (a, b) -> a + b, callSpan);
+            }
+            case "-" -> numericBinary(leftArgument, rightArgument, java.math.BigInteger::subtract,
+                    (a, b) -> a - b, callSpan);
+            case "*" -> numericBinary(leftArgument, rightArgument, java.math.BigInteger::multiply,
+                    (a, b) -> a * b, callSpan);
+            case "/" -> {
+                Value.Num dividend = numeric(leftArgument);
+                Value.Num divisor = numeric(rightArgument);
+                if (NumericValues.compare(divisor, new Value.Num(0)) == 0) {
+                    throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero", rightArgument.span());
+                }
+                java.math.BigInteger a = NumericValues.integral(dividend);
+                java.math.BigInteger b = NumericValues.integral(divisor);
+                if (a != null && b != null) {
+                    java.math.BigInteger[] division = a.divideAndRemainder(b);
+                    if (division[1].signum() == 0) yield new Value.Num(division[0]);
+                    double rounded = NumericValues.quotientToDouble(a, b);
+                    Value.Num result = finiteNumber(rounded, "Numeric result is not finite", callSpan);
+                    if (new java.math.BigDecimal(rounded).multiply(new java.math.BigDecimal(b))
+                            .compareTo(new java.math.BigDecimal(a)) != 0) {
+                        reportImplicitPrecisionLoss(callSpan);
+                    }
+                    yield result;
+                }
+                yield finiteNumber(dividend.value() / divisor.value(),
                         "Numeric result is not finite", callSpan);
             }
-            case "-" -> finiteNumber(number(leftArgument) - number(rightArgument),
-                    "Numeric result is not finite", callSpan);
-            case "*" -> finiteNumber(number(leftArgument) * number(rightArgument),
-                    "Numeric result is not finite", callSpan);
-            case "/" -> {
-                double divisor = number(rightArgument);
-                if (divisor == 0.0) {
+            case "div" -> {
+                Value.Num dividend = numeric(leftArgument);
+                Value.Num divisor = numeric(rightArgument);
+                java.math.BigInteger a = NumericValues.integral(dividend);
+                java.math.BigInteger b = NumericValues.integral(divisor);
+                if (a == null || b == null) {
+                    throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "div operands must satisfy Integer", callSpan);
+                }
+                if (b.signum() == 0) {
                     throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero", rightArgument.span());
                 }
-                yield finiteNumber(number(leftArgument) / divisor, "Numeric result is not finite", callSpan);
+                yield new Value.Num(a.divide(b));
             }
             case "%" -> {
-                double divisor = number(rightArgument);
-                if (divisor == 0.0) {
+                Value.Num dividend = numeric(leftArgument);
+                Value.Num divisor = numeric(rightArgument);
+                if (NumericValues.compare(divisor, new Value.Num(0)) == 0) {
                     throw runtime(Diagnostic.Codes.DIVISION_BY_ZERO, "Division by zero", rightArgument.span());
                 }
-                yield finiteNumber(number(leftArgument) % divisor, "Numeric result is not finite", callSpan);
+                java.math.BigInteger a = NumericValues.integral(dividend);
+                java.math.BigInteger b = NumericValues.integral(divisor);
+                yield a != null && b != null ? new Value.Num(a.remainder(b))
+                        : finiteNumber(dividend.value() % divisor.value(),
+                        "Numeric result is not finite", callSpan);
             }
-            case ">" -> new Value.Bool(number(leftArgument) > number(rightArgument));
-            case ">=" -> new Value.Bool(number(leftArgument) >= number(rightArgument));
-            case "<" -> new Value.Bool(number(leftArgument) < number(rightArgument));
-            case "<=" -> new Value.Bool(number(leftArgument) <= number(rightArgument));
+            case ">" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) > 0);
+            case ">=" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) >= 0);
+            case "<" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) < 0);
+            case "<=" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) <= 0);
             case "==" -> new Value.Bool(ValueSemantics.equal(left, right, reflectionContext));
             case "!=" -> new Value.Bool(!ValueSemantics.equal(left, right, reflectionContext));
             default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR, "Unknown operator: " + op);
@@ -1822,17 +1936,24 @@ final class Interpreter {
                 "toString specialization must return a String", span);
     }
 
-    private double number(Value value) {
-        value = underlying(value);
-        if (value instanceof Value.Num(double value1)) return value1;
-        throw runtime(Diagnostic.Codes.EXPECTED_NUMBER, "Expected number, got: " + value);
-    }
-
-    private double number(Value.Argument argument) {
+    private Value.Num numeric(Value.Argument argument) {
         Value raw = underlying(argument.value());
-        if (raw instanceof Value.Num(double value)) return value;
+        if (raw instanceof Value.Num number) return number;
         throw runtime(Diagnostic.Codes.EXPECTED_NUMBER,
                 "Expected number, got: " + argument.value(), argument.span());
+    }
+
+    private Value.Num numericBinary(Value.Argument left, Value.Argument right,
+                                    java.util.function.BiFunction<java.math.BigInteger, java.math.BigInteger,
+                                            java.math.BigInteger> exact,
+                                    java.util.function.DoubleBinaryOperator floating, SourceSpan span) {
+        Value.Num a = numeric(left);
+        Value.Num b = numeric(right);
+        java.math.BigInteger ai = NumericValues.integral(a);
+        java.math.BigInteger bi = NumericValues.integral(b);
+        return ai != null && bi != null ? new Value.Num(exact.apply(ai, bi))
+                : finiteNumber(floating.applyAsDouble(a.value(), b.value()),
+                "Numeric result is not finite", span);
     }
 
     private Value.Num finiteNumber(double value, String message) {
@@ -1857,6 +1978,10 @@ final class Interpreter {
         for (BuiltinContract contract : BuiltinContract.values()) {
             builtins.define(contract.publicName(), new Value.ContractValue(contract));
         }
+        builtins.define("Int", new Value.ContractValue(BuiltinContract.INTEGER));
+        builtins.define("Byte", new Value.ContractValue(BuiltinContract.UINT8));
+        builtins.define("Float32", new Value.ContractValue(BuiltinContract.FLOAT));
+        builtins.define("Float64", new Value.ContractValue(BuiltinContract.DOUBLE));
         builtins.define("contract", locatedFunction("contract", List.of("bases"), (args, span) -> {
             Value argument = underlying(args.getFirst().value());
             List<ContractDescriptor> bases = new ArrayList<>();
@@ -1980,7 +2105,7 @@ final class Interpreter {
             }
         }));
         builtins.define("numberText", locatedFunction("numberText", List.of("number"), (args, ignored) ->
-                new Value.Str(new Value.Num(number(args.getFirst())).toString())));
+                new Value.Str(numeric(args.getFirst()).toString())));
 
         builtins.define("field", locatedFunction("field", List.of("key", "value"), (args, ignored) ->
                 new Value.Field(args.getFirst().value(), args.get(1).value())));
@@ -2519,7 +2644,7 @@ final class Interpreter {
                 || collection instanceof Value.Field
                 || collection instanceof Value.LazyCollection lazy
                 && lazy.resolvedShape() == Value.LazyCollection.Shape.KEYLESS) {
-            if (!(key instanceof Value.Num(double number)) || number != Math.rint(number)) {
+            if (!(key instanceof Value.Num numeric) || NumericValues.integral(numeric) == null) {
                 throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                         "Sequential Collection key must be an integer, got: " + key, span);
             }
@@ -2588,6 +2713,153 @@ final class Interpreter {
             selected = template;
         }
         return selected;
+    }
+
+    private BuiltinContract expectedNumericFormat(ContractClause clause, Environment env,
+                                                  Resolution resolution) {
+        BuiltinContract selected = null;
+        for (Resolution.ContractBinding reference : valueRequirements(resolution.clause(clause))) {
+            if (reference.inline() != null || !reference.arguments().isEmpty()) continue;
+            if (reference.name().matches("_[1-9][0-9]*")) continue;
+            Value resolved = underlying(reference.binding() == null ? globals.get(reference.name())
+                    : env.getResolved(reference.binding()));
+            if (!(resolved instanceof Value.ContractValue contract)) continue;
+            ContractDescriptor descriptor = contract.descriptor();
+            if (descriptor != BuiltinContract.FLOAT && descriptor != BuiltinContract.DOUBLE) continue;
+            if (selected != null && selected != descriptor) return null;
+            selected = (BuiltinContract) descriptor;
+        }
+        return selected;
+    }
+
+    private NumericPolicy numericPolicy(ContractClause clause, Environment env, Resolution resolution,
+                                        NumericPolicy fallback) {
+        boolean broad = false;
+        for (Resolution.ContractBinding reference : valueRequirements(resolution.clause(clause))) {
+            if (reference.inline() != null || !reference.arguments().isEmpty()
+                    || reference.name().matches("_[1-9][0-9]*")) continue;
+            Value resolved;
+            try {
+                resolved = underlying(reference.binding() == null ? globals.get(reference.name())
+                        : env.getResolved(reference.binding()));
+            } catch (LangException unavailable) {
+                continue;
+            }
+            BuiltinContract contract = resolved instanceof Value.ContractValue value
+                    && value.descriptor() instanceof BuiltinContract builtin ? builtin : null;
+            if (contract == BuiltinContract.NUMBER || contract == BuiltinContract.REAL) broad = true;
+            else if (contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL
+                    || contract == BuiltinContract.INT8 || contract == BuiltinContract.UINT8
+                    || contract == BuiltinContract.INT16 || contract == BuiltinContract.UINT16
+                    || contract == BuiltinContract.INT32 || contract == BuiltinContract.UINT32
+                    || contract == BuiltinContract.INT64 || contract == BuiltinContract.UINT64
+                    || contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE) {
+                return NumericPolicy.STRICT;
+            }
+        }
+        return broad ? NumericPolicy.BROAD : fallback;
+    }
+
+    /** Reports source-provable literal division once, before its dynamic evaluation. */
+    private void analyzeStaticPrecision(List<Stmt> program) {
+        staticallyAnalyzedProgram = null;
+        staticallyReportedPrecisionLosses.clear();
+        Map<String, BuiltinContract> aliases = new HashMap<>();
+        for (Stmt statement : program) {
+            if (statement instanceof Assign assign && assign.value() instanceof Name name) {
+                BuiltinContract contract = aliases.get(name.name());
+                if (contract == null) contract = BuiltinContract.named(name.name()).orElse(null);
+                if (contract != null) aliases.put(assign.name(), contract);
+            }
+        }
+        analyzeStaticPrecisionStatements(program, NumericPolicy.BROAD, aliases);
+        staticallyAnalyzedProgram = program;
+    }
+
+    private void analyzeStaticPrecisionStatements(List<Stmt> statements, NumericPolicy inherited,
+                                                  Map<String, BuiltinContract> aliases) {
+        for (Stmt statement : statements) {
+            if (statement instanceof Assign assign) {
+                analyzeStaticPrecisionExpression(assign.value(), staticNumericPolicy(assign.contracts(), inherited,
+                        aliases), assign.contracts());
+            } else if (statement instanceof FunctionDef function) {
+                analyzeStaticPrecisionStatements(function.body(),
+                        staticNumericPolicy(function.resultContracts(), NumericPolicy.BROAD, aliases), aliases);
+            } else if (statement instanceof ExprStmt expression) {
+                analyzeStaticPrecisionExpression(expression.expression(), inherited, null);
+            } else if (statement instanceof PrintLine line) {
+                analyzeStaticPrecisionExpression(line.builtinArgument(), inherited, null);
+            }
+        }
+    }
+
+    private NumericPolicy staticNumericPolicy(ContractClause clause, NumericPolicy fallback,
+                                              Map<String, BuiltinContract> aliases) {
+        if (clause == null) return fallback;
+        boolean broad = false;
+        for (ContractName name : clause.names()) {
+            if (name.inline() != null || !name.arguments().isEmpty()) continue;
+            BuiltinContract contract = aliases.get(name.name());
+            if (contract == null) contract = BuiltinContract.named(name.name()).orElse(null);
+            if (contract == BuiltinContract.NUMBER || contract == BuiltinContract.REAL) broad = true;
+            else if (contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL
+                    || contract == BuiltinContract.INT8 || contract == BuiltinContract.UINT8
+                    || contract == BuiltinContract.INT16 || contract == BuiltinContract.UINT16
+                    || contract == BuiltinContract.INT32 || contract == BuiltinContract.UINT32
+                    || contract == BuiltinContract.INT64 || contract == BuiltinContract.UINT64
+                    || contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE)
+                return NumericPolicy.STRICT;
+        }
+        return broad ? NumericPolicy.BROAD : fallback;
+    }
+
+    private void analyzeStaticPrecisionExpression(Expr expression, NumericPolicy policy,
+                                                  ContractClause context) {
+        if (!(ungroup(expression) instanceof Binary binary) || !binary.operator().equals("/")
+                || !(ungroup(binary.left()) instanceof Literal(Value.Num left, SourceSpan ignoredLeft))
+                || !(ungroup(binary.right()) instanceof Literal(Value.Num right, SourceSpan ignoredRight))) return;
+        java.math.BigInteger numerator = NumericValues.integral(left);
+        java.math.BigInteger denominator = NumericValues.integral(right);
+        if (numerator == null || denominator == null || denominator.signum() == 0
+                || numerator.remainder(denominator).signum() == 0) return;
+        double rounded = NumericValues.quotientToDouble(numerator, denominator);
+        if (!Double.isFinite(rounded) || new java.math.BigDecimal(rounded)
+                .multiply(new java.math.BigDecimal(denominator))
+                .compareTo(new java.math.BigDecimal(numerator)) == 0) return;
+        List<Diagnostic.Related> related = context == null ? List.of()
+                : List.of(new Diagnostic.Related("Numeric result requirement", context.span()));
+        Diagnostic diagnostic = new Diagnostic(Diagnostic.Phase.SEMANTIC,
+                Diagnostic.Codes.IMPLICIT_PRECISION_LOSS,
+                "Implicit numeric precision loss", binary.span(), related);
+        if (policy == NumericPolicy.STRICT) throw new LangException(diagnostic);
+        staticallyReportedPrecisionLosses.add(binary.span());
+        warnings.add(diagnostic);
+    }
+
+    private void reportImplicitPrecisionLoss(SourceSpan span) {
+        if (staticallyReportedPrecisionLosses.contains(span)) return;
+        Diagnostic diagnostic = new Diagnostic(Diagnostic.Phase.RUNTIME,
+                Diagnostic.Codes.IMPLICIT_PRECISION_LOSS,
+                "Implicit numeric precision loss", span);
+        if (numericPolicy == NumericPolicy.STRICT) throw new LangException(diagnostic);
+        warnings.add(diagnostic);
+    }
+
+    private Value.Num contextualNumericLiteral(Value.Num number, SourceSpan span,
+                                               BuiltinContract format) {
+        if (format == null || number.literalText() == null) return number;
+        java.math.BigDecimal source = new java.math.BigDecimal(number.literalText());
+        double rounded = format == BuiltinContract.FLOAT ? source.floatValue() : source.doubleValue();
+        if (!Double.isFinite(rounded)) {
+            throw runtime(Diagnostic.Codes.NON_FINITE_RESULT,
+                    "Numeric result is not finite", span);
+        }
+        return new Value.Num(rounded);
+    }
+
+    private static Expr ungroup(Expr expression) {
+        while (expression instanceof Group group) expression = group.expression();
+        return expression;
     }
 
     private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
@@ -2753,7 +3025,7 @@ final class Interpreter {
     private static int compareDictionaryKeys(Value left, Value right) {
         left = ValueSemantics.underlying(left);
         right = ValueSemantics.underlying(right);
-        if (left instanceof Value.Num(double a) && right instanceof Value.Num(double b)) return Double.compare(a, b);
+        if (left instanceof Value.Num a && right instanceof Value.Num b) return NumericValues.compare(a, b);
         if (left instanceof Value.Str(String a) && right instanceof Value.Str(String b)) {
             return CollectionRuntime.FIELD_ORDER.compare(a, b);
         }
@@ -2793,12 +3065,8 @@ final class Interpreter {
     }
 
     private OptionalInt index(Value.Argument argument) {
-        Value raw = underlying(argument.value());
-        if (!(raw instanceof Value.Num(double number)) || !Double.isFinite(number)
-                || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) {
-            return OptionalInt.empty();
-        }
-        return OptionalInt.of((int) number);
+        int index = NumericValues.nonNegativeInt(argument.value());
+        return index < 0 ? OptionalInt.empty() : OptionalInt.of(index);
     }
 
     private String dictionaryKey(Value.Argument argument) {
@@ -2836,14 +3104,29 @@ final class Interpreter {
 
     private Value argumentValue(Expr argument, Value.Callable callable,
                                 Environment env, Resolution resolution) {
-        if (!(argument instanceof CollectionLiteral literal)) return evalInner(argument, env, resolution);
-        if (!analyzeCollectionHoles(literal).indexes().isEmpty()) return eval(argument, env, null, resolution);
-        TemplateContract template = callable instanceof Value.ContractedCallable contracted
-                ? contracted.expectedTemplate() : callable instanceof OverloadCallable overload
-                ? overload.expectedTemplate() : null;
-        CollectionShape shape = template != null && template.descriptor().root().named()
-                ? CollectionShape.DICTIONARY : CollectionShape.INFER;
-        return evaluateCollection(literal, env, resolution, shape, template);
+        NumericPolicy previousPolicy = numericPolicy;
+        if (callable instanceof Value.ContractedCallable contracted && contracted.strictNumeric()
+                || callable instanceof OverloadCallable overload && overload.strictNumeric()) {
+            numericPolicy = NumericPolicy.STRICT;
+        }
+        try {
+            if (ungroup(argument) instanceof Literal(Value.Num number, SourceSpan span)) {
+                BuiltinContract format = callable instanceof Value.ContractedCallable contracted
+                        ? contracted.expectedNumericFormat() : callable instanceof OverloadCallable overload
+                        ? overload.expectedNumericFormat() : null;
+                return contextualNumericLiteral(number, span, format);
+            }
+            if (!(argument instanceof CollectionLiteral literal)) return evalInner(argument, env, resolution);
+            if (!analyzeCollectionHoles(literal).indexes().isEmpty()) return eval(argument, env, null, resolution);
+            TemplateContract template = callable instanceof Value.ContractedCallable contracted
+                    ? contracted.expectedTemplate() : callable instanceof OverloadCallable overload
+                    ? overload.expectedTemplate() : null;
+            CollectionShape shape = template != null && template.descriptor().root().named()
+                    ? CollectionShape.DICTIONARY : CollectionShape.INFER;
+            return evaluateCollection(literal, env, resolution, shape, template);
+        } finally {
+            numericPolicy = previousPolicy;
+        }
     }
 
     private Value reflect(Value value) {

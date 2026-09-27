@@ -73,6 +73,9 @@ public final class Main {
         }
         try {
             interpreter.execute(new Parser(source).parseProgram());
+            for (Diagnostic warning : interpreter.warnings()) {
+                error.println("Warning: " + warning.render());
+            }
         } catch (LangException e) {
             error.println("Error: " + e.getMessage());
             return 1;

@@ -59,6 +59,9 @@ final class JLineRepl {
             if (line.isBlank()) continue;
             try {
                 interpreter.execute(new Parser(line).parseProgram());
+                for (Diagnostic warning : interpreter.warnings()) {
+                    error.println("Warning: " + warning.render());
+                }
                 output.flush();
             } catch (LangException languageError) {
                 error.println("Error: " + languageError.getMessage());

@@ -1089,6 +1089,14 @@ final class Parser {
         }
 
         private Expr numberLiteral(Token token) {
+            if (!token.text().contains(".")) {
+                try {
+                    return new Literal(new Value.Num(new java.math.BigInteger(token.text()), token.text()), token.span());
+                } catch (NumberFormatException ignored) {
+                    throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_NUMBER,
+                            "Invalid number literal", token.span());
+                }
+            }
             final double value;
             try {
                 value = Double.parseDouble(token.text());
@@ -1100,7 +1108,7 @@ final class Parser {
                 throw new LangException(Diagnostic.Phase.PARSER, Diagnostic.Codes.PARSE_INVALID_NUMBER,
                         "Number literal is outside the finite range", token.span());
             }
-            return new Literal(new Value.Num(value), token.span());
+            return new Literal(new Value.Num(value, token.text()), token.span());
         }
 
         private boolean canStartAtom(Token token) {

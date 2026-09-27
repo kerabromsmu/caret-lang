@@ -73,6 +73,10 @@ public final class EmbeddingBridge {
         return diagnostic == null ? Optional.empty() : Optional.of(externalDiagnostic(diagnostic, sourceName));
     }
 
+    public List<CaretDiagnostic> warnings(String sourceName) {
+        return interpreter.warnings().stream().map(warning -> externalDiagnostic(warning, sourceName)).toList();
+    }
+
     public static boolean isExpectedFailure(Throwable failure) { return failure instanceof LangException; }
 
     private static CaretDiagnostic externalDiagnostic(Diagnostic diagnostic, String sourceName) {
@@ -148,7 +152,10 @@ public final class EmbeddingBridge {
     private CaretValue external(Value original) {
         Value value = ValueSemantics.underlying(original);
         return switch (value) {
-            case Value.Num number -> new CaretValue.NumberValue(number.value());
+            case Value.Num number -> number.exactInteger() != null
+                    && number.exactInteger().abs().compareTo(java.math.BigInteger.ONE.shiftLeft(53)) > 0
+                    ? new CaretValue.ExactIntegerValue(number.exactInteger())
+                    : new CaretValue.NumberValue(number.value());
             case Value.Str text -> new CaretValue.TextValue(text.value());
             case Value.Bool bool -> new CaretValue.BooleanValue(bool.value());
             case Value.Null ignored -> CaretValue.NullValue.INSTANCE;
@@ -202,6 +209,7 @@ public final class EmbeddingBridge {
         Objects.requireNonNull(value, "Caret value");
         return switch (value) {
             case CaretValue.NumberValue number -> new Value.Num(number.value());
+            case CaretValue.ExactIntegerValue number -> new Value.Num(number.value());
             case CaretValue.TextValue text -> new Value.Str(text.value());
             case CaretValue.BooleanValue bool -> new Value.Bool(bool.value());
             case CaretValue.NullValue ignored -> Value.Null.INSTANCE;

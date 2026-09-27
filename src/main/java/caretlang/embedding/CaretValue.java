@@ -5,7 +5,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.TextValue,
+public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.ExactIntegerValue,
+        CaretValue.TextValue,
         CaretValue.BooleanValue, CaretValue.NullValue, CaretValue.MissingValue, CaretValue.FieldValue,
         CaretValue.SequenceValue, CaretValue.CollectionValue, CaretCallable {
 
@@ -13,6 +14,9 @@ public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.Te
         public NumberValue {
             if (!Double.isFinite(value)) throw new IllegalArgumentException("Caret numbers must be finite");
         }
+    }
+    record ExactIntegerValue(java.math.BigInteger value) implements CaretValue {
+        public ExactIntegerValue { Objects.requireNonNull(value); }
     }
     record TextValue(String value) implements CaretValue {
         public TextValue { Objects.requireNonNull(value); }
@@ -37,6 +41,7 @@ public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.Te
     }
 
     static NumberValue number(double value) { return new NumberValue(value); }
+    static ExactIntegerValue integer(java.math.BigInteger value) { return new ExactIntegerValue(value); }
     static TextValue text(String value) { return new TextValue(value); }
     static BooleanValue bool(boolean value) { return new BooleanValue(value); }
     static NullValue nullValue() { return NullValue.INSTANCE; }

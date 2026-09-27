@@ -392,6 +392,15 @@ final class ContractInference {
             };
         }
         EnumSet<BuiltinContract> declaredResult = clause(function.resultContracts());
+        if ((declaredResult.contains(BuiltinContract.FLOAT) || declaredResult.contains(BuiltinContract.DOUBLE)
+                || declaredResult.contains(BuiltinContract.INTEGER)
+                || declaredResult.contains(BuiltinContract.NATURAL))
+                && function.body().getLast() instanceof ExprStmt line
+                && (line.expression() instanceof Literal(Value.Num ignored, SourceSpan ignoredSpan)
+                || line.expression() instanceof Binary binary
+                && Set.of("+", "-", "*", "/", "%", "div").contains(binary.operator()))) {
+            result = Shape.generic();
+        }
         constrain(result, declaredResult, requirements, function.span());
         EnumSet<BuiltinContract> inferredGuarantees = result.guarantees().clone();
         EnumSet<BuiltinContract> guarantees = inferredGuarantees.clone();
@@ -427,7 +436,10 @@ final class ContractInference {
                 yield switch (unary.operator()) {
                     case "-" -> {
                         constrain(operand, EnumSet.of(BuiltinContract.NUMBER), requirements, unary.operand().span());
-                        yield Shape.concrete(BuiltinContract.NUMBER);
+                        yield operand.guarantees().stream().anyMatch(contract ->
+                                ContractRelations.implies(contract, BuiltinContract.INTEGER))
+                                ? Shape.concrete(BuiltinContract.INTEGER)
+                                : Shape.concrete(BuiltinContract.NUMBER);
                     }
                     case "not" -> {
                         requireTruth(operand, unary.operand().span());
@@ -501,6 +513,11 @@ final class ContractInference {
         Shape right = expression(binary.right(), parameters, locals, requirements, visible);
         return switch (binary.operator()) {
             case "+" -> plus(left, right);
+            case "div" -> {
+                constrain(left, EnumSet.of(BuiltinContract.INTEGER), requirements, binary.left().span());
+                constrain(right, EnumSet.of(BuiltinContract.INTEGER), requirements, binary.right().span());
+                yield Shape.concrete(BuiltinContract.INTEGER);
+            }
             case "-", "*", "/", "%", "<", "<=", ">", ">=" -> {
                 constrain(left, EnumSet.of(BuiltinContract.NUMBER), requirements, binary.left().span());
                 constrain(right, EnumSet.of(BuiltinContract.NUMBER), requirements, binary.right().span());
@@ -524,8 +541,10 @@ final class ContractInference {
                 || right.guarantees().contains(BuiltinContract.STRING)) {
             return Shape.concrete(BuiltinContract.STRING);
         }
-        if (left.guarantees().contains(BuiltinContract.NUMBER)
-                && right.guarantees().contains(BuiltinContract.NUMBER)) {
+        if (left.guarantees().stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.NUMBER))
+                && right.guarantees().stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.NUMBER))) {
             return Shape.concrete(BuiltinContract.NUMBER);
         }
         // `+` is relational: an unresolved operand may be Number or String. Do not invent a
@@ -577,6 +596,16 @@ final class ContractInference {
         ArrayList<Shape> shapes = new ArrayList<>();
         for (int i = 0; i < arguments.size(); i++) {
             Shape shape = expression(arguments.get(i), parameters, locals, requirements, visible);
+            Expr supplied = ungroup(arguments.get(i));
+            if ((supplied instanceof Literal(Value.Num ignored, SourceSpan ignoredSpan)
+                    || supplied instanceof Binary binary
+                    && Set.of("+", "-", "*", "/", "%", "div").contains(binary.operator()))
+                    && i < called.parameterRequirements().size()
+                    && called.parameterRequirements().get(i).stream().anyMatch(contract ->
+                    contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE
+                            || contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL)) {
+                shape = Shape.generic();
+            }
             shapes.add(shape);
             if (i < called.parameterRequirements().size()) {
                 constrain(shape, called.parameterRequirements().get(i), requirements, arguments.get(i).span());
@@ -595,6 +624,13 @@ final class ContractInference {
     }
 
     private static Shape literal(Value value) {
+        if (value instanceof Value.Num number) {
+            if (number.exactInteger() != null) {
+                return Shape.concrete(number.exactInteger().signum() >= 0
+                        ? BuiltinContract.NATURAL : BuiltinContract.INTEGER);
+            }
+            return Shape.concrete(BuiltinContract.DOUBLE);
+        }
         return switch (ValueKind.of(value)) {
             case NUMBER -> Shape.concrete(BuiltinContract.NUMBER);
             case STRING -> Shape.concrete(BuiltinContract.STRING);
@@ -1207,6 +1243,18 @@ final class ContractInference {
         if (assign.value() instanceof CollectionLiteral && declared.stream().anyMatch(contract ->
                 contract == BuiltinContract.SEQUENCE || contract == BuiltinContract.DICTIONARY
                         || contract == BuiltinContract.SET || contract == BuiltinContract.COLLECTION)) {
+            return Shape.generic();
+        }
+        boolean numericTarget = declared.stream().anyMatch(contract -> contract == BuiltinContract.REAL
+                || contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL
+                || contract == BuiltinContract.INT8 || contract == BuiltinContract.UINT8
+                || contract == BuiltinContract.INT16 || contract == BuiltinContract.UINT16
+                || contract == BuiltinContract.INT32 || contract == BuiltinContract.UINT32
+                || contract == BuiltinContract.INT64 || contract == BuiltinContract.UINT64
+                || contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE);
+        if (numericTarget && (ungroup(assign.value()) instanceof Literal(Value.Num ignored, SourceSpan ignoredSpan)
+                || ungroup(assign.value()) instanceof Binary binary && Set.of("+", "-", "*", "/", "%", "div")
+                .contains(binary.operator()))) {
             return Shape.generic();
         }
         return expression(assign.value(), parameters, locals, requirements, visible);

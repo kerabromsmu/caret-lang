@@ -92,6 +92,9 @@ diff -u examples/features/collection_constructors.expected "$CARET_TEST_TMP/coll
 "$CARET_LAUNCHER" examples/features/templates.caret > "$CARET_TEST_TMP/templates-output.txt"
 diff -u examples/features/templates.expected "$CARET_TEST_TMP/templates-output.txt"
 
+"$CARET_LAUNCHER" examples/features/numeric_foundations.caret > "$CARET_TEST_TMP/numeric-foundations-output.txt"
+diff -u examples/features/numeric_foundations.expected "$CARET_TEST_TMP/numeric-foundations-output.txt"
+
 "$CARET_LAUNCHER" examples/features/error_template.caret > "$CARET_TEST_TMP/error-template-output.txt"
 diff -u examples/features/error_template.expected "$CARET_TEST_TMP/error-template-output.txt"
 
@@ -321,6 +324,7 @@ expect_failure examples/errors/incompatible_declared_inference.caret unused
 expect_failure examples/errors/contract_derivation_cycle.caret unused
 expect_failure examples/errors/template_invalid_constructor.caret unused
 expect_failure examples/errors/template_noncomparable_fixed.caret unused
+expect_failure examples/errors/precision_loss_strict.caret unused
 expect_failure examples/errors/template_missing_required.caret unused
 expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused

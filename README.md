@@ -320,11 +320,12 @@ shadows this builtin-only grouping and follows ordinary application rules.
 
 ## Current limitations
 
-The approved [Phase 4 numeric and packed design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
-also remains unimplemented. It adds exact arbitrary-precision integers, signed/unsigned formats
-through 64 bits, upgrades the current `Natural` size predicate to that exact numeric foundation,
-adds `Float`/`Double`, true `/` alongside truncating integer `div`, and precision
-warnings or errors according to explicit result requirements. Planned `(Contract) expression`
+The [Phase 4 numeric foundation](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+now provides exact arbitrary-precision integers, signed/unsigned formats through 64 bits,
+value-based `Natural`/`Integer`/`Real`/`Number` domains, `Float`/`Double`, true `/` alongside
+truncating integer `div`, and precision warnings or errors according to result requirements.
+The packed-layout portion of the [approved design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
+remains planned. Planned `(Contract) expression`
 converts a value; declarations and directly contracted holes remain checks. Packed storage will
 cover finite positional sequences of fixed-format scalars or fixed-size templates, preserving
 template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
@@ -356,7 +357,7 @@ template constructor/predicate invocation, and callable `eager` forms are deferr
   analysis are implemented, including the read-only `caret inspect` report;
   nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
   implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
-- Additional contract-selected collection representations, formats,
+- Additional contract-selected collection representations and formats,
   cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,

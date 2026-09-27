@@ -459,7 +459,7 @@ Do not claim the new protocol implemented based on tests of legacy Sequence/Dict
 ## Phase 4 packed layouts (planned)
 
 This approved design resolves the packed-storage decisions for issues #77 and #78. Exact numeric
-foundations (#82) and explicit contract conversion (#83) are separate prerequisite implementation tasks.
+foundations (#82) are implemented; explicit contract conversion (#83) is the remaining prerequisite.
 Nothing in this section claims existing packed runtime support. It takes precedence over less
 specific packed illustrations later in this document. Packed storage remains a Phase 4 completion
 gate; SIMD execution, formats, and native buffer APIs remain later work.
@@ -475,7 +475,7 @@ retains its contextual-empty exception; a selected packed empty retains `T` and 
 
 Supported scalar layouts are `Int8`/`UInt8` (one byte), `Int16`/`UInt16` (two), `Int32`/`UInt32`
 (four), `Int64`/`UInt64` (eight), `Float` (four), `Double` (eight), and `Boolean` (one byte, 0 or 1).
-The [numeric contracts](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-planned)
+The [numeric contracts](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-implemented)
 own their ranges, membership, and aliases. `Byte` selects UInt8, `Float32` selects Float, and
 `Float64` selects Double. `Int` means format-independent Integer and supplies no packed layout.
 

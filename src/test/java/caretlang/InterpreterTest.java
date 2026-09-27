@@ -14,6 +14,210 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void exactIntegerDomainsArithmeticAndContextualFloatAreValueBased() {
+        assertEquals("18446744073709551615\ntrue\nfalse\nfalse\ntrue\n2\n-2\n2.5\n",
+                execute("""
+                        maximum = 18446744073709551615
+                        print maximum
+                        print UInt64 maximum
+                        print UInt64 (maximum + 1)
+                        print Float 0.1
+                        (Float) selected = 0.1
+                        print Float selected
+                        print 5 div 2
+                        print (-7) div 3
+                        print 5 / 2
+                        """));
+    }
+
+    @Test
+    void broadDivisionReportsPrecisionWarningAndStrictResultRejectsLoss() {
+        Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        interpreter.execute(new Parser("(Number) ratio = 1 / 3").parseProgram());
+        assertEquals(1, interpreter.warnings().size());
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, interpreter.warnings().getFirst().code());
+        assertEquals(1, interpreter.warnings().getFirst().primarySpan().start().line());
+
+        LangException strict = assertThrows(LangException.class,
+                () -> execute("(Double) ratio = 1 / 3"));
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, strict.diagnostic().code());
+        LangException result = assertThrows(LangException.class, () -> execute("""
+                (Double) divide ignored = 1 / 3
+                divide 0
+                """));
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, result.diagnostic().code());
+        LangException parameter = assertThrows(LangException.class, () -> execute("""
+                identity (Double) value = value
+                identity (1 / 3)
+                """));
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, parameter.diagnostic().code());
+    }
+
+    @Test
+    void literalPrecisionLossIsReportedAtAnalysisOnce() {
+        Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        List<Ast.Stmt> program = new Parser("(Number) ratio = 1 / 3").parseProgram();
+        interpreter.validate(program);
+        assertEquals(1, interpreter.warnings().size());
+        Diagnostic warning = interpreter.warnings().getFirst();
+        assertEquals(Diagnostic.Phase.SEMANTIC, warning.phase());
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, warning.code());
+        assertEquals(1, warning.primarySpan().start().line());
+        assertEquals(18, warning.primarySpan().start().column());
+        interpreter.execute(program);
+        assertTrue(interpreter.warnings().isEmpty());
+
+        List<Ast.Stmt> repeatable = new Parser("print 1 / 3").parseProgram();
+        interpreter.execute(repeatable);
+        assertEquals(1, interpreter.warnings().size());
+        interpreter.execute(repeatable);
+        assertEquals(1, interpreter.warnings().size());
+    }
+
+    @Test
+    void numericPolicyFollowsContractAliasesAndNarrowedOverloads() {
+        Interpreter broad = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        broad.execute(new Parser("MyNumber = Number\n(MyNumber) ratio = 1 / 3").parseProgram());
+        assertEquals(1, broad.warnings().size());
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, broad.warnings().getFirst().code());
+
+        LangException overload = assertThrows(LangException.class, () -> execute("""
+                choose (Int8) selector (Double) value = value
+                choose (String) selector (Double) value = value
+                choose 1 (1 / 3)
+                """));
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, overload.diagnostic().code());
+        assertEquals(3, overload.diagnostic().primarySpan().start().line());
+    }
+
+    @Test
+    void knownNumericParameterAndResultContextsSelectLiteralFormats() {
+        assertEquals("true\ntrue\ntrue\n", execute("""
+                identity (Float) value = value
+                (Float) make ignored = 0.1
+                (Float) grouped = (0.1)
+                print Float (identity 0.1)
+                print Float (make 0)
+                print Float grouped
+                """));
+    }
+
+    @Test
+    void integerDivisionRetainsOperatorPrecedenceAliasesAndHoles() {
+        assertEquals("5\n-2\n-2\n2\n3\n5\n", execute("""
+                print 10 div 3 + 2
+                print (-7) div 3
+                print 7 div (-3)
+                print div 7 3
+                quotient = div
+                print quotient 10 3
+                halves = div _ 2
+                print halves 10
+                """));
+        LangException zero = assertThrows(LangException.class, () -> execute("print 3 div 0"));
+        assertEquals(Diagnostic.Codes.DIVISION_BY_ZERO, zero.diagnostic().code());
+    }
+
+    @Test
+    void exactRemainderAndTrueDivisionCoverSignsAndSignedZero() {
+        assertEquals("-1\n1\n2\n-2\n-3.5\n2\ntrue\ntrue\n", execute("""
+                print (-7) % 3
+                print 7 % (-3)
+                print (-7) div (-3)
+                print 7 div (-3)
+                print (-7) / 2
+                print 6 / 3
+                print (-0.0) == 0
+                print Float (-0.0)
+                """));
+    }
+
+    @Test
+    void allConcreteIntegerFormatsRespectExactAdjacentBoundaries() {
+        StringBuilder program = new StringBuilder();
+        StringBuilder expected = new StringBuilder();
+        for (int width : List.of(8, 16, 32, 64)) {
+            java.math.BigInteger signedMin = java.math.BigInteger.ONE.shiftLeft(width - 1).negate();
+            java.math.BigInteger signedMax = java.math.BigInteger.ONE.shiftLeft(width - 1)
+                    .subtract(java.math.BigInteger.ONE);
+            java.math.BigInteger unsignedMax = java.math.BigInteger.ONE.shiftLeft(width)
+                    .subtract(java.math.BigInteger.ONE);
+            String signed = "Int" + width;
+            String unsigned = "UInt" + width;
+            program.append("print ").append(signed).append(" (").append(signedMin).append(")\n")
+                    .append("print ").append(signed).append(' ').append(signedMax).append('\n')
+                    .append("print ").append(signed).append(" 0\n")
+                    .append("print ").append(signed).append(" (-1)\n")
+                    .append("print ").append(signed).append(" (").append(signedMin.subtract(java.math.BigInteger.ONE))
+                    .append(")\n")
+                    .append("print ").append(signed).append(' ').append(signedMax.add(java.math.BigInteger.ONE))
+                    .append('\n')
+                    .append("print ").append(unsigned).append(" 0\n")
+                    .append("print ").append(unsigned).append(' ').append(unsignedMax).append('\n')
+                    .append("print ").append(unsigned).append(" (-1)\n")
+                    .append("print ").append(unsigned).append(' ').append(unsignedMax.add(java.math.BigInteger.ONE))
+                    .append('\n');
+            expected.append("true\ntrue\ntrue\ntrue\nfalse\nfalse\ntrue\ntrue\nfalse\nfalse\n");
+        }
+        assertEquals(expected.toString(), execute(program.toString()));
+    }
+
+    @Test
+    void floatingRepresentabilityOverlapsExactIntegerDomains() {
+        assertEquals("true\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\n", execute("""
+                print Float 16777216
+                print Float 16777217
+                print Double 9007199254740992
+                print Double 9007199254740993
+                print Integer 7.0
+                print Integer 7.5
+                print Int == Integer
+                """));
+    }
+
+    @Test
+    void contextualFloatRoundsFromSourceDigitsIncludingTiesAndSubnormals() {
+        String subnormal = java.math.BigDecimal.ONE.divide(
+                java.math.BigDecimal.valueOf(2).pow(149)).toPlainString();
+        String floatMaximum = new java.math.BigDecimal((double) Float.MAX_VALUE).toPlainString();
+        String doubleMaximum = new java.math.BigDecimal(Double.MAX_VALUE).toBigIntegerExact().toString();
+        assertEquals("true\ntrue\ntrue\ntrue\ntrue\n", execute("""
+                (Float) tied = 1.000000059604644775390625
+                (Float) above = 1.000000059604644775390626
+                (Float) tiny = %s
+                (Float) largestFloat = %s
+                (Double) largestDouble = %s
+                print tied == 1
+                print above > 1
+                print tiny > 0
+                print Float largestFloat
+                print Double largestDouble
+                """.formatted(subnormal, floatMaximum, doubleMaximum)));
+        LangException overflow = assertThrows(LangException.class, () -> execute("""
+                (Float) overflow = 10000000000000000000000000000000000000000.0
+                """));
+        assertEquals(Diagnostic.Codes.NON_FINITE_RESULT, overflow.diagnostic().code());
+    }
+
+    @Test
+    void contextualDoubleRoundsWholeNumberSourceAndAliasesKeepStrictPolicy() {
+        assertEquals("true\ntrue\n", execute("""
+                MyDouble = Double
+                (MyDouble) rounded = 9007199254740993
+                print rounded == 9007199254740992
+                print Double rounded
+                """));
+        LangException strict = assertThrows(LangException.class, () -> execute("""
+                MyDouble = Double
+                (MyDouble) ratio = 1 / 3
+                """));
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, strict.diagnostic().code());
+        assertEquals(2, strict.diagnostic().primarySpan().start().line());
+        LangException invalid = assertThrows(LangException.class, () -> execute("print 1.5 div 1"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, invalid.diagnostic().code());
+    }
+
+    @Test
     void contextualNamedTemplateBindingCompletesOnlyDirectMissingModifiers() {
         assertEquals("~\ntrue\ntrue\nfalse\n", execute("""
                 Person = template [^name = (String) _ ^phone = (String~) _ ^alias = (String?~) _]
@@ -630,8 +834,10 @@ final class InterpreterTest {
         assertEquals(1, zero.diagnostic().primarySpan().start().line());
 
         String huge = "9".repeat(200);
+        assertEquals(new java.math.BigInteger(huge).multiply(new java.math.BigInteger(huge)) + "\n",
+                execute("print " + huge + " * " + huge));
         LangException nonFinite = assertThrows(LangException.class,
-                () -> execute("print " + huge + " * " + huge));
+                () -> execute("print " + "9".repeat(400) + " / 7"));
         assertEquals(Diagnostic.Codes.NON_FINITE_RESULT, nonFinite.diagnostic().code());
     }
 

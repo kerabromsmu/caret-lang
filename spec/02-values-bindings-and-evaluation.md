@@ -57,14 +57,14 @@ Null and missing are separate runtime values.
 
 Number literals start with a digit and may contain at most one decimal point. Malformed number
 literals are reported as language errors rather than leaking a Java numeric-conversion exception.
-Numbers must remain finite. Literals outside the finite range and arithmetic producing a non-finite
-result are errors. Division and remainder by zero are errors.
+Floating-point numbers must remain finite. Floating literals outside the selected finite range
+and floating arithmetic producing a non-finite result are errors; whole-number literals have no
+fixed upper bound. Division and remainder by zero are errors.
 
-### Phase 4 numeric values and arithmetic (planned)
+### Phase 4 numeric values and arithmetic (implemented)
 
-The following approved design extends the current finite-`double` prototype. It is not implemented
-by the existing Number tests. Numeric contract membership is owned by
-[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-planned).
+The following design is implemented by the interpreter. Numeric contract membership is owned by
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-implemented).
 
 `Number` prescribes no storage format. Integer values support arbitrary precision, including every
 value in the signed and unsigned 64-bit domains. A runtime must not pass exact integers through
@@ -74,7 +74,6 @@ Storage choice is separate from the mathematical value and its public numeric co
 Whole-number tokens without a selecting context produce exact integers. Decimal tokens default to
 `Double`. An expected concrete numeric format can instead select the literal representation:
 
-<!-- caret-example: planned -->
 ```caret
 count = 123456789012345678901234567890  // exact integer
 ratio = 0.1                           // Double
@@ -104,7 +103,7 @@ the quotient, rather than overflowing a floating-point conversion of its integer
 An arithmetic result does not inherit an operand's fixed-width constraint; explicit result
 requirements validate it. In particular, adding `255` and `1` produces `256`, which fails `UInt8`.
 
-### Precision requirements and warnings (planned)
+### Precision requirements and warnings (implemented)
 
 An implicit conversion that changes a numeric value is a precision loss. In a broad `Number` or
 `Real` result context it warns and continues with the rounded value. Under an explicit concrete
@@ -318,7 +317,7 @@ implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` 
 of exposing JVM stack exhaustion.
 
 The initial operator matrix records this implemented runtime behavior. The explicitly planned
-[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-planned) specifies the changes
+[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-implemented) specifies the changes
 for exact integers, concrete formats, and `div`; it does not claim current runtime support.
 
 The self-interpreter may represent successful and failed operations as named result collections. Its

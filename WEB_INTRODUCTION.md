@@ -128,29 +128,33 @@ missing still requires the field to be written in the literal. Membership and ex
 of an established Collection never add fields, and omission always supplies missing rather than
 null.
 
-### Planned numbers, conversions, and packed data
+### Exact numbers; planned conversions and packed data
 
-The current protocol provides `Natural` as the non-negative integer predicate for collection sizes.
-The approved numeric revision makes `Number`, `Real`, `Integer`, and `Natural` common domains without
-prescribing storage formats and gives `Natural` the exact integer foundation. Integers will remain exact at arbitrary size. Concrete formats include
+`Number`, `Real`, `Integer`, and `Natural` are common domains without prescribed storage
+formats. Integers remain exact at arbitrary size, including collection sizes. Concrete formats include
 signed and unsigned 8/16/32/64-bit integers, `Float` (binary32), and `Double` (binary64).
 `Int`, `Byte`, `Float32`, and `Float64` alias `Integer`, `UInt8`, `Float`, and `Double` respectively.
 These contracts test exact representability, so their memberships can overlap.
 
-The following examples are **planned, not runnable in the current interpreter**:
+These examples run in the current interpreter:
 
-<!-- caret-example: planned -->
 ```caret
 count = 123456789012345678901234567890  // exact integer
 (Float) sample = 0.1                  // context selects the literal format
-rounded = (Float) source              // explicitly convert a numeric source
-whole = (Integer) -3.75               // -3: truncate toward zero
-5 / 2                                // 2.5: true division
-5 div 2                              // 2: integer division
-10 div 3 + 2                         // 5: div has multiplication precedence
+print 5 / 2                          // 2.5: true division
+print 5 div 2                        // 2: integer division
+print 10 div 3 + 2                   // 5: div has multiplication precedence
 ```
 
-`Float value` remains a membership test; `(Float) value` requests conversion. Declaration contracts
+The following explicit conversions remain planned:
+
+<!-- caret-example: planned -->
+```caret
+rounded = (Float) source
+whole = (Integer) -3.75
+```
+
+`Float value` is a membership test; planned `(Float) value` requests conversion. Declaration contracts
 and directly contracted holes remain checks. Implicit precision loss warns in broad Number/Real
 result contexts but is an error under explicit concrete numeric or integer result requirements.
 Normal floating-point arithmetic rounding does not warn. Explicit conversion permits its specified
@@ -176,7 +180,7 @@ choice of `keys`, `values`, or `fields`. Lazy map/filter stay lazy; repacking is
 exposes semantic contracts without exposing buffers or physical layout details. The selected layout
 is retained with a packed value, so an ordinary homogeneous sequence does not satisfy `Packed T`.
 The
-[numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned),
+[numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented),
 [conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned),
 and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
 define the implementation requirements.
@@ -370,7 +374,7 @@ postfix `:` recovers the reflected value or callable only when that observer ret
 
 ## Values and collections
 
-The current prototype supports finite numbers, Unicode strings, Booleans, null, and missing. It also
+The current interpreter supports exact integers, finite floating-point numbers, Unicode strings, Booleans, null, and missing. It also
 provides persistent sequences and canonically ordered Dictionaries. Collection updates
 produce new values rather than mutating existing ones, and equality is structural for ordinary data.
 The bare `[]` value is a shape-neutral empty Collection accepted by compatible sequence and
@@ -539,7 +543,8 @@ contravariant parameters, covariant results, inline clauses, and standalone vari
 implemented, including explicit allowances and variables shared across a complete declaration header.
 
 The implemented Phase 2 operator model preserves the prototype's compact behavior without adding hidden
-numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
+numeric promotion. Arithmetic and ordering operate on exact integers and finite floating-point
+`Number` values. `+` is a
 closed overload set: it adds two numbers or concatenates when either operand is a string, rendering
 the other value through Caret's own deterministic formatter. Equality uses a recursive structural
 `Eq` capability and continues to reject live callables even when nested. Boolean operations retain

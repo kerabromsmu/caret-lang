@@ -907,7 +907,7 @@ without weakening Caret's reflection model.
 
 ### Planned Phase 4 numeric and diagnostic integration
 
-The [numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+The [numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
 requires an exact arbitrary-precision integer carrier in the public `CaretValue` model alongside
 the existing finite-double `NumberValue`. Integer literals, exports, arguments, host providers,
 nested Collections, and both directions of callbacks must round-trip without intermediate double

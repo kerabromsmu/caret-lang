@@ -343,7 +343,7 @@ and its acceptance matrix clarify #77 and #78. Both remain open implementation-r
 recording the design does not supply runtime evidence. Preserve #76 as the representation-analysis
 dependency and require these separate prerequisite cards before packed implementation:
 
-1. **Numeric foundations (#82):** format-independent Number/Real/Integer/Natural, exact arbitrary-precision
+1. **Numeric foundations (#82, implemented):** format-independent Number/Real/Integer/Natural, exact arbitrary-precision
    integers, full signed/unsigned 8/16/32/64-bit domains, finite Float/Double, value-based
    representability, aliases, contextual literals, exact integer arithmetic/comparison, true `/`,
    truncating integer `div` at multiplicative precedence, precision diagnostics, and exact Java

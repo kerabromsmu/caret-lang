@@ -45,9 +45,9 @@ multiline grouping, implicit nodes, desugaring, and AST rebuilding must not repl
 with logical positions or truncate an enclosing node to one of its children.
 
 <a id="phase-4-numeric-and-conversion-diagnostics-planned"></a>
-### Phase 4 numeric and conversion diagnostics (planned); template completion (implemented)
+### Phase 4 numeric diagnostics and template completion (implemented); conversion diagnostics (planned)
 
-The approved [numeric precision policy](02-values-bindings-and-evaluation.md#precision-requirements-and-warnings-planned)
+The approved [numeric precision policy](02-values-bindings-and-evaluation.md#precision-requirements-and-warnings-implemented)
 adds nonfatal warnings for lossy implicit conversions in broad result contexts. A warning includes
 the same stable code, phase, physical source location, and relevant contract location information
 as other diagnostics, but it does not abort evaluation or turn an otherwise successful operation

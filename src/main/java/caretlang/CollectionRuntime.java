@@ -95,11 +95,9 @@ final class CollectionRuntime {
                 Guarantee.UNKNOWN, Guarantee.TRUE, Guarantee.FALSE, Guarantee.TRUE);
 
         @Override public Value getElement(Value key) {
-            if (!(ValueSemantics.underlying(key) instanceof Value.Num(double number))
-                    || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) {
-                return Value.Missing.INSTANCE;
-            }
-            return sequence.find((int) number).orElse(Value.Missing.INSTANCE);
+            int index = NumericValues.nonNegativeInt(key);
+            return index < 0 ? Value.Missing.INSTANCE
+                    : sequence.find(index).orElse(Value.Missing.INSTANCE);
         }
 
         @Override public Value keys() {

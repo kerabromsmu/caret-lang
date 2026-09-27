@@ -3,6 +3,7 @@ package caretlang;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.math.BigInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -25,13 +26,27 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
-    record Num(double value) implements Value {
+    record Num(double value, BigInteger exactInteger, String literalText) implements Value {
         public Num {
-            if (!Double.isFinite(value)) throw new IllegalArgumentException("Caret numbers must be finite");
+            if (exactInteger == null && !Double.isFinite(value))
+                throw new IllegalArgumentException("Caret numbers must be finite");
         }
+        public Num(double value) { this(value, null, null); }
+        public Num(long value) { this((double) value, BigInteger.valueOf(value), null); }
+        public Num(BigInteger value) { this(value.doubleValue(), Objects.requireNonNull(value), null); }
+        public Num(BigInteger value, String literalText) {
+            this(value.doubleValue(), Objects.requireNonNull(value), literalText);
+        }
+        public Num(double value, String literalText) { this(value, null, literalText); }
+        @Override public boolean equals(Object other) {
+            return other instanceof Num number && NumericValues.compare(this, number) == 0;
+        }
+        @Override public int hashCode() { return NumericValues.decimal(this).stripTrailingZeros().hashCode(); }
         @Override public @NotNull String toString() {
+            if (exactInteger != null) return exactInteger.toString();
             long asLong = (long) value;
-            return value == asLong ? Long.toString(asLong) : Double.toString(value);
+            return value >= Long.MIN_VALUE && value < 0x1.0p63 && value == asLong
+                    ? Long.toString(asLong) : Double.toString(value);
         }
     }
 
@@ -117,9 +132,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
         @Override public int hashCode() { return Objects.hash(key, value); }
         @Override public Value getElement(Value index) {
-            return ValueSemantics.underlying(index) instanceof Num(double number)
-                    ? number == 0 ? key : number == 1 ? value : Missing.INSTANCE
-                    : Missing.INSTANCE;
+            int position = NumericValues.nonNegativeInt(index);
+            return position == 0 ? key : position == 1 ? value : Missing.INSTANCE;
         }
         @Override public Value keys() { return new Seq(List.of(new Num(0), new Num(1))); }
         @Override public Value valueEntries() { return new Seq(List.of(key, value)); }
@@ -494,9 +508,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return List.copyOf(values);
         }
         @Override public Value getElement(Value key) {
-            if (!(ValueSemantics.underlying(key) instanceof Num(double number))
-                    || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) return Missing.INSTANCE;
-            return at((int) number);
+            int index = NumericValues.nonNegativeInt(key);
+            return index < 0 ? Missing.INSTANCE : at(index);
         }
         @Override public Value keys() {
             ArrayList<Value> keys = new ArrayList<>(size);
@@ -609,7 +622,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private static int compareKeys(Value left, Value right) {
             left = ValueSemantics.underlying(left);
             right = ValueSemantics.underlying(right);
-            if (left instanceof Num(double a) && right instanceof Num(double b)) return Double.compare(a, b);
+            if (left instanceof Num a && right instanceof Num b) return NumericValues.compare(a, b);
             if (left instanceof Str(String a) && right instanceof Str(String b)) {
                 return CollectionRuntime.FIELD_ORDER.compare(a, b);
             }
@@ -662,11 +675,9 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                 current = resolvedShape();
             }
             if (current == Shape.KEYLESS) {
-                if (!(ValueSemantics.underlying(key) instanceof Num(double number))
-                        || number < 0 || number != Math.rint(number) || number > Integer.MAX_VALUE) {
-                    return Missing.INSTANCE;
-                }
-                return entryAt((int) number).map(Produced::value).orElse(Missing.INSTANCE);
+                int index = NumericValues.nonNegativeInt(key);
+                return index < 0 ? Missing.INSTANCE
+                        : entryAt(index).map(Produced::value).orElse(Missing.INSTANCE);
             }
             int index = 0;
             Optional<Produced> entry;
@@ -987,33 +998,55 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final int parameterIndex;
         private final java.util.function.BiFunction<Integer, Argument, Argument> validator;
         private final java.util.function.IntFunction<TemplateContract> expectedTemplate;
+        private final java.util.function.IntFunction<BuiltinContract> expectedNumericFormat;
+        private final java.util.function.IntFunction<Boolean> strictNumeric;
 
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator) {
-            this(target, validator, ignored -> null);
+            this(target, validator, ignored -> null, ignored -> null, ignored -> false);
         }
 
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
                            java.util.function.IntFunction<TemplateContract> expectedTemplate) {
-            this(target, 0, validator, expectedTemplate);
+            this(target, validator, expectedTemplate, ignored -> null, ignored -> false);
+        }
+
+        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
+                           java.util.function.IntFunction<TemplateContract> expectedTemplate,
+                           java.util.function.IntFunction<BuiltinContract> expectedNumericFormat) {
+            this(target, validator, expectedTemplate, expectedNumericFormat, ignored -> false);
+        }
+
+        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
+                           java.util.function.IntFunction<TemplateContract> expectedTemplate,
+                           java.util.function.IntFunction<BuiltinContract> expectedNumericFormat,
+                           java.util.function.IntFunction<Boolean> strictNumeric) {
+            this(target, 0, validator, expectedTemplate, expectedNumericFormat, strictNumeric);
         }
 
         private ContractedCallable(Callable target, int parameterIndex,
                                    java.util.function.BiFunction<Integer, Argument, Argument> validator,
-                                   java.util.function.IntFunction<TemplateContract> expectedTemplate) {
+                                   java.util.function.IntFunction<TemplateContract> expectedTemplate,
+                                   java.util.function.IntFunction<BuiltinContract> expectedNumericFormat,
+                                   java.util.function.IntFunction<Boolean> strictNumeric) {
             this.target = Objects.requireNonNull(target);
             this.parameterIndex = parameterIndex;
             this.validator = Objects.requireNonNull(validator);
             this.expectedTemplate = Objects.requireNonNull(expectedTemplate);
+            this.expectedNumericFormat = Objects.requireNonNull(expectedNumericFormat);
+            this.strictNumeric = Objects.requireNonNull(strictNumeric);
         }
 
         TemplateContract expectedTemplate() { return expectedTemplate.apply(parameterIndex); }
+        BuiltinContract expectedNumericFormat() { return expectedNumericFormat.apply(parameterIndex); }
+        boolean strictNumeric() { return strictNumeric.apply(parameterIndex); }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             argument = validator.apply(parameterIndex, argument);
             int before = target.remainingArity();
             Value result = target.apply(argument, callSpan);
             return before > 1 && result instanceof Callable callable
-                    ? new ContractedCallable(callable, parameterIndex + 1, validator, expectedTemplate) : result;
+                    ? new ContractedCallable(callable, parameterIndex + 1, validator,
+                    expectedTemplate, expectedNumericFormat, strictNumeric) : result;
         }
 
         @Override public int remainingArity() { return target.remainingArity(); }

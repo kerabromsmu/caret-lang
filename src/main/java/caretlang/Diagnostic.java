@@ -73,6 +73,7 @@ record Diagnostic(Phase phase, String code, String message, SourceSpan primarySp
         static final String AMBIGUOUS_COLLECTION_SHAPE = "AMBIGUOUS_COLLECTION_SHAPE";
         static final String DIVISION_BY_ZERO = "DIVISION_BY_ZERO";
         static final String NON_FINITE_RESULT = "NON_FINITE_RESULT";
+        static final String IMPLICIT_PRECISION_LOSS = "IMPLICIT_PRECISION_LOSS";
         static final String INVALID_DYNAMIC_FIELD_NAME = "INVALID_DYNAMIC_FIELD_NAME";
         static final String TEMPLATE_INVALID_CONSTRUCTOR = "TEMPLATE_INVALID_CONSTRUCTOR";
         static final String TEMPLATE_NONCOMPARABLE_FIXED_VALUE = "TEMPLATE_NONCOMPARABLE_FIXED_VALUE";

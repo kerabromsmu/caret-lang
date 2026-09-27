@@ -557,8 +557,9 @@ final class ParserTest {
     @Test
     void rejectsNonFiniteNumberLiteralsAsLocatedParserDiagnostics() {
         String huge = "9".repeat(400);
+        assertDoesNotThrow(() -> new Parser("value = " + huge).parseProgram());
         LangException error = assertThrows(LangException.class,
-                () -> new Parser("value = " + huge).parseProgram());
+                () -> new Parser("value = " + huge + ".0").parseProgram());
         assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
         assertEquals(9, error.span().start().column());
         assertTrue(error.getMessage().contains("outside the finite range"));

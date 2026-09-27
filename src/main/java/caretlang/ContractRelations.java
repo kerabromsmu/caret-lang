@@ -61,6 +61,8 @@ final class ContractRelations {
 
     private static boolean rawImplies(ContractDescriptor left, ContractDescriptor right) {
         if (left == right || right == BuiltinContract.ANY) return true;
+        if (left instanceof BuiltinContract a && right instanceof BuiltinContract b
+                && numericFormatImplies(a, b)) return true;
 
         if (left instanceof ParameterizedContract lp && right instanceof ParameterizedContract rp) {
             if (lp.base() != rp.base() || lp.arguments().size() != rp.arguments().size()) return false;
@@ -87,6 +89,39 @@ final class ContractRelations {
             current.bases().forEach(pending::addLast);
         }
         return false;
+    }
+
+    private static boolean numericFormatImplies(BuiltinContract left, BuiltinContract right) {
+        if (left == BuiltinContract.FLOAT && right == BuiltinContract.DOUBLE) return true;
+        IntegerFormat source = integerFormat(left);
+        if (source == null) return false;
+        if (right == BuiltinContract.FLOAT) return source.maximumMagnitude().bitLength() <= 24;
+        if (right == BuiltinContract.DOUBLE) return source.maximumMagnitude().bitLength() <= 53;
+        IntegerFormat target = integerFormat(right);
+        return target != null && source.min().compareTo(target.min()) >= 0
+                && source.max().compareTo(target.max()) <= 0;
+    }
+
+    private record IntegerFormat(java.math.BigInteger min, java.math.BigInteger max) {
+        java.math.BigInteger maximumMagnitude() { return min.abs().max(max.abs()); }
+    }
+
+    private static IntegerFormat integerFormat(BuiltinContract contract) {
+        int width = switch (contract) {
+            case INT8, UINT8 -> 8;
+            case INT16, UINT16 -> 16;
+            case INT32, UINT32 -> 32;
+            case INT64, UINT64 -> 64;
+            default -> 0;
+        };
+        if (width == 0) return null;
+        boolean signed = contract == BuiltinContract.INT8 || contract == BuiltinContract.INT16
+                || contract == BuiltinContract.INT32 || contract == BuiltinContract.INT64;
+        java.math.BigInteger minimum = signed
+                ? java.math.BigInteger.ONE.shiftLeft(width - 1).negate() : java.math.BigInteger.ZERO;
+        java.math.BigInteger maximum = java.math.BigInteger.ONE.shiftLeft(signed ? width - 1 : width)
+                .subtract(java.math.BigInteger.ONE);
+        return new IntegerFormat(minimum, maximum);
     }
 
     private static Absence absence(ContractDescriptor descriptor) {

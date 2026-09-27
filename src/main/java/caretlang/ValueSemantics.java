@@ -117,7 +117,7 @@ final class ValueSemantics {
             return leftProvider.isPresent() && rightProvider.isPresent()
                     && equalCollections(a, leftProvider.get(), b, rightProvider.get(), context);
         }
-        if (a instanceof Value.Num(double x) && b instanceof Value.Num(double y)) return x == y;
+        if (a instanceof Value.Num x && b instanceof Value.Num y) return NumericValues.compare(x, y) == 0;
         return Objects.equals(a, b);
     }
 

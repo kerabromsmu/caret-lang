@@ -5,7 +5,7 @@
 
 ## Planned Collection contract integration
 
-Phase 4 introduces the format-independent `Natural` domain of non-negative integers, with exact
+Phase 4 provides the format-independent `Natural` domain of non-negative integers, with exact
 arbitrary-precision support under the numeric revision below. It does not introduce infinite
 numeric values. Collection `size` has result contract `Natural~`.
 
@@ -21,11 +21,11 @@ interpretation selected by result contracts and arity is
 [explicitly deferred](06-collections-fields-and-templates.md#deferred-template-construction-and-callable-eager).
 That overload and its ambiguity diagnostics are not Phase 4 requirements.
 
-## Phase 4 numeric contracts (planned)
+## Phase 4 numeric contracts (implemented)
 
-These approved contracts are planned, not implementations supplied by the current prototype's
-finite-`double` Number representation. They supersede older illustrative numeric derivation graphs
-where those graphs conflict. [Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+These contracts are implemented with exact integer and finite floating-point values. They supersede
+older illustrative numeric derivation graphs where those graphs conflict.
+[Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
 owns literals, arithmetic, and precision policy.
 
 | Contract | Domain / concrete representation |
@@ -61,7 +61,7 @@ layout; homogeneity alone cannot make them eligible. Packed membership is separa
 
 `Contract value` remains a Boolean membership predicate. `(Contract) expression` instead requests
 a value-producing conversion. This deliberately changes the old grouped-predicate interpretation
-in that position. [Conversion grammar](03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-and-div-planned)
+in that position. [Conversion grammar](03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-planned-and-div-implemented)
 owns extent, grouping, aliases, and holes. Declaration, parameter, and result clauses remain strict
 requirements; they do not implicitly convert already-established values.
 
@@ -491,7 +491,7 @@ a provably zero divisor and a provably non-finite arithmetic result may be rejec
 otherwise `DIVISION_BY_ZERO` and `NON_FINITE_RESULT` remain the runtime diagnostics at their
 established locations.
 
-The [Phase 4 numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+The [Phase 4 numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
 now specifies exact integer arithmetic, concrete formats, division, and conversion policy. Those
 changes require new operator/inference evidence before implementation is claimed. The initial
 implemented matrix above does not itself provide implicit widening, signedness conversion, or
@@ -591,7 +591,7 @@ Every `ReadWrite` value also satisfies `Readable` and `Writable`. Multiple deriv
 contract composition; no separate multiple-inheritance mechanism is required.
 
 The standard numeric domains follow the separately specified
-[Phase 4 numeric contracts](#phase-4-numeric-contracts-planned). In particular, `Float` is a concrete
+[Phase 4 numeric contracts](#phase-4-numeric-contracts-implemented). In particular, `Float` is a concrete
 binary32 format contract that also accepts exactly representable integral values; it is not a
 fractional-only domain. Future `Fractional` describes exact rational values, not the existing
 floating-point formats.
