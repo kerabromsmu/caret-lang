@@ -497,6 +497,16 @@ expose host objects, addresses, buffers, offsets, stride, alignment, or byte ord
 reflection. Public metadata exposes selected semantic contracts through the ordinary reflective
 interface; a template is not thereby an external serialization `Format`.
 
+The representation decision has three distinct inputs. A template descriptor owns the logical
+positions, names, fixed values, refinements, and `defaultsMissing` flags. A concrete numeric
+contract owns a format and its representable value domain. An internal packed-layout descriptor
+records the contiguous physical arrangement selected from those inputs. Equal layouts may share
+one internal descriptor even when their templates differ semantically; membership and reflection
+must continue to use each value's semantic contract. Conversely, equal semantic field sets can
+have distinct named physical orders when their template declaration orders differ. The selected
+layout is retained with the Collection so `Packed T` membership does not infer storage from
+currently enumerated values.
+
 Nullable/optional elements and fields, missing/null payloads, variable-size fields, String payloads,
 arbitrary-precision Integer payloads without a concrete format, references, packed Sets, packed
 dictionaries, and bit fields are excluded. Do not reserve a valid numeric bit pattern as a missing
@@ -577,6 +587,12 @@ Numeric, conversion, and packed implementation cards must each add representativ
 tests cover every diagnostic; parser/resolver/inference/runtime tests cover static-versus-dynamic
 discovery and locations. Run the full baseline suites, corpus/navigation and conformance checks,
 example-coverage script, and `git diff --check` before claiming implementation completion.
+
+The delivery order is numeric values, formats, arithmetic, warnings, and embedding carriers
+(#82); value-producing conversion syntax and recursive conversion (#83); then selected packed
+storage and protocol integration (#78). The matrix above remains planned evidence until each
+owning card supplies tests and runnable examples. This design card (#77) supplies no runtime
+evidence for those requirements.
 
 <a id="immutable-collections"></a>
 ## Immutable collections (implemented baseline)

@@ -314,7 +314,8 @@ Public custom-provider construction remains deferred. Equality forcing is provis
 ## Phase 4 numeric, conversion, and packed design
 
 The [approved design and acceptance matrix](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
-clarify #77/#78 and their separate numeric (#82) and conversion (#83) prerequisites. All rows below remain planned.
+complete the specification task #77 and define separate numeric (#82), conversion (#83), and packed
+(#78) implementation gates. All rows below remain planned.
 The existing `DATA-COLL-006` and `TEMPLATE-OPT-001` requirements additionally require these selected
 layouts and optimized/reference parity; homogeneous values alone are not packed membership.
 Design clarification supplies no runtime test or runnable-example evidence.

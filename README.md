@@ -330,6 +330,8 @@ cover finite positional sequences of fixed-format scalars or fixed-size template
 template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
 conversion through this new syntax are deferred. See the canonical
 [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
+The packed-layout plan separates the visible element contracts from private physical layout
+metadata; equally shaped values do not gain `Packed T` membership merely by being homogeneous.
 
 The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
 now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,

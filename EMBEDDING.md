@@ -11,7 +11,12 @@ will add an exact arbitrary-precision integer carrier alongside the current fini
 `NumberValue`, including lossless exports, arguments, nested data, and callback round trips.
 Load, execution, and invocation results will expose nonfatal precision warnings separately from
 failure diagnostics. These APIs are not implemented yet; the examples below describe the current
-SDK. Packed storage will not expose host buffers or change sandbox authority.
+SDK. The planned exact carrier must round-trip integer inputs, outputs, nested values, and callback
+arguments without a `double` intermediate; the existing finite-double carrier remains available.
+Warnings remain separate for load, execute, and host invocation, and do not replace a failure
+diagnostic or grant output authority. Packed storage will not expose host buffers or change sandbox
+authority. These requirements belong to #82; #83 owns explicit conversion, and #78 owns selected
+packed storage.
 
 ## Get the SDK
 

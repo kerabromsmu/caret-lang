@@ -173,7 +173,9 @@ extended = seqAdd ordinary 300
 
 Lazy input must be consumed before a packed result is available. Keyed input requires an explicit
 choice of `keys`, `values`, or `fields`. Lazy map/filter stay lazy; repacking is explicit. Reflection
-exposes contracts without exposing buffers or physical layout details. The
+exposes semantic contracts without exposing buffers or physical layout details. The selected layout
+is retained with a packed value, so an ordinary homogeneous sequence does not satisfy `Packed T`.
+The
 [numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned),
 [conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned),
 and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
