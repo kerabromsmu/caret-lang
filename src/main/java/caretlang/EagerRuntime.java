@@ -30,6 +30,7 @@ final class EagerRuntime {
             return result;
         }
         if (value instanceof Value.Container || value instanceof Value.Callable) return value;
+        if (value instanceof Value.PackedCollection) return value;
         if (value instanceof Value.ProjectedDictionary projection && projection.isReflection()
                 || value instanceof Value.Dictionary dictionary && dictionary.isReflection()) {
             return Value.EmptyCollection.INSTANCE;

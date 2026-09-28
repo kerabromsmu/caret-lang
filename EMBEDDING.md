@@ -18,8 +18,10 @@ identity at any size.
 separately from failure `diagnostics()`. A broad numeric result can report
 `IMPLICIT_PRECISION_LOSS` without failing the operation. Inspect warnings even after a successful
 operation; warnings do not grant output authority or replace failure diagnostics. Explicit
-conversion (#83) and selected packed storage (#78) remain planned. Packed storage will not expose
-host buffers or change sandbox authority.
+conversion (#83) and selected packed storage (#78) are implemented. Packed values cross the Java
+embedding boundary as ordinary semantic sequences; their selected layout is not inferred again
+when returned by a host callback. Packed storage does not expose host buffers or change sandbox
+authority.
 
 ## Get the SDK
 

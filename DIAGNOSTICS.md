@@ -4,8 +4,8 @@ Every stable message variant in `DiagnosticCatalog` and `HostMessageCatalog` is 
 fixtures compare complete stderr with the adjacent `.expected` file. Entries that cannot be reached
 from ordinary Caret source use focused Java evidence.
 
-Phase 4 numeric warnings, conversion errors, and planned contiguous packed-storage additions are specified in
-[the diagnostic owner](spec/01-source-layout-and-diagnostics.md#phase-4-numeric-and-conversion-diagnostics-planned)
+Phase 4 numeric warnings, conversion errors, and contiguous packed-storage diagnostics are specified in
+[the diagnostic owner](spec/01-source-layout-and-diagnostics.md#phase-4-numeric-template-conversion-and-packed-diagnostics-implemented)
 and [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
 `IMPLICIT_PRECISION_LOSS` is implemented as a warning or strict error; `div` uses the existing
 zero-division and contract diagnostics. Conversion has exact fixture or focused Java evidence for
@@ -99,6 +99,8 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
 | RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret`; `examples/errors/template_missing_required.caret`; `InterpreterTest#templateCompletionRejectsNondefaultableAndWrongShapesWithLocations` |
 | RUNTIME-CONVERSION-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/conversion_range.caret`; `InterpreterTest#numericConversionChecksBoundariesAfterTruncation` |
+| RUNTIME-PACKED-APPEND-VIOLATION | public | CONTRACT_VIOLATION | `InterpreterTest#packedAppendEnumerationEagerAndAliasesPreserveSelectedLayout` |
+| RUNTIME-PACKED-LAYOUT-VIOLATION | public | CONTRACT_VIOLATION | `PackedLayoutTest#broadAndNullableLayoutsFailBeforeReadingAnyPayload` |
 | RUNTIME-CONVERSION-SHAPE-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/conversion_shape.caret`; `InterpreterTest#structuralConversionUsesExactShapeAndValidatesRepeatedAndFixedValues` |
 | RUNTIME-EFFECT-CONSTRAINT-REQUIRES-CALLABLE | public | EFFECT_CONSTRAINT_REQUIRES_CALLABLE | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | RUNTIME-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |

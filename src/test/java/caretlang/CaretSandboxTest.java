@@ -65,6 +65,29 @@ class CaretSandboxTest {
     }
 
     @Test
+    void packedValuesCrossEmbeddingAsExactSemanticSequencesWithoutPhysicalMetadata() {
+        java.math.BigInteger maximum = new java.math.BigInteger("18446744073709551615");
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
+                .callback("echo", 1, Set.of(), List::getFirst).build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("packed-embedding.caret", """
+                    (Packed UInt64) packed = [18446744073709551615]
+                    selected = Packed UInt64 packed
+                    roundtrip = echo packed
+                    roundtripSelected = Packed UInt64 roundtrip
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            CaretValue.CollectionValue values = executed.value().orElseThrow();
+            CaretValue sequence = CaretValue.sequence(List.of(CaretValue.integer(maximum)));
+            assertEquals(sequence, values.find("packed").orElseThrow());
+            assertEquals(sequence, values.find("roundtrip").orElseThrow());
+            assertEquals(CaretValue.bool(true), values.find("selected").orElseThrow());
+            assertEquals(CaretValue.bool(false), values.find("roundtripSelected").orElseThrow());
+        }
+    }
+
+    @Test
     void precisionWarningsRemainSeparateAcrossEmbeddingOperations() {
         try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
                 .value("input", () -> CaretValue.number(1)).build())) {

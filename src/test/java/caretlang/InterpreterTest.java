@@ -105,7 +105,7 @@ final class InterpreterTest {
                 """));
         LangException failure = assertThrows(LangException.class,
                 () -> execute("(Packed Int8) literal = [1.5]"));
-        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, failure.diagnostic().code());
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, failure.diagnostic().code());
     }
 
     @Test
@@ -259,6 +259,260 @@ final class InterpreterTest {
                 print (Sequence Point packed)
                 print (Sequence (Sequence Number)) packed
                 """));
+    }
+
+    @Test
+    void packedAppendEnumerationEagerAndAliasesPreserveSelectedLayout() {
+        assertEquals("true\ntrue\nfalse\n3\n[ 0 1 2 ]\n[ 1 2 3 ]\n2\ntrue\ntrue\ntrue\n", execute("""
+                Small = Packed Int8
+                source = (Small) [1 2]
+                alias = source
+                extended = seqAdd source 3
+                print Small source
+                print Small extended
+                print source == extended
+                print size extended
+                print keys extended
+                print values extended
+                print seqGet alias 1
+                print isFinite extended
+                print extended == [1 2 3]
+                print Small (eager extended)
+                """));
+        LangException invalid = assertThrows(LangException.class, () -> execute("""
+                Small = Packed Int8
+                source = (Small) [1 2]
+                seqAdd source 128
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, invalid.diagnostic().code());
+        assertEquals(3, invalid.span().start().line());
+        assertEquals("Packed append rejects value for Int8", invalid.diagnostic().message());
+    }
+
+    @Test
+    void packedLayoutsRejectBroadOptionalAndVariableSizeFieldsBeforePacking() {
+        for (String target : List.of("Number", "Real", "Integer", "Natural", "String",
+                "Int8?", "Int8~", "Sequence Int8", "Dictionary String Int8")) {
+            LangException failure = assertThrows(LangException.class,
+                    () -> execute("(Packed (" + target + ")) []"), target);
+            assertEquals(Diagnostic.Codes.INVALID_PACKED_LAYOUT, failure.diagnostic().code(), target);
+        }
+        for (String template : List.of("template [(String) _]", "template [_]",
+                "template [(Int8?) _]", "template [\"fixed\" (Int8) _]")) {
+            LangException failure = assertThrows(LangException.class,
+                    () -> execute("Item = " + template + "\n(Packed Item) []"), template);
+            assertEquals(Diagnostic.Codes.INVALID_PACKED_LAYOUT, failure.diagnostic().code(), template);
+        }
+        for (String value : List.of("~", "?")) {
+            LangException failure = assertThrows(LangException.class,
+                    () -> execute("(Packed Int8) [" + value + "]"), value);
+            assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, failure.diagnostic().code(), value);
+        }
+    }
+
+    @Test
+    void packedProtocolAndFailuresMatchWithOwnershipOptimizationDisabled() {
+        assertEquals("true\n", execute("""
+                narrow = (Packed Int8) [1 2 3]
+                wide = (Packed Int32) [1 2 3]
+                print narrow == wide
+                """));
+        String program = """
+                Small = Packed Int16
+                source = (Small) [1 2]
+                extended = seqAdd source 3
+                identity value = value
+                mapped = map identity extended
+                positive value = value > 0
+                filtered = filter extended positive
+                print source
+                print extended
+                print keys extended
+                print values extended
+                print fields extended
+                print size extended
+                print getElement extended 1
+                print extended == [1 2 3]
+                print extended == (Packed Int32) [1 2 3]
+                print Small extended
+                print Small mapped
+                print Small filtered
+                print Small (eager extended)
+                print @extended.size
+                print @extended.elementContract.id
+                """;
+        assertEquals(executeWithOwnership(program, OwnershipTracker.Mode.DISABLED),
+                executeWithOwnership(program, OwnershipTracker.Mode.ENABLED));
+        for (OwnershipTracker.Mode mode : OwnershipTracker.Mode.values()) {
+            Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()),
+                    null, EffectCatalog.standard(false), mode);
+            Value.PackedCollection selected = assertInstanceOf(Value.PackedCollection.class,
+                    interpreter.execute(new Parser("(Packed Int16) values = [1 2]").parseProgram()));
+            assertEquals(mode == OwnershipTracker.Mode.ENABLED, selected.usesContiguousPayload());
+            assertEquals(4, selected.layout().stride() * selected.length());
+        }
+        String rejected = """
+                Small = Packed Int16
+                source = (Small) [1 2]
+                seqAdd source 40000
+                """;
+        for (OwnershipTracker.Mode mode : OwnershipTracker.Mode.values()) {
+            Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()),
+                    null, EffectCatalog.standard(false), mode);
+            LangException failure = assertThrows(LangException.class,
+                    () -> interpreter.execute(new Parser(rejected).parseProgram()));
+            assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, failure.diagnostic().code());
+            assertEquals(3, failure.span().start().line());
+        }
+    }
+
+    @Test
+    void packedContextPropagatesToKnownParametersAndResultsWithoutRepackingValues() {
+        assertEquals("true\ntrue\ntrue\n", execute("""
+                Small = Packed Int8
+                accepts (Small) values = true
+                print accepts [1 2]
+                (Small) make ignored = [3 4]
+                print Small (make 0)
+                acceptsDirect (Packed Int8) values = true
+                print acceptsDirect [7 8]
+                """));
+        LangException strict = assertThrows(LangException.class, () -> execute("""
+                Small = Packed Int8
+                accepts (Small) values = true
+                ordinary = [1 2]
+                accepts ordinary
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, strict.diagnostic().code());
+        LangException establishedResult = assertThrows(LangException.class, () -> execute("""
+                Small = Packed Int8
+                (Small) makeLocal ignored =
+                  result = [5 6]
+                  result
+                makeLocal 0
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, establishedResult.diagnostic().code());
+    }
+
+    @Test
+    void packedTemplateLiteralSelectsConcreteFloatFieldBeforeChecking() {
+        assertEquals("true\n0.10000000149011612\n", execute("""
+                Point = template [(Float) _ (Int8) _]
+                (Packed Point) points = [[0.1 2]]
+                print (Packed Point points)
+                print points[0][0]
+                """));
+        assertEquals("0.10000000149011612\n", execute("""
+                (Packed Float) values = [0.1]
+                print values[0]
+                """));
+    }
+
+    @Test
+    void packedNestedTemplatesRetainFixedAndRepeatedSemanticConstraints() {
+        assertEquals("true\ntrue\ntrue\n", execute("""
+                Item = template [^pair = [(Int8) _ (Boolean) _] ^id = (UInt64) _]
+                items = (Packed Item) [[^id = 18446744073709551615 ^pair = [7 true]]]
+                print (Packed Item items)
+                Fixed = template [7 (Int8) _]
+                fixed = (Packed Fixed) [[7 2]]
+                print (Packed Fixed fixed)
+                Same = template [(Int8) _1 (Int8) _1]
+                repeated = (Packed Same) [[3 3]]
+                print (Packed Same repeated)
+                """));
+        for (String source : List.of("""
+                Fixed = template [7 (Int8) _]
+                (Packed Fixed) [[8 2]]
+                """, """
+                Same = template [(Int8) _1 (Int8) _1]
+                (Packed Same) [[1 2]]
+                """)) {
+            LangException rejected = assertThrows(LangException.class, () -> execute(source));
+            assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, rejected.diagnostic().code());
+        }
+    }
+
+    @Test
+    void packedScalarFormatsCoverEveryWidthThroughConstructionAppendAccessAndReflection() {
+        record Case(String format, String low, String high, int width) {}
+        for (Case sample : List.of(
+                new Case("Int8", "-128", "127", 1),
+                new Case("UInt8", "0", "255", 1),
+                new Case("Int16", "-32768", "32767", 2),
+                new Case("UInt16", "0", "65535", 2),
+                new Case("Int32", "-2147483648", "2147483647", 4),
+                new Case("UInt32", "0", "4294967295", 4),
+                new Case("Int64", "-9223372036854775808", "9223372036854775807", 8),
+                new Case("UInt64", "0", "18446744073709551615", 8),
+                new Case("Byte", "0", "255", 1),
+                new Case("Float32", "1.401298464324817e-45", "3.4028234663852886e38", 4),
+                new Case("Float64", "5e-324", "1.7976931348623157e308", 8),
+                new Case("Boolean", "false", "true", 1))) {
+            Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+            String literal = sample.format().startsWith("Float")
+                    ? new java.math.BigDecimal(sample.low()).toPlainString() : sample.low();
+            String high = sample.format().startsWith("Float")
+                    ? new java.math.BigDecimal(sample.high()).toPlainString() : sample.high();
+            String low = literal.startsWith("-") ? "(" + literal + ")" : literal;
+            String declaration = "(Packed " + sample.format() + ") packed = ["
+                    + low + " " + high + "]";
+            Value.PackedCollection packed = assertInstanceOf(Value.PackedCollection.class,
+                    interpreter.execute(new Parser(declaration).parseProgram()), sample.format());
+            assertEquals(sample.width() * 2, packed.payloadSize(), sample.format());
+            assertEquals(packed.at(0), packed.getElement(new Value.Num(0)), sample.format());
+            assertEquals(new Value.Num(2), ValueSemantics.reflectionFields(packed).get("size"), sample.format());
+            assertTrue(ValueSemantics.equal(packed, new Value.Seq(packed.values())), sample.format());
+            String appendValue = sample.format().equals("Boolean") ? "false" : "0";
+            Value.PackedCollection appended = assertInstanceOf(Value.PackedCollection.class,
+                    interpreter.execute(new Parser("seqAdd packed " + appendValue).parseProgram()),
+                    sample.format());
+            assertSame(packed.layout(), appended.layout(), sample.format());
+            assertEquals(sample.width() * 3, appended.payloadSize(), sample.format());
+            assertEquals(packed.values(), appended.values().subList(0, 2), sample.format());
+            assertEquals(new Value.Bool(true), interpreter.execute(new Parser(
+                    "Packed " + sample.format() + " packed").parseProgram()), sample.format());
+        }
+    }
+
+    @Test
+    void packedIntegerWidthsRejectAdjacentOutOfRangeValuesOnConstructionAndAppend() {
+        record Case(String format, String low, String high) {}
+        for (Case sample : List.of(
+                new Case("Int8", "-128", "127"), new Case("UInt8", "0", "255"),
+                new Case("Int16", "-32768", "32767"), new Case("UInt16", "0", "65535"),
+                new Case("Int32", "-2147483648", "2147483647"),
+                new Case("UInt32", "0", "4294967295"),
+                new Case("Int64", "-9223372036854775808", "9223372036854775807"),
+                new Case("UInt64", "0", "18446744073709551615"))) {
+            for (String adjacent : List.of(
+                    new java.math.BigInteger(sample.low()).subtract(java.math.BigInteger.ONE).toString(),
+                    new java.math.BigInteger(sample.high()).add(java.math.BigInteger.ONE).toString())) {
+                String expression = adjacent.startsWith("-") ? "(" + adjacent + ")" : adjacent;
+                LangException construction = assertThrows(LangException.class, () -> execute(
+                        "(Packed " + sample.format() + ") [" + expression + "]"), sample.format());
+                assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION,
+                        construction.diagnostic().code(), sample.format());
+                assertEquals(Diagnostic.Phase.RUNTIME, construction.diagnostic().phase());
+                assertEquals(1, construction.span().start().line());
+
+                LangException append = assertThrows(LangException.class, () -> execute(
+                        "(Packed " + sample.format() + ") packed = [0]\n"
+                                + "seqAdd packed " + expression), sample.format());
+                assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION,
+                        append.diagnostic().code(), sample.format());
+                assertEquals(Diagnostic.Phase.RUNTIME, append.diagnostic().phase());
+                assertEquals(2, append.span().start().line());
+            }
+        }
+    }
+
+    private String executeWithOwnership(String source, OwnershipTracker.Mode mode) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8),
+                null, EffectCatalog.standard(false), mode);
+        interpreter.execute(new Parser(source).parseProgram());
+        return bytes.toString(StandardCharsets.UTF_8);
     }
     @Test
     void exactIntegerDomainsArithmeticAndContextualFloatAreValueBased() {

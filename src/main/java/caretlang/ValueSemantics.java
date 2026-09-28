@@ -44,7 +44,14 @@ final class ValueSemantics {
                 fields.put("size", new Value.Num(collection.entries().size()));
             }
             case Value.SettledCollection collection -> fields.put("size", collection.size());
-            case Value.PackedCollection collection -> fields.put("size", collection.size());
+            case Value.PackedCollection collection -> {
+                fields.put("size", collection.size());
+                if (context.names(collection.elementContract())) {
+                    Value.ContractValue target = new Value.ContractValue(collection.elementContract());
+                    fields.put("elementContract", Value.Dictionary.reflection(
+                            reflectionFields(target, context), target, context));
+                }
+            }
             case Value.EmptyCollection ignored -> {
                 fields.put("shape", new Value.Str("empty"));
                 fields.put("size", new Value.Num(0));

@@ -44,8 +44,8 @@ Every parsed AST node retains its complete physical source span. Logical indenta
 multiline grouping, implicit nodes, desugaring, and AST rebuilding must not replace those coordinates
 with logical positions or truncate an enclosing node to one of its children.
 
-<a id="phase-4-numeric-and-conversion-diagnostics-planned"></a>
-### Phase 4 numeric, template, and conversion diagnostics (implemented)
+<a id="phase-4-numeric-template-conversion-and-packed-diagnostics-implemented"></a>
+### Phase 4 numeric, template, conversion, and packed diagnostics (implemented)
 
 The approved [numeric precision policy](02-values-bindings-and-evaluation.md#precision-requirements-and-warnings-implemented)
 adds nonfatal warnings for lossy implicit conversions in broad result contexts. A warning includes
@@ -70,6 +70,11 @@ message variants with exact positive/negative evidence. Implemented conversion f
 ineligible packed element contract, `EXPECTED_SEQUENCE` for keyed-to-positional conversion
 without projection, and `CONTRACT_VIOLATION` for a result outside the requested domain or exact
 template shape.
+Packed append rejects an incompatible value with `CONTRACT_VIOLATION` at the appended argument.
+Construction and conversion reject ineligible fixed layouts with `INVALID_PACKED_LAYOUT`, and
+payload values that fail the selected element contract or physical format with
+`CONTRACT_VIOLATION`. These errors retain physical source locations and do not expose host
+exceptions or partially constructed packed values.
 
 Phase 4 expected-template literal completion reuses `CONTRACT_VIOLATION` when a named literal omits
 a required or nondefaultable field. Attribute the failure to the complete literal because an

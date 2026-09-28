@@ -280,11 +280,12 @@ final class Interpreter {
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution) {
-        return executeBlock(statements, env, resolution, null, null);
+        return executeBlock(statements, env, resolution, null, null, null);
     }
 
     private Value executeBlock(List<Stmt> statements, Environment env, Resolution resolution,
-                               TemplateContract resultTemplate, BuiltinContract resultFormat) {
+                               TemplateContract resultTemplate, BuiltinContract resultFormat,
+                               ParameterizedContract resultPacked) {
         LinkedHashMap<String, Value.Field> exports = new LinkedHashMap<>();
         IdentityHashMap<FunctionDef, Value.Callable> functions = prepareDeclarations(statements, env, resolution);
         IdentityHashMap<Assign, UserContract> contractPlaceholders = prepareContractDeclarations(statements, env);
@@ -307,8 +308,11 @@ final class Interpreter {
                         if (shape == CollectionShape.INFER && template != null && template.descriptor().root().named()) {
                             shape = CollectionShape.DICTIONARY;
                         }
-                        value = evaluateCollection(collection, env, resolution, shape, template);
                         ParameterizedContract packed = expectedPacked(contracts, env, resolution);
+                        if (packed == null && contracts == null && !exported
+                                && statement == statements.getLast()) packed = resultPacked;
+                        value = packed != null ? evaluatePackedLiteral(collection, env, resolution, packed)
+                                : evaluateCollection(collection, env, resolution, shape, template);
                         if (packed != null) value = contextualPackedLiteral(packed, value, collection.span());
                     } else if (ungroup(value1) instanceof Literal(Value.Num number, SourceSpan span)) {
                         value = contextualNumericLiteral(number, span,
@@ -346,7 +350,12 @@ final class Interpreter {
                 }
                 last = value;
             } else if (statement instanceof ExprStmt(Expr expression, SourceSpan ignored)) {
-                if (statement == statements.getLast() && resultTemplate != null
+                if (statement == statements.getLast() && resultPacked != null
+                        && expression instanceof CollectionLiteral collection
+                        && analyzeCollectionHoles(collection).indexes().isEmpty()) {
+                    Value value = evaluatePackedLiteral(collection, env, resolution, resultPacked);
+                    last = contextualPackedLiteral(resultPacked, value, collection.span());
+                } else if (statement == statements.getLast() && resultTemplate != null
                         && expression instanceof CollectionLiteral collection
                         && analyzeCollectionHoles(collection).indexes().isEmpty()) {
                     last = evaluateCollection(collection, env, resolution,
@@ -471,6 +480,7 @@ final class Interpreter {
                                     parameter.contracts(), resolution, env, "parameter " + parameter.name());
                             return new Value.Argument(checked, argument.span());
                         }, index -> expectedTemplate(function.params().get(index).contracts(), env, resolution),
+                                index -> expectedPacked(function.params().get(index).contracts(), env, resolution),
                                 index -> expectedNumericFormat(function.params().get(index).contracts(),
                                         env, resolution),
                                 index -> numericPolicy(function.params().get(index).contracts(), env, resolution,
@@ -511,7 +521,8 @@ final class Interpreter {
             try {
                 result = executeBlock(function.body(), new Environment(parameters), resolution,
                         expectedTemplate(function.resultContracts(), env, resolution),
-                        expectedNumericFormat(function.resultContracts(), env, resolution));
+                        expectedNumericFormat(function.resultContracts(), env, resolution),
+                        expectedPacked(function.resultContracts(), env, resolution));
             } finally {
                 numericPolicy = previousPolicy;
             }
@@ -543,6 +554,7 @@ final class Interpreter {
                     resolution, env, "parameter " + parameter.name());
             return new Value.Argument(checked, argument.span());
         }, index -> expectedTemplate(lambda.params().get(index).contracts(), env, resolution),
+                index -> expectedPacked(lambda.params().get(index).contracts(), env, resolution),
                 index -> expectedNumericFormat(lambda.params().get(index).contracts(), env, resolution),
                 index -> numericPolicy(lambda.params().get(index).contracts(), env, resolution,
                         NumericPolicy.BROAD) == NumericPolicy.STRICT);
@@ -859,6 +871,20 @@ final class Interpreter {
                 TemplateContract candidate = Interpreter.this.expectedTemplate(
                         variantClause(variant, position), contractEnvironment, resolution);
                 if (candidate == null || selected != null && selected != candidate) return null;
+                selected = candidate;
+            }
+            return selected;
+        }
+
+        ParameterizedContract expectedPacked() {
+            int position = 0;
+            while (arguments.containsKey(position)) position++;
+            ParameterizedContract selected = null;
+            for (OverloadVariant variant : viable) {
+                ParameterizedContract candidate = Interpreter.this.expectedPacked(
+                        variantClause(variant, position), contractEnvironment, resolution);
+                if (candidate == null || selected != null
+                        && selected.arguments().getFirst() != candidate.arguments().getFirst()) return null;
                 selected = candidate;
             }
             return selected;
@@ -2159,8 +2185,21 @@ final class Interpreter {
         builtins.define("hasValues", collectionGuarantee("hasValues", CollectionRuntime.Facts::hasValues));
 
         builtins.define("seqEmpty", function("seqEmpty", List.of(), args -> ownership.fresh(new Value.Seq(List.of()))));
-        builtins.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) ->
-                ownership.append(sequence(args.getFirst()), args.get(1).value())));
+        builtins.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) -> {
+            Value current = underlying(args.getFirst().value());
+            if (current instanceof Value.PackedCollection packed) {
+                Value value = args.get(1).value();
+                if (!packed.layout().canEncode(value)
+                        || !packed.elementContract().test(value, args.get(1).span())) {
+                    throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "Packed append rejects value for " + packed.elementContract().publicName(),
+                            args.get(1).span());
+                }
+                ownership.share(value);
+                return packed.append(value, args.get(1).span());
+            }
+            return ownership.append(sequence(args.getFirst()), args.get(1).value());
+        }));
         builtins.define("seqGet", locatedFunction("seqGet", List.of("sequence", "index"), (args, ignored) -> {
             Value.Seq values = sequence(args.get(0));
             OptionalInt index = index(args.get(1));
@@ -2352,9 +2391,9 @@ final class Interpreter {
             return indexedFields(argument);
         }
         if (raw instanceof Value.PackedCollection packed) {
-            return new IndexedCollection(index -> index >= 0 && index < packed.values().size()
-                    ? Optional.of(packed.values().get(index)) : Optional.empty(),
-                    packed.values().size(), packed.facts());
+            return new IndexedCollection(index -> index >= 0 && index < packed.length()
+                    ? Optional.of(packed.at(index)) : Optional.empty(),
+                    packed.length(), packed.facts());
         }
         if (raw instanceof Value.LazyCollection collection
                 && (collection.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
@@ -2474,9 +2513,9 @@ final class Interpreter {
             return new IndexedCollection(sequence::find, sequence.size(), provider.facts());
         }
         if (raw instanceof Value.PackedCollection packed) {
-            return new IndexedCollection(index -> index >= 0 && index < packed.values().size()
-                    ? Optional.of(packed.values().get(index)) : Optional.empty(),
-                    packed.values().size(), packed.facts());
+            return new IndexedCollection(index -> index >= 0 && index < packed.length()
+                    ? Optional.of(packed.at(index)) : Optional.empty(),
+                    packed.length(), packed.facts());
         }
         if (raw instanceof Value.LazySeq sequence) {
             return new IndexedCollection(index -> index < sequence.length()
@@ -2662,7 +2701,8 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                     "Collection access key must support equality, got: " + ValueSemantics.kind(key), span);
         }
-        if (collection instanceof Value.Seq || collection instanceof Value.LazySeq
+        if (collection instanceof Value.Seq || collection instanceof Value.PackedCollection
+                || collection instanceof Value.LazySeq
                 || collection instanceof Value.Field
                 || collection instanceof Value.LazyCollection lazy
                 && lazy.resolvedShape() == Value.LazyCollection.Shape.KEYLESS) {
@@ -2797,7 +2837,7 @@ final class Interpreter {
                         "Contract violation for packed literal element: expected " + element.publicName(), span);
             }
         }
-        return new Value.PackedCollection(element, values);
+        return new Value.PackedCollection(element, values, span, ownership.optimizationsEnabled());
     }
 
     private NumericPolicy numericPolicy(ContractClause clause, Environment env, Resolution resolution,
@@ -2995,7 +3035,16 @@ final class Interpreter {
             validatePackedElementLayout(elementContract, operandSpan);
             Value.Seq sequence = (Value.Seq) convertSequence(elementContract, source,
                     operandSpan, env, conversionSpan);
-            converted = new Value.PackedCollection(elementContract, sequence.values());
+            for (Value element : sequence.values()) {
+                if (!elementContract.test(element, operandSpan)) {
+                    throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "Conversion to " + requested.publicName() + " rejected "
+                                    + ValueSemantics.kind(element), operandSpan);
+                }
+            }
+            converted = new Value.PackedCollection(elementContract, sequence.values(), operandSpan,
+                    ownership.optimizationsEnabled());
+            if (verifyFinal) return converted;
         } else if (target instanceof TemplateContract template) {
             converted = convertTemplateNode(template.descriptor().root(), source, operandSpan, env,
                     conversionSpan);
@@ -3114,58 +3163,7 @@ final class Interpreter {
     }
 
     private void validatePackedElementLayout(ContractDescriptor target, SourceSpan span) {
-        if (target instanceof BuiltinContract builtin && (builtin == BuiltinContract.INT8
-                || builtin == BuiltinContract.UINT8 || builtin == BuiltinContract.INT16
-                || builtin == BuiltinContract.UINT16 || builtin == BuiltinContract.INT32
-                || builtin == BuiltinContract.UINT32 || builtin == BuiltinContract.INT64
-                || builtin == BuiltinContract.UINT64 || builtin == BuiltinContract.FLOAT
-                || builtin == BuiltinContract.DOUBLE || builtin == BuiltinContract.BOOLEAN)) return;
-        if (target instanceof TemplateContract template) {
-            validatePackedNode(template.descriptor().root(), span);
-            return;
-        }
-        throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
-                "No fixed packed layout for " + target.publicName(), span);
-    }
-
-    private void validatePackedNode(CollectionConstructorDescriptor.Node node, SourceSpan span) {
-        if (node instanceof CollectionConstructorDescriptor.FixedNode) return;
-        if (node instanceof CollectionConstructorDescriptor.HoleNode hole) {
-            ContractDescriptor selected = null;
-            for (Object requirement : hole.requirements()) {
-                if (!(requirement instanceof ContractDescriptor contract)) continue;
-                if (contract instanceof ModifiedContract modified
-                        && (modified.nullable() || modified.optional())) {
-                    throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
-                            "Packed fields cannot be nullable or optional", span);
-                }
-                if (!(contract instanceof BuiltinContract builtin) || !(builtin == BuiltinContract.INT8
-                        || builtin == BuiltinContract.UINT8 || builtin == BuiltinContract.INT16
-                        || builtin == BuiltinContract.UINT16 || builtin == BuiltinContract.INT32
-                        || builtin == BuiltinContract.UINT32 || builtin == BuiltinContract.INT64
-                        || builtin == BuiltinContract.UINT64 || builtin == BuiltinContract.FLOAT
-                        || builtin == BuiltinContract.DOUBLE || builtin == BuiltinContract.BOOLEAN)) continue;
-                if (selected != null && selected != contract) {
-                    throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
-                            "Conflicting concrete packed formats", span);
-                }
-                selected = contract;
-            }
-            if (selected == null) {
-                throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
-                        "Packed field requires one concrete format", span);
-            }
-            return;
-        }
-        CollectionConstructorDescriptor.CollectionNode collection =
-                (CollectionConstructorDescriptor.CollectionNode) node;
-        for (CollectionConstructorDescriptor.Element element : collection.elements()) {
-            if (element.defaultsMissing()) {
-                throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
-                        "Packed fields cannot default to missing", span);
-            }
-            validatePackedNode(element.value(), span);
-        }
+        PackedLayout.of(target, span);
     }
 
     private Value checkedConversion(ContractDescriptor target, Value value, SourceSpan span) {
@@ -3194,16 +3192,42 @@ final class Interpreter {
     private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
                                      CollectionShape expected,
                                      CollectionConstructorDescriptor.CollectionNode shape) {
+        return evaluateCollection(literal, env, resolution, expected, shape, null, false);
+    }
+
+    private Value evaluatePackedLiteral(CollectionLiteral literal, Environment env,
+                                        Resolution resolution, ParameterizedContract packed) {
+        ContractDescriptor element = packed.arguments().getFirst();
+        CollectionConstructorDescriptor.Node elementShape = element instanceof TemplateContract template
+                ? template.descriptor().root()
+                : new CollectionConstructorDescriptor.HoleNode(0, List.of(element), literal.span());
+        return evaluateCollection(literal, env, resolution, CollectionShape.KEYLESS,
+                null, elementShape, true);
+    }
+
+    private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
+                                     CollectionShape expected,
+                                     CollectionConstructorDescriptor.CollectionNode shape,
+                                     CollectionConstructorDescriptor.Node positionalElement,
+                                     boolean selectNumeric) {
         if (literal.elements().isEmpty() && (shape == null || !shape.named())) {
             return Value.EmptyCollection.INSTANCE;
         }
         ArrayList<Value> values = new ArrayList<>(literal.elements().size());
-        for (CollectionElement element : literal.elements()) {
-            CollectionConstructorDescriptor.CollectionNode nested = element instanceof NamedElement named
-                    ? nestedExpected(shape, named.name()) : null;
+        for (int index = 0; index < literal.elements().size(); index++) {
+            CollectionElement element = literal.elements().get(index);
+            CollectionConstructorDescriptor.Node node = positionalElement != null ? positionalElement
+                    : expectedNode(shape, element, index);
+            CollectionConstructorDescriptor.CollectionNode nested =
+                    node instanceof CollectionConstructorDescriptor.CollectionNode collection ? collection : null;
             Value value = element.value() instanceof CollectionLiteral collection && nested != null
                     ? evaluateCollection(collection, env, resolution,
-                    nested.named() ? CollectionShape.DICTIONARY : CollectionShape.KEYLESS, nested)
+                    nested.named() ? CollectionShape.DICTIONARY : CollectionShape.KEYLESS,
+                    nested, null, selectNumeric)
+                    : selectNumeric && node instanceof CollectionConstructorDescriptor.HoleNode hole
+                    && ungroup(element.value()) instanceof Literal(Value.Num number, SourceSpan span)
+                    && packedNumericFormat(hole) != null
+                    ? contextualNumericLiteral(number, span, packedNumericFormat(hole))
                     : evalInner(element.value(), env, resolution);
             values.add(element instanceof NamedElement named
                     ? new Value.Field(new Value.Str(named.name()), value) : value);
@@ -3314,14 +3338,25 @@ final class Interpreter {
                 ? Value.KeyedCollection.Shape.DICTIONARY : Value.KeyedCollection.Shape.GENERAL, keyed));
     }
 
-    private static CollectionConstructorDescriptor.CollectionNode nestedExpected(
-            CollectionConstructorDescriptor.CollectionNode shape, String name) {
-        if (shape == null || !shape.named()) return null;
-        for (CollectionConstructorDescriptor.Element element : shape.elements()) {
-            if (name.equals(element.name())
-                    && element.value() instanceof CollectionConstructorDescriptor.CollectionNode nested) return nested;
+    private static CollectionConstructorDescriptor.Node expectedNode(
+            CollectionConstructorDescriptor.CollectionNode shape, CollectionElement element, int index) {
+        if (shape == null) return null;
+        if (!shape.named()) return index < shape.elements().size() ? shape.elements().get(index).value() : null;
+        if (!(element instanceof NamedElement named)) return null;
+        for (CollectionConstructorDescriptor.Element candidate : shape.elements()) {
+            if (named.name().equals(candidate.name())) return candidate.value();
         }
         return null;
+    }
+
+    private static BuiltinContract packedNumericFormat(CollectionConstructorDescriptor.HoleNode hole) {
+        BuiltinContract selected = null;
+        for (Object requirement : hole.requirements()) {
+            if (requirement != BuiltinContract.FLOAT && requirement != BuiltinContract.DOUBLE) continue;
+            if (selected != null && selected != requirement) return null;
+            selected = (BuiltinContract) requirement;
+        }
+        return selected;
     }
 
     private void addFirst(List<Value.KeyedCollection.Entry> entries, Value key, Value value) {
@@ -3438,9 +3473,15 @@ final class Interpreter {
             TemplateContract template = callable instanceof Value.ContractedCallable contracted
                     ? contracted.expectedTemplate() : callable instanceof OverloadCallable overload
                     ? overload.expectedTemplate() : null;
-            CollectionShape shape = template != null && template.descriptor().root().named()
+            ParameterizedContract packed = callable instanceof Value.ContractedCallable contracted
+                    ? contracted.expectedPacked() : callable instanceof OverloadCallable overload
+                    ? overload.expectedPacked() : null;
+            CollectionShape shape = packed != null ? CollectionShape.KEYLESS
+                    : template != null && template.descriptor().root().named()
                     ? CollectionShape.DICTIONARY : CollectionShape.INFER;
-            return evaluateCollection(literal, env, resolution, shape, template);
+            Value value = packed != null ? evaluatePackedLiteral(literal, env, resolution, packed)
+                    : evaluateCollection(literal, env, resolution, shape, template);
+            return packed == null ? value : contextualPackedLiteral(packed, value, literal.span());
         } finally {
             numericPolicy = previousPolicy;
         }

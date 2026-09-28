@@ -620,6 +620,10 @@ final class ContractInference {
                             || contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL)) {
                 shape = Shape.generic();
             }
+            if (supplied instanceof CollectionLiteral && i < called.parameterRequirements().size()
+                    && called.parameterRequirements().get(i).contains(BuiltinContract.PACKED)) {
+                shape = Shape.generic();
+            }
             shapes.add(shape);
             if (i < called.parameterRequirements().size()) {
                 constrain(shape, called.parameterRequirements().get(i), requirements, arguments.get(i).span());
@@ -1273,7 +1277,8 @@ final class ContractInference {
                                        Map<String, FunctionContract> visible) {
         Set<BuiltinContract> declared = clause(assign.contracts());
         if (assign.value() instanceof CollectionLiteral && declared.stream().anyMatch(contract ->
-                contract == BuiltinContract.SEQUENCE || contract == BuiltinContract.DICTIONARY
+                contract == BuiltinContract.SEQUENCE || contract == BuiltinContract.PACKED
+                        || contract == BuiltinContract.DICTIONARY
                         || contract == BuiltinContract.SET || contract == BuiltinContract.COLLECTION)) {
             return Shape.generic();
         }

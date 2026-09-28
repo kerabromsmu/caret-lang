@@ -124,7 +124,7 @@ Ordinary inference applies where there is no explicit declaration boundary. Fail
 the final result contract remain errors even if an earlier conversion emitted only a warning.
 
 Warnings do not excuse overflow, zero division, invalid operand contracts, or unsupported
-conversions. See [diagnostic delivery](01-source-layout-and-diagnostics.md#phase-4-numeric-and-conversion-diagnostics-planned).
+conversions. See [diagnostic delivery](01-source-layout-and-diagnostics.md#phase-4-numeric-template-conversion-and-packed-diagnostics-implemented).
 Future rational `Fractional`, `Complex`, wider named fixed-width formats, and bit fields are not
 part of this implementation boundary.
 

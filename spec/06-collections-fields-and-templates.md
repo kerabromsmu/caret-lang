@@ -456,13 +456,11 @@ containers/functions, alias sharing, containment cycles, and all located failure
 diagnostic inventory with exact codes and locations when implementation chooses them.
 Do not claim the new protocol implemented based on tests of legacy Sequence/Dictionary behavior.
 
-## Phase 4 packed layouts (planned)
+## Phase 4 packed layouts (implemented)
 
-This approved design resolves the packed-storage decisions for issues #77 and #78. Exact numeric
-foundations (#82) are implemented; explicit contract conversion (#83) is the remaining prerequisite.
-Nothing in this section claims existing packed runtime support. It takes precedence over less
-specific packed illustrations later in this document. Packed storage remains a Phase 4 completion
-gate; SIMD execution, formats, and native buffer APIs remain later work.
+This design governs the packed-storage implementation delivered by #78 after numeric foundations
+(#82) and explicit conversion (#83). It takes precedence over less specific packed illustrations
+later in this document. SIMD execution, formats, and native buffer APIs remain later work.
 
 ### Supported layouts and membership
 
@@ -494,8 +492,9 @@ Collection without declaration-order provenance uses that Collection's enumerati
 Element payloads occupy a contiguous block with shared internal layout metadata. Semantic
 contracts must survive packing and element access independently of physical storage. Do not
 expose host objects, addresses, buffers, offsets, stride, alignment, or byte order through Caret
-reflection. Public metadata exposes selected semantic contracts through the ordinary reflective
-interface; a template is not thereby an external serialization `Format`.
+reflection. Public metadata exposes the selected semantic contract as `@packed.elementContract`
+through the ordinary contract metadata projection when the observer can name that contract; the
+field is absent otherwise. A template is not thereby an external serialization `Format`.
 
 The representation decision has three distinct inputs. A template descriptor owns the logical
 positions, names, fixed values, refinements, and `defaultsMissing` flags. A concrete numeric
@@ -523,7 +522,6 @@ After conversion, every element must satisfy its structural and scalar requireme
 shape, unsupported layout, and out-of-range values are located errors; do not expose a partial
 packed result. A fixed-width append is validation, not an implicit explicit-conversion request.
 
-<!-- caret-example: planned -->
 ```caret
 (Packed Int8) small = [1 2]
 converted = (Packed Int8) [1.9 2.1]  // explicitly truncates elements to [1 2]
@@ -562,8 +560,8 @@ reflection, equality, diagnostics, and persistent updates.
 
 ### Packed and prerequisite acceptance matrix
 
-This is required future evidence, not a list of existing passing tests. Supply exact expected
-outputs and diagnostic phase/code/physical line/column when each implementation lands.
+This matrix records required implementation evidence. Exact expected outputs and diagnostic
+phase/code/physical line/column appear in the cited tests and runnable fixtures.
 
 | Area | Required acceptance cases |
 | --- | --- |
@@ -588,11 +586,11 @@ tests cover every diagnostic; parser/resolver/inference/runtime tests cover stat
 discovery and locations. Run the full baseline suites, corpus/navigation and conformance checks,
 example-coverage script, and `git diff --check` before claiming implementation completion.
 
-The delivery order is numeric values, formats, arithmetic, warnings, and embedding carriers
+The delivery order was numeric values, formats, arithmetic, warnings, and embedding carriers
 (#82); value-producing conversion syntax and recursive conversion (#83); then contiguous selected
-packed storage and protocol integration (#78). The conversion implementation records selected
-packed membership with temporary immutable reference storage. Physical layout and full protocol
-evidence remain with #78.
+packed storage and protocol integration (#78). Optimized execution uses a contiguous payload and
+shared internal descriptor; optimization-disabled execution retains a reference representation
+with the same observable behavior.
 
 <a id="immutable-collections"></a>
 ## Immutable collections (implemented baseline)

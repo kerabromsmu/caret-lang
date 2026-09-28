@@ -34,6 +34,7 @@ expect_failure examples/errors/invalid_packed_layout.caret
 expect_failure examples/errors/keyed_conversion.caret
 expect_failure examples/errors/conversion_range.caret
 expect_failure examples/errors/conversion_shape.caret
+expect_failure examples/errors/packed_invalid_append.caret
 
 expect_test_failure() {
   local source_file=$1
@@ -103,6 +104,12 @@ diff -u examples/features/numeric_foundations.expected "$CARET_TEST_TMP/numeric-
 
 "$CARET_LAUNCHER" examples/features/conversion.caret > "$CARET_TEST_TMP/conversion-output.txt"
 diff -u examples/features/conversion.expected "$CARET_TEST_TMP/conversion-output.txt"
+
+"$CARET_LAUNCHER" examples/features/packed_scalar.caret > "$CARET_TEST_TMP/packed-scalar-output.txt"
+diff -u examples/features/packed_scalar.expected "$CARET_TEST_TMP/packed-scalar-output.txt"
+
+"$CARET_LAUNCHER" examples/features/packed_structural.caret > "$CARET_TEST_TMP/packed-structural-output.txt"
+diff -u examples/features/packed_structural.expected "$CARET_TEST_TMP/packed-structural-output.txt"
 
 "$CARET_LAUNCHER" examples/features/error_template.caret > "$CARET_TEST_TMP/error-template-output.txt"
 diff -u examples/features/error_template.expected "$CARET_TEST_TMP/error-template-output.txt"

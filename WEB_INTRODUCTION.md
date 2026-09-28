@@ -128,7 +128,7 @@ missing still requires the field to be written in the literal. Membership and ex
 of an established Collection never add fields, and omission always supplies missing rather than
 null.
 
-### Exact numbers, explicit conversions, and planned packed storage
+### Exact numbers, explicit conversions, and packed storage
 
 `Number`, `Real`, `Integer`, and `Natural` are common domains without prescribed storage
 formats. Integers remain exact at arbitrary size, including collection sizes. Concrete formats include
@@ -161,8 +161,8 @@ Normal floating-point arithmetic rounding does not warn. Explicit conversion per
 rounding or truncation, but never bypasses range or final contract checks. Numeric text parsing and
 custom conversion registration are deferred for this syntax.
 
-`Packed T` currently selects a finite positional sequence with an explicit element contract;
-contiguous fixed-layout storage is planned next. Eligible element contracts use concrete numeric
+`Packed T` selects a finite positional sequence with an explicit element contract and contiguous
+fixed-layout storage. Eligible element contracts use concrete numeric
 formats, Boolean, or fixed-size templates. Named record fields retain template declaration order;
 scalar positions need concrete formats. Missing/null payloads, variable-size fields, and bit
 fields are excluded.
@@ -176,12 +176,13 @@ extended = seqAdd ordinary 300
 
 Lazy input must be consumed before a packed result is available. Keyed input requires an explicit
 choice of `keys`, `values`, or `fields`. Lazy map/filter stay lazy; repacking is explicit. Reflection
-exposes semantic contracts without exposing buffers or physical layout details. The selected layout
+exposes the selected semantic contract as `@packed.elementContract` when visible, without exposing
+buffers or physical layout details. The selected layout
 is retained with a packed value, so an ordinary homogeneous sequence does not satisfy `Packed T`.
 The
 [numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented),
 [conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented),
-and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
+and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-implemented)
 define the implementation requirements.
 
 ### Template fields and missing values

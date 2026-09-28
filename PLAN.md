@@ -297,8 +297,9 @@ Dictionaries. Static `^name`, ordinary `field "name" value`, exported blocks, an
 one String-keyed `Dictionary K V` representation; mixed shapes and duplicate keys are diagnosed.
 The common provider-backed `keys`/`values`/`fields`/`size` operations, Boolean-or-missing guarantee
 queries, matching reflection fields, `Natural`, and shape-neutral empty facts are implemented.
-The steps below describe the remaining contextual, template, and representation work.
-The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+The steps below record the contextual, template, and representation work subject to the final
+Phase 4 completion audit.
+The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
 records the newer #55/#59 decisions and takes precedence over legacy implementation targets
 for its covered behavior. The common protocol, Field tuple, contextual shape, settlement, lazy
 transform, and strict-consumer foundations are implemented; remaining decisions require their own evidence.
@@ -338,10 +339,9 @@ transform, and strict-consumer foundations are implemented; remaining decisions 
 
 ### Packed design and separate numeric/conversion prerequisites
 
-The [approved packed design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
-and its acceptance matrix clarify #77 and #78. Both remain open implementation-roadmap work;
-recording the design does not supply runtime evidence. Preserve #76 as the representation-analysis
-dependency and require these separate prerequisite cards before packed implementation:
+The [approved packed design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-implemented)
+and its acceptance matrix clarify #77 and #78. The design and its prerequisite implementations
+are complete; #79 audits the resulting evidence. Their delivery order was:
 
 1. **Numeric foundations (#82, implemented):** format-independent Number/Real/Integer/Natural, exact arbitrary-precision
    integers, full signed/unsigned 8/16/32/64-bit domains, finite Float/Double, value-based
@@ -349,16 +349,15 @@ dependency and require these separate prerequisite cards before packed implement
    truncating integer `div` at multiplicative precedence, precision diagnostics, and exact Java
    embedding round trips. This task consumes #77's design and must reconcile Natural with #65's
    protocol work without duplicating or weakening its contract.
-2. **Explicit contract conversion (#83):** depends on #82 and #77. Implement
+2. **Explicit contract conversion (#83, implemented):** depends on #82 and #77. It supplies
    `(Contract) expression`, following-application precedence, identity-based target resolution,
    preserved non-contract grouping, strict declarations/checked holes, built-in conversion and
-   recursive structural rules, and exact diagnostics. Prepare representation-conversion integration
-   for #78; do not claim packed storage implemented before that card supplies it.
-3. **Packed implementation (#78):** depends on #76, #77, #82, and #83. Implement selected
+   recursive structural rules, and exact diagnostics. It selects the representation consumed by #78.
+3. **Packed implementation (#78, implemented):** depends on #76, #77, #82, and #83. It supplies selected
    finite positional layouts for fixed numeric formats, one-byte Boolean, and fixed-size templates;
    retain declaration order, exclude nullable/variable-size payloads, materialize explicit lazy
-   conversions, reject incompatible appends, and integrate the common protocol with reference-mode
-   parity. Keep physical layout metadata internal.
+   conversions, rejects incompatible appends, and integrates the common protocol with reference-mode
+   parity. Physical layout metadata remains internal.
 
 This order adds prerequisites without renumbering existing Phase 4 cards: #77 → #82 → #83 → #78.
 #79's completion audit

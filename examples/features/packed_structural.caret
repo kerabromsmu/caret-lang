@@ -1,0 +1,10 @@
+Point = template [^z = (Int16) _ ^a = (Boolean) _]
+Points = Packed Point
+points = (Points) [[^a = true ^z = 42] [^a = false ^z = -7]]
+print Points points
+print points[0].z
+print points[1].a
+print points == [[^z = 42 ^a = true] [^z = -7 ^a = false]]
+appended = seqAdd points [^z = 0 ^a = true]
+print Points appended
+print size appended

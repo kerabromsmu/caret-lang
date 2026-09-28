@@ -289,35 +289,103 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return ValueSemantics.render(this); }
     }
 
-    /** Selected packed semantics with reference payloads until the physical-layout card. */
+    /** Selected packed semantics backed by one immutable contiguous payload. */
     final class PackedCollection implements Value, CollectionRuntime.Provider {
         private final ContractDescriptor elementContract;
-        private final List<Value> values;
+        private final PackedLayout layout;
+        private final byte[] payload;
+        private final List<Value> referenceValues;
+        private final List<PackedLayout.Metadata> metadata;
+        private final int count;
         private static final CollectionRuntime.Facts FACTS = new CollectionRuntime.Facts(
                 CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
                 CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.TRUE,
                 CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE);
 
-        PackedCollection(ContractDescriptor elementContract, List<Value> values) {
+        PackedCollection(ContractDescriptor elementContract, List<Value> values, SourceSpan span) {
+            this(elementContract, values, span, true);
+        }
+        PackedCollection(ContractDescriptor elementContract, List<Value> values, SourceSpan span,
+                         boolean optimized) {
             this.elementContract = Objects.requireNonNull(elementContract);
-            this.values = List.copyOf(values);
+            this.layout = PackedLayout.of(elementContract, span);
+            this.count = values.size();
+            long byteCount = (long) layout.stride() * count;
+            if (byteCount > Integer.MAX_VALUE) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                        "Packed payload too large", span);
+            }
+            this.payload = optimized ? new byte[(int) byteCount] : null;
+            this.referenceValues = optimized ? null : List.copyOf(values);
+            ArrayList<PackedLayout.Metadata> captured = optimized ? new ArrayList<>(count) : null;
+            for (int index = 0; index < count; index++) {
+                if (!layout.canEncode(values.get(index))) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "Packed value does not match its fixed layout", span);
+                }
+                if (optimized) {
+                    layout.write(values.get(index), payload, index * layout.stride());
+                    captured.add(layout.captureMetadata(values.get(index)));
+                }
+            }
+            this.metadata = optimized ? List.copyOf(captured) : null;
+        }
+        private PackedCollection(ContractDescriptor elementContract, PackedLayout layout,
+                                 byte[] payload, List<Value> referenceValues,
+                                 List<PackedLayout.Metadata> metadata, int count) {
+            this.elementContract = elementContract;
+            this.layout = layout;
+            this.payload = payload;
+            this.referenceValues = referenceValues;
+            this.metadata = metadata;
+            this.count = count;
         }
         ContractDescriptor elementContract() { return elementContract; }
-        List<Value> values() { return values; }
+        PackedLayout layout() { return layout; }
+        boolean usesContiguousPayload() { return payload != null; }
+        int payloadSize() { return payload == null ? 0 : payload.length; }
+        int length() { return count; }
+        Value at(int index) { return referenceValues == null
+                ? layout.restoreMetadata(layout.read(payload, index * layout.stride()), metadata.get(index))
+                : referenceValues.get(index); }
+        List<Value> values() {
+            if (referenceValues != null) return referenceValues;
+            ArrayList<Value> decoded = new ArrayList<>(count);
+            for (int index = 0; index < count; index++) decoded.add(at(index));
+            return List.copyOf(decoded);
+        }
+        PackedCollection append(Value value) { return append(value, null); }
+        PackedCollection append(Value value, SourceSpan span) {
+            if (referenceValues != null) {
+                ArrayList<Value> appended = new ArrayList<>(referenceValues);
+                appended.add(value);
+                return new PackedCollection(elementContract, layout, null, List.copyOf(appended), null, count + 1);
+            }
+            long byteCount = (long) payload.length + layout.stride();
+            if (byteCount > Integer.MAX_VALUE) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                        "Packed payload too large", span);
+            }
+            byte[] appended = Arrays.copyOf(payload, (int) byteCount);
+            layout.write(value, appended, payload.length);
+            ArrayList<PackedLayout.Metadata> captured = new ArrayList<>(metadata);
+            captured.add(layout.captureMetadata(value));
+            return new PackedCollection(elementContract, layout, appended, null, List.copyOf(captured), count + 1);
+        }
         @Override public Value getElement(Value key) {
             int index = NumericValues.nonNegativeInt(key);
-            return index >= 0 && index < values.size() ? values.get(index) : Missing.INSTANCE;
+            return index >= 0 && index < count ? at(index) : Missing.INSTANCE;
         }
         @Override public Value keys() {
-            ArrayList<Value> keys = new ArrayList<>(values.size());
-            for (int index = 0; index < values.size(); index++) keys.add(new Num(index));
+            ArrayList<Value> keys = new ArrayList<>(count);
+            for (int index = 0; index < count; index++) keys.add(new Num(index));
             return new Seq(keys);
         }
-        @Override public Value valueEntries() { return new Seq(values); }
+        @Override public Value valueEntries() { return new Seq(values()); }
         @Override public Value fieldEntries() { return valueEntries(); }
-        @Override public Value size() { return new Num(values.size()); }
+        @Override public Value size() { return new Num(count); }
         @Override public CollectionRuntime.Facts facts() { return FACTS; }
-        @Override public String toString() { return ValueSemantics.render(new Seq(values)); }
+        @Override public String toString() { return ValueSemantics.render(new Seq(values())); }
     }
 
     /** The single shape-neutral empty collection literal. */
@@ -1030,45 +1098,50 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final int parameterIndex;
         private final java.util.function.BiFunction<Integer, Argument, Argument> validator;
         private final java.util.function.IntFunction<TemplateContract> expectedTemplate;
+        private final java.util.function.IntFunction<ParameterizedContract> expectedPacked;
         private final java.util.function.IntFunction<BuiltinContract> expectedNumericFormat;
         private final java.util.function.IntFunction<Boolean> strictNumeric;
 
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator) {
-            this(target, validator, ignored -> null, ignored -> null, ignored -> false);
+            this(target, validator, ignored -> null, ignored -> null, ignored -> null, ignored -> false);
         }
 
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
                            java.util.function.IntFunction<TemplateContract> expectedTemplate) {
-            this(target, validator, expectedTemplate, ignored -> null, ignored -> false);
+            this(target, validator, expectedTemplate, ignored -> null, ignored -> null, ignored -> false);
         }
 
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
                            java.util.function.IntFunction<TemplateContract> expectedTemplate,
                            java.util.function.IntFunction<BuiltinContract> expectedNumericFormat) {
-            this(target, validator, expectedTemplate, expectedNumericFormat, ignored -> false);
+            this(target, validator, expectedTemplate, ignored -> null, expectedNumericFormat, ignored -> false);
         }
 
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
                            java.util.function.IntFunction<TemplateContract> expectedTemplate,
+                           java.util.function.IntFunction<ParameterizedContract> expectedPacked,
                            java.util.function.IntFunction<BuiltinContract> expectedNumericFormat,
                            java.util.function.IntFunction<Boolean> strictNumeric) {
-            this(target, 0, validator, expectedTemplate, expectedNumericFormat, strictNumeric);
+            this(target, 0, validator, expectedTemplate, expectedPacked, expectedNumericFormat, strictNumeric);
         }
 
         private ContractedCallable(Callable target, int parameterIndex,
                                    java.util.function.BiFunction<Integer, Argument, Argument> validator,
                                    java.util.function.IntFunction<TemplateContract> expectedTemplate,
+                                   java.util.function.IntFunction<ParameterizedContract> expectedPacked,
                                    java.util.function.IntFunction<BuiltinContract> expectedNumericFormat,
                                    java.util.function.IntFunction<Boolean> strictNumeric) {
             this.target = Objects.requireNonNull(target);
             this.parameterIndex = parameterIndex;
             this.validator = Objects.requireNonNull(validator);
             this.expectedTemplate = Objects.requireNonNull(expectedTemplate);
+            this.expectedPacked = Objects.requireNonNull(expectedPacked);
             this.expectedNumericFormat = Objects.requireNonNull(expectedNumericFormat);
             this.strictNumeric = Objects.requireNonNull(strictNumeric);
         }
 
         TemplateContract expectedTemplate() { return expectedTemplate.apply(parameterIndex); }
+        ParameterizedContract expectedPacked() { return expectedPacked.apply(parameterIndex); }
         BuiltinContract expectedNumericFormat() { return expectedNumericFormat.apply(parameterIndex); }
         boolean strictNumeric() { return strictNumeric.apply(parameterIndex); }
 
@@ -1078,7 +1151,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Value result = target.apply(argument, callSpan);
             return before > 1 && result instanceof Callable callable
                     ? new ContractedCallable(callable, parameterIndex + 1, validator,
-                    expectedTemplate, expectedNumericFormat, strictNumeric) : result;
+                    expectedTemplate, expectedPacked, expectedNumericFormat, strictNumeric) : result;
         }
 
         @Override public int remainingArity() { return target.remainingArity(); }

@@ -55,7 +55,7 @@ Aliases are the same contract identities: `Int = Integer`, `Byte = UInt8`, `Floa
 `Float64 = Double`. A concrete format selects a layout only when representation is requested.
 `Packed Integer`, `Packed Natural`, `Packed Real`, and `Packed Number` have no concrete fixed-width
 layout; homogeneity alone cannot make them eligible. Packed membership is separately defined by
-[the selected-layout contract](06-collections-fields-and-templates.md#phase-4-packed-layouts-planned).
+[the selected-layout contract](06-collections-fields-and-templates.md#phase-4-packed-layouts-implemented).
 
 ## Phase 4 explicit contract conversion (implemented)
 
@@ -92,10 +92,10 @@ meaningful even when the input already satisfies the target's semantic element c
 `(Sequence Number) packed` produces an ordinary sequence, while `(Packed Int16) packedInt8`
 selects the Int16 layout.
 
-The current interpreter records an explicitly selected packed element contract and stores an
-immutable reference sequence. The contiguous physical representation and complete packed protocol
-belong to the following packed-storage phase; selected membership and conversion behavior already
-apply.
+The interpreter retains the selected packed element contract. Optimized execution stores its
+elements in a contiguous fixed-layout payload; optimization-disabled execution uses immutable
+reference storage with equivalent observable behavior. Conversion and selected membership apply
+in both modes.
 
 Keyed-to-positional conversion requires an explicit `keys`, `values`, or `fields` projection; it
 does not discard keys implicitly. Packing, lazy consumption, and unsupported layouts follow the

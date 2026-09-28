@@ -14,6 +14,8 @@ final class OwnershipTracker {
 
     OwnershipTracker(Mode mode) { this.mode = mode; }
 
+    boolean optimizationsEnabled() { return mode == Mode.ENABLED; }
+
     <T extends Value> T fresh(T value) {
         if (mode == Mode.ENABLED && reusable(value)) states.put(value, State.UNIQUE);
         return value;
@@ -23,6 +25,9 @@ final class OwnershipTracker {
         value = ValueSemantics.underlying(value);
         if (states.put(value, State.SHARED) == State.SHARED) return;
         if (value instanceof Value.Seq sequence) sequence.values().forEach(this::share);
+        if (value instanceof Value.PackedCollection packed && !packed.usesContiguousPayload()) {
+            packed.values().forEach(this::share);
+        }
         if (value instanceof Value.Dictionary dictionary) dictionary.entries().values().forEach(this::share);
         if (value instanceof Value.Callable callable) callable.retainedValues().forEach(this::share);
     }

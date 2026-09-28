@@ -63,8 +63,8 @@ Contracts form derivation graphs and act as predicates, while the prototype now 
 contract-based multiple dispatch for ordinary functions. Collections use one universal `[...]`
 literal. The prototype implements positional and String-keyed Dictionary forms, and exported blocks are
 shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-resolution
-environments. The planned contextual contract model will determine whether a positional value is a
-list, set, dictionary, packed buffer, or another representation; first-class dynamic fields also
+environments. Contextual contracts select Sequence, Set, Dictionary, and Packed representations
+where their requirements are unambiguous; further representations and first-class dynamic fields
 remain planned. A non-empty Collection is entirely positional or
 entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes is an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
@@ -324,17 +324,16 @@ The [Phase 4 numeric foundation](spec/02-values-bindings-and-evaluation.md#phase
 now provides exact arbitrary-precision integers, signed/unsigned formats through 64 bits,
 value-based `Natural`/`Integer`/`Real`/`Number` domains, `Float`/`Double`, true `/` alongside
 truncating integer `div`, and precision warnings or errors according to result requirements.
-The packed-layout portion of the [approved design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
-remains planned. `(Contract) expression` now
-converts a value; declarations and directly contracted holes remain checks. Packed storage will
-cover finite positional sequences of fixed-format scalars or fixed-size templates, preserving
+The packed-layout portion of the [approved design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-implemented)
+is implemented. `(Contract) expression` converts a value; declarations and directly contracted
+holes remain checks. Packed storage covers finite positional sequences of fixed-format scalars or fixed-size templates, preserving
 template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
 conversion through this new syntax are deferred. See the canonical
 [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
-The packed-layout plan separates the visible element contracts from private physical layout
-metadata. The current conversion implementation records selected `Packed T` membership over
-immutable reference storage; equally shaped ordinary sequences do not gain that membership merely
-by being homogeneous.
+Packed Collections use contiguous payloads in optimized execution, with reference storage when
+optimizations are disabled. Both retain selected `Packed T` membership, while equally shaped
+ordinary sequences do not gain it merely by being homogeneous. Reflection exposes
+`@packed.elementContract` when visible but never the physical layout or buffer.
 
 The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
 now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,
