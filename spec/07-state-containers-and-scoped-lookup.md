@@ -5,7 +5,7 @@
 
 ## Phase 4 integration boundary
 
-The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 defines unpublished construction and settlement. Constructing code can inspect and edit an
 unfinished Collection, but outside code cannot access it until settlement. This is distinct from
 a stable-identity mutable container. Settled Collection updates produce new values. `eager`

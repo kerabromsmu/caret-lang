@@ -19,7 +19,7 @@ remaining predictable, statically analyzable, and pleasant to work with?
 
 ### Collection evolution
 
-Phase 4's [Collection protocol](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
+Phase 4's [Collection protocol](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 now provides ordinary `keys`, `values`, `fields`, and `size` operations for the implemented
 Collection shapes, with `isOrdered`, `isSequential`, `isUnique`, `isFinite`, `isKeyed`, and
 `hasValues` queries and matching reflection fields. `Natural` describes non-negative integer
@@ -187,12 +187,11 @@ define the implementation requirements.
 
 ### Template fields and missing values
 
-Every value matching a template contains every declared field. Phase 4 plans to complete a named
-Collection literal when one expected template is known: an omitted field directly declared with
+Every value matching a template contains every declared field. A named Collection literal is
+completed when one expected template is known: an omitted field directly declared with
 `T~` or `T?~` is inserted with value `~` when its full clause accepts missing. Null remains distinct;
 `T?~` permits an explicitly supplied null but omission still supplies missing.
 
-<!-- caret-example: planned -->
 ```caret
 Person = template [
   ^name = (String) _
@@ -206,8 +205,8 @@ Person = template [
 The completed value contains `phone = ~` and `nickname = ~`. An alias that accepts missing permits
 an explicitly supplied `~` but does not enable omission. A separately established Collection that
 lacks either field does not match, and explicit conversion does not complete it. Planned direct
-RuleDefinition literals use the same contextual rule for defaultable CATEN fields. Rules and this
-literal-completion behavior remain unimplemented.
+RuleDefinition literals use the same contextual rule for defaultable CATEN fields; those literals
+and their contextual completion remain unimplemented.
 
 ### Ordinary functions
 
@@ -406,11 +405,10 @@ print seqGet items 0
 print dictGet settings "theme"
 ```
 
-The prototype now has a general `Collection` contract, positional and static named `[...]` literals,
-and named Collections returned directly by exported blocks. The planned contextual model will let
-the same literal describe a list, set, dictionary, packed buffer, or heterogeneous structure while
-surrounding contracts select behavior and representation. Dynamic fields will become ordinary
-first-class collection elements rather than a separate object or JSON notation.
+The prototype has a general `Collection` contract, positional and static named `[...]` literals,
+and named Collections returned directly by exported blocks. Contextual contracts select Sequence,
+Set, Dictionary, or packed representations for the same literal where the requirement is
+unambiguous. Further representations and first-class dynamic fields remain planned.
 
 A collection literal containing holes now produces a reifiable collection constructor before a
 surrounding call receives it. These constructors retain positional or named shape, direct nesting,

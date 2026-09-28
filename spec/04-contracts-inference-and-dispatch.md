@@ -9,7 +9,7 @@ Phase 4 provides the format-independent `Natural` domain of non-negative integer
 arbitrary-precision support under the numeric revision below. It does not introduce infinite
 numeric values. Collection `size` has result contract `Natural~`.
 
-The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 owns guarantee queries, shape inference, Field tuples, and contextual empty-Collection equality.
 Runtime validation of lazy membership is unnecessary when inferred/declared producer contracts
 already establish the answer; otherwise necessary computation contributes its ordinary effects.

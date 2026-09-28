@@ -335,7 +335,7 @@ optimizations are disabled. Both retain selected `Packed T` membership, while eq
 ordinary sequences do not gain it merely by being homogeneous. Reflection exposes
 `@packed.elementContract` when visible but never the physical layout or buffer.
 
-The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
+The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,
 `values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
 two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,

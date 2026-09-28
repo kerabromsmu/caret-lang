@@ -20,7 +20,7 @@ handler facilities remain deferred; the
 [effects specification](05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)
 owns their design.
 
-The [planned Collection protocol](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+The [planned Collection protocol](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
 an ordinary protocol operation, not restricted to metadata access.
 

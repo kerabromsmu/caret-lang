@@ -290,19 +290,20 @@ and direct declaration clauses.
 - Complete `LAMBDA-LOWAPP-001`: lambda construction binds above `$`, with parser and runtime
   coverage for ungrouped lambdas used as complete low-precedence arguments.
 
-## Phase 4 — Universal collections, fields, and mutability containers
+## Phase 4 — Universal collections, fields, and mutability containers (completed)
 
-Current foundation: `Collection` is implemented as the general contract for Sequences and
+The completed foundation implements `Collection` as the general contract for Sequences and
 Dictionaries. Static `^name`, ordinary `field "name" value`, exported blocks, and `dictPut` share
 one String-keyed `Dictionary K V` representation; mixed shapes and duplicate keys are diagnosed.
 The common provider-backed `keys`/`values`/`fields`/`size` operations, Boolean-or-missing guarantee
 queries, matching reflection fields, `Natural`, and shape-neutral empty facts are implemented.
-The steps below record the contextual, template, and representation work subject to the final
-Phase 4 completion audit.
-The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
+The steps below record the contextual, template, and representation work verified by the Phase 4
+completion audit (#79).
+The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 records the newer #55/#59 decisions and takes precedence over legacy implementation targets
 for its covered behavior. The common protocol, Field tuple, contextual shape, settlement, lazy
-transform, and strict-consumer foundations are implemented; remaining decisions require their own evidence.
+transform, and strict-consumer foundations are implemented; deferred extensions retain separate
+requirements and evidence.
 
 ### Agreed collection revision and deferrals
 
@@ -355,14 +356,13 @@ are complete; #79 audits the resulting evidence. Their delivery order was:
    recursive structural rules, and exact diagnostics. It selects the representation consumed by #78.
 3. **Packed implementation (#78, implemented):** depends on #76, #77, #82, and #83. It supplies selected
    finite positional layouts for fixed numeric formats, one-byte Boolean, and fixed-size templates;
-   retain declaration order, exclude nullable/variable-size payloads, materialize explicit lazy
+   retains declaration order, excludes nullable/variable-size payloads, materializes explicit lazy
    conversions, rejects incompatible appends, and integrates the common protocol with reference-mode
    parity. Physical layout metadata remains internal.
 
 This order adds prerequisites without renumbering existing Phase 4 cards: #77 → #82 → #83 → #78.
-#79's completion audit
-must include their transitive implementation evidence. Add runnable examples and genuine
-conformance/diagnostic evidence when each feature is implemented. Numeric text parsing through the
+#79's completion audit includes their transitive implementation evidence, runnable examples, and
+conformance/diagnostic evidence. Numeric text parsing through the
 new syntax, custom conversions (possibly related to future formats), Fractional/Complex, wider
 named fixed formats, packed keyed Collections, and bit fields remain deferred.
 
@@ -446,6 +446,12 @@ named fixed formats, packed keyed Collections, and bit fields remain deferred.
   `object.field{}`. Reification exposes no additional read/write authority.
 - Extend reflection with field descriptors, order, mutability, ownership, contracts, nullability,
   optionality, export status, and visibility-filtered container identity/content-contract metadata.
+
+Phase 4 completion is recorded by #79 after the common protocol, contextual templates, exact
+numeric domains, explicit conversion, packed layouts, diagnostics, embedding, examples, and
+optimization parity passed the baseline suites. The project cards #64–#78 and prerequisite cards
+#82/#83 are Done. Public element-operation APIs, custom providers, computations, resumable handlers,
+and callable `eager` forms remain deferred as stated above.
 
 ## Phase 5 — Self-hosting foundation and ordinary cycles
 

@@ -10,6 +10,18 @@ decision.
 Requirement IDs are permanent. Rows may change status, evidence, or wording, but an ID must not be
 reused for another behavior.
 
+## Phase 4 completion record
+
+The Phase 4 completion audit (#79) verifies the implemented Collection protocol, contextual
+templates, exact numeric domains, explicit conversion, packed layouts, Java embedding carriers,
+diagnostics, and optimized/reference parity against the canonical specifications. All Phase 4
+implementation cards #64–#78, predecessor design cards #55/#59, and prerequisite cards #63, #82,
+and #83 are closed and Done in the Caret project. The rows below cite executable Java tests and
+`.caret` examples; `test.sh` exercises
+their golden output and error fixtures. Public element-operation APIs, custom providers,
+computations, resumable handlers, callable `eager`, and later compiler/sandbox features remain
+deferred or planned in their own rows.
+
 | ID                 | Requirement                                                                                                               | Status      | Automated test evidence                                                                                                                                                   | Runnable example                           | Dependency or note                                                                     |
 |--------------------|---------------------------------------------------------------------------------------------------------------------------|-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------|----------------------------------------------------------------------------------------|
 | CORE-VAL-001       | Finite numbers, strings, Booleans, null, and missing are distinct values.                                                 | implemented | `InterpreterTest#characterizesCoreLanguageBehavior`                                                                                                                       | `examples/features/implemented_features.caret`      | Non-finite numeric behavior is `CORE-NUM-001`.                                         |
@@ -269,22 +281,21 @@ found while implementing later phases must be added here as `unresolved` rows be
 settled but unimplemented requirements remain `planned`. Syntax or semantics must never be inferred
 silently from an example.
 
-The following requirements extend the implemented exact-template baseline without introducing the
-deferred context-dependent template invocation API or general computations. Their planned status
-does not change current prototype behavior.
+The following requirement extends the exact-template baseline without introducing the deferred
+context-dependent template invocation API or general computations. Its implemented status is
+supported by the tests and examples below.
 
 | ID | Requirement | Status | Automated test evidence | Runnable example | Dependency or note |
 |---|---|---|---|---|---|
-| TEMPLATE-OPTIONAL-001 | A named Collection literal under one unambiguous expected template materializes each omitted direct `T~` or `T?~` hole as a present field containing `~` when the full clause accepts missing. | implemented | `InterpreterTest#contextualNamedTemplateBindingCompletesOnlyDirectMissingModifiers`; `InterpreterTest#expectedTemplatesCompleteKnownArgumentsAndNestedLiterals`; `InterpreterTest#declaredTemplateResultsCompleteLiteralsAndExportedBlocks`; `InterpreterTest#dynamicTemplateKeysAndNullableOptionalTermsCompleteWithoutChangingPredicates`; `InterpreterTest#templateCompletionPreservesExplicitValuesAndExistingCollections`; `InterpreterTest#templateCompletionRejectsNondefaultableAndWrongShapesWithLocations`; `InterpreterTest#competingTemplateOverloadsCannotSelectByCompletingAnArgument`; `InterpreterTest#sharedNumberedHoleRequirementsCanDisableAVisibleDefault`; `InterpreterTest#templateCompletionMetadataIsIndependentOfStorageReuse` | `examples/features/templates.caret`; `examples/errors/template_missing_required.caret` | [Named templates](spec/06-collections-fields-and-templates.md#named-fields); bindings, known arguments, results, nesting and exported blocks. Aliases and incompatible shared-hole constraints do not default; predicates remain exact. Explicit conversion awaits #83. Reflect `defaultsMissing`; no packed layout implied. |
+| TEMPLATE-OPTIONAL-001 | A named Collection literal under one unambiguous expected template materializes each omitted direct `T~` or `T?~` hole as a present field containing `~` when the full clause accepts missing. | implemented | `InterpreterTest#contextualNamedTemplateBindingCompletesOnlyDirectMissingModifiers`; `InterpreterTest#expectedTemplatesCompleteKnownArgumentsAndNestedLiterals`; `InterpreterTest#declaredTemplateResultsCompleteLiteralsAndExportedBlocks`; `InterpreterTest#dynamicTemplateKeysAndNullableOptionalTermsCompleteWithoutChangingPredicates`; `InterpreterTest#templateCompletionPreservesExplicitValuesAndExistingCollections`; `InterpreterTest#templateCompletionRejectsNondefaultableAndWrongShapesWithLocations`; `InterpreterTest#competingTemplateOverloadsCannotSelectByCompletingAnArgument`; `InterpreterTest#sharedNumberedHoleRequirementsCanDisableAVisibleDefault`; `InterpreterTest#templateCompletionMetadataIsIndependentOfStorageReuse` | `examples/features/templates.caret`; `examples/errors/template_missing_required.caret` | [Named templates](spec/06-collections-fields-and-templates.md#named-fields); bindings, known arguments, results, nesting and exported blocks. Aliases and incompatible shared-hole constraints do not default; predicates and explicit conversion remain exact. Reflect `defaultsMissing`; no packed layout implied. |
 | RULE-PHASE-CONTRACT-001 | Define the first-class contracts for RuleDefinition C/T/E values while preserving persistent contexts, reevaluable triggers and effects executed only on rule application. | unresolved | — | — | [Rule phase dependencies](spec/11-rules-rulesets-and-objects.md#basic-definition); Phase 8 prerequisite alongside TEMPLATE-OPTIONAL-001. No rule-specific AST, parser exception or hidden lazy-expression wrapper may substitute for these contracts. |
 
 ## Collection revision and deferred execution design
 
-The [Phase 4 revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
-is being implemented incrementally. The common protocol and contextual Field/shape foundation have
-runtime evidence; remaining rows require their own implementation, diagnostics, and runnable examples.
-Zip APIs and lazy `with` binding remain unimplemented.
-Public custom-provider construction remains deferred. Equality forcing is provisional.
+The [Phase 4 revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+is implemented for the rows marked below, including the common protocol, contextual Field/shape
+construction, zip APIs, and lazy `with` binding. Public custom-provider construction remains
+deferred. Equality forcing follows the specified provisional policy.
 
 | Requirement | Normative behavior | Status | Automated evidence | Runnable examples | Notes |
 |---|---|---|---|---|---|

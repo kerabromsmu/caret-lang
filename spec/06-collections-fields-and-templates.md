@@ -4,22 +4,19 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="phase-4-collection-protocol-revision-planned"></a>
-## Phase 4 Collection protocol revision (partially implemented)
+<a id="phase-4-collection-protocol-revision-partially-implemented"></a>
+## Phase 4 Collection protocol revision (implemented with deferred extensions)
 
 This section records the decisions from issues #55 and #59 and their joint design discussion.
 The common `keys`/`values`/`fields`/`size` protocol, Boolean-or-missing guarantee queries,
 matching reflection fields, `Natural`, contextual Field/Set/Dictionary/keyless shapes, first-key
 settlement, unified access, lazy shape-aware transforms, strict consumers, paired construction,
-revised Collection equality,
-and shape-neutral empty facts are
-implemented. The remaining state, scoped-lookup, materialization,
-and packed-layout work in this revision is
-planned. Expected-template completion for named literals is implemented. For the subjects covered here the revision
-supersedes the earlier target semantics below: required dot access, scalar-only dynamic keys,
+revised Collection equality, shape-neutral empty facts, containers, scoped lookup,
+collection-value `eager`, expected-template completion for named literals, and selected packed
+layouts are implemented. Later extensions are identified below. For the subjects covered here,
+this revision supersedes earlier target semantics: required dot access, scalar-only dynamic keys,
 eager transforms, a distinct non-Collection Field representation, and earlier collection-equality
-assumptions. Existing tests and the implemented baseline remain valid descriptions of the current
-prototype until their corresponding implementation changes land. Examples for unfinished slices
-remain conceptual/planned.
+assumptions. Examples for deferred extensions remain conceptual/planned.
 
 ### Scope and custom-provider deferral
 
@@ -37,8 +34,8 @@ interface, and additional immutable-update syntax are also deferred beyond Phase
 phase assigned. Their design is retained below. Internal construction and settlement, existing
 persistent primitives, and mutable containers with `put` remain in scope.
 
-The Dictionary-order, zip construction, with-binding, and Field-access decisions below supersede
-the former open items. Their implementation remains planned.
+The implemented Dictionary-order, zip construction, with-binding, and Field-access decisions below
+supersede the former open items.
 
 Custom construction has a semantic model: a provider supplies access, enumeration, size, and
 guarantees; constructing code can edit unpublished content until settlement. The public mechanism

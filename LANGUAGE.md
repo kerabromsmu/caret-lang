@@ -125,7 +125,7 @@ semantic contract; physical layouts remain private.
 
 ## Deferred specification work
 
-The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
+The [Phase 4 Collection protocol revision](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 records the joint #55/#59 decisions and their explicit precedence over affected legacy target behavior.
 Its common enumeration, size, guarantee, reflection, `Natural`, contextual Field/Set/Dictionary
 shape, settlement, unified access, lazy transforms, strict consumers, paired construction, revised equality,
