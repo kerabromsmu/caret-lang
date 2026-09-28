@@ -166,12 +166,19 @@ fixed-layout storage. Eligible element contracts use concrete numeric
 formats, Boolean, or fixed-size templates. Named record fields retain template declaration order;
 scalar positions need concrete formats. Missing/null payloads, variable-size fields, and bit
 fields are excluded.
+Derived contracts with one fixed base layout can also select packed storage. Literal construction,
+explicit packed conversion, and `seqAdd` check their bases and refinements and preserve derived
+membership on access, including nested template fields. Append does not implicitly round a
+fractional or out-of-range value.
 
 ```caret
 (Packed Int8) small = [1 2]
 converted = (Packed Int8) [1.9 2.1]  // [1 2], with explicit element conversion
 ordinary = (Sequence Number) small
 extended = seqAdd ordinary 300
+Small = contract Int8
+(Packed Small) tagged = [1 2]
+print Small (getElement tagged 0)  // true
 ```
 
 Lazy input must be consumed before a packed result is available. Keyed input requires an explicit
@@ -370,6 +377,8 @@ non-callable metadata Dictionary: `type (@function)` is `"Dictionary"`, while `@
 `"Function"`. Its fields are computed lazily for the observing environment: hidden facts and names
 become `~`, known-empty facts remain `[]`, and moving metadata cannot increase visibility. Adjacent
 postfix `:` recovers the reflected value or callable only when that observer retains access.
+The same visibility check applies when using `getElement`, `keys`, `values`, `fields`, or `size`
+on retained reflective metadata.
 
 ## Values and collections
 

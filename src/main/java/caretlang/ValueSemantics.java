@@ -74,7 +74,7 @@ final class ValueSemantics {
                     ? projected.fields(context) : reflective.fields());
             default -> { }
         }
-        CollectionRuntime.provider(value).ifPresent(provider -> {
+        CollectionRuntime.provider(value, context).ifPresent(provider -> {
             CollectionRuntime.Facts facts = provider.facts();
             facts.validate(null);
             fields.put("sequential", facts.sequential().value());
@@ -119,8 +119,8 @@ final class ValueSemantics {
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY,
                     "Callable values cannot be compared for equality", null);
         }
-        Optional<CollectionRuntime.Provider> leftProvider = CollectionRuntime.provider(a);
-        Optional<CollectionRuntime.Provider> rightProvider = CollectionRuntime.provider(b);
+        Optional<CollectionRuntime.Provider> leftProvider = CollectionRuntime.provider(a, context);
+        Optional<CollectionRuntime.Provider> rightProvider = CollectionRuntime.provider(b, context);
         if (leftProvider.isPresent() || rightProvider.isPresent()) {
             return leftProvider.isPresent() && rightProvider.isPresent()
                     && equalCollections(a, leftProvider.get(), b, rightProvider.get(), context);

@@ -23,6 +23,11 @@ owns their design.
 The [planned Collection protocol](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
 an ordinary protocol operation, not restricted to metadata access.
+For a reflective Collection, `getElement`, `keys`, `values`, `fields`, `size`, equality, and
+Collection facts use the intersection of the reference's captured context and the current
+observer context. Merely checking Collection membership does not project metadata. Retaining a
+reference across observer changes cannot reveal names or inferred facts hidden from either
+context.
 
 Implemented Collection-value `eager` replaces a reflection reference with the empty Collection without traversing its
 metadata, including nested references. It does not snapshot the reflective target or recover

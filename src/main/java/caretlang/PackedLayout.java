@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 
 /** One immutable physical descriptor shared by all elements of a packed Collection. */
 final class PackedLayout {
@@ -188,9 +190,41 @@ final class PackedLayout {
     }
 
     private static Node node(ContractDescriptor contract, SourceSpan span) {
-        if (contract instanceof BuiltinContract builtin) return scalar(builtin, span);
+        Node selected = candidate(contract, span, Collections.newSetFromMap(new IdentityHashMap<>()));
+        if (selected == null) throw invalid("No fixed packed layout for " + contract.publicName(), span);
+        return selected;
+    }
+
+    private static Node candidate(ContractDescriptor contract, SourceSpan span,
+                                  Set<ContractDescriptor> visiting) {
+        if (contract instanceof ModifiedContract modified) {
+            if (modified.nullable() || modified.optional()) {
+                throw invalid("Packed fields cannot be nullable or optional", span);
+            }
+        }
+        if (contract instanceof BuiltinContract builtin) {
+            return switch (builtin) {
+                case INT8, UINT8, BOOLEAN, INT16, UINT16, INT32, UINT32, FLOAT,
+                     INT64, UINT64, DOUBLE -> scalar(builtin, span);
+                default -> null;
+            };
+        }
         if (contract instanceof TemplateContract template) return node(template.descriptor().root(), span);
-        throw invalid("No fixed packed layout for " + contract.publicName(), span);
+        if (!visiting.add(contract)) return null;
+        try {
+            Node selected = null;
+            for (ContractDescriptor base : contract.bases()) {
+                Node next = candidate(base, span, visiting);
+                if (next == null) continue;
+                if (selected != null && !selected.equals(next)) {
+                    throw invalid("Conflicting concrete packed formats", span);
+                }
+                selected = next;
+            }
+            return selected;
+        } finally {
+            visiting.remove(contract);
+        }
     }
 
     private static Node scalar(BuiltinContract format, SourceSpan span) {
@@ -212,27 +246,18 @@ final class PackedLayout {
             return new Constant(value);
         }
         if (descriptor instanceof CollectionConstructorDescriptor.HoleNode hole) {
-            BuiltinContract selected = null;
+            Node selected = null;
             for (Object requirement : hole.requirements()) {
                 if (!(requirement instanceof ContractDescriptor contract)) continue;
-                if (contract instanceof ModifiedContract modified
-                        && (modified.nullable() || modified.optional())) {
-                    throw invalid("Packed fields cannot be nullable or optional", span);
-                }
-                if (!(contract instanceof BuiltinContract builtin)) continue;
-                if (!(builtin == BuiltinContract.INT8 || builtin == BuiltinContract.UINT8
-                        || builtin == BuiltinContract.INT16 || builtin == BuiltinContract.UINT16
-                        || builtin == BuiltinContract.INT32 || builtin == BuiltinContract.UINT32
-                        || builtin == BuiltinContract.INT64 || builtin == BuiltinContract.UINT64
-                        || builtin == BuiltinContract.FLOAT || builtin == BuiltinContract.DOUBLE
-                        || builtin == BuiltinContract.BOOLEAN)) continue;
-                if (selected != null && selected != builtin) {
+                Node next = candidate(contract, span, Collections.newSetFromMap(new IdentityHashMap<>()));
+                if (next == null) continue;
+                if (selected != null && !selected.equals(next)) {
                     throw invalid("Conflicting concrete packed formats", span);
                 }
-                selected = builtin;
+                selected = next;
             }
             if (selected == null) throw invalid("Packed field requires one concrete format", span);
-            return scalar(selected, span);
+            return selected;
         }
         CollectionConstructorDescriptor.CollectionNode collection =
                 (CollectionConstructorDescriptor.CollectionNode) descriptor;

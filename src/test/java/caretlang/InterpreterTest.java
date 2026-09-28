@@ -262,6 +262,58 @@ final class InterpreterTest {
     }
 
     @Test
+    void derivedPackedContractsAcquireNominalElementsAcrossAllOperations() {
+        assertEquals("true\ntrue\ntrue\ntrue\ntrue\n", execute("""
+                Small = contract Int8
+                (Packed Small) values = [1]
+                converted = (Packed Small) [2]
+                appended = seqAdd values 3
+                print Small (getElement values 0)
+                print Small (getElement converted 0)
+                print Small (getElement appended 1)
+                print (Sequence Small appended)
+                print Packed Small appended
+                """));
+        assertEquals("true\ntrue\n", execute("""
+                Small = contract Int8
+                Point = template [(Small) _]
+                (Packed Point) points = [[1]]
+                print Small (getElement (getElement points 0) 0)
+                print Point (getElement points 0)
+                """));
+        String refined = """
+                positive value = value > 0
+                Small = contract [Int8 positive]
+                (Packed Small) values = [1]
+                extended = seqAdd values 2
+                print Small (getElement extended 0)
+                print Small (getElement extended 1)
+                """;
+        assertEquals(executeWithOwnership(refined, OwnershipTracker.Mode.DISABLED),
+                executeWithOwnership(refined, OwnershipTracker.Mode.ENABLED));
+        assertEquals("true\ntrue\n", execute(refined));
+        LangException refinement = assertThrows(LangException.class, () -> execute("""
+                positive value = value > 0
+                Small = contract [Int8 positive]
+                (Packed Small) values = [1]
+                seqAdd values (0 - 1)
+                """));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, refinement.diagnostic().code());
+        for (String expression : List.of("(Packed Small) [1.9]", "seqAdd values 1.9")) {
+            LangException failure = assertThrows(LangException.class, () -> execute("""
+                    Small = contract Int8
+                    (Packed Small) values = [1]
+                    """ + expression));
+            assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, failure.diagnostic().code());
+        }
+        LangException conflict = assertThrows(LangException.class, () -> execute("""
+                Conflicted = contract [Int8 UInt8]
+                (Packed Conflicted) []
+                """));
+        assertEquals(Diagnostic.Codes.INVALID_PACKED_LAYOUT, conflict.diagnostic().code());
+    }
+
+    @Test
     void packedAppendEnumerationEagerAndAliasesPreserveSelectedLayout() {
         assertEquals("true\ntrue\nfalse\n3\n[ 0 1 2 ]\n[ 1 2 3 ]\n2\ntrue\ntrue\ntrue\n", execute("""
                 Small = Packed Int8
@@ -678,9 +730,10 @@ final class InterpreterTest {
 
     @Test
     void contextualFloatRoundsFromSourceDigitsIncludingTiesAndSubnormals() {
-        String subnormal = java.math.BigDecimal.ONE.divide(
-                java.math.BigDecimal.valueOf(2).pow(149)).toPlainString();
-        String floatMaximum = new java.math.BigDecimal((double) Float.MAX_VALUE).toPlainString();
+        // 2^-149 = 5^149 / 10^149, so this decimal is exact.
+        String subnormal = new java.math.BigDecimal(java.math.BigInteger.valueOf(5).pow(149), 149)
+                .toPlainString();
+        String floatMaximum = new java.math.BigDecimal(Float.MAX_VALUE).toPlainString();
         String doubleMaximum = new java.math.BigDecimal(Double.MAX_VALUE).toBigIntegerExact().toString();
         assertEquals("true\ntrue\ntrue\ntrue\ntrue\n", execute("""
                 (Float) tied = 1.000000059604644775390625
@@ -2125,6 +2178,47 @@ final class InterpreterTest {
     }
 
     @Test
+    void collectionProtocolUsesCurrentObserverForRetainedCallableMetadata() {
+        Value.Callable callable = new Value.FunctionValue("transform", List.of("value"),
+                (args, ignored) -> args.getFirst().value());
+        ReflectionContext defining = ReflectionContext.defining();
+        ReflectionContext hidden = ReflectionContext.externalModule(false, false, Set.of());
+        Value.ProjectedDictionary retained = (Value.ProjectedDictionary)
+                Value.CallableMetadata.reflection(callable, defining);
+        CollectionRuntime.Provider visible = CollectionRuntime.provider(retained, defining).orElseThrow();
+        CollectionRuntime.Provider restricted = CollectionRuntime.provider(retained, hidden).orElseThrow();
+        assertEquals(new Value.Str("transform"), visible.getElement(new Value.Str("id")));
+        assertEquals(Value.Missing.INSTANCE, restricted.getElement(new Value.Str("id")));
+        assertTrue(((Value.Seq) restricted.keys()).values().contains(new Value.Str("id")));
+        assertTrue(((Value.Seq) restricted.fieldEntries()).values().stream().anyMatch(field ->
+                field instanceof Value.Field entry && entry.key().equals(new Value.Str("id"))
+                        && entry.value() == Value.Missing.INSTANCE));
+        assertFalse(((Value.Seq) restricted.valueEntries()).values().contains(new Value.Str("transform")));
+        assertEquals(new Value.Num(((Value.Seq) restricted.keys()).size()), restricted.size());
+        assertEquals(new Value.Num(retained.fields(hidden).size()), restricted.size());
+        assertEquals(restricted.size(), ValueSemantics.reflectionFields(retained, hidden).get("size"));
+
+        Value.ProjectedDictionary capturedHidden = (Value.ProjectedDictionary)
+                Value.CallableMetadata.reflection(callable, hidden);
+        assertEquals(Value.Missing.INSTANCE, CollectionRuntime.provider(capturedHidden, defining)
+                .orElseThrow().getElement(new Value.Str("id")));
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        interpreter.execute(new Parser("(Number) transform (Number) value = value + 1\nmetadata = @transform")
+                .parseProgram());
+        interpreter.reflectionContext(hidden);
+        interpreter.execute(new Parser("""
+                print getElement metadata "id"
+                print (size metadata) == (size (keys metadata))
+                print (size metadata) == (size (fields metadata))
+                with metadata
+                  print id
+                """).parseProgram());
+        assertEquals("~\ntrue\ntrue\n~\n", bytes.toString(StandardCharsets.UTF_8));
+    }
+
+    @Test
     void callableReflectionSeparatesStableDeclarationsFromStrongerLocalInference() {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
@@ -2201,19 +2295,18 @@ final class InterpreterTest {
     void hiddenCallableAndDescriptorMetadataRetainLanguageOwnedIdentity() {
         Object firstIdentity = new Object();
         Object secondIdentity = new Object();
-        CallableSignature firstSignature = signatureWithRequirement(firstIdentity, "Private");
-        CallableSignature secondSignature = signatureWithRequirement(secondIdentity, "Private");
+        CallableSignature firstSignature = signatureWithRequirement(firstIdentity);
+        CallableSignature secondSignature = signatureWithRequirement(secondIdentity);
         Value.Callable first = new Value.FunctionValue("first", List.of("value"),
                 (values, span) -> values.getFirst().value(),
                 false, firstSignature);
-        Value.Callable alias = first;
         Value.Callable second = new Value.FunctionValue("second", List.of("value"),
                 (values, span) -> values.getFirst().value(),
                 false, secondSignature);
         ReflectionContext hidden = ReflectionContext.restricted(false, false, false, Set.of());
 
         Value firstMetadata = Value.CallableMetadata.reflection(first, hidden);
-        Value aliasMetadata = Value.CallableMetadata.reflection(alias, hidden);
+        Value aliasMetadata = Value.CallableMetadata.reflection(first, hidden);
         Value secondMetadata = Value.CallableMetadata.reflection(second, hidden);
         assertTrue(ValueSemantics.equal(firstMetadata, aliasMetadata, ReflectionContext.defining()));
         assertFalse(ValueSemantics.equal(firstMetadata, secondMetadata, ReflectionContext.defining()));
@@ -2227,8 +2320,8 @@ final class InterpreterTest {
         assertFalse(ValueSemantics.equal(firstRef, secondRef, ReflectionContext.defining()));
     }
 
-    private static CallableSignature signatureWithRequirement(Object identity, String name) {
-        CallableSignature.ContractTerm requirement = new CallableSignature.NamedRef(identity, name);
+    private static CallableSignature signatureWithRequirement(Object identity) {
+        CallableSignature.ContractTerm requirement = new CallableSignature.NamedRef(identity, "Private");
         return new CallableSignature(List.of(new CallableSignature.Parameter("value", List.of(requirement),
                 List.of(requirement), List.of(requirement))),
                 new CallableSignature.Result(List.of(requirement), List.of(requirement), List.of(requirement)),
@@ -2763,9 +2856,9 @@ final class InterpreterTest {
                 true
                 false
                 true
-                [ \"a\" \"missing\" \"z\" ]
+                [ "a" "missing" "z" ]
                 [ 1 ~ 3 ]
-                [ \"a\" = 1 \"missing\" = ~ \"z\" = 3 ]
+                [ "a" = 1 "missing" = ~ "z" = 3 ]
                 3
                 false
                 true
@@ -2787,7 +2880,7 @@ final class InterpreterTest {
                 true
                 true
                 3
-                [ \"a\" \"missing\" \"z\" ]
+                [ "a" "missing" "z" ]
                 local
                 Collection
                 Natural
@@ -2879,7 +2972,7 @@ final class InterpreterTest {
                 CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE));
         SourceSpan span = SourceSpan.point(new SourcePosition(8, 2, 4));
         LangException error = assertThrows(LangException.class, () ->
-                CollectionRuntime.provider(provider).orElseThrow().facts().validate(span));
+                CollectionRuntime.provider(provider, ReflectionContext.defining()).orElseThrow().facts().validate(span));
         assertEquals(Diagnostic.Codes.CONTRADICTORY_COLLECTION_GUARANTEES, error.diagnostic().code());
         assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
         assertEquals(span, error.diagnostic().primarySpan());
@@ -2892,7 +2985,7 @@ final class InterpreterTest {
                 CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
                 CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE));
         assertSame(Value.EmptyCollection.INSTANCE,
-                CollectionRuntime.provider(valid).orElseThrow().keys());
+                CollectionRuntime.provider(valid, ReflectionContext.defining()).orElseThrow().keys());
         assertEquals(1, valid.reads);
         Map<String, Value> reflected = ValueSemantics.reflectionFields(valid);
         assertSame(Value.Missing.INSTANCE, reflected.get("size"));
@@ -3021,7 +3114,7 @@ final class InterpreterTest {
     @Test
     void internalFieldAndCollectionSettlementPreservePersistentValues() {
         Value.Field field = new Value.Field(new Value.Str("key"), Value.Missing.INSTANCE);
-        CollectionRuntime.Provider provider = CollectionRuntime.provider(field).orElseThrow();
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(field, ReflectionContext.defining()).orElseThrow();
         assertEquals(new Value.Str("key"), provider.getElement(new Value.Num(0)));
         assertSame(Value.Missing.INSTANCE, provider.getElement(new Value.Num(1)));
         assertSame(Value.Missing.INSTANCE, provider.getElement(new Value.Num(2)));
@@ -4430,7 +4523,7 @@ final class InterpreterTest {
                 """));
         Value.Callable callable = new Value.FunctionValue("identity", List.of("value"),
                 (args, ignored) -> args.getFirst().value());
-        assertSame(callable, EagerRuntime.materialize(callable, null));
+        assertSame(callable, EagerRuntime.materialize(callable, null, ReflectionContext.defining()));
     }
 
     @Test
@@ -4460,7 +4553,7 @@ final class InterpreterTest {
         TracedProvider nested = new TracedProvider(trace, "nested", List.of(new Value.Num(7)));
         TracedProvider root = new TracedProvider(trace, "root", List.of(nested));
         Value result = EagerRuntime.materialize(root, new SourceSpan(new SourcePosition(0, 1, 1),
-                new SourcePosition(5, 1, 6)));
+                new SourcePosition(5, 1, 6)), ReflectionContext.defining());
         assertEquals(List.of("root:keys", "root:values", "nested:keys", "nested:values"), trace);
         assertSame(Value.Missing.INSTANCE, ((CollectionRuntime.Provider) result).getElement(new Value.Num(2)));
         assertEquals(new Value.Num(999), root.getElement(new Value.Num(2)));
@@ -4471,7 +4564,8 @@ final class InterpreterTest {
         Value.Seq cycle = new Value.Seq(List.of());
         cycle.appendOwned(cycle);
         SourceSpan span = new SourceSpan(new SourcePosition(14, 3, 5), new SourcePosition(19, 3, 10));
-        LangException cyclic = assertThrows(LangException.class, () -> EagerRuntime.materialize(cycle, span));
+        LangException cyclic = assertThrows(LangException.class, () -> EagerRuntime.materialize(cycle, span,
+                ReflectionContext.defining()));
         assertEquals(Diagnostic.Codes.EAGER_CYCLE, cyclic.diagnostic().code());
         assertEquals(3, cyclic.span().start().line());
         assertEquals(5, cyclic.span().start().column());
@@ -4491,7 +4585,7 @@ final class InterpreterTest {
             }
         }
         LangException infinite = assertThrows(LangException.class,
-                () -> EagerRuntime.materialize(new InfiniteProvider(), span));
+                () -> EagerRuntime.materialize(new InfiniteProvider(), span, ReflectionContext.defining()));
         assertEquals(Diagnostic.Codes.EAGER_INFINITE, infinite.diagnostic().code());
         assertEquals(3, infinite.span().start().line());
     }
@@ -4507,7 +4601,8 @@ final class InterpreterTest {
         Value.KeyedCollection source = new Value.KeyedCollection(Value.KeyedCollection.Shape.GENERAL,
                 List.of(new Value.KeyedCollection.Entry(firstKey, new Value.Num(10)),
                         new Value.KeyedCollection.Entry(secondKey, ignoredCycle)));
-        Value.SettledCollection result = (Value.SettledCollection) EagerRuntime.materialize(source, null);
+        Value.SettledCollection result = (Value.SettledCollection) EagerRuntime.materialize(source, null,
+                ReflectionContext.defining());
         assertEquals(1, result.entries().size());
         assertSame(Value.EmptyCollection.INSTANCE, result.entries().getFirst().key());
         assertEquals(new Value.Num(10), result.entries().getFirst().value());
@@ -4515,11 +4610,11 @@ final class InterpreterTest {
 
         Value.Seq shared = new Value.Seq(List.of(new Value.Num(5)));
         Value.SettledCollection dag = (Value.SettledCollection) EagerRuntime.materialize(
-                new Value.Seq(List.of(shared, shared)), null);
+                new Value.Seq(List.of(shared, shared)), null, ReflectionContext.defining());
         assertSame(dag.entries().get(0).value(), dag.entries().get(1).value());
         Value.Field sharedField = new Value.Field(new Value.Str("x"), shared);
         Value.SettledCollection fieldDag = (Value.SettledCollection) EagerRuntime.materialize(
-                new Value.Seq(List.of(sharedField, sharedField)), null);
+                new Value.Seq(List.of(sharedField, sharedField)), null, ReflectionContext.defining());
         assertSame(fieldDag.entries().get(0).value(), fieldDag.entries().get(1).value());
     }
 
@@ -4541,7 +4636,8 @@ final class InterpreterTest {
             }
         }
         KeylessProvider source = new KeylessProvider();
-        CollectionRuntime.Provider result = (CollectionRuntime.Provider) EagerRuntime.materialize(source, null);
+        CollectionRuntime.Provider result = (CollectionRuntime.Provider) EagerRuntime.materialize(source, null,
+                ReflectionContext.defining());
         assertSame(Value.Missing.INSTANCE, result.keys());
         assertSame(Value.Missing.INSTANCE, result.getElement(new Value.Num(0)));
         assertEquals(new Value.Num(99), source.getElement(new Value.Num(0)));
@@ -4550,9 +4646,9 @@ final class InterpreterTest {
         ContractDescriptor numbers = BuiltinContract.SEQUENCE.parameterize(List.of(BuiltinContract.NUMBER));
         Value.Attributed attributed = new Value.Attributed(new Value.Seq(List.of(new Value.Num(1))),
                 Set.of(numbers));
-        Value materialized = EagerRuntime.materialize(attributed, null);
-        assertTrue(materialized instanceof Value.Attributed);
-        assertTrue(((Value.Attributed) materialized).contracts().contains(numbers));
+        Value.Attributed materialized = assertInstanceOf(Value.Attributed.class,
+                EagerRuntime.materialize(attributed, null, ReflectionContext.defining()));
+        assertTrue(materialized.contracts().contains(numbers));
         assertTrue(numbers.accepts(materialized));
     }
 

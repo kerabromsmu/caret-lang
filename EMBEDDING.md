@@ -111,6 +111,11 @@ new sandbox for another script.
 Sequences, named Collections, and callables. Convenience factories include `number`, `text`,
 `bool`, `nullValue`, `missing`, `sequence`, and `collection`; construct a `FieldValue` directly.
 Null and missing remain distinct.
+`FieldValue(String name, CaretValue value)` remains the string-key form. Use
+`KeyedFieldValue(CaretValue key, CaretValue value)` or `CaretValue.field(key, value)` for numeric,
+Boolean, or other non-string keys. Caret-to-Java conversion emits the typed form for non-string
+keys; both forms round-trip through callbacks, including fields within keyed Collections. Callable
+keys and values must belong to the receiving sandbox.
 
 A successful execution returns a named `CollectionValue` containing every binding in the script's
 top lexical layer. Java can invoke a returned `CaretCallable` directly or through `sandbox.invoke`:

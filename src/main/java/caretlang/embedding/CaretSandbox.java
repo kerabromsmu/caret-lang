@@ -214,6 +214,10 @@ public final class CaretSandbox implements AutoCloseable {
                 }
             }
             case CaretValue.FieldValue field -> requireOwnedCallables(field.value());
+            case CaretValue.KeyedFieldValue field -> {
+                requireOwnedCallables(field.key());
+                requireOwnedCallables(field.value());
+            }
             case CaretValue.SequenceValue sequence -> sequence.values().forEach(this::requireOwnedCallables);
             case CaretValue.CollectionValue collection -> collection.fields().values().forEach(this::requireOwnedCallables);
             default -> { }

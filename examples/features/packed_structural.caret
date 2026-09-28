@@ -8,3 +8,14 @@ print points == [[^z = 42 ^a = true] [^z = -7 ^a = false]]
 appended = seqAdd points [^z = 0 ^a = true]
 print Points appended
 print size appended
+
+Small = contract Int8
+(Packed Small) derived = [1 2]
+print Small (getElement derived 0)
+converted = (Packed Small) [3]
+print Small (getElement converted 0)
+extended = seqAdd derived 4
+print Small (getElement extended 2)
+SmallPoint = template [^x = (Small) _]
+(Packed SmallPoint) nested = [[^x = 5]]
+print Small ((getElement nested 0).x)

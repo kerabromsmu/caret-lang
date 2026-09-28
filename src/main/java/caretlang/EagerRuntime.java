@@ -7,13 +7,17 @@ import java.util.List;
 /** Enumeration-first, depth-first materialization of language Collection values. */
 final class EagerRuntime {
     private final SourceSpan span;
+    private final ReflectionContext observer;
     private final IdentityHashMap<Value, Value> completed = new IdentityHashMap<>();
     private final IdentityHashMap<Value, Boolean> active = new IdentityHashMap<>();
 
-    private EagerRuntime(SourceSpan span) { this.span = span; }
+    private EagerRuntime(SourceSpan span, ReflectionContext observer) {
+        this.span = span;
+        this.observer = observer;
+    }
 
-    static Value materialize(Value value, SourceSpan span) {
-        return new EagerRuntime(span).visit(value);
+    static Value materialize(Value value, SourceSpan span, ReflectionContext observer) {
+        return new EagerRuntime(span, observer).visit(value);
     }
 
     private Value visit(Value value) {
@@ -46,7 +50,7 @@ final class EagerRuntime {
             }
             finally { active.remove(value); }
         }
-        CollectionRuntime.Provider provider = CollectionRuntime.provider(value).orElse(null);
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(value, observer).orElse(null);
         if (provider == null) return value;
         if (active.containsKey(value)) throw cycle();
         Value previous = completed.get(value);

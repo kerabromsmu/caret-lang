@@ -1799,7 +1799,7 @@ final class Interpreter {
     private Value evaluateWith(With with, Environment env, Resolution resolution) {
         Value target = evalInner(with.target(), env, resolution);
         Value raw = underlying(target);
-        CollectionRuntime.Provider provider = CollectionRuntime.provider(raw).orElse(null);
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(raw, reflectionContext).orElse(null);
         if (provider == null || provider.facts().keyed() == CollectionRuntime.Guarantee.FALSE) {
             throw runtime(Diagnostic.Codes.EXPECTED_WITH_TARGET,
                     "with target must expose public named members", with.target().span());
@@ -2174,7 +2174,8 @@ final class Interpreter {
                 new CallableSignature.Effects(List.of("Output", "StateRead", "StateWrite", "TestReport")
                         .stream().map(CallableSignature.EffectRef::new).toList(), null, null), List.of());
         builtins.define("eager", new Value.FunctionValue("eager", List.of("value"),
-                (args, ignored) -> EagerRuntime.materialize(args.getFirst().value(), args.getFirst().span()),
+                (args, ignored) -> EagerRuntime.materialize(args.getFirst().value(), args.getFirst().span(),
+                        reflectionContext),
                 false, eagerSignature));
         builtins.define("isSequential", collectionGuarantee("isSequential",
                 CollectionRuntime.Facts::sequential));
@@ -2188,7 +2189,8 @@ final class Interpreter {
         builtins.define("seqAdd", locatedFunction("seqAdd", List.of("sequence", "value"), (args, ignored) -> {
             Value current = underlying(args.getFirst().value());
             if (current instanceof Value.PackedCollection packed) {
-                Value value = args.get(1).value();
+                Value value = acquirePackedValue(packed.elementContract(), args.get(1).value(),
+                        args.get(1).span());
                 if (!packed.layout().canEncode(value)
                         || !packed.elementContract().test(value, args.get(1).span())) {
                     throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
@@ -2625,7 +2627,7 @@ final class Interpreter {
     }
 
     private CollectionRuntime.Provider collection(Value.Argument argument) {
-        CollectionRuntime.Provider provider = CollectionRuntime.provider(argument.value()).orElseThrow(() ->
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(argument.value(), reflectionContext).orElseThrow(() ->
                 runtime(Diagnostic.Codes.EXPECTED_COLLECTION,
                         "Expected Collection, got: " + argument.value(), argument.span()));
         provider.facts().validate(argument.span());
@@ -2831,13 +2833,78 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                     "Expected sequence, got: " + ValueSemantics.kind(raw), span);
         }
-        for (Value value : values) {
+        List<Value> acquired = new ArrayList<>(values.size());
+        for (Value original : values) {
+            Value value = acquirePackedValue(element, original, span);
             if (!element.test(value, span)) {
                 throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
                         "Contract violation for packed literal element: expected " + element.publicName(), span);
             }
+            acquired.add(value);
         }
-        return new Value.PackedCollection(element, values, span, ownership.optimizationsEnabled());
+        return new Value.PackedCollection(element, acquired, span, ownership.optimizationsEnabled());
+    }
+
+    private Value acquirePackedValue(ContractDescriptor contract, Value value, SourceSpan span) {
+        if (contract instanceof UserContract user) {
+            if (user.accepts(value)) return value;
+            Value acquired = value;
+            for (ContractDescriptor base : user.bases()) {
+                acquired = acquirePackedValue(base, acquired, span);
+            }
+            if (!user.canAcquire(acquired, span)) return acquired;
+            java.util.LinkedHashSet<ContractDescriptor> memberships = new java.util.LinkedHashSet<>();
+            while (acquired instanceof Value.Attributed attributed) {
+                memberships.addAll(attributed.contracts());
+                acquired = attributed.value();
+            }
+            memberships.add(user);
+            return new Value.Attributed(acquired, memberships);
+        }
+        if (contract instanceof TemplateContract template) {
+            return acquirePackedNode(template.descriptor().root(), value, span);
+        }
+        return value;
+    }
+
+    private Value acquirePackedNode(CollectionConstructorDescriptor.Node node, Value value, SourceSpan span) {
+        if (node instanceof CollectionConstructorDescriptor.HoleNode hole) {
+            Value acquired = value;
+            for (Object requirement : hole.requirements()) {
+                if (requirement instanceof ContractDescriptor contract) {
+                    acquired = acquirePackedValue(contract, acquired, span);
+                }
+            }
+            return acquired;
+        }
+        if (!(node instanceof CollectionConstructorDescriptor.CollectionNode collection)) return value;
+        Value raw = underlying(value);
+        if (collection.named() && raw instanceof Value.Dictionary dictionary) {
+            java.util.LinkedHashMap<String, Value> fields = new java.util.LinkedHashMap<>(dictionary.entries());
+            for (CollectionConstructorDescriptor.Element part : collection.elements()) {
+                Value member = fields.get(part.name());
+                if (member != null) fields.put(part.name(), acquirePackedNode(part.value(), member, span));
+            }
+            return retainPackedAttributes(value, new Value.Dictionary(fields));
+        }
+        if (!collection.named() && raw instanceof Value.Seq sequence) {
+            List<Value> elements = new ArrayList<>(sequence.values());
+            for (int index = 0; index < Math.min(elements.size(), collection.elements().size()); index++) {
+                elements.set(index, acquirePackedNode(collection.elements().get(index).value(),
+                        elements.get(index), span));
+            }
+            return retainPackedAttributes(value, new Value.Seq(elements));
+        }
+        return value;
+    }
+
+    private Value retainPackedAttributes(Value original, Value changed) {
+        java.util.LinkedHashSet<ContractDescriptor> memberships = new java.util.LinkedHashSet<>();
+        while (original instanceof Value.Attributed attributed) {
+            memberships.addAll(attributed.contracts());
+            original = attributed.value();
+        }
+        return memberships.isEmpty() ? changed : new Value.Attributed(changed, memberships);
     }
 
     private NumericPolicy numericPolicy(ContractClause clause, Environment env, Resolution resolution,
@@ -3035,14 +3102,17 @@ final class Interpreter {
             validatePackedElementLayout(elementContract, operandSpan);
             Value.Seq sequence = (Value.Seq) convertSequence(elementContract, source,
                     operandSpan, env, conversionSpan);
-            for (Value element : sequence.values()) {
+            List<Value> acquired = new ArrayList<>(sequence.values().size());
+            for (Value original : sequence.values()) {
+                Value element = acquirePackedValue(elementContract, original, operandSpan);
                 if (!elementContract.test(element, operandSpan)) {
                     throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
                             "Conversion to " + requested.publicName() + " rejected "
                                     + ValueSemantics.kind(element), operandSpan);
                 }
+                acquired.add(element);
             }
-            converted = new Value.PackedCollection(elementContract, sequence.values(), operandSpan,
+            converted = new Value.PackedCollection(elementContract, acquired, operandSpan,
                     ownership.optimizationsEnabled());
             if (verifyFinal) return converted;
         } else if (target instanceof TemplateContract template) {
@@ -3074,7 +3144,7 @@ final class Interpreter {
 
     private Value convertSequence(ContractDescriptor elementContract, Value source,
                                   SourceSpan operandSpan, Environment env, SourceSpan conversionSpan) {
-        CollectionRuntime.Provider provider = CollectionRuntime.provider(source)
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(source, reflectionContext)
                 .orElseThrow(() -> unsupportedConversion(underlying(source),
                         BuiltinContract.SEQUENCE, operandSpan));
         CollectionRuntime.Facts facts = provider.facts();

@@ -481,6 +481,14 @@ must preserve the selected layout and ordinary semantic validation; broad or con
 requirements are not resolved by sampling values or guessing a width. Preserve concrete-format
 requirements in structural descriptors even though several numeric contracts may accept a value.
 
+A derived nominal contract with one fixed base layout selects that layout, including when it
+appears in a structural template hole. Contextual packed literals, explicit packed conversion,
+and packed append validate the base and refinements, then acquire the derived contract for each
+accepted element before storage. Nested template holes acquire their own derived contracts.
+Decoded elements retain those semantic memberships. A broad base with no fixed layout, or
+different concrete layouts among bases or hole requirements, is invalid even for an empty packed
+collection. Packed append does not round or truncate a value to make it fit a derived contract.
+
 Positional fields follow index order. Named fields follow the template's declaration order,
 recursively, independently of sorted Dictionary enumeration. Equivalent named semantic shapes
 can consequently have different physical layouts. A template constructed from a concrete

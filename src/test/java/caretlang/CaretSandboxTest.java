@@ -65,6 +65,32 @@ class CaretSandboxTest {
     }
 
     @Test
+    void nonStringFieldKeysRoundTripThroughJavaCallbacks() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
+                .callback("echo", 1, Set.of(), List::getFirst).build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("field-keys.caret", """
+                    before = field 1 "one"
+                    after = echo before
+                    keyed = [(field 2 "two") (field "three" 3)]
+                    returned = echo keyed
+                    numericKey = Number (@after).key
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            CaretValue.CollectionValue values = executed.value().orElseThrow();
+            CaretValue numeric = CaretValue.field(CaretValue.number(1), CaretValue.text("one"));
+            assertEquals(numeric, values.find("before").orElseThrow());
+            assertEquals(numeric, values.find("after").orElseThrow());
+            assertEquals(CaretValue.bool(true), values.find("numericKey").orElseThrow());
+            assertEquals(CaretValue.sequence(List.of(
+                    CaretValue.field(CaretValue.number(2), CaretValue.text("two")),
+                    new CaretValue.FieldValue("three", CaretValue.number(3)))),
+                    values.find("returned").orElseThrow());
+        }
+    }
+
+    @Test
     void packedValuesCrossEmbeddingAsExactSemanticSequencesWithoutPhysicalMetadata() {
         java.math.BigInteger maximum = new java.math.BigInteger("18446744073709551615");
         try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
@@ -364,6 +390,8 @@ class CaretSandboxTest {
                     () -> secondIdentity.invoke(List.of(CaretValue.collection(Map.of("nested", firstIdentity)))));
             assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
                     () -> secondIdentity.invoke(List.of(new CaretValue.FieldValue("nested", firstIdentity))));
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                    () -> secondIdentity.invoke(List.of(CaretValue.field(firstIdentity, CaretValue.number(1)))));
             assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
                     () -> second.invoke(firstIdentity, List.of(CaretValue.missing())));
         }

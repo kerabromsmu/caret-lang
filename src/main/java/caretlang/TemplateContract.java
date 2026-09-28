@@ -32,6 +32,7 @@ final class TemplateContract implements ContractDescriptor {
 
     private boolean matches(CollectionConstructorDescriptor.Node node, Value value,
                             Map<Integer, Value> repeated) {
+        Value attributed = value;
         value = ValueSemantics.underlying(value);
         if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) {
             return ValueSemantics.equal(fixed.value(), value);
@@ -39,14 +40,14 @@ final class TemplateContract implements ContractDescriptor {
         if (node instanceof CollectionConstructorDescriptor.HoleNode(
                 int parameter, List<Object> requirements, SourceSpan span
         )) {
-            Value prior = repeated.putIfAbsent(parameter, value);
-            if (prior != null && !ValueSemantics.equal(prior, value)) return false;
+            Value prior = repeated.putIfAbsent(parameter, attributed);
+            if (prior != null && !ValueSemantics.equal(prior, attributed)) return false;
             for (Object requirement : requirements) {
                 if (requirement instanceof ContractDescriptor contract) {
-                    if (!contract.accepts(value)) return false;
+                    if (!contract.accepts(attributed)) return false;
                 } else {
                     Value result = ValueSemantics.underlying(refinementInvoker.apply(
-                            (Value.Callable) requirement, new Value.Argument(value, span)));
+                            (Value.Callable) requirement, new Value.Argument(attributed, span)));
                     if (!(result instanceof Value.Bool(boolean accepted)) || !accepted) return false;
                 }
             }

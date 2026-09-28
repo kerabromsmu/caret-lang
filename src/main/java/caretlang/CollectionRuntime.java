@@ -60,7 +60,7 @@ final class CollectionRuntime {
         Facts facts();
     }
 
-    static Optional<Provider> provider(Value input) {
+    static Optional<Provider> provider(Value input, ReflectionContext observer) {
         Value value = ValueSemantics.underlying(input);
         if (value instanceof Provider provider) return Optional.of(provider);
         if (value == Value.EmptyCollection.INSTANCE) return Optional.of(EmptyProvider.INSTANCE);
@@ -69,12 +69,17 @@ final class CollectionRuntime {
             return Optional.of(new DictionaryProvider(dictionary.entries(), dictionary.fieldBindings()));
         }
         if (value instanceof Value.ProjectedDictionary projected) {
-            return Optional.of(new DictionaryProvider(projected.fields(ReflectionContext.defining()), Map.of()));
+            return Optional.of(new DictionaryProvider(projected.fields(observer), Map.of()));
         }
         return Optional.empty();
     }
 
-    static boolean isCollection(Value value) { return provider(value).isPresent(); }
+    static boolean isCollection(Value value) {
+        Value raw = ValueSemantics.underlying(value);
+        return raw instanceof Provider || raw == Value.EmptyCollection.INSTANCE
+                || raw instanceof Value.Seq || raw instanceof Value.Dictionary
+                || raw instanceof Value.ProjectedDictionary;
+    }
 
     private enum EmptyProvider implements Provider {
         INSTANCE;
