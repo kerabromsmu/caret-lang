@@ -308,6 +308,8 @@ final class Interpreter {
                             shape = CollectionShape.DICTIONARY;
                         }
                         value = evaluateCollection(collection, env, resolution, shape, template);
+                        ParameterizedContract packed = expectedPacked(contracts, env, resolution);
+                        if (packed != null) value = contextualPackedLiteral(packed, value, collection.span());
                     } else if (ungroup(value1) instanceof Literal(Value.Num number, SourceSpan span)) {
                         value = contextualNumericLiteral(number, span,
                                 contracts == null && !exported && statement == statements.getLast()
@@ -1571,6 +1573,8 @@ final class Interpreter {
                     : evalInner(whenFalse, env, resolution);
         }
         if (expr instanceof Apply(Expr function, Expr argument1, SourceSpan ignored)) {
+            Value conversion = groupedContractApplication((Apply) expr, env, resolution);
+            if (conversion != null) return conversion;
             Value fn = underlying(evalInner(function, env, resolution));
             if (!(fn instanceof Value.Callable callable)) {
                 throw runtime(Diagnostic.Codes.NOT_CALLABLE, "Value is not callable: " + fn);
@@ -2317,6 +2321,7 @@ final class Interpreter {
         Value raw = underlying(argument.value());
         if (raw instanceof Value.EmptyCollection) return ownership.fresh(new Value.Seq(List.of()));
         if (raw instanceof Value.Seq sequence) return sequence;
+        if (raw instanceof Value.PackedCollection packed) return ownership.fresh(new Value.Seq(packed.values()));
         if (raw instanceof Value.LazySeq sequence) return ownership.fresh(new Value.Seq(sequence.materialize()));
         if (raw instanceof Value.LazyCollection collection
                 && collection.materializedValue() instanceof Value.Seq sequence) return ownership.fresh(sequence);
@@ -2346,6 +2351,11 @@ final class Interpreter {
         if (raw instanceof Value.EmptyCollection || raw instanceof Value.Seq || raw instanceof Value.LazySeq) {
             return indexedFields(argument);
         }
+        if (raw instanceof Value.PackedCollection packed) {
+            return new IndexedCollection(index -> index >= 0 && index < packed.values().size()
+                    ? Optional.of(packed.values().get(index)) : Optional.empty(),
+                    packed.values().size(), packed.facts());
+        }
         if (raw instanceof Value.LazyCollection collection
                 && (collection.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
                 || collection.resolvedShape() == Value.LazyCollection.Shape.INFER
@@ -2357,6 +2367,13 @@ final class Interpreter {
                 }
                 return entry.value();
             }), null, collection.facts());
+        }
+        if (raw instanceof Value.SettledCollection collection
+                && collection.kind() == ValueKind.SEQUENCE
+                && collection.facts().sequential() == CollectionRuntime.Guarantee.TRUE) {
+            return new IndexedCollection(index -> index < collection.entries().size()
+                    ? Optional.of(collection.entries().get(index).value()) : Optional.empty(),
+                    collection.entries().size(), collection.facts());
         }
         throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
                 "Expected sequence, got: " + argument.value(), argument.span());
@@ -2455,6 +2472,11 @@ final class Interpreter {
         }
         if (raw instanceof Value.Seq sequence) {
             return new IndexedCollection(sequence::find, sequence.size(), provider.facts());
+        }
+        if (raw instanceof Value.PackedCollection packed) {
+            return new IndexedCollection(index -> index >= 0 && index < packed.values().size()
+                    ? Optional.of(packed.values().get(index)) : Optional.empty(),
+                    packed.values().size(), packed.facts());
         }
         if (raw instanceof Value.LazySeq sequence) {
             return new IndexedCollection(index -> index < sequence.length()
@@ -2732,6 +2754,52 @@ final class Interpreter {
         return selected;
     }
 
+    private ParameterizedContract expectedPacked(ContractClause clause, Environment env,
+                                                 Resolution resolution) {
+        ParameterizedContract selected = null;
+        for (Resolution.ContractBinding reference : valueRequirements(resolution.clause(clause))) {
+            if (reference.inline() != null) continue;
+            Value value;
+            try {
+                value = underlying(reference.binding() == null ? globals.get(reference.name())
+                        : env.getResolved(reference.binding()));
+            } catch (LangException unavailable) {
+                continue;
+            }
+            if (!(value instanceof Value.ContractValue contract)) continue;
+            ContractDescriptor resolved = contract.descriptor();
+            if (!reference.arguments().isEmpty()) {
+                if (resolved.parameterArity() != reference.arguments().size()) continue;
+                resolved = resolved.parameterize(reference.arguments().stream()
+                        .map(argument -> resolveContractDescriptor(argument, env, resolution)).toList());
+            }
+            if (!(resolved instanceof ParameterizedContract candidate)
+                    || candidate.base() != BuiltinContract.PACKED || candidate.parameterArity() != 0) continue;
+            if (selected != null && selected.arguments().getFirst() != candidate.arguments().getFirst()) return null;
+            selected = candidate;
+        }
+        return selected;
+    }
+
+    private Value contextualPackedLiteral(ParameterizedContract contract, Value source, SourceSpan span) {
+        ContractDescriptor element = contract.arguments().getFirst();
+        validatePackedElementLayout(element, span);
+        Value raw = underlying(source);
+        List<Value> values = raw == Value.EmptyCollection.INSTANCE ? List.of()
+                : raw instanceof Value.Seq sequence ? sequence.values() : null;
+        if (values == null) {
+            throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
+                    "Expected sequence, got: " + ValueSemantics.kind(raw), span);
+        }
+        for (Value value : values) {
+            if (!element.test(value, span)) {
+                throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                        "Contract violation for packed literal element: expected " + element.publicName(), span);
+            }
+        }
+        return new Value.PackedCollection(element, values);
+    }
+
     private NumericPolicy numericPolicy(ContractClause clause, Environment env, Resolution resolution,
                                         NumericPolicy fallback) {
         boolean broad = false;
@@ -2860,6 +2928,255 @@ final class Interpreter {
     private static Expr ungroup(Expr expression) {
         while (expression instanceof Group group) expression = group.expression();
         return expression;
+    }
+
+    private Value groupedContractApplication(Apply application, Environment env, Resolution resolution) {
+        ArrayList<Expr> arguments = new ArrayList<>();
+        Expr head = application;
+        while (head instanceof Apply apply) {
+            arguments.addFirst(apply.argument());
+            head = apply.function();
+        }
+        if (!(head instanceof Group)) return null;
+        Value selected = underlying(evalInner(head, env, resolution));
+        if (selected instanceof Value.ContractValue contract) {
+            Expr operand = arguments.getFirst();
+            for (int index = 1; index < arguments.size(); index++) {
+                Expr argument = arguments.get(index);
+                operand = new Apply(operand, argument, SourceSpan.cover(operand.span(), argument.span()));
+            }
+            Value source = eval(operand, env, null, resolution);
+            return convertValue(contract.descriptor(), source, operand.span(), env, application.span());
+        }
+        Value current = selected;
+        SourceSpan callSpan = head.span();
+        for (Expr argument : arguments) {
+            if (!(underlying(current) instanceof Value.Callable callable)) {
+                throw runtime(Diagnostic.Codes.NOT_CALLABLE,
+                        "Value is not callable: " + current, callSpan);
+            }
+            Value value = argumentValue(argument, callable, env, resolution);
+            callSpan = SourceSpan.cover(callSpan, argument.span());
+            current = invoke(callable, new Value.Argument(value, argument.span()), callSpan);
+        }
+        return current;
+    }
+
+    private Value convertValue(ContractDescriptor requested, Value source, SourceSpan operandSpan,
+                               Environment env, SourceSpan conversionSpan) {
+        return convertValue(requested, source, operandSpan, env, conversionSpan, true);
+    }
+
+    private Value convertValue(ContractDescriptor requested, Value source, SourceSpan operandSpan,
+                               Environment env, SourceSpan conversionSpan, boolean verifyFinal) {
+        ContractDescriptor target = requested instanceof ModifiedContract modified ? modified.base() : requested;
+        Value raw = underlying(source);
+        if (raw == Value.Null.INSTANCE || raw == Value.Missing.INSTANCE) {
+            return verifyFinal ? checkedConversion(requested, source, operandSpan) : source;
+        }
+        if (verifyFinal && (target instanceof TemplateContract
+                && (raw instanceof Value.Seq || raw instanceof Value.Dictionary)
+                || target instanceof ParameterizedContract parameterized
+                && (parameterized.base() == BuiltinContract.SEQUENCE
+                && raw instanceof Value.Seq
+                || parameterized.base() == BuiltinContract.PACKED
+                && raw instanceof Value.PackedCollection))
+                && requested.test(source, operandSpan)) return source;
+        Value converted = source;
+        if (target instanceof ParameterizedContract parameterized
+                && parameterized.base() == BuiltinContract.SEQUENCE
+                && parameterized.parameterArity() == 0) {
+            converted = convertSequence(parameterized.arguments().getFirst(), source, operandSpan, env,
+                    conversionSpan);
+        } else if (target instanceof ParameterizedContract parameterized
+                && parameterized.base() == BuiltinContract.PACKED
+                && parameterized.parameterArity() == 0) {
+            ContractDescriptor elementContract = parameterized.arguments().getFirst();
+            validatePackedElementLayout(elementContract, operandSpan);
+            Value.Seq sequence = (Value.Seq) convertSequence(elementContract, source,
+                    operandSpan, env, conversionSpan);
+            converted = new Value.PackedCollection(elementContract, sequence.values());
+        } else if (target instanceof TemplateContract template) {
+            converted = convertTemplateNode(template.descriptor().root(), source, operandSpan, env,
+                    conversionSpan);
+        } else if (target instanceof BuiltinContract builtin && (builtin == BuiltinContract.FLOAT
+                || builtin == BuiltinContract.DOUBLE || builtin == BuiltinContract.INTEGER
+                || builtin == BuiltinContract.NATURAL || builtin == BuiltinContract.INT8
+                || builtin == BuiltinContract.UINT8 || builtin == BuiltinContract.INT16
+                || builtin == BuiltinContract.UINT16 || builtin == BuiltinContract.INT32
+                || builtin == BuiltinContract.UINT32 || builtin == BuiltinContract.INT64
+                || builtin == BuiltinContract.UINT64)) {
+            if (!(raw instanceof Value.Num number)) throw unsupportedConversion(raw, requested, operandSpan);
+            java.math.BigDecimal exact = NumericValues.decimal(number);
+            if (builtin == BuiltinContract.FLOAT || builtin == BuiltinContract.DOUBLE) {
+                double rounded = builtin == BuiltinContract.FLOAT ? exact.floatValue() : exact.doubleValue();
+                converted = finiteNumber(rounded, "Numeric result is not finite", operandSpan);
+            } else converted = new Value.Num(exact.toBigInteger());
+        } else if (target == BuiltinContract.STRING && !(raw instanceof Value.Str)) {
+            Value renderer = underlying(env.get("toString"));
+            if (!(renderer instanceof Value.Callable callable)) {
+                throw runtime(Diagnostic.Codes.NOT_CALLABLE,
+                        "Value is not callable: " + renderer, conversionSpan);
+            }
+            converted = invoke(callable, new Value.Argument(source, operandSpan), conversionSpan);
+        }
+        return verifyFinal ? checkedConversion(requested, converted, operandSpan) : converted;
+    }
+
+    private Value convertSequence(ContractDescriptor elementContract, Value source,
+                                  SourceSpan operandSpan, Environment env, SourceSpan conversionSpan) {
+        CollectionRuntime.Provider provider = CollectionRuntime.provider(source)
+                .orElseThrow(() -> unsupportedConversion(underlying(source),
+                        BuiltinContract.SEQUENCE, operandSpan));
+        CollectionRuntime.Facts facts = provider.facts();
+        facts.validate(operandSpan);
+        if (facts.keyed() == CollectionRuntime.Guarantee.TRUE) {
+            throw runtime(Diagnostic.Codes.EXPECTED_SEQUENCE,
+                    "Explicit keys, values, or fields projection required for keyed conversion", operandSpan);
+        }
+        if (facts.finite() == CollectionRuntime.Guarantee.FALSE) {
+            throw runtime(Diagnostic.Codes.EAGER_INFINITE,
+                    "Cannot convert a declared-infinite Collection", operandSpan);
+        }
+        IndexedCollection indexed = indexedSequence(new Value.Argument(source, operandSpan));
+        ArrayList<Value> elements = new ArrayList<>();
+        for (int index = 0; ; index++) {
+            Optional<Value> element = indexed.at(index);
+            if (element.isEmpty()) break;
+            elements.add(convertValue(elementContract, element.get(), operandSpan, env, conversionSpan, false));
+        }
+        return new Value.Seq(elements);
+    }
+
+    private Value convertTemplateNode(CollectionConstructorDescriptor.Node node, Value source,
+                                      SourceSpan operandSpan, Environment env, SourceSpan conversionSpan) {
+        Value raw = underlying(source);
+        if (node instanceof CollectionConstructorDescriptor.FixedNode) return source;
+        if (node instanceof CollectionConstructorDescriptor.HoleNode hole) {
+            ContractDescriptor selected = null;
+            for (Object requirement : hole.requirements()) {
+                if (!(requirement instanceof ContractDescriptor candidate)
+                        || !convertibleRequirement(candidate)) continue;
+                if (selected != null && selected != candidate) return source;
+                selected = candidate;
+            }
+            return selected == null ? source : convertValue(selected, source, operandSpan, env, conversionSpan, false);
+        }
+        CollectionConstructorDescriptor.CollectionNode collection =
+                (CollectionConstructorDescriptor.CollectionNode) node;
+        if (collection.named()) {
+            Map<String, Value> fields = raw instanceof Value.Dictionary dictionary ? dictionary.entries()
+                    : raw instanceof Value.ProjectedDictionary projected
+                    ? projected.fields(reflectionContext) : null;
+            if (fields == null || fields.size() != collection.elements().size()) {
+                throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                        "Conversion requires the template's exact named fields", operandSpan);
+            }
+            LinkedHashMap<String, Value> converted = new LinkedHashMap<>();
+            for (CollectionConstructorDescriptor.Element element : collection.elements()) {
+                Value member = fields.get(element.name());
+                if (member == null) {
+                    throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "Conversion requires the template's exact named fields", operandSpan);
+                }
+                converted.put(element.name(), convertTemplateNode(element.value(), member,
+                        operandSpan, env, conversionSpan));
+            }
+            return new Value.Dictionary(converted);
+        }
+        Value.Seq input = (Value.Seq) convertSequence(BuiltinContract.ANY, source,
+                operandSpan, env, conversionSpan);
+        if (input.size() != collection.elements().size()) {
+            throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                    "Conversion requires the template's exact positional shape", operandSpan);
+        }
+        ArrayList<Value> converted = new ArrayList<>(input.size());
+        for (int index = 0; index < input.size(); index++) {
+            converted.add(convertTemplateNode(collection.elements().get(index).value(),
+                    input.find(index).orElseThrow(),
+                    operandSpan, env, conversionSpan));
+        }
+        return new Value.Seq(converted);
+    }
+
+    private static boolean convertibleRequirement(ContractDescriptor target) {
+        if (target instanceof ModifiedContract modified) target = modified.base();
+        return target == BuiltinContract.STRING || target == BuiltinContract.FLOAT
+                || target == BuiltinContract.DOUBLE || target == BuiltinContract.INTEGER
+                || target == BuiltinContract.NATURAL || target == BuiltinContract.INT8
+                || target == BuiltinContract.UINT8 || target == BuiltinContract.INT16
+                || target == BuiltinContract.UINT16 || target == BuiltinContract.INT32
+                || target == BuiltinContract.UINT32 || target == BuiltinContract.INT64
+                || target == BuiltinContract.UINT64 || target instanceof TemplateContract
+                || target instanceof ParameterizedContract parameterized
+                && (parameterized.base() == BuiltinContract.SEQUENCE
+                || parameterized.base() == BuiltinContract.PACKED);
+    }
+
+    private void validatePackedElementLayout(ContractDescriptor target, SourceSpan span) {
+        if (target instanceof BuiltinContract builtin && (builtin == BuiltinContract.INT8
+                || builtin == BuiltinContract.UINT8 || builtin == BuiltinContract.INT16
+                || builtin == BuiltinContract.UINT16 || builtin == BuiltinContract.INT32
+                || builtin == BuiltinContract.UINT32 || builtin == BuiltinContract.INT64
+                || builtin == BuiltinContract.UINT64 || builtin == BuiltinContract.FLOAT
+                || builtin == BuiltinContract.DOUBLE || builtin == BuiltinContract.BOOLEAN)) return;
+        if (target instanceof TemplateContract template) {
+            validatePackedNode(template.descriptor().root(), span);
+            return;
+        }
+        throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                "No fixed packed layout for " + target.publicName(), span);
+    }
+
+    private void validatePackedNode(CollectionConstructorDescriptor.Node node, SourceSpan span) {
+        if (node instanceof CollectionConstructorDescriptor.FixedNode) return;
+        if (node instanceof CollectionConstructorDescriptor.HoleNode hole) {
+            ContractDescriptor selected = null;
+            for (Object requirement : hole.requirements()) {
+                if (!(requirement instanceof ContractDescriptor contract)) continue;
+                if (contract instanceof ModifiedContract modified
+                        && (modified.nullable() || modified.optional())) {
+                    throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                            "Packed fields cannot be nullable or optional", span);
+                }
+                if (!(contract instanceof BuiltinContract builtin) || !(builtin == BuiltinContract.INT8
+                        || builtin == BuiltinContract.UINT8 || builtin == BuiltinContract.INT16
+                        || builtin == BuiltinContract.UINT16 || builtin == BuiltinContract.INT32
+                        || builtin == BuiltinContract.UINT32 || builtin == BuiltinContract.INT64
+                        || builtin == BuiltinContract.UINT64 || builtin == BuiltinContract.FLOAT
+                        || builtin == BuiltinContract.DOUBLE || builtin == BuiltinContract.BOOLEAN)) continue;
+                if (selected != null && selected != contract) {
+                    throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                            "Conflicting concrete packed formats", span);
+                }
+                selected = contract;
+            }
+            if (selected == null) {
+                throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                        "Packed field requires one concrete format", span);
+            }
+            return;
+        }
+        CollectionConstructorDescriptor.CollectionNode collection =
+                (CollectionConstructorDescriptor.CollectionNode) node;
+        for (CollectionConstructorDescriptor.Element element : collection.elements()) {
+            if (element.defaultsMissing()) {
+                throw runtime(Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                        "Packed fields cannot default to missing", span);
+            }
+            validatePackedNode(element.value(), span);
+        }
+    }
+
+    private Value checkedConversion(ContractDescriptor target, Value value, SourceSpan span) {
+        if (target.test(value, span)) return value;
+        throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
+                "Conversion to " + target.publicName() + " rejected " + ValueSemantics.kind(value), span);
+    }
+
+    private LangException unsupportedConversion(Value source, ContractDescriptor target, SourceSpan span) {
+        return runtime(Diagnostic.Codes.UNSUPPORTED_CONVERSION,
+                "Cannot convert " + ValueSemantics.kind(source) + " to " + target.publicName(), span);
     }
 
     private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,

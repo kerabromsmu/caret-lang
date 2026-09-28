@@ -229,9 +229,9 @@ That spelling is only a design direction and is not valid Caret syntax.
 Analyzed named infix calls invoke the same callable values as prefix application. A non-callable
 infix target or a callable whose remaining arity is not two produces a located runtime diagnostic.
 
-## Phase 4 conversion syntax (planned) and div (implemented)
+## Phase 4 conversion syntax and div (implemented)
 
-`div` is implemented; parenthesized contract conversion remains planned.
+`div` and parenthesized contract conversion are implemented.
 
 `div` is a built-in operator with the same precedence and left associativity as `*`, `/`, and `%`.
 It is not an ordinary named-infix spelling and is reserved against user declaration/shadowing.
@@ -275,7 +275,7 @@ function or lambda to convert a subsequently supplied value.
 
 Declaration, parameter, and result clauses stay strict checks; contextual literal creation is
 specified separately. Conversion behavior and its exclusions belong to
-[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned).
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented).
 
 <a id="function-composition"></a>
 ## Function composition

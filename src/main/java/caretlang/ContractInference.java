@@ -588,6 +588,20 @@ final class ContractInference {
             arguments.addFirst(apply.argument());
             target = apply.function();
         }
+        if (target instanceof Group group && !(arguments.size() == 1
+                && ungroup(arguments.getFirst()) instanceof Hole)) {
+            BuiltinContract conversion = ungroup(group.expression()) instanceof Name name
+                    ? BuiltinContract.named(name.name()).orElse(null) : null;
+            if (conversion != null && conversion.parameterArity() == 0) {
+                Expr operand = arguments.getFirst();
+                for (int index = 1; index < arguments.size(); index++) {
+                    Expr argument = arguments.get(index);
+                    operand = new Apply(operand, argument, SourceSpan.cover(operand.span(), argument.span()));
+                }
+                expression(operand, parameters, locals, requirements, visible);
+                return Shape.concrete(conversion);
+            }
+        }
         if (!(target instanceof Name name) || !visible.containsKey(name.name())) {
             for (Expr argument : arguments) expression(argument, parameters, locals, requirements, visible);
             return Shape.unknown();
@@ -1025,6 +1039,24 @@ final class ContractInference {
         while (target instanceof Apply apply) {
             arguments.addFirst(apply.argument());
             target = apply.function();
+        }
+        if (target instanceof Group group && !(arguments.size() == 1
+                && ungroup(arguments.getFirst()) instanceof Hole)) {
+            BuiltinContract conversion = ungroup(group.expression()) instanceof Name name
+                    ? BuiltinContract.named(name.name()).orElse(null) : null;
+            if (conversion != null && conversion.parameterArity() == 0) {
+                Expr operand = arguments.getFirst();
+                for (int index = 1; index < arguments.size(); index++) {
+                    Expr argument = arguments.get(index);
+                    operand = new Apply(operand, argument, SourceSpan.cover(operand.span(), argument.span()));
+                }
+                EffectSummary result = expressionEffects(operand, visible);
+                if (conversion == BuiltinContract.STRING) {
+                    CallableEffects renderer = visible.get("toString");
+                    result = result.plus(renderer == null ? EffectSummary.UNKNOWN : renderer.summary());
+                }
+                return result;
+            }
         }
         EffectSummary result = EffectSummary.PURE;
         for (Expr argument : arguments) result = result.plus(expressionEffects(argument, visible));

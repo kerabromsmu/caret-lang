@@ -45,7 +45,7 @@ multiline grouping, implicit nodes, desugaring, and AST rebuilding must not repl
 with logical positions or truncate an enclosing node to one of its children.
 
 <a id="phase-4-numeric-and-conversion-diagnostics-planned"></a>
-### Phase 4 numeric diagnostics and template completion (implemented); conversion diagnostics (planned)
+### Phase 4 numeric, template, and conversion diagnostics (implemented)
 
 The approved [numeric precision policy](02-values-bindings-and-evaluation.md#precision-requirements-and-warnings-implemented)
 adds nonfatal warnings for lossy implicit conversions in broad result contexts. A warning includes
@@ -65,8 +65,11 @@ remain errors. Attribute failures to the offending operand/conversion/layout req
 retain related declaration locations. Static rejection is permitted when proven; dynamic values
 retain equivalent runtime checks and one-based physical locations. Existing zero-division and
 non-finite-result errors remain applicable. Implementation must inventory concrete codes and
-message variants with exact positive/negative evidence before claiming support; this planned
-section does not add implemented entries to the diagnostic catalog.
+message variants with exact positive/negative evidence. Implemented conversion failures use
+`UNSUPPORTED_CONVERSION` for an unavailable built-in conversion, `INVALID_PACKED_LAYOUT` for an
+ineligible packed element contract, `EXPECTED_SEQUENCE` for keyed-to-positional conversion
+without projection, and `CONTRACT_VIOLATION` for a result outside the requested domain or exact
+template shape.
 
 Phase 4 expected-template literal completion reuses `CONTRACT_VIOLATION` when a named literal omits
 a required or nondefaultable field. Attribute the failure to the complete literal because an

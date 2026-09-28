@@ -325,14 +325,16 @@ now provides exact arbitrary-precision integers, signed/unsigned formats through
 value-based `Natural`/`Integer`/`Real`/`Number` domains, `Float`/`Double`, true `/` alongside
 truncating integer `div`, and precision warnings or errors according to result requirements.
 The packed-layout portion of the [approved design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
-remains planned. Planned `(Contract) expression`
+remains planned. `(Contract) expression` now
 converts a value; declarations and directly contracted holes remain checks. Packed storage will
 cover finite positional sequences of fixed-format scalars or fixed-size templates, preserving
 template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
 conversion through this new syntax are deferred. See the canonical
 [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
 The packed-layout plan separates the visible element contracts from private physical layout
-metadata; equally shaped values do not gain `Packed T` membership merely by being homogeneous.
+metadata. The current conversion implementation records selected `Packed T` membership over
+immutable reference storage; equally shaped ordinary sequences do not gain that membership merely
+by being homogeneous.
 
 The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-partially-implemented)
 now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,

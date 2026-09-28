@@ -104,7 +104,7 @@ print person.phone~
 print (person == samePerson)
 print (person == fieldPerson)
 print (person == dictPut (dictPut dictEmpty "age" 36) "name" "Ada")
-print (Dictionary String Any) person
+print (Dictionary String Any person)
 
 // String dynamic lookup and safe missing lookup.
 fieldName = "name"

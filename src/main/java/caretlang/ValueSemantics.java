@@ -44,6 +44,7 @@ final class ValueSemantics {
                 fields.put("size", new Value.Num(collection.entries().size()));
             }
             case Value.SettledCollection collection -> fields.put("size", collection.size());
+            case Value.PackedCollection collection -> fields.put("size", collection.size());
             case Value.EmptyCollection ignored -> {
                 fields.put("shape", new Value.Str("empty"));
                 fields.put("size", new Value.Num(0));
@@ -339,6 +340,9 @@ final class ValueSemantics {
                     pending.push(entry.value());
                 });
             }
+            else if (value instanceof Value.PackedCollection collection) {
+                collection.values().forEach(pending::push);
+            }
             else if (value instanceof Value.Dictionary dictionary) {
                 dictionary.entries().values().forEach(pending::push);
             } else if (value instanceof Value.ProjectedDictionary dictionary) {
@@ -500,7 +504,8 @@ final class ValueSemantics {
         return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary
                 || value instanceof Value.Seq || value instanceof Value.LazySeq
                 || value instanceof Value.LazyCollection || value instanceof Value.KeyedCollection
-                || value instanceof Value.SettledCollection;
+                || value instanceof Value.SettledCollection
+                || value instanceof Value.PackedCollection;
     }
 
     private static String spaces(int count) { return " ".repeat(count); }

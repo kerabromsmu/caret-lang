@@ -128,7 +128,7 @@ missing still requires the field to be written in the literal. Membership and ex
 of an established Collection never add fields, and omission always supplies missing rather than
 null.
 
-### Exact numbers; planned conversions and packed data
+### Exact numbers, explicit conversions, and planned packed storage
 
 `Number`, `Real`, `Integer`, and `Natural` are common domains without prescribed storage
 formats. Integers remain exact at arbitrary size, including collection sizes. Concrete formats include
@@ -146,33 +146,32 @@ print 5 div 2                        // 2: integer division
 print 10 div 3 + 2                   // 5: div has multiplication precedence
 ```
 
-The following explicit conversions remain planned:
+Explicit conversion is available:
 
-<!-- caret-example: planned -->
 ```caret
+source = 0.1
 rounded = (Float) source
 whole = (Integer) -3.75
 ```
 
-`Float value` is a membership test; planned `(Float) value` requests conversion. Declaration contracts
+`Float value` is a membership test; `(Float) value` requests conversion. Declaration contracts
 and directly contracted holes remain checks. Implicit precision loss warns in broad Number/Real
 result contexts but is an error under explicit concrete numeric or integer result requirements.
 Normal floating-point arithmetic rounding does not warn. Explicit conversion permits its specified
 rounding or truncation, but never bypasses range or final contract checks. Numeric text parsing and
 custom conversion registration are deferred for this syntax.
 
-`Packed T` will select a contiguous fixed-layout representation for a finite positional sequence.
-It supports concrete numeric formats, one-byte Booleans, and fixed-size templates. Named record
-fields retain template declaration order; scalar positions need concrete formats. There are no
-missing/null payloads, variable-size fields, or bit fields in this first packed version.
+`Packed T` currently selects a finite positional sequence with an explicit element contract;
+contiguous fixed-layout storage is planned next. Eligible element contracts use concrete numeric
+formats, Boolean, or fixed-size templates. Named record fields retain template declaration order;
+scalar positions need concrete formats. Missing/null payloads, variable-size fields, and bit
+fields are excluded.
 
-<!-- caret-example: planned -->
 ```caret
 (Packed Int8) small = [1 2]
 converted = (Packed Int8) [1.9 2.1]  // [1 2], with explicit element conversion
 ordinary = (Sequence Number) small
 extended = seqAdd ordinary 300
-// seqAdd small 300                 // error: incompatible packed element
 ```
 
 Lazy input must be consumed before a packed result is available. Keyed input requires an explicit
@@ -181,7 +180,7 @@ exposes semantic contracts without exposing buffers or physical layout details. 
 is retained with a packed value, so an ordinary homogeneous sequence does not satisfy `Packed T`.
 The
 [numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented),
-[conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned),
+[conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented),
 and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
 define the implementation requirements.
 

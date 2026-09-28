@@ -57,15 +57,14 @@ Aliases are the same contract identities: `Int = Integer`, `Byte = UInt8`, `Floa
 layout; homogeneity alone cannot make them eligible. Packed membership is separately defined by
 [the selected-layout contract](06-collections-fields-and-templates.md#phase-4-packed-layouts-planned).
 
-## Phase 4 explicit contract conversion (planned)
+## Phase 4 explicit contract conversion (implemented)
 
 `Contract value` remains a Boolean membership predicate. `(Contract) expression` instead requests
 a value-producing conversion. This deliberately changes the old grouped-predicate interpretation
-in that position. [Conversion grammar](03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-planned-and-div-implemented)
+in that position. [Conversion grammar](03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-and-div-implemented)
 owns extent, grouping, aliases, and holes. Declaration, parameter, and result clauses remain strict
 requirements; they do not implicitly convert already-established values.
 
-<!-- caret-example: planned -->
 ```caret
 (Float) literal = 0.1           // contextual literal construction
 (Double) source = 0.1
@@ -92,6 +91,11 @@ where no different representation is requested. Representation-selecting convers
 meaningful even when the input already satisfies the target's semantic element contract:
 `(Sequence Number) packed` produces an ordinary sequence, while `(Packed Int16) packedInt8`
 selects the Int16 layout.
+
+The current interpreter records an explicitly selected packed element contract and stores an
+immutable reference sequence. The contiguous physical representation and complete packed protocol
+belong to the following packed-storage phase; selected membership and conversion behavior already
+apply.
 
 Keyed-to-positional conversion requires an explicit `keys`, `values`, or `fields` projection; it
 does not discard keys implicitly. Packing, lazy consumption, and unsupported layouts follow the

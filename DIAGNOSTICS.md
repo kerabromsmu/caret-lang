@@ -4,12 +4,12 @@ Every stable message variant in `DiagnosticCatalog` and `HostMessageCatalog` is 
 fixtures compare complete stderr with the adjacent `.expected` file. Entries that cannot be reached
 from ordinary Caret source use focused Java evidence.
 
-Phase 4 numeric warnings and errors, and the planned conversion/packed additions, are specified in
+Phase 4 numeric warnings, conversion errors, and planned contiguous packed-storage additions are specified in
 [the diagnostic owner](spec/01-source-layout-and-diagnostics.md#phase-4-numeric-and-conversion-diagnostics-planned)
 and [acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
 `IMPLICIT_PRECISION_LOSS` is implemented as a warning or strict error; `div` uses the existing
-zero-division and contract diagnostics. Conversion and packed implementation must add exact
-evidence for unsupported conversions, range failures, and invalid layouts. Warnings must
+zero-division and contract diagnostics. Conversion has exact fixture or focused Java evidence for
+unsupported conversions, range failures, and invalid layouts. Warnings must
 remain separate from program output and embedded failure diagnostics.
 Expected-template literal completion is implemented: omitted required or nondefaultable fields
 reuse `CONTRACT_VIOLATION` at the literal with the template field as related context, while
@@ -71,6 +71,7 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-EXPECTED-NUMBER | public | EXPECTED_NUMBER | `examples/errors/expected_number.caret` |
 | RUNTIME-EXPECTED-STRING | public | EXPECTED_STRING | `examples/errors/expected_string.caret` |
 | RUNTIME-EXPECTED-SEQUENCE | public | EXPECTED_SEQUENCE | `examples/errors/expected_sequence.caret` |
+| RUNTIME-CONVERSION-KEYED-SEQUENCE | public | EXPECTED_SEQUENCE | `examples/errors/keyed_conversion.caret`; `InterpreterTest#keyedConversionRequiresProjectionAndEmptyPackingIsSelected` |
 | RUNTIME-EXPECTED-DICTIONARY | public | EXPECTED_DICTIONARY | `examples/errors/expected_dictionary.caret` |
 | RUNTIME-EXPECTED-COLLECTION | public | EXPECTED_COLLECTION | `examples/errors/expected_collection.caret` |
 | RUNTIME-EXPECTED-CONTAINER | public | EXPECTED_CONTAINER | `examples/errors/expected_container.caret`; `InterpreterTest#containerReadsAndWritesRejectNonContainersAtLocatedOperands` |
@@ -78,6 +79,7 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | SEMANTIC-INVALID-OUTER-PATH | public | INVALID_OUTER_PATH | `InterpreterTest#withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue` |
 | RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES | public | CONTRADICTORY_COLLECTION_GUARANTEES | `InterpreterTest#internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent` |
 | RUNTIME-EAGER-INFINITE | public | EAGER_INFINITE | `InterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |
+| RUNTIME-CONVERSION-INFINITE | public | EAGER_INFINITE | `InterpreterTest#conversionRejectsDeclaredInfiniteInputBeforeEnumeration` |
 | RUNTIME-EAGER-CYCLE | public | EAGER_CYCLE | `InterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |
 | RUNTIME-INVALID-DICTIONARY-KEY | public | INVALID_DICTIONARY_KEY | `examples/errors/invalid_dictionary_key.caret` |
 | RUNTIME-INVALID-COLLECTION-KEY | public | INVALID_COLLECTION_KEY | `examples/errors/invalid_collection_key.caret`; `InterpreterTest#unifiedCollectionAccessSupportsSugarContractsCompositeKeysAndPartials` |
@@ -85,6 +87,8 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-DIVISION-BY-ZERO | public | DIVISION_BY_ZERO | `examples/errors/division_by_zero.caret` |
 | RUNTIME-NONFINITE-RESULT | public | NON_FINITE_RESULT | `examples/errors/non_finite_result.caret` |
 | RUNTIME-IMPLICIT-PRECISION-LOSS | public | IMPLICIT_PRECISION_LOSS | `InterpreterTest#broadDivisionReportsPrecisionWarningAndStrictResultRejectsLoss`; `CaretSandboxTest#precisionWarningsRemainSeparateAcrossEmbeddingOperations` |
+| RUNTIME-UNSUPPORTED-CONVERSION | public | UNSUPPORTED_CONVERSION | `examples/errors/unsupported_conversion.caret`; `InterpreterTest#conversionUsesSelectedToStringAndConsumesLazyInput` |
+| RUNTIME-INVALID-PACKED-LAYOUT | public | INVALID_PACKED_LAYOUT | `examples/errors/invalid_packed_layout.caret`; `InterpreterTest#packedConversionSelectsMembershipAndSequenceConversionRemovesIt` |
 | SEMANTIC-IMPLICIT-PRECISION-LOSS | public | IMPLICIT_PRECISION_LOSS | `InterpreterTest#literalPrecisionLossIsReportedAtAnalysisOnce` |
 | RUNTIME-INVALID-DYNAMIC-FIELD | public | INVALID_DYNAMIC_FIELD_NAME | `examples/errors/invalid_dynamic_key.caret` |
 | RUNTIME-TEMPLATE-INVALID-CONSTRUCTOR | public | TEMPLATE_INVALID_CONSTRUCTOR | `examples/errors/template_invalid_constructor.caret` |
@@ -94,6 +98,8 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-MIXED-HOLES | public | MIXED_HOLE_STYLES | `examples/errors/mixed_holes.caret` |
 | RUNTIME-INVALID-ASSERTION | public | INVALID_ASSERTION | `examples/errors/invalid_assertion.caret` |
 | RUNTIME-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/contract_violation.caret`; `examples/errors/template_missing_required.caret`; `InterpreterTest#templateCompletionRejectsNondefaultableAndWrongShapesWithLocations` |
+| RUNTIME-CONVERSION-CONTRACT-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/conversion_range.caret`; `InterpreterTest#numericConversionChecksBoundariesAfterTruncation` |
+| RUNTIME-CONVERSION-SHAPE-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/conversion_shape.caret`; `InterpreterTest#structuralConversionUsesExactShapeAndValidatesRepeatedAndFixedValues` |
 | RUNTIME-EFFECT-CONSTRAINT-REQUIRES-CALLABLE | public | EFFECT_CONSTRAINT_REQUIRES_CALLABLE | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | RUNTIME-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
 | RUNTIME-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `InterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |

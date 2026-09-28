@@ -14,6 +14,253 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class InterpreterTest {
     @Test
+    void explicitNumericConversionProducesValuesAndPreservesPredicates() {
+        assertEquals("false\n0.10000000149011612\n-3\n255\n5\n", execute("""
+                print Float 0.1
+                print (Float) 0.1
+                print (Integer) (-3.75)
+                print (UInt8) 255.9
+                add x y = x + y
+                print (Int8) add 2 3
+                """));
+        Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        interpreter.execute(new Parser("rounded = (Float) 0.1").parseProgram());
+        assertTrue(interpreter.warnings().isEmpty());
+    }
+
+    @Test
+    void conversionTargetsUseRuntimeIdentityAndGroupedCallsRemainOrdinary() {
+        assertEquals("true\ntrue\n5\n42\n", execute("""
+                Choice = Float
+                selected = true & Choice ! Double
+                (Float) converted = (selected) 0.1
+                print Float converted
+                print Float ((selected) 0.1)
+                add x y = x + y
+                print (add) 2 3
+                print (String) 42
+                """));
+    }
+
+    @Test
+    void sequenceConversionSelectsRepresentationAndConvertsEachElement() {
+        assertEquals("[ 1 2 ]\ntrue\n", execute("""
+                converted = (Sequence Int8) [1.9 2.1]
+                print converted
+                Small = Sequence Int8
+                print Small converted
+                """));
+        LangException keyed = assertThrows(LangException.class,
+                () -> execute("print (Sequence Int8) [^a = 1]"));
+        assertEquals(Diagnostic.Codes.EXPECTED_SEQUENCE, keyed.diagnostic().code());
+    }
+
+    @Test
+    void structuralConversionUsesExactShapeAndValidatesRepeatedAndFixedValues() {
+        assertEquals("[ 1 2 ]\n[\n  \"age\" = 7\n  \"name\" = \"42\"\n]\n", execute("""
+                Pair = template [(Int8) _ (Int8) _]
+                Person = template [^name = (String) _ ^age = (Int8) _]
+                print (Pair) [1.9 2.8]
+                print (Person) [^name = 42 ^age = 7.8]
+                """));
+        for (String source : List.of("""
+                Person = template [^name = (String) _ ^age = (Int8) _]
+                print (Person) [^age = 7.8]
+                """, """
+                Same = template [_1 _1]
+                print (Same) [1 2]
+                """, """
+                Fixed = template [7 (Int8) _]
+                print (Fixed) [8 2]
+                """)) {
+            LangException failure = assertThrows(LangException.class, () -> execute(source));
+            assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, failure.diagnostic().code());
+        }
+    }
+
+    @Test
+    void packedConversionSelectsMembershipAndSequenceConversionRemovesIt() {
+        assertEquals("[ 1 2 ]\ntrue\ntrue\nfalse\nfalse\n", execute("""
+                Small = Packed Int8
+                packed = (Small) [1.9 2.8]
+                print packed
+                print Small packed
+                print (Sequence Int8 packed)
+                print Small [1 2]
+                ordinary = (Sequence Number) packed
+                print Small ordinary
+                """));
+        LangException invalid = assertThrows(LangException.class,
+                () -> execute("print (Packed Integer) [1 2]"));
+        assertEquals(Diagnostic.Codes.INVALID_PACKED_LAYOUT, invalid.diagnostic().code());
+    }
+
+    @Test
+    void packedLiteralConstructionKeepsDeclarationCheckingStrict() {
+        assertEquals("true\n[ 1 2 ]\n", execute("""
+                Small = Packed Int8
+                (Small) literal = [1 2]
+                print Small literal
+                print literal
+                """));
+        LangException failure = assertThrows(LangException.class,
+                () -> execute("(Packed Int8) literal = [1.5]"));
+        assertEquals(Diagnostic.Codes.INCOMPATIBLE_CONTRACTS, failure.diagnostic().code());
+    }
+
+    @Test
+    void numericConversionChecksBoundariesAfterTruncation() {
+        assertEquals("-128\n127\n0\n65535\n", execute("""
+                print (Int8) (-128.9)
+                print (Int8) 127.9
+                print (Natural) 0.9
+                print (UInt16) 65535.9
+                """));
+        for (String source : List.of("(Int8) 128", "(Int8) (-129)",
+                "(UInt8) (-1)", "(UInt16) 65536", "(Int16) 32768",
+                "(UInt32) 4294967296", "(Int32) 2147483648",
+                "(UInt64) 18446744073709551616", "(Int64) 9223372036854775808",
+                "(Natural) (-1.1)")) {
+            LangException failure = assertThrows(LangException.class, () -> execute(source), source);
+            assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, failure.diagnostic().code(), source);
+        }
+        assertEquals("-32768\n32767\n4294967295\n-9223372036854775808\n18446744073709551615\n", execute("""
+                print (Int16) (-32768)
+                print (Int16) 32767
+                print (UInt32) 4294967295
+                print (Int64) (-9223372036854775808)
+                print (UInt64) 18446744073709551615
+                """));
+        LangException overflow = assertThrows(LangException.class,
+                () -> execute("(Double) " + "9".repeat(400)));
+        assertEquals(Diagnostic.Codes.NON_FINITE_RESULT, overflow.diagnostic().code());
+    }
+
+    @Test
+    void conversionExtentHolesAndNonContractGroupingRemainDistinct() {
+        assertEquals("6\n5\nfalse\ntrue\n5\n7\n", execute("""
+                add left right = left + right
+                print (Int8) add 2 3 + 1
+                print (Int8) (add 2 3)
+                checked = (Int8) _
+                print checked 128
+                print checked 5
+                print (add) 2 3
+                print (Int8) $ add 3 4
+                """));
+        LangException nonContract = assertThrows(LangException.class,
+                () -> execute("print (42) 1"));
+        assertEquals(Diagnostic.Codes.NOT_CALLABLE, nonContract.diagnostic().code());
+        assertEquals(1, nonContract.span().start().line());
+    }
+
+    @Test
+    void conversionCoversPostfixAndLambdaOperandsButCheckedNumberedHolesStayPredicates() {
+        assertEquals("7\n5\ntrue\nfalse\n", execute("""
+                record = [^value = 7.9]
+                print (Int8) record.value
+                print (Int8) (value -> value + 1) 4
+                checked = (Int8) _1
+                print checked 7
+                print checked 128
+                """));
+    }
+
+    @Test
+    void conversionUsesSelectedToStringAndConsumesLazyInput() {
+        assertEquals("value:7\n1\n2\n[ 1 2 ]\n", execute("""
+                (String) toString (Number) value = "value:" + numberText value
+                print (String) 7
+                (Output Number) trace (Number) value =
+                  print value
+                  value
+                source = map trace [1 2]
+                packed = (Packed Int8) source
+                print packed
+                """));
+        LangException parsing = assertThrows(LangException.class,
+                () -> execute("(Int8) \"7\""));
+        assertEquals(Diagnostic.Codes.UNSUPPORTED_CONVERSION, parsing.diagnostic().code());
+        assertEquals(1, parsing.span().start().line());
+        LangException truthiness = assertThrows(LangException.class,
+                () -> execute("(Boolean) 1"));
+        assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, truthiness.diagnostic().code());
+    }
+
+    @Test
+    void recursiveStringConversionRunsSelectedRendererEffectsInOrder() {
+        assertEquals("1\n2\n[ \"n:1\" \"n:2\" ]\n", execute("""
+                (Output String) toString (Number) value =
+                  print value
+                  "n:" + numberText value
+                converted = (Sequence String) [1 2]
+                print converted
+                """));
+        LangException disallowed = assertThrows(LangException.class, () -> execute("""
+                (Output String) toString (Number) value =
+                  print value
+                  numberText value
+                (pure Sequence String) render ignored = (Sequence String) [1]
+                render 0
+                """));
+        assertEquals(Diagnostic.Codes.UNKNOWN_CALL_EFFECTS, disallowed.diagnostic().code());
+    }
+
+    @Test
+    void keyedConversionRequiresProjectionAndEmptyPackingIsSelected() {
+        assertEquals("false\ntrue\n[ 1 2 ]\ntrue\n", execute("""
+                Small = Packed Int8
+                print Small []
+                selected = (Small) []
+                print Small selected
+                print (Sequence Int8) values [^first = 1 ^second = 2]
+                print selected == []
+                """));
+        LangException keyed = assertThrows(LangException.class,
+                () -> execute("(Packed Int8) [^first = 1]"));
+        assertEquals(Diagnostic.Codes.EXPECTED_SEQUENCE, keyed.diagnostic().code());
+    }
+
+    @Test
+    void conversionRejectsDeclaredInfiniteInputBeforeEnumeration() {
+        class InfiniteProvider implements Value.Reflective, CollectionRuntime.Provider {
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { throw new AssertionError("Must not enumerate"); }
+            @Override public Value keys() { throw new AssertionError("Must not enumerate"); }
+            @Override public Value valueEntries() { throw new AssertionError("Must not enumerate"); }
+            @Override public Value fieldEntries() { throw new AssertionError("Must not enumerate"); }
+            @Override public Value size() { return Value.Missing.INSTANCE; }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.UNKNOWN,
+                        CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        interpreter.defineEmbeddingValue("infiniteSource", InfiniteProvider::new);
+        LangException failure = assertThrows(LangException.class, () ->
+                interpreter.execute(new Parser("(Packed Int8) infiniteSource").parseProgram()));
+        assertEquals(Diagnostic.Codes.EAGER_INFINITE, failure.diagnostic().code());
+        assertEquals(1, failure.span().start().line());
+        assertEquals(15, failure.span().start().column());
+        assertEquals("Cannot convert a declared-infinite Collection", failure.diagnostic().message());
+    }
+
+    @Test
+    void nestedTemplateAndPackedConversionRetainSelectedElementContract() {
+        assertEquals("[\n  [ 1 2 ]\n  [ 3 4 ]\n]\ntrue\ntrue\n[\n  [ 1 2 ]\n  [ 3 4 ]\n]\n", execute("""
+                Point = template [(Int8) _ (UInt8) _]
+                Points = Packed Point
+                packed = (Points) [[1.9 2.1] [3.8 4.4]]
+                print packed
+                print Points packed
+                print (Sequence Point packed)
+                print (Sequence (Sequence Number)) packed
+                """));
+    }
+    @Test
     void exactIntegerDomainsArithmeticAndContextualFloatAreValueBased() {
         assertEquals("18446744073709551615\ntrue\nfalse\nfalse\ntrue\n2\n-2\n2.5\n",
                 execute("""
@@ -594,8 +841,9 @@ final class InterpreterTest {
                   value
                 identity value = value
                 (pure) copy = identity
+                Signature = [Number] -> (Output Number)
                 print noisy 3
-                print (([Number] -> (Output Number)) noisy)
+                print (Signature noisy)
                 print copy 2
                 """));
 
@@ -2448,7 +2696,7 @@ final class InterpreterTest {
                         print updated.name
                         print dictHas exported "age"
                         print dictKeys updated
-                        print (Dictionary String Any) exported
+                        print (Dictionary String Any exported)
                         NamedCollection = Dictionary String
                         AnyNamedCollection = NamedCollection Any
                         (AnyNamedCollection) accepted = fields
@@ -2665,8 +2913,8 @@ final class InterpreterTest {
                 explicit = { (Number) 10 }
                 print type inferred
                 print Container inferred
-                print (Container Number) inferred
-                print (Container Any) inferred
+                print (Container Number inferred)
+                print (Container Any inferred)
                 print inferred == alias
                 print inferred == explicit
                 print inferred{}
@@ -2694,15 +2942,15 @@ final class InterpreterTest {
     void containerParameterizedMembershipPreservesInvariantNestedContentContracts() {
         assertEquals("true\nfalse\n[ 3 4 ]\nfalse\nfalse\n", execute("""
                 holder = { (Sequence Number) [1 2] }
-                print (Container (Sequence Number)) holder
-                print (Container (Sequence Any)) holder
+                print (Container (Sequence Number) holder)
+                print (Container (Sequence Any) holder)
                 print put holder [3 4]
 
                 (Boolean) positive (Number) value = value > 0
                 guarded = { (Number positive) 1 }
                 both = { (Number Natural) 1 }
-                print (Container Number) guarded
-                print (Container Number) both
+                print (Container Number guarded)
+                print (Container Number both)
                 """));
     }
 
@@ -3721,7 +3969,7 @@ final class InterpreterTest {
                 print type general
                 print keys general
                 candidate = zipWithKeys ["b" "a"] [2 1]
-                print (Dictionary String Number) candidate
+                print (Dictionary String Number candidate)
                 (Dictionary String Number) sorted = zipWithKeys ["b" "a"] [2 1]
                 print keys sorted
 
@@ -3917,7 +4165,7 @@ final class InterpreterTest {
                 """));
         assertEquals("true\n", execute("""
                 (Sequence Number) result = eager [1 2]
-                print (Sequence Number) result
+                print (Sequence Number result)
                 """));
         assertEquals("1\n2\n[ 1 2 ]\n", execute("""
                 (Output Number) emit value =

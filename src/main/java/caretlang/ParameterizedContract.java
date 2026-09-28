@@ -29,7 +29,11 @@ final class ParameterizedContract implements ContractDescriptor {
         value = ValueSemantics.underlying(value);
         if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
         if (parameterArity() > 0 || !base.accepts(value)) return false;
-        if (value instanceof Value.EmptyCollection) return true;
+        if (value instanceof Value.EmptyCollection) return base != BuiltinContract.PACKED;
+        if (base == BuiltinContract.PACKED && value instanceof Value.PackedCollection packed) {
+            return packed.elementContract() == arguments.getFirst()
+                    && packed.values().stream().allMatch(arguments.getFirst()::accepts);
+        }
         if (value instanceof Value.SettledCollection collection) {
             return switch (base) {
                 case BuiltinContract.SEQUENCE -> collection.entries().stream()
@@ -43,6 +47,9 @@ final class ParameterizedContract implements ContractDescriptor {
             };
         }
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
+            return sequence.values().stream().allMatch(arguments.getFirst()::accepts);
+        }
+        if (base == BuiltinContract.SEQUENCE && value instanceof Value.PackedCollection sequence) {
             return sequence.values().stream().allMatch(arguments.getFirst()::accepts);
         }
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.LazySeq sequence) {
@@ -78,7 +85,12 @@ final class ParameterizedContract implements ContractDescriptor {
         if (value instanceof Value.LazyCollection collection) value = collection.materializedValue();
         if (parameterArity() > 0) return false;
         if (!base.test(value, span)) return false;
-        if (value instanceof Value.EmptyCollection) return true;
+        if (value instanceof Value.EmptyCollection) return base != BuiltinContract.PACKED;
+        if (base == BuiltinContract.PACKED && value instanceof Value.PackedCollection packed) {
+            return packed.elementContract() == arguments.getFirst()
+                    && packed.values().stream().allMatch(value1 ->
+                    arguments.getFirst().acceptsRequirement(value1, span));
+        }
         if (value instanceof Value.SettledCollection collection) {
             return switch (base) {
                 case BuiltinContract.SEQUENCE -> collection.entries().stream()
@@ -92,6 +104,11 @@ final class ParameterizedContract implements ContractDescriptor {
             };
         }
         if (base == BuiltinContract.SEQUENCE && value instanceof Value.Seq sequence) {
+            ContractDescriptor element = arguments.getFirst();
+            return sequence.values().stream().allMatch(
+                    elementValue -> element.acceptsRequirement(elementValue, span));
+        }
+        if (base == BuiltinContract.SEQUENCE && value instanceof Value.PackedCollection sequence) {
             ContractDescriptor element = arguments.getFirst();
             return sequence.values().stream().allMatch(
                     elementValue -> element.acceptsRequirement(elementValue, span));

@@ -518,7 +518,7 @@ alone, including for an empty value. Ordinary Collections retain all their broad
 Contextual literal construction selects the requested layout and validates values. A declaration
 does not silently convert an already-established ordinary sequence into packed storage.
 Explicit `(Packed T) source` conversion recursively converts elements to `T`, using the
-[built-in conversion rules](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned).
+[built-in conversion rules](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented).
 After conversion, every element must satisfy its structural and scalar requirements. Incompatible
 shape, unsupported layout, and out-of-range values are located errors; do not expose a partial
 packed result. A fixed-width append is validation, not an implicit explicit-conversion request.
@@ -589,10 +589,10 @@ discovery and locations. Run the full baseline suites, corpus/navigation and con
 example-coverage script, and `git diff --check` before claiming implementation completion.
 
 The delivery order is numeric values, formats, arithmetic, warnings, and embedding carriers
-(#82); value-producing conversion syntax and recursive conversion (#83); then selected packed
-storage and protocol integration (#78). The matrix above remains planned evidence until each
-owning card supplies tests and runnable examples. This design card (#77) supplies no runtime
-evidence for those requirements.
+(#82); value-producing conversion syntax and recursive conversion (#83); then contiguous selected
+packed storage and protocol integration (#78). The conversion implementation records selected
+packed membership with temporary immutable reference storage. Physical layout and full protocol
+evidence remain with #78.
 
 <a id="immutable-collections"></a>
 ## Immutable collections (implemented baseline)
@@ -2077,10 +2077,9 @@ when analysis identifies one template shape unambiguously. Competing overload/te
 not insert fields to decide their own selection.
 
 Only Collection constructors receive this context. Ordinary template application remains a pure
-Boolean membership predicate. Explicit conversion is a later language feature and will require
+Boolean membership predicate. Explicit conversion requires
 the source's established exact shape even when its operand is written as a literal:
 
-<!-- caret-example: planned -->
 ```caret
 candidate = [^name = "Ada"]
 

@@ -9,7 +9,8 @@ import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
         Value.Field, Value.Container, Value.KeyedCollection, Value.LazyCollection, Value.LazySeq,
-        Value.Reflective, Value.Seq, Value.Callable, Value.Attributed, Value.SettledCollection {
+        Value.Reflective, Value.Seq, Value.Callable, Value.Attributed, Value.SettledCollection,
+        Value.PackedCollection {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
         public Attributed {
@@ -286,6 +287,37 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public Value size() { return new Num(entries.size()); }
         @Override public CollectionRuntime.Facts facts() { return facts; }
         @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
+    /** Selected packed semantics with reference payloads until the physical-layout card. */
+    final class PackedCollection implements Value, CollectionRuntime.Provider {
+        private final ContractDescriptor elementContract;
+        private final List<Value> values;
+        private static final CollectionRuntime.Facts FACTS = new CollectionRuntime.Facts(
+                CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
+                CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.TRUE,
+                CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE);
+
+        PackedCollection(ContractDescriptor elementContract, List<Value> values) {
+            this.elementContract = Objects.requireNonNull(elementContract);
+            this.values = List.copyOf(values);
+        }
+        ContractDescriptor elementContract() { return elementContract; }
+        List<Value> values() { return values; }
+        @Override public Value getElement(Value key) {
+            int index = NumericValues.nonNegativeInt(key);
+            return index >= 0 && index < values.size() ? values.get(index) : Missing.INSTANCE;
+        }
+        @Override public Value keys() {
+            ArrayList<Value> keys = new ArrayList<>(values.size());
+            for (int index = 0; index < values.size(); index++) keys.add(new Num(index));
+            return new Seq(keys);
+        }
+        @Override public Value valueEntries() { return new Seq(values); }
+        @Override public Value fieldEntries() { return valueEntries(); }
+        @Override public Value size() { return new Num(values.size()); }
+        @Override public CollectionRuntime.Facts facts() { return FACTS; }
+        @Override public String toString() { return ValueSemantics.render(new Seq(values)); }
     }
 
     /** The single shape-neutral empty collection literal. */

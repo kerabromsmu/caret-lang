@@ -80,6 +80,14 @@ enum BuiltinContract implements ContractDescriptor {
             return new ParameterizedContract(this, arguments);
         }
     },
+    PACKED("Packed") {
+        @Override public boolean accepts(Value value) {
+            value = ValueSemantics.underlying(value);
+            return value instanceof Value.PackedCollection;
+        }
+        @Override public java.util.List<ContractDescriptor> bases() { return java.util.List.of(SEQUENCE); }
+        @Override public int parameterArity() { return 1; }
+    },
     DICTIONARY("Dictionary") {
         @Override public boolean accepts(Value value) {
             value = ValueSemantics.underlying(value);

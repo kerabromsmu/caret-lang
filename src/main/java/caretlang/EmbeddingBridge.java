@@ -176,6 +176,8 @@ public final class EmbeddingBridge {
                                     external(entry.value()))).toList())
                     : new CaretValue.SequenceValue(collection.entries().stream().map(
                             entry -> external(entry.value())).toList());
+            case Value.PackedCollection collection -> new CaretValue.SequenceValue(
+                    collection.values().stream().map(this::external).toList());
             case Value.Seq sequence -> new CaretValue.SequenceValue(sequence.values().stream().map(this::external).toList());
             case Value.LazySeq sequence -> new CaretValue.SequenceValue(sequence.materialize().stream().map(this::external).toList());
             case Value.LazyCollection collection -> {
