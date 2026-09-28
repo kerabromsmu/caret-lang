@@ -174,8 +174,8 @@ named embedding module, generated API documentation, and a standalone example.
 ### Release versions
 
 The tracked [`VERSION`](VERSION) file is the source of the release version in
-`MAJOR.MINOR.UPDATE` form. The completed `0.1.x` line represents Phase 1, and `0.2.x` represents the
-Phase 2 release line from [`PLAN.md`](PLAN.md).
+`MAJOR.MINOR.UPDATE` form. The completed `0.1.x`, `0.2.x`, `0.3.x`, and `0.4.x` lines represent
+Phases 1 through 4 respectively in [`PLAN.md`](PLAN.md).
 
 - Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
 - Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.

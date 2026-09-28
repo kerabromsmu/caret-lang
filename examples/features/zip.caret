@@ -21,4 +21,3 @@ print zipWithKeys ["same" "same"] lazyValues
 // Ordinary numbered-hole partials can reorder the two inputs.
 swapped = zip _2 _1
 print swapped [3] [4]
-
