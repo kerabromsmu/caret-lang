@@ -548,7 +548,7 @@ class CaretSandboxTest {
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
                     () -> first.invoke(identity, null));
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
-                    () -> first.invoke(identity, Collections.singletonList((CaretValue) null)));
+                    () -> first.invoke(identity, Collections.singletonList(null)));
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
                     () -> first.swapEnvironment(null));
         }

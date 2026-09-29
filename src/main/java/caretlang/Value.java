@@ -140,6 +140,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public Value valueEntries() { return new Seq(List.of(key, value)); }
         @Override public Value fieldEntries() { return valueEntries(); }
         @Override public Value size() { return new Num(2); }
+        // The provider protocol is internal; Value variants are public as members of Value.
+        @SuppressWarnings("ClassEscapesDefinedScope")
         @Override public CollectionRuntime.Facts facts() {
             return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE,
                     CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
@@ -209,6 +211,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         @Override public Value size() { return new Num(entries.size()); }
 
+        @SuppressWarnings("ClassEscapesDefinedScope")
         @Override public CollectionRuntime.Facts facts() {
             return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
                     CollectionRuntime.Guarantee.TRUE,
@@ -239,7 +242,6 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         List<Entry> entries() { return entries; }
         ValueKind kind() { return kind; }
-        boolean keysAvailable() { return keysAvailable; }
 
         synchronized Field fieldBinding(String name) {
             if (!keysAvailable) return null;
@@ -285,6 +287,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             }).toList());
         }
         @Override public Value size() { return new Num(entries.size()); }
+        @SuppressWarnings("ClassEscapesDefinedScope")
         @Override public CollectionRuntime.Facts facts() { return facts; }
         @Override public String toString() { return ValueSemantics.render(this); }
     }
@@ -319,7 +322,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.referenceValues = optimized ? null : List.copyOf(values);
             ArrayList<PackedLayout.Metadata> captured = optimized ? new ArrayList<>(count) : null;
             for (int index = 0; index < count; index++) {
-                if (!layout.canEncode(values.get(index))) {
+                if (layout.rejects(values.get(index))) {
                     throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CONTRACT_VIOLATION,
                             "Packed value does not match its fixed layout", span);
                 }
@@ -384,6 +387,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public Value valueEntries() { return new Seq(values()); }
         @Override public Value fieldEntries() { return valueEntries(); }
         @Override public Value size() { return new Num(count); }
+        @SuppressWarnings("ClassEscapesDefinedScope")
         @Override public CollectionRuntime.Facts facts() { return FACTS; }
         @Override public String toString() { return ValueSemantics.render(new Seq(values())); }
     }
@@ -619,6 +623,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public Value valueEntries() { return new Seq(materialize()); }
         @Override public Value fieldEntries() { return valueEntries(); }
         @Override public Value size() { return new Num(size); }
+        @SuppressWarnings("ClassEscapesDefinedScope")
         @Override public CollectionRuntime.Facts facts() { return facts; }
         @Override public String toString() { return ValueSemantics.render(this); }
     }
@@ -735,10 +740,9 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             synchronized (this) { return shape; }
         }
 
-        synchronized boolean selectDictionary() {
-            if (!dictionarySelectable || shapeLocked) return false;
+        synchronized void selectDictionary() {
+            if (!dictionarySelectable || shapeLocked) return;
             dictionarySelected = true;
-            return true;
         }
 
         synchronized boolean dictionarySelected() { return dictionarySelected; }
@@ -830,6 +834,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return new Num(knownSize != null ? knownSize : materializeEntries().size());
         }
 
+        @SuppressWarnings("ClassEscapesDefinedScope")
         @Override public CollectionRuntime.Facts facts() {
             Shape current = resolvedShape();
             CollectionRuntime.Guarantee keyed = switch (current) {
@@ -1102,21 +1107,6 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final java.util.function.IntFunction<BuiltinContract> expectedNumericFormat;
         private final java.util.function.IntFunction<Boolean> strictNumeric;
 
-        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator) {
-            this(target, validator, ignored -> null, ignored -> null, ignored -> null, ignored -> false);
-        }
-
-        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
-                           java.util.function.IntFunction<TemplateContract> expectedTemplate) {
-            this(target, validator, expectedTemplate, ignored -> null, ignored -> null, ignored -> false);
-        }
-
-        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
-                           java.util.function.IntFunction<TemplateContract> expectedTemplate,
-                           java.util.function.IntFunction<BuiltinContract> expectedNumericFormat) {
-            this(target, validator, expectedTemplate, ignored -> null, expectedNumericFormat, ignored -> false);
-        }
-
         ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
                            java.util.function.IntFunction<TemplateContract> expectedTemplate,
                            java.util.function.IntFunction<ParameterizedContract> expectedPacked,
@@ -1356,7 +1346,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                     "result", resultValue(signature.result(), context),
                     "effects", effectsValue(signature.effects(), context),
                     "variables", new Seq(signature.variables().stream()
-                            .map(variable -> variableValue(variable, context)).toList())), null, "Signature");
+                            .map(variable -> variableValue(variable, context)).toList())), "Signature");
         }
 
         private static Value parameterValue(CallableSignature.Parameter parameter, int position,
@@ -1366,26 +1356,26 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                     "id", parameter.name() == null ? Missing.INSTANCE : new Str(parameter.name()),
                     "requirements", refs(effective(parameter.requirements(), parameter.declared(), context), context),
                     "declared", nullableRefs(parameter.declared(), context),
-                    "inferred", inferredRefs(parameter.inferred(), parameter.declared(), context)), null, "Parameter");
+                    "inferred", inferredRefs(parameter.inferred(), parameter.declared(), context)), "Parameter");
         }
 
         private static Value resultValue(CallableSignature.Result result, ReflectionContext captured) {
             return projected(captured, context -> Map.of(
                     "guarantees", refs(effective(result.guarantees(), result.declared(), context), context),
                     "declared", nullableRefs(result.declared(), context),
-                    "inferred", inferredRefs(result.inferred(), result.declared(), context)), null, "FunctionResult");
+                    "inferred", inferredRefs(result.inferred(), result.declared(), context)), "FunctionResult");
         }
 
         private static Value effectsValue(CallableSignature.Effects effects, ReflectionContext captured) {
             return projected(captured, context -> Map.of(
                     "upperBound", nullableEffects(effective(effects.upperBound(), effects.declared(), context), context),
                     "declared", nullableEffects(effects.declared(), context),
-                    "inferred", inferredEffects(effects.inferred(), effects.declared(), context)), null, "FunctionEffects");
+                    "inferred", inferredEffects(effects.inferred(), effects.declared(), context)), "FunctionEffects");
         }
 
         private static Value variableValue(CallableSignature.Variable variable, ReflectionContext captured) {
             return projected(captured, context -> Map.of("index", new Num(variable.index()),
-                    "requirements", refs(variable.requirements(), context)), null, "SignatureVariable");
+                    "requirements", refs(variable.requirements(), context)), "SignatureVariable");
         }
 
         private static Value refs(List<CallableSignature.ContractTerm> terms, ReflectionContext context) {
@@ -1434,11 +1424,11 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return !context.inferredFacts() && declared != null ? declared : complete;
         }
         private static Value metadata(String kind, ReflectionContext captured, Map<String, Value> values) {
-            return projected(captured, ignored -> values, null, kind);
+            return projected(captured, ignored -> values, kind);
         }
         private static Value projected(ReflectionContext captured, ProjectionBody body,
-                                       Value target, String kind) {
-            return projected(captured, body, target, null, kind);
+                                       String kind) {
+            return projected(captured, body, null, null, kind);
         }
         private static Value projected(ReflectionContext captured, ProjectionBody body,
                                        Value target, Object semanticIdentity, String kind) {

@@ -1,11 +1,9 @@
 package caretlang;
 
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.BiFunction;
 
 /** Exact structural collection contract derived from a language-owned constructor descriptor. */
@@ -56,7 +54,7 @@ final class TemplateContract implements ContractDescriptor {
         CollectionConstructorDescriptor.CollectionNode collection =
                 (CollectionConstructorDescriptor.CollectionNode) node;
         if (collection.named()) {
-            if (!(value instanceof Value.Dictionary dictionary)
+            if (!(value instanceof Value.Dictionary)
                     && !(value instanceof Value.ProjectedDictionary)) return false;
             Map<String, Value> fields = value instanceof Value.Dictionary dictionary
                     ? dictionary.entries() : ((Value.ProjectedDictionary) value).fields(ReflectionContext.defining());
@@ -79,12 +77,11 @@ final class TemplateContract implements ContractDescriptor {
     }
 
     boolean implies(TemplateContract required) {
-        return nodeImplies(descriptor.root(), required.descriptor.root(),
-                java.util.Collections.newSetFromMap(new IdentityHashMap<>()));
+        return nodeImplies(descriptor.root(), required.descriptor.root());
     }
 
     private boolean nodeImplies(CollectionConstructorDescriptor.Node left,
-                                CollectionConstructorDescriptor.Node right, Set<Object> visiting) {
+                                CollectionConstructorDescriptor.Node right) {
         if (left == right) return true;
         if (right instanceof CollectionConstructorDescriptor.HoleNode target) {
             if (left instanceof CollectionConstructorDescriptor.HoleNode source) {
@@ -107,7 +104,7 @@ final class TemplateContract implements ContractDescriptor {
         for (int index = 0; index < source.elements().size(); index++) {
             CollectionConstructorDescriptor.Element a = source.elements().get(index);
             CollectionConstructorDescriptor.Element b = target.elements().get(index);
-            if (!java.util.Objects.equals(a.name(), b.name()) || !nodeImplies(a.value(), b.value(), visiting)) {
+            if (!java.util.Objects.equals(a.name(), b.name()) || !nodeImplies(a.value(), b.value())) {
                 return false;
             }
         }

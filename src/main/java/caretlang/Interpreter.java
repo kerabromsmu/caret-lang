@@ -161,12 +161,7 @@ final class Interpreter {
     private void validateEffectAllowances(List<Stmt> statements, Resolution resolution) {
         for (Stmt statement : statements) {
             if (!(statement instanceof FunctionDef function)) {
-                Expr expression = switch (statement) {
-                    case Assign assign -> assign.value();
-                    case ExprStmt line -> line.expression();
-                    case PrintLine line -> line.builtinArgument();
-                    case FunctionDef ignored -> null;
-                };
+                Expr expression = statementExpression(statement);
                 if (expression != null) AstTraversal.walkPreOrder(expression, candidate -> {
                     if (candidate instanceof With with) validateEffectAllowances(with.body(), resolution);
                 });
@@ -193,6 +188,15 @@ final class Interpreter {
         }
     }
 
+    private static Expr statementExpression(Stmt statement) {
+        return switch (statement) {
+            case Assign assign -> assign.value();
+            case ExprStmt line -> line.expression();
+            case PrintLine line -> line.builtinArgument();
+            case FunctionDef ignored -> null;
+        };
+    }
+
     private void validateCompositionCompatibility(List<Stmt> statements, Resolution resolution) {
         HashMap<Integer, List<CallableSignature>> variants = new HashMap<>();
         collectFunctionSignatures(statements, resolution, variants);
@@ -210,12 +214,7 @@ final class Interpreter {
                         .add(CallableSignature.inferred(function, Objects.requireNonNull(inference), resolution));
                 collectFunctionSignatures(function.body(), resolution, signatures);
             } else {
-                Expr expression = switch (statement) {
-                    case Assign assign -> assign.value();
-                    case ExprStmt line -> line.expression();
-                    case PrintLine line -> line.builtinArgument();
-                    case FunctionDef ignored -> null;
-                };
+                Expr expression = statementExpression(statement);
                 if (expression != null) AstTraversal.walkPreOrder(expression, candidate -> {
                     if (candidate instanceof With with) collectFunctionSignatures(with.body(), resolution, signatures);
                 });
@@ -369,10 +368,8 @@ final class Interpreter {
                 last = eval(usesBuiltinPrint(line, env, resolution)
                         ? new Apply(line.target(), line.builtinArgument(), line.span())
                         : line.ordinaryCall(), env, null, resolution);
-            } else if (statement instanceof FunctionDef(String name, ContractClause resultContracts,
-                                                        List<Parameter> params, List<Stmt> body,
-                                                        SourceSpan ignored)) {
-                last = functions.get((FunctionDef) statement);
+            } else if (statement instanceof FunctionDef function) {
+                last = functions.get(function);
             }
         }
 
@@ -769,9 +766,7 @@ final class Interpreter {
             List<String> parameters = operation == SequenceOperation.FOLD
                     ? List.of("values", "initial", "combine") : List.of("values", "predicate");
             CallableSignature signature = CallableSignature.builtin(parameters, ALL_EFFECTS);
-            for (int index = 0; index < arguments.size(); index++) {
-                signature = signature.specializeFirst(arguments.get(index).value());
-            }
+            for (Value.Argument supplied : arguments) signature = signature.specializeFirst(supplied.value());
             return signature;
         }
         @Override public List<Value> retainedValues() {
@@ -819,21 +814,18 @@ final class Interpreter {
     }
 
     private static List<CallableSignature> operatorSignatures(String operator) {
-        if (operator.equals("div")) return List.of(CallableSignature.operator(
-                List.of("Integer", "Integer"), "Integer"));
-        if (operator.equals("+")) return List.of(
-                CallableSignature.operator(List.of("Number", "Number"), "Number"),
-                CallableSignature.operator(List.of("String", "String"), "String"),
-                CallableSignature.operator(List.of("String", "Any"), "String"),
-                CallableSignature.operator(List.of("Any", "String"), "String"));
-        if (operator.equals("==") || operator.equals("!=")) {
-            return List.of(CallableSignature.operator(List.of("Eq", "Eq"), "Boolean"));
-        }
-        String result = switch (operator) {
-            case ">", ">=", "<", "<=" -> "Boolean";
-            default -> "Number";
+        return switch (operator) {
+            case "div" -> List.of(CallableSignature.operator(List.of("Integer", "Integer"), "Integer"));
+            case "+" -> List.of(
+                    CallableSignature.operator(List.of("Number", "Number"), "Number"),
+                    CallableSignature.operator(List.of("String", "String"), "String"),
+                    CallableSignature.operator(List.of("String", "Any"), "String"),
+                    CallableSignature.operator(List.of("Any", "String"), "String"));
+            case "==", "!=" -> List.of(CallableSignature.operator(List.of("Eq", "Eq"), "Boolean"));
+            case ">", ">=", "<", "<=" -> List.of(CallableSignature.operator(
+                    List.of("Number", "Number"), "Boolean"));
+            default -> List.of(CallableSignature.operator(List.of("Number", "Number"), "Number"));
         };
-        return List.of(CallableSignature.operator(List.of("Number", "Number"), result));
     }
 
     private final class OverloadCallable implements Value.Callable {
@@ -1516,7 +1508,7 @@ final class Interpreter {
                     yield numeric.exactInteger() == null && numeric.value() == 0.0
                             ? new Value.Num(-numeric.value())
                             : integer != null ? new Value.Num(integer.negate())
-                            : finiteNumber(-numeric.value(), "Numeric result is not finite");
+                            : finiteNumber(-numeric.value());
                 }
                 case "not" -> new Value.Bool(!truth(value));
                 default -> throw runtime(Diagnostic.Codes.UNKNOWN_OPERATOR,
@@ -1704,22 +1696,19 @@ final class Interpreter {
         if (expr instanceof Group(Expr expression, SourceSpan ignored)) {
             return evalInner(expression, env, resolution);
         }
-        if (expr instanceof CollectionLiteral(List<CollectionElement> elements, SourceSpan ignored)) {
-            return evaluateCollection((CollectionLiteral) expr, env, resolution, CollectionShape.INFER);
+        if (expr instanceof CollectionLiteral collection) {
+            return evaluateCollection(collection, env, resolution);
         }
-        if (expr instanceof ArrowContract(List<List<Expr>> parameters, Expr result, List<Name> effectTerms,
-                                          boolean explicitPure, SourceSpan ignored)) {
-            ArrowContract analyzed = resolution.arrow((ArrowContract) expr);
-            parameters = analyzed.parameters();
-            result = analyzed.result();
+        if (expr instanceof ArrowContract arrow) {
+            ArrowContract analyzed = resolution.arrow(arrow);
             ArrayList<List<ContractDescriptor>> parameterDescriptors = new ArrayList<>();
-            for (List<Expr> parameter : parameters) {
+            for (List<Expr> parameter : analyzed.parameters()) {
                 parameterDescriptors.add(parameter.stream()
                         .map(requirement -> arrowRequirement(requirement, env, resolution)).toList());
             }
-            ContractDescriptor resultDescriptor = arrowRequirement(result, env, resolution);
+            ContractDescriptor resultDescriptor = arrowRequirement(analyzed.result(), env, resolution);
             return new Value.ContractValue(new ArrowContractDescriptor(
-                    List.copyOf(parameterDescriptors), resultDescriptor, effectTerms.stream()
+                    List.copyOf(parameterDescriptors), resultDescriptor, arrow.effectTerms().stream()
                     .map(effect -> effectCatalog.resolve(effect.name()).orElseThrow()).toList()));
         }
         if (expr instanceof Lambda lambda) return lambdaFunction(lambda, env, resolution);
@@ -1894,7 +1883,7 @@ final class Interpreter {
                     yield new Value.Str(leftText + rightText);
                 }
                 yield numericBinary(leftArgument, rightArgument, java.math.BigInteger::add,
-                        (a, b) -> a + b, callSpan);
+                        Double::sum, callSpan);
             }
             case "-" -> numericBinary(leftArgument, rightArgument, java.math.BigInteger::subtract,
                     (a, b) -> a - b, callSpan);
@@ -1912,15 +1901,14 @@ final class Interpreter {
                     java.math.BigInteger[] division = a.divideAndRemainder(b);
                     if (division[1].signum() == 0) yield new Value.Num(division[0]);
                     double rounded = NumericValues.quotientToDouble(a, b);
-                    Value.Num result = finiteNumber(rounded, "Numeric result is not finite", callSpan);
+                    Value.Num result = finiteNumber(rounded, callSpan);
                     if (new java.math.BigDecimal(rounded).multiply(new java.math.BigDecimal(b))
                             .compareTo(new java.math.BigDecimal(a)) != 0) {
                         reportImplicitPrecisionLoss(callSpan);
                     }
                     yield result;
                 }
-                yield finiteNumber(dividend.value() / divisor.value(),
-                        "Numeric result is not finite", callSpan);
+                yield finiteNumber(dividend.value() / divisor.value(), callSpan);
             }
             case "div" -> {
                 Value.Num dividend = numeric(leftArgument);
@@ -1945,8 +1933,7 @@ final class Interpreter {
                 java.math.BigInteger a = NumericValues.integral(dividend);
                 java.math.BigInteger b = NumericValues.integral(divisor);
                 yield a != null && b != null ? new Value.Num(a.remainder(b))
-                        : finiteNumber(dividend.value() % divisor.value(),
-                        "Numeric result is not finite", callSpan);
+                        : finiteNumber(dividend.value() % divisor.value(), callSpan);
             }
             case ">" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) > 0);
             case ">=" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) >= 0);
@@ -1982,17 +1969,20 @@ final class Interpreter {
         java.math.BigInteger ai = NumericValues.integral(a);
         java.math.BigInteger bi = NumericValues.integral(b);
         return ai != null && bi != null ? new Value.Num(exact.apply(ai, bi))
-                : finiteNumber(floating.applyAsDouble(a.value(), b.value()),
-                "Numeric result is not finite", span);
+                : finiteNumber(floating.applyAsDouble(a.value(), b.value()), span);
     }
 
-    private Value.Num finiteNumber(double value, String message) {
-        if (!Double.isFinite(value)) throw runtime(Diagnostic.Codes.NON_FINITE_RESULT, message);
+    private Value.Num finiteNumber(double value) {
+        if (!Double.isFinite(value)) {
+            throw runtime(Diagnostic.Codes.NON_FINITE_RESULT, "Numeric result is not finite");
+        }
         return new Value.Num(value);
     }
 
-    private Value.Num finiteNumber(double value, String message, SourceSpan span) {
-        if (!Double.isFinite(value)) throw runtime(Diagnostic.Codes.NON_FINITE_RESULT, message, span);
+    private Value.Num finiteNumber(double value, SourceSpan span) {
+        if (!Double.isFinite(value)) {
+            throw runtime(Diagnostic.Codes.NON_FINITE_RESULT, "Numeric result is not finite", span);
+        }
         return new Value.Num(value);
     }
 
@@ -2016,8 +2006,7 @@ final class Interpreter {
             Value argument = underlying(args.getFirst().value());
             List<ContractDescriptor> bases = new ArrayList<>();
             List<Value.Callable> refinements = new ArrayList<>();
-            if (argument == Value.Missing.INSTANCE) {
-            } else if (argument instanceof Value.ContractValue contract) {
+            if (argument instanceof Value.ContractValue contract) {
                 bases.add(contract.descriptor());
             } else if (argument instanceof Value.Callable callable && callable.refinementEligible()) {
                 refinements.add(callable);
@@ -2034,7 +2023,7 @@ final class Interpreter {
                                         + ValueSemantics.kind(element), args.getFirst().span());
                     }
                 }
-            } else {
+            } else if (argument != Value.Missing.INSTANCE) {
                 if (argument instanceof Value.Callable) {
                     throw new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_REFINEMENT,
                             "Invalid refinement predicate: callable must be unary, Boolean-returning, and pure",
@@ -2171,8 +2160,9 @@ final class Interpreter {
         CallableSignature eagerSignature = new CallableSignature(
                 List.of(new CallableSignature.Parameter("value", List.of(), null, null)),
                 new CallableSignature.Result(List.of(), null, null),
-                new CallableSignature.Effects(List.of("Output", "StateRead", "StateWrite", "TestReport")
-                        .stream().map(CallableSignature.EffectRef::new).toList(), null, null), List.of());
+                new CallableSignature.Effects(java.util.stream.Stream
+                        .of("Output", "StateRead", "StateWrite", "TestReport")
+                        .map(CallableSignature.EffectRef::new).toList(), null, null), List.of());
         builtins.define("eager", new Value.FunctionValue("eager", List.of("value"),
                 (args, ignored) -> EagerRuntime.materialize(args.getFirst().value(), args.getFirst().span(),
                         reflectionContext),
@@ -2191,7 +2181,7 @@ final class Interpreter {
             if (current instanceof Value.PackedCollection packed) {
                 Value value = acquirePackedValue(packed.elementContract(), args.get(1).value(),
                         args.get(1).span());
-                if (!packed.layout().canEncode(value)
+                if (packed.layout().rejects(value)
                         || !packed.elementContract().test(value, args.get(1).span())) {
                     throw runtime(Diagnostic.Codes.CONTRACT_VIOLATION,
                             "Packed append rejects value for " + packed.elementContract().publicName(),
@@ -2854,9 +2844,9 @@ final class Interpreter {
             }
             if (!user.canAcquire(acquired, span)) return acquired;
             java.util.LinkedHashSet<ContractDescriptor> memberships = new java.util.LinkedHashSet<>();
-            while (acquired instanceof Value.Attributed attributed) {
-                memberships.addAll(attributed.contracts());
-                acquired = attributed.value();
+            while (acquired instanceof Value.Attributed(Value nested, Set<ContractDescriptor> contracts)) {
+                memberships.addAll(contracts);
+                acquired = nested;
             }
             memberships.add(user);
             return new Value.Attributed(acquired, memberships);
@@ -2900,9 +2890,9 @@ final class Interpreter {
 
     private Value retainPackedAttributes(Value original, Value changed) {
         java.util.LinkedHashSet<ContractDescriptor> memberships = new java.util.LinkedHashSet<>();
-        while (original instanceof Value.Attributed attributed) {
-            memberships.addAll(attributed.contracts());
-            original = attributed.value();
+        while (original instanceof Value.Attributed(Value nested, Set<ContractDescriptor> contracts)) {
+            memberships.addAll(contracts);
+            original = nested;
         }
         return memberships.isEmpty() ? changed : new Value.Attributed(changed, memberships);
     }
@@ -2990,9 +2980,10 @@ final class Interpreter {
 
     private void analyzeStaticPrecisionExpression(Expr expression, NumericPolicy policy,
                                                   ContractClause context) {
-        if (!(ungroup(expression) instanceof Binary binary) || !binary.operator().equals("/")
-                || !(ungroup(binary.left()) instanceof Literal(Value.Num left, SourceSpan ignoredLeft))
-                || !(ungroup(binary.right()) instanceof Literal(Value.Num right, SourceSpan ignoredRight))) return;
+        if (!(ungroup(expression) instanceof Binary(String operator, Expr leftExpr, Expr rightExpr,
+                SourceSpan binarySpan)) || !operator.equals("/")
+                || !(ungroup(leftExpr) instanceof Literal(Value.Num left, SourceSpan ignoredLeft))
+                || !(ungroup(rightExpr) instanceof Literal(Value.Num right, SourceSpan ignoredRight))) return;
         java.math.BigInteger numerator = NumericValues.integral(left);
         java.math.BigInteger denominator = NumericValues.integral(right);
         if (numerator == null || denominator == null || denominator.signum() == 0
@@ -3005,9 +2996,9 @@ final class Interpreter {
                 : List.of(new Diagnostic.Related("Numeric result requirement", context.span()));
         Diagnostic diagnostic = new Diagnostic(Diagnostic.Phase.SEMANTIC,
                 Diagnostic.Codes.IMPLICIT_PRECISION_LOSS,
-                "Implicit numeric precision loss", binary.span(), related);
+                "Implicit numeric precision loss", binarySpan, related);
         if (policy == NumericPolicy.STRICT) throw new LangException(diagnostic);
-        staticallyReportedPrecisionLosses.add(binary.span());
+        staticallyReportedPrecisionLosses.add(binarySpan);
         warnings.add(diagnostic);
     }
 
@@ -3129,7 +3120,7 @@ final class Interpreter {
             java.math.BigDecimal exact = NumericValues.decimal(number);
             if (builtin == BuiltinContract.FLOAT || builtin == BuiltinContract.DOUBLE) {
                 double rounded = builtin == BuiltinContract.FLOAT ? exact.floatValue() : exact.doubleValue();
-                converted = finiteNumber(rounded, "Numeric result is not finite", operandSpan);
+                converted = finiteNumber(rounded, operandSpan);
             } else converted = new Value.Num(exact.toBigInteger());
         } else if (target == BuiltinContract.STRING && !(raw instanceof Value.Str)) {
             Value renderer = underlying(env.get("toString"));
@@ -3247,9 +3238,8 @@ final class Interpreter {
                 "Cannot convert " + ValueSemantics.kind(source) + " to " + target.publicName(), span);
     }
 
-    private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution,
-                                     CollectionShape expected) {
-        return evaluateCollection(literal, env, resolution, expected,
+    private Value evaluateCollection(CollectionLiteral literal, Environment env, Resolution resolution) {
+        return evaluateCollection(literal, env, resolution, CollectionShape.INFER,
                 (CollectionConstructorDescriptor.CollectionNode) null);
     }
 

@@ -129,14 +129,15 @@ public final class CaretSandbox implements AutoCloseable {
             } else {
                 CaretEnvironment previous = environment.getAndSet(replacement);
                 try {
-                    EmbeddingBridge replacementBridge = new EmbeddingBridge(
-                            this, environment, output, this::stageCallbacks, this::newCallable);
-                    bridge = replacementBridge;
+                    bridge = new EmbeddingBridge(this, environment, output,
+                            this::stageCallbacks, this::newCallable);
                     rememberSchema(replacement);
                 } catch (RuntimeException failure) {
                     environment.set(previous);
-                    if (!EmbeddingBridge.isExpectedFailure(failure)) throw failure;
-                    throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT, "Invalid replacement environment");
+                    if (EmbeddingBridge.isExpectedFailure(failure)) {
+                        throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT, "Invalid replacement environment");
+                    }
+                    throw failure;
                 }
             }
         } finally {
@@ -250,9 +251,11 @@ public final class CaretSandbox implements AutoCloseable {
             try {
                 return new CaretSandbox(environment, output);
             } catch (RuntimeException failure) {
-                if (!EmbeddingBridge.isExpectedFailure(failure)) throw failure;
-                throw new CaretEmbeddingException(CaretEmbeddingException.Code.INVALID_ARGUMENT,
-                        "Invalid initial environment");
+                if (EmbeddingBridge.isExpectedFailure(failure)) {
+                    throw new CaretEmbeddingException(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                            "Invalid initial environment");
+                }
+                throw failure;
             }
         }
     }

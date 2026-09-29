@@ -27,8 +27,8 @@ final class PackedLayoutTest {
                         number("9223372036854775807")),
                 new Case(BuiltinContract.UINT64, 8, number(0),
                         number("18446744073709551615")),
-                new Case(BuiltinContract.FLOAT, 4, new Value.Num((double) Float.MIN_VALUE),
-                        new Value.Num((double) Float.MAX_VALUE)),
+                new Case(BuiltinContract.FLOAT, 4, new Value.Num(Float.MIN_VALUE),
+                        new Value.Num(Float.MAX_VALUE)),
                 new Case(BuiltinContract.DOUBLE, 8, new Value.Num(Double.MIN_VALUE),
                         new Value.Num(Double.MAX_VALUE)),
                 new Case(BuiltinContract.BOOLEAN, 1, new Value.Bool(false), new Value.Bool(true)))) {
@@ -40,6 +40,14 @@ final class PackedLayoutTest {
             assertEquals(sample.second(), packed.at(1), sample.format().publicName());
             assertEquals(2, packed.length());
         }
+    }
+
+    @Test
+    void directIntegerWriteRejectsNonintegralValue() {
+        PackedLayout layout = PackedLayout.of(BuiltinContract.INT8, SPAN);
+        IllegalArgumentException invalid = assertThrows(IllegalArgumentException.class,
+                () -> layout.write(new Value.Num(1.5), new byte[layout.stride()], 0));
+        assertEquals("Packed integer must be integral", invalid.getMessage());
     }
 
     @Test

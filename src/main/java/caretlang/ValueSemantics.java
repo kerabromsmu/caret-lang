@@ -70,8 +70,7 @@ final class ValueSemantics {
             case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
             case Value.LazySeq sequence -> fields.put("size", new Value.Num(sequence.length()));
             case Value.LazyCollection collection -> fields.put("size", collection.size());
-            case Value.Reflective reflective -> fields.putAll(reflective instanceof Value.ProjectedDictionary projected
-                    ? projected.fields(context) : reflective.fields());
+            case Value.Reflective reflective -> fields.putAll(reflective.fields());
             default -> { }
         }
         CollectionRuntime.provider(value, context).ifPresent(provider -> {
@@ -111,7 +110,7 @@ final class ValueSemantics {
                     && b instanceof Value.ProjectedDictionary y
                     && x.semanticIdentity() == y.semanticIdentity();
         }
-        if (a instanceof Value.Field x || b instanceof Value.Field y) {
+        if (a instanceof Value.Field || b instanceof Value.Field) {
             return a instanceof Value.Field x && b instanceof Value.Field y
                     && equal(x.key(), y.key(), context) && equal(x.value(), y.value(), context);
         }
@@ -125,7 +124,9 @@ final class ValueSemantics {
             return leftProvider.isPresent() && rightProvider.isPresent()
                     && equalCollections(a, leftProvider.get(), b, rightProvider.get(), context);
         }
-        if (a instanceof Value.Num x && b instanceof Value.Num y) return NumericValues.compare(x, y) == 0;
+        if (a instanceof Value.Num leftNumber && b instanceof Value.Num rightNumber) {
+            return NumericValues.compare(leftNumber, rightNumber) == 0;
+        }
         return Objects.equals(a, b);
     }
 
@@ -221,7 +222,7 @@ final class ValueSemantics {
             if (left.facts().hasValues() != CollectionRuntime.Guarantee.FALSE
                     && !equal(candidate.get().value(), rightEntries.get(match).value(), context)) return false;
         }
-        while (right.entryAt().apply(rightIndex++).isPresent()) return false;
+        if (right.entryAt().apply(rightIndex).isPresent()) return false;
         return matched.stream().allMatch(Boolean::booleanValue);
     }
 
@@ -251,7 +252,7 @@ final class ValueSemantics {
             }
             matched.set(match, true);
         }
-        while (right.entryAt().apply(rightIndex++).isPresent()) return false;
+        if (right.entryAt().apply(rightIndex).isPresent()) return false;
         return matched.stream().allMatch(Boolean::booleanValue);
     }
 
@@ -367,10 +368,6 @@ final class ValueSemantics {
 
     static String render(Value root) {
         return render(root, null, ReflectionContext.defining());
-    }
-
-    static String render(Value root, Function<Value, String> nestedRenderer) {
-        return render(root, nestedRenderer, ReflectionContext.defining());
     }
 
     static String render(Value root, Function<Value, String> nestedRenderer, ReflectionContext context) {

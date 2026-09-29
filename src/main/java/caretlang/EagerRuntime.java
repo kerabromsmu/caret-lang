@@ -21,12 +21,12 @@ final class EagerRuntime {
     }
 
     private Value visit(Value value) {
-        if (value instanceof Value.Attributed attributed) {
+        if (value instanceof Value.Attributed(Value nested, java.util.Set<ContractDescriptor> contracts)) {
             Value previous = completed.get(value);
             if (previous != null) return previous;
-            Value changed = visit(attributed.value());
+            Value changed = visit(nested);
             var retained = new java.util.LinkedHashSet<ContractDescriptor>();
-            for (ContractDescriptor contract : attributed.contracts()) {
+            for (ContractDescriptor contract : contracts) {
                 if (contract.accepts(changed)) retained.add(contract);
             }
             Value result = retained.isEmpty() ? changed : new Value.Attributed(changed, retained);

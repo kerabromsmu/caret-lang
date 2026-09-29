@@ -39,7 +39,11 @@ final class PackedLayout {
             long bits;
             if (format == BuiltinContract.FLOAT) bits = Float.floatToRawIntBits((float) number.value());
             else if (format == BuiltinContract.DOUBLE) bits = Double.doubleToRawLongBits(number.value());
-            else bits = NumericValues.integral(number).longValue();
+            else {
+                BigInteger integral = NumericValues.integral(number);
+                if (integral == null) throw new IllegalArgumentException("Packed integer must be integral");
+                bits = integral.longValue();
+            }
             for (int index = 0; index < width; index++) bytes[offset + index] = (byte) (bits >>> (index * 8));
         }
 
@@ -47,7 +51,7 @@ final class PackedLayout {
             if (format == BuiltinContract.BOOLEAN) return new Value.Bool(bytes[offset] == 1);
             long bits = 0;
             for (int index = 0; index < width; index++) bits |= (bytes[offset + index] & 0xffL) << (index * 8);
-            if (format == BuiltinContract.FLOAT) return new Value.Num((double) Float.intBitsToFloat((int) bits));
+            if (format == BuiltinContract.FLOAT) return new Value.Num(Float.intBitsToFloat((int) bits));
             if (format == BuiltinContract.DOUBLE) return new Value.Num(Double.longBitsToDouble(bits));
             byte[] bigEndian = new byte[width];
             for (int index = 0; index < width; index++) bigEndian[width - index - 1] = bytes[offset + index];
@@ -117,7 +121,7 @@ final class PackedLayout {
     }
 
     int stride() { return stride; }
-    boolean canEncode(Value value) { return canEncode(element, value); }
+    boolean rejects(Value value) { return rejects(element, value); }
     void write(Value value, byte[] bytes, int offset) { element.write(value, bytes, offset); }
     Value read(byte[] bytes, int offset) { return element.read(bytes, offset); }
     Metadata captureMetadata(Value value) { return captureMetadata(element, value); }
@@ -167,26 +171,26 @@ final class PackedLayout {
         return metadata.contracts().isEmpty() ? value : new Value.Attributed(value, metadata.contracts());
     }
 
-    private static boolean canEncode(Node node, Value value) {
+    private static boolean rejects(Node node, Value value) {
         value = ValueSemantics.underlying(value);
-        if (node instanceof Constant) return true;
-        if (node instanceof Scalar scalar) return scalar.format().accepts(value);
+        if (node instanceof Constant) return false;
+        if (node instanceof Scalar scalar) return !scalar.format().accepts(value);
         Structure structure = (Structure) node;
         if (structure.named()) {
-            if (!(value instanceof Value.Dictionary dictionary)) return false;
+            if (!(value instanceof Value.Dictionary dictionary)) return true;
             Map<String, Value> fields = dictionary.entries();
-            if (fields.size() != structure.parts().size()) return false;
+            if (fields.size() != structure.parts().size()) return true;
             for (Part part : structure.parts()) {
                 Value member = fields.get(part.name());
-                if (member == null || !canEncode(part.node(), member)) return false;
+                if (member == null || rejects(part.node(), member)) return true;
             }
-            return true;
+            return false;
         }
-        if (!(value instanceof Value.Seq sequence) || sequence.size() != structure.parts().size()) return false;
+        if (!(value instanceof Value.Seq sequence) || sequence.size() != structure.parts().size()) return true;
         for (int index = 0; index < structure.parts().size(); index++) {
-            if (!canEncode(structure.parts().get(index).node(), sequence.values().get(index))) return false;
+            if (rejects(structure.parts().get(index).node(), sequence.values().get(index))) return true;
         }
-        return true;
+        return false;
     }
 
     private static Node node(ContractDescriptor contract, SourceSpan span) {

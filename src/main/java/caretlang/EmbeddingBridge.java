@@ -12,7 +12,6 @@ import java.util.function.BiFunction;
 public final class EmbeddingBridge {
     public record Prepared(Object program) {}
 
-    private final CaretSandbox owner;
     private final AtomicReference<CaretEnvironment> environment;
     private final Consumer<Map<String, CaretCallable>> registrar;
     private final BiFunction<Object, Integer, CaretCallable> callableFactory;
@@ -23,7 +22,7 @@ public final class EmbeddingBridge {
     public EmbeddingBridge(CaretSandbox owner, AtomicReference<CaretEnvironment> environment,
                            PrintStream output, Consumer<Map<String, CaretCallable>> registrar,
                            BiFunction<Object, Integer, CaretCallable> callableFactory) {
-        this.owner = Objects.requireNonNull(owner);
+        Objects.requireNonNull(owner);
         this.environment = Objects.requireNonNull(environment);
         this.registrar = Objects.requireNonNull(registrar);
         this.callableFactory = Objects.requireNonNull(callableFactory);
@@ -98,11 +97,8 @@ public final class EmbeddingBridge {
                 "Host binding is not available in the current environment: " + name, null);
         try {
             return internal(supplier.get());
-        } catch (Error error) {
-            throw error;
-        } catch (CaretEmbeddingException misuse) {
-            throw misuse;
         } catch (Exception exception) {
+            if (exception instanceof CaretEmbeddingException misuse) throw misuse;
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                     "Host value provider failed", null);
         }
@@ -115,11 +111,8 @@ public final class EmbeddingBridge {
                     "Host callback is not available in the current environment: " + declaration.name(), null);
             try {
                 return internal(current.implementation().invoke(values.stream().map(this::external).toList()));
-            } catch (Error error) {
-                throw error;
-            } catch (CaretEmbeddingException misuse) {
-                throw misuse;
             } catch (Exception exception) {
+                if (exception instanceof CaretEmbeddingException misuse) throw misuse;
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                         "Host callback failed: " + declaration.name(), null);
             }
