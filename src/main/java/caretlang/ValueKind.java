@@ -5,8 +5,8 @@ import java.util.Objects;
 /** One authoritative classification of runtime values into public Caret kinds. */
 enum ValueKind {
     NUMBER("Number"), STRING("String"), BOOLEAN("Boolean"), NULL("Null"), MISSING("Missing"),
-    COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), FUNCTION("Function"),
-    FIELD("Field"), CONTRACT("Contract"), REFLECTIVE("Reflective");
+    COLLECTION("Collection"), SEQUENCE("Sequence"), DICTIONARY("Dictionary"), SET("Set"), FUNCTION("Function"),
+    FIELD("Field"), CONTAINER("Container"), CONTRACT("Contract"), REFLECTIVE("Reflective");
 
     private final String publicName;
     ValueKind(String publicName) { this.publicName = publicName; }
@@ -15,6 +15,11 @@ enum ValueKind {
     static ValueKind of(Value input) {
         Objects.requireNonNull(input);
         Value value = ValueSemantics.underlying(input);
+        if (value instanceof CollectionRuntime.Provider
+                && !(value instanceof Value.Field) && !(value instanceof Value.KeyedCollection)
+                && !(value instanceof Value.LazySeq) && !(value instanceof Value.LazyCollection)
+                && !(value instanceof Value.SettledCollection)
+                && !(value instanceof Value.PackedCollection)) return COLLECTION;
         return switch (value) {
             case Value.Num ignored -> NUMBER;
             case Value.Str ignored -> STRING;
@@ -22,10 +27,25 @@ enum ValueKind {
             case Value.Null ignored -> NULL;
             case Value.Missing ignored -> MISSING;
             case Value.Field ignored -> FIELD;
+            case Value.Container ignored -> CONTAINER;
+            case Value.KeyedCollection collection -> switch (collection.shape()) {
+                case DICTIONARY -> DICTIONARY;
+                case SET -> SET;
+                case GENERAL -> COLLECTION;
+            };
             case Value.Dictionary ignored -> DICTIONARY;
             case Value.ProjectedDictionary ignored -> DICTIONARY;
             case Value.EmptyCollection ignored -> COLLECTION;
             case Value.Seq ignored -> SEQUENCE;
+            case Value.LazySeq ignored -> SEQUENCE;
+            case Value.LazyCollection collection -> switch (collection.resolvedShape()) {
+                case KEYLESS -> SEQUENCE;
+                case SET -> SET;
+                case KEYED -> collection.dictionarySelected() ? DICTIONARY : COLLECTION;
+                case INFER -> COLLECTION;
+            };
+            case Value.SettledCollection collection -> collection.kind();
+            case Value.PackedCollection ignored -> SEQUENCE;
             case Value.ContractValue ignored -> CONTRACT;
             case Value.Attributed attributed -> of(attributed.value());
             case Value.Reflective ignored -> REFLECTIVE;

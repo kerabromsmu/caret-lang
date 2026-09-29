@@ -1,0 +1,23 @@
+// Compatible Collection contracts can compare structurally.
+(Sequence Number) broad = [1 2]
+(Sequence Natural) narrow = [1 2]
+print broad == narrow
+
+// Shape-neutral empty adapts, while established Set and Dictionary shapes differ.
+(Set Number) sourceSet = [1]
+(Dictionary String Number) sourceDictionary = [(field "value" 1)]
+emptySet = filter sourceSet (value -> false)
+emptyDictionary = filter sourceDictionary (value -> false)
+print emptySet == emptyDictionary
+print [] == emptySet
+
+// Equality demands corresponding lazy values from left to right and stops at a mismatch.
+(Output Number) traceLeft value =
+  print value
+  value
+(Output Number) traceRight value =
+  print (value * 10)
+  value
+left = map traceLeft [1 2]
+right = map traceRight [9 2]
+print left == right

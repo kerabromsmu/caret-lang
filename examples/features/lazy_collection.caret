@@ -1,0 +1,17 @@
+(Output Number) traced (Number) value =
+  print value
+  value * 10
+
+mapped = map traced [1 2]
+alias = mapped
+print "made"
+print size mapped
+print mapped[0]
+print alias[0]
+print mapped[1]
+
+(Output Collection) make ignored = map traced [3]
+first = make 0
+second = make 0
+print first[0]
+print second[0]

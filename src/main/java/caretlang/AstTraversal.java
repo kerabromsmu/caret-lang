@@ -13,6 +13,8 @@ final class AstTraversal {
         return switch (expression) {
             case Literal ignored -> List.of();
             case Name ignored -> List.of();
+            case OuterPath ignored -> List.of();
+            case With with -> List.of(with.target());
             case Hole ignored -> List.of();
             case ContractVariable ignored -> List.of();
             case Unary unary -> List.of(unary.operand());
@@ -27,6 +29,8 @@ final class AstTraversal {
             case DynamicField field -> List.of(field.target(), field.name());
             case Reflect reflect -> List.of(reflect.target());
             case Dereference dereference -> List.of(dereference.target());
+            case ContainerRead read -> List.of(read.target());
+            case ContainerLiteral container -> List.of(container.value());
             case ContractModifier modifier -> List.of(modifier.target());
             case ContractTerms terms -> terms.terms();
             case Group group -> List.of(group.expression());
@@ -50,6 +54,8 @@ final class AstTraversal {
         return switch (expression) {
             case Literal literal -> literal;
             case Name name -> name;
+            case OuterPath path -> path;
+            case With with -> new With(children.getFirst(), with.body(), with.span());
             case Hole hole -> hole;
             case ContractVariable variable -> variable;
             case Unary unary -> new Unary(unary.operator(), children.get(0), unary.span());
@@ -67,6 +73,9 @@ final class AstTraversal {
                     children.get(0), children.get(1), field.optional(), field.span());
             case Reflect reflect -> new Reflect(children.getFirst(), reflect.span());
             case Dereference dereference -> new Dereference(children.getFirst(), dereference.span());
+            case ContainerRead read -> new ContainerRead(children.getFirst(), read.span());
+            case ContainerLiteral container -> new ContainerLiteral(
+                    container.contracts(), children.getFirst(), container.span());
             case ContractModifier modifier -> new ContractModifier(children.getFirst(), modifier.nullable(),
                     modifier.optional(), modifier.span());
             case ContractTerms terms -> new ContractTerms(children, terms.span());

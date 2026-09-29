@@ -5,11 +5,11 @@
 
 ## Planned Collection contract integration
 
-Phase 4 introduces the format-independent `Natural` domain of non-negative integers, with exact
+Phase 4 provides the format-independent `Natural` domain of non-negative integers, with exact
 arbitrary-precision support under the numeric revision below. It does not introduce infinite
 numeric values. Collection `size` has result contract `Natural~`.
 
-The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+The [Collection protocol revision](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 owns guarantee queries, shape inference, Field tuples, and contextual empty-Collection equality.
 Runtime validation of lazy membership is unnecessary when inferred/declared producer contracts
 already establish the answer; otherwise necessary computation contributes its ordinary effects.
@@ -18,14 +18,14 @@ are errors.
 
 Existing template calls remain predicates in Phase 4. The later dual predicate/constructor
 interpretation selected by result contracts and arity is
-[explicitly deferred](06-collections-fields-and-templates.md#deferred-template-construction-and-callable-eager).
+[explicitly deferred](sections/06-01-collection-protocol.md#deferred-template-construction-and-callable-eager).
 That overload and its ambiguity diagnostics are not Phase 4 requirements.
 
-## Phase 4 numeric contracts (planned)
+## Phase 4 numeric contracts (implemented)
 
-These approved contracts are planned, not implementations supplied by the current prototype's
-finite-`double` Number representation. They supersede older illustrative numeric derivation graphs
-where those graphs conflict. [Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+These contracts are implemented with exact integer and finite floating-point values. They supersede
+older illustrative numeric derivation graphs where those graphs conflict.
+[Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
 owns literals, arithmetic, and precision policy.
 
 | Contract | Domain / concrete representation |
@@ -55,17 +55,16 @@ Aliases are the same contract identities: `Int = Integer`, `Byte = UInt8`, `Floa
 `Float64 = Double`. A concrete format selects a layout only when representation is requested.
 `Packed Integer`, `Packed Natural`, `Packed Real`, and `Packed Number` have no concrete fixed-width
 layout; homogeneity alone cannot make them eligible. Packed membership is separately defined by
-[the selected-layout contract](06-collections-fields-and-templates.md#phase-4-packed-layouts-planned).
+[the selected-layout contract](sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented).
 
-## Phase 4 explicit contract conversion (planned)
+## Phase 4 explicit contract conversion (implemented)
 
 `Contract value` remains a Boolean membership predicate. `(Contract) expression` instead requests
 a value-producing conversion. This deliberately changes the old grouped-predicate interpretation
-in that position. [Conversion grammar](03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-and-div-planned)
+in that position. [Conversion grammar](03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-and-div-implemented)
 owns extent, grouping, aliases, and holes. Declaration, parameter, and result clauses remain strict
 requirements; they do not implicitly convert already-established values.
 
-<!-- caret-example: planned -->
 ```caret
 (Float) literal = 0.1           // contextual literal construction
 (Double) source = 0.1
@@ -93,6 +92,11 @@ meaningful even when the input already satisfies the target's semantic element c
 `(Sequence Number) packed` produces an ordinary sequence, while `(Packed Int16) packedInt8`
 selects the Int16 layout.
 
+The interpreter retains the selected packed element contract. Optimized execution stores its
+elements in a contiguous fixed-layout payload; optimization-disabled execution uses immutable
+reference storage with equivalent observable behavior. Conversion and selected membership apply
+in both modes.
+
 Keyed-to-positional conversion requires an explicit `keys`, `values`, or `fields` projection; it
 does not discard keys implicitly. Packing, lazy consumption, and unsupported layouts follow the
 Collection specification. Existing null/missing alternatives permit the corresponding value when
@@ -103,7 +107,7 @@ behavior; these exclusions concern the new conversion form.
 Only built-in conversion behavior is included. User-defined conversion registration is deferred;
 whether it belongs with `format` is a future decision. This syntax neither implements contextual
 template predicate/constructor calls nor adds a public conversion-registration API. The separate
-[expected-template literal rule](06-collections-fields-and-templates.md#named-fields) applies while
+[expected-template literal rule](sections/06-06-templates-foundations.md#named-fields) applies while
 constructing a literal, not while converting an established value; even `(Template) [literal]` is
 the explicit conversion form and therefore requires the source literal's complete field set.
 
@@ -214,7 +218,7 @@ planned [layout modifiers](01-source-layout-and-diagnostics.md#planned-layout-ba
 will first translate physical indentation into effective
 logical indentation; the ordinary block rules will then consume that logical indentation. If a
 body contains exported bindings (`^`), calling the function returns the immutable named `Collection`
-specified in the [collections document](06-collections-fields-and-templates.md#collections-and-lexical-scopes).
+specified in the [collections document](sections/06-03-collection-baseline.md#collections-and-lexical-scopes).
 It is observationally equivalent to the explicit named literal containing those exports. Otherwise
 the prototype returns the final expression or assigned value.
 
@@ -449,7 +453,7 @@ implemented; no sealing syntax is implemented yet.
 equality operators. Scalar values, null, missing, contract values by descriptor identity,
 structurally comparable metadata dictionaries, and language-owned metadata descriptors
 satisfy it. Immutable collections satisfy `Eq` only when every recursively reachable
-member does. Planned containers satisfy it by stable container identity, without reading their
+member does. Containers satisfy it by stable container identity, without reading their
 contents.
 
 A live callable does not satisfy `Eq`, and neither does a structure containing one. A statically
@@ -491,7 +495,7 @@ a provably zero divisor and a provably non-finite arithmetic result may be rejec
 otherwise `DIVISION_BY_ZERO` and `NON_FINITE_RESULT` remain the runtime diagnostics at their
 established locations.
 
-The [Phase 4 numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+The [Phase 4 numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
 now specifies exact integer arithmetic, concrete formats, division, and conversion policy. Those
 changes require new operator/inference evidence before implementation is claimed. The initial
 implemented matrix above does not itself provide implicit widening, signedness conversion, or
@@ -569,10 +573,10 @@ imply one another unless their argument descriptors are identical. No constructo
 covariant merely because its current implementation appears read-only.
 
 The prototype's static implication foundation implements descriptor identity, transitive nominal
-derivation, null/missing accepted-set inclusion, and covariance for the implemented immutable
-`Sequence` constructor. Parameter conjunction ordering uses those proofs, normalizes duplicate and
+derivation, null/missing accepted-set inclusion, covariance for immutable `Sequence`, and invariance
+for mutable `Container`. Parameter conjunction ordering uses those proofs, normalizes duplicate and
 `Any` requirements, and keeps null and missing alternatives distinct. Unknown relationships remain
-incomparable. Mutable `Container` variance remains tied to that later value-kind implementation.
+incomparable.
 
 ---
 
@@ -591,7 +595,7 @@ Every `ReadWrite` value also satisfies `Readable` and `Writable`. Multiple deriv
 contract composition; no separate multiple-inheritance mechanism is required.
 
 The standard numeric domains follow the separately specified
-[Phase 4 numeric contracts](#phase-4-numeric-contracts-planned). In particular, `Float` is a concrete
+[Phase 4 numeric contracts](#phase-4-numeric-contracts-implemented). In particular, `Float` is a concrete
 binary32 format contract that also accepts exactly representable integral values; it is not a
 fractional-only domain. Future `Fractional` describes exact rational values, not the existing
 floating-point formats.

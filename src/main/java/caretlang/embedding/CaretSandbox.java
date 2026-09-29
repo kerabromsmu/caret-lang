@@ -37,9 +37,11 @@ public final class CaretSandbox implements AutoCloseable {
             loaded = true;
             sourceName = source.name();
             try {
-                return CaretLoadResult.success(new LoadedProgram(this, bridge.load(source.text())));
+                return CaretLoadResult.success(new LoadedProgram(this, bridge.load(source.text())),
+                        bridge.warnings(sourceName));
             } catch (RuntimeException failure) {
-                return CaretLoadResult.failure(List.of(expectedDiagnostic(failure)));
+                return CaretLoadResult.failure(List.of(expectedDiagnostic(failure)),
+                        bridge.warnings(sourceName));
             } catch (Error fatal) {
                 closed = true;
                 pendingCallbacks = null;
@@ -60,13 +62,14 @@ public final class CaretSandbox implements AutoCloseable {
             try {
                 CaretValue.CollectionValue value = bridge.execute((EmbeddingBridge.Prepared) handle.program);
                 commitCallbacks();
-                return CaretExecutionResult.success(value);
+                return CaretExecutionResult.success(value, bridge.warnings(sourceName));
             } catch (CaretEmbeddingException misuse) {
                 pendingCallbacks = null;
                 throw misuse;
             } catch (RuntimeException failure) {
                 pendingCallbacks = null;
-                return CaretExecutionResult.failure(List.of(expectedDiagnostic(failure)));
+                return CaretExecutionResult.failure(List.of(expectedDiagnostic(failure)),
+                        bridge.warnings(sourceName));
             } catch (Error fatal) {
                 closed = true;
                 pendingCallbacks = null;
@@ -97,13 +100,14 @@ public final class CaretSandbox implements AutoCloseable {
             try {
                 CaretValue value = bridge.invoke(callable.implementationHandle(), List.copyOf(arguments));
                 commitCallbacks();
-                return CaretInvocationResult.success(value);
+                return CaretInvocationResult.success(value, bridge.warnings(sourceName));
             } catch (CaretEmbeddingException misuse) {
                 pendingCallbacks = null;
                 throw misuse;
             } catch (RuntimeException failure) {
                 pendingCallbacks = null;
-                return CaretInvocationResult.failure(List.of(expectedDiagnostic(failure)));
+                return CaretInvocationResult.failure(List.of(expectedDiagnostic(failure)),
+                        bridge.warnings(sourceName));
             } catch (Error fatal) {
                 closed = true;
                 pendingCallbacks = null;
@@ -125,14 +129,15 @@ public final class CaretSandbox implements AutoCloseable {
             } else {
                 CaretEnvironment previous = environment.getAndSet(replacement);
                 try {
-                    EmbeddingBridge replacementBridge = new EmbeddingBridge(
-                            this, environment, output, this::stageCallbacks, this::newCallable);
-                    bridge = replacementBridge;
+                    bridge = new EmbeddingBridge(this, environment, output,
+                            this::stageCallbacks, this::newCallable);
                     rememberSchema(replacement);
                 } catch (RuntimeException failure) {
                     environment.set(previous);
-                    if (!EmbeddingBridge.isExpectedFailure(failure)) throw failure;
-                    throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT, "Invalid replacement environment");
+                    if (EmbeddingBridge.isExpectedFailure(failure)) {
+                        throw misuse(CaretEmbeddingException.Code.INVALID_ARGUMENT, "Invalid replacement environment");
+                    }
+                    throw failure;
                 }
             }
         } finally {
@@ -210,6 +215,10 @@ public final class CaretSandbox implements AutoCloseable {
                 }
             }
             case CaretValue.FieldValue field -> requireOwnedCallables(field.value());
+            case CaretValue.KeyedFieldValue field -> {
+                requireOwnedCallables(field.key());
+                requireOwnedCallables(field.value());
+            }
             case CaretValue.SequenceValue sequence -> sequence.values().forEach(this::requireOwnedCallables);
             case CaretValue.CollectionValue collection -> collection.fields().values().forEach(this::requireOwnedCallables);
             default -> { }
@@ -242,9 +251,11 @@ public final class CaretSandbox implements AutoCloseable {
             try {
                 return new CaretSandbox(environment, output);
             } catch (RuntimeException failure) {
-                if (!EmbeddingBridge.isExpectedFailure(failure)) throw failure;
-                throw new CaretEmbeddingException(CaretEmbeddingException.Code.INVALID_ARGUMENT,
-                        "Invalid initial environment");
+                if (EmbeddingBridge.isExpectedFailure(failure)) {
+                    throw new CaretEmbeddingException(CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                            "Invalid initial environment");
+                }
+                throw failure;
             }
         }
     }

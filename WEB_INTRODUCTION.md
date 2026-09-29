@@ -17,42 +17,95 @@ remaining predictable, statically analyzable, and pleasant to work with?
 
 ## Designed around expressions
 
-### Planned Collection evolution
+### Collection evolution
 
-Phase 4's [Collection protocol](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
-is specified but not implemented. Ordinary `keys`, `values`, `fields`, and `size` operations
-will work across Collection shapes, with reflective queries for ordering, sequentiality,
-uniqueness, finiteness, keyedness, and value support. `Natural` describes non-negative integer
-sizes; an unknown size is missing.
+Phase 4's [Collection protocol](spec/sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+now provides ordinary `keys`, `values`, `fields`, and `size` operations for the implemented
+Collection shapes, with `isOrdered`, `isSequential`, `isUnique`, `isFinite`, `isKeyed`, and
+`hasValues` queries and matching reflection fields. `Natural` describes non-negative integer
+sizes; an unknown size is missing. A guarantee returns `true`, `false`, or `~` when unknown.
 
-Planned `map` and `filter` produce lazy results even from eager inputs. Values are obtained when
-demanded; their function contracts describe any effects. `eager` materializes enumerated content
+```caret
+items = [10 ~ 30]
+record = [^name = "Ada" ^age = 42]
+
+print keys items            // [ 0 1 2 ]
+print values record         // [ 42 "Ada" ] in Dictionary key order
+print isSequential items    // true
+print (@record).keyed       // true
+print size []               // 0
+```
+
+The implemented `map` and `filter` adapters produce lazy results even from eager input across
+keyless, keyed, and Set Collections. Each demanded entry establishes once for aliases of that
+result, while a fresh invocation gets a fresh result. Keyed transforms consume Field tuples,
+filtered key enumeration performs the predicate work needed to discover retained entries, and
+strict `fold`, `any`, and `all` traverse the same field stream. Values are obtained when demanded,
+and their function contracts describe any effects. The implemented `eager` materializes enumerated content
 in order, recursively, leaving mutable containers and stored functions intact. It replaces
 reflection references with empty Collections and reports cyclic containment or known-infinite
 input. Unknown finiteness may mean it never completes.
 
-Keyed traversal uses `Field` tuples; keyless traversal uses plain values. A Set is keyed without
-associated values. Transforms can change Collection shape when contracts determine their output.
-Dot and bracket access will share `getElement` semantics: absent valid keys yield missing,
+```caret
+source = map (value -> value + 1) [1 2]
+snapshot = eager source
+print snapshot  // [ 2 3 ]
+```
+
+Keyed traversal uses `Field` tuples; keyless traversal uses plain values. Fields are two-position
+Collections carrying `Field K V`; `keys` returns `[ 0 1 ]`, and reflection exposes `key` and
+`value`. A Set is keyed without associated values, and `Set K` context selects member semantics for
+plain values or key-only Fields. Missing-key Fields contribute keyless values, while fully omitted
+Fields contribute nothing. Transforms can change Collection shape when contracts determine their output.
+For a named Collection, `object.@field` instead reifies the field binding: its metadata retains
+binding identity and visible owner references without evaluating a mutable container's content.
+The binding remains immutable even when its value is a container. `@container.contentContracts`
+exposes its permitted content contracts; an explicit `container{}` performs the state read.
+Dot and bracket access share implemented `getElement` semantics: absent valid keys yield missing,
 invalid keys are errors, and keys may be composite values supporting equality.
 
-Dictionaries retain sorted keys of one type; general keyed Collections need only comparable
-keys. Planned `zip` pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
+Dictionaries retain sorted keys of one sortable type; general keyed Collections need only equality
+keys and retain their established entry order. Repeated keys retain the first entry. Implemented `zip`
+pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
-Dictionary construction. Field tuples support positional key/value access.
+Dictionary construction. Field positions zero and one use the same bracket/`getElement` path.
+Access sugar follows lexical `getElement`, including local shadowing and ordinary hole partials.
+Collection equality respects keyed/value shape and declared ordering, compares unordered content by
+key or multiplicity, short-circuits lazy demand, and treats known-infinite Collections as unequal.
+A shape-neutral empty Collection adapts to the established empty shape on its other side.
 
 Public `addElement`, `removeElement`, and `replaceElement`, their construction-selection
 interface, and additional immutable-update syntax are deferred beyond Phase 4. Their design is
 retained in the specification. Internal construction/settlement, existing persistent collection
 primitives, and mutable containers with `put` remain in scope.
 
-Planned `with` analyzes the names used in its body and binds them against enumerated public keys
+Implemented `with` analyzes the names used in its body and binds them against enumerated public keys
 before executing the body. Member values remain lazy; a present missing value shadows outer
 bindings, while an absent name resolves outward. Explicit `outer.name` accesses the outer binding.
 
-These are future semantics; the executable examples elsewhere in this introduction still describe
-the current interpreter. Phase 4 also plans expected-template completion for Collection literals.
-This does not turn ordinary `Template value` application into construction; template
+```caret
+age = 20
+person = [^age = 42]
+with person
+  print age        // 42
+  print outer.age  // 20
+```
+
+The later behavior in this section remains planned. Phase 4 implements expected-template completion for named Collection literals:
+
+```caret
+Person = template [^name = (String) _ ^phone = (String~) _]
+(Person) ada = [^name = "Ada"]
+print ada.phone       // ~ (the field is present)
+print Person ada       // true
+print Person [^name = "Ada"] // false: ordinary membership is exact
+```
+
+The reflected template element metadata reports `defaultsMissing`. An alias of `String~` accepts
+an explicit missing value but does not make omission defaultable. Context also propagates through
+known function arguments, declared results, nested literals, and exported blocks; it inserts only
+eligible missing fields and preserves explicit field evaluation order. This does not turn ordinary
+`Template value` application into construction; template
 constructor/predicate invocation, custom provider construction, completely deferred computation
 syntax, resumable failure handling, and callable forms of `eager` remain later work.
 
@@ -75,64 +128,77 @@ missing still requires the field to be written in the literal. Membership and ex
 of an established Collection never add fields, and omission always supplies missing rather than
 null.
 
-### Planned numbers, conversions, and packed data
+### Exact numbers, explicit conversions, and packed storage
 
-The approved Phase 4 design makes `Number`, `Real`, `Integer`, and `Natural` common domains without
-prescribing storage formats. Integers will remain exact at arbitrary size. Concrete formats include
+`Number`, `Real`, `Integer`, and `Natural` are common domains without prescribed storage
+formats. Integers remain exact at arbitrary size, including collection sizes. Concrete formats include
 signed and unsigned 8/16/32/64-bit integers, `Float` (binary32), and `Double` (binary64).
 `Int`, `Byte`, `Float32`, and `Float64` alias `Integer`, `UInt8`, `Float`, and `Double` respectively.
 These contracts test exact representability, so their memberships can overlap.
 
-The following examples are **planned, not runnable in the current interpreter**:
+These examples run in the current interpreter:
 
-<!-- caret-example: planned -->
 ```caret
 count = 123456789012345678901234567890  // exact integer
 (Float) sample = 0.1                  // context selects the literal format
-rounded = (Float) source              // explicitly convert a numeric source
-whole = (Integer) -3.75               // -3: truncate toward zero
-5 / 2                                // 2.5: true division
-5 div 2                              // 2: integer division
-10 div 3 + 2                         // 5: div has multiplication precedence
+print 5 / 2                          // 2.5: true division
+print 5 div 2                        // 2: integer division
+print 10 div 3 + 2                   // 5: div has multiplication precedence
 ```
 
-`Float value` remains a membership test; `(Float) value` requests conversion. Declaration contracts
+Explicit conversion is available:
+
+```caret
+source = 0.1
+rounded = (Float) source
+whole = (Integer) -3.75
+```
+
+`Float value` is a membership test; `(Float) value` requests conversion. Declaration contracts
 and directly contracted holes remain checks. Implicit precision loss warns in broad Number/Real
 result contexts but is an error under explicit concrete numeric or integer result requirements.
 Normal floating-point arithmetic rounding does not warn. Explicit conversion permits its specified
 rounding or truncation, but never bypasses range or final contract checks. Numeric text parsing and
 custom conversion registration are deferred for this syntax.
 
-`Packed T` will select a contiguous fixed-layout representation for a finite positional sequence.
-It supports concrete numeric formats, one-byte Booleans, and fixed-size templates. Named record
-fields retain template declaration order; scalar positions need concrete formats. There are no
-missing/null payloads, variable-size fields, or bit fields in this first packed version.
+`Packed T` selects a finite positional sequence with an explicit element contract and contiguous
+fixed-layout storage. Eligible element contracts use concrete numeric
+formats, Boolean, or fixed-size templates. Named record fields retain template declaration order;
+scalar positions need concrete formats. Missing/null payloads, variable-size fields, and bit
+fields are excluded.
+Derived contracts with one fixed base layout can also select packed storage. Literal construction,
+explicit packed conversion, and `seqAdd` check their bases and refinements and preserve derived
+membership on access, including nested template fields. Append does not implicitly round a
+fractional or out-of-range value.
 
-<!-- caret-example: planned -->
 ```caret
 (Packed Int8) small = [1 2]
 converted = (Packed Int8) [1.9 2.1]  // [1 2], with explicit element conversion
 ordinary = (Sequence Number) small
 extended = seqAdd ordinary 300
-// seqAdd small 300                 // error: incompatible packed element
+Small = contract Int8
+(Packed Small) tagged = [1 2]
+print Small (getElement tagged 0)  // true
 ```
 
 Lazy input must be consumed before a packed result is available. Keyed input requires an explicit
 choice of `keys`, `values`, or `fields`. Lazy map/filter stay lazy; repacking is explicit. Reflection
-exposes contracts without exposing buffers or physical layout details. The
-[numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned),
-[conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned),
-and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
+exposes the selected semantic contract as `@packed.elementContract` when visible, without exposing
+buffers or physical layout details. The selected layout
+is retained with a packed value, so an ordinary homogeneous sequence does not satisfy `Packed T`.
+The
+[numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented),
+[conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented),
+and [packed specification](spec/sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented)
 define the implementation requirements.
 
 ### Template fields and missing values
 
-Every value matching a template contains every declared field. Phase 4 plans to complete a named
-Collection literal when one expected template is known: an omitted field directly declared with
+Every value matching a template contains every declared field. A named Collection literal is
+completed when one expected template is known: an omitted field directly declared with
 `T~` or `T?~` is inserted with value `~` when its full clause accepts missing. Null remains distinct;
 `T?~` permits an explicitly supplied null but omission still supplies missing.
 
-<!-- caret-example: planned -->
 ```caret
 Person = template [
   ^name = (String) _
@@ -146,8 +212,8 @@ Person = template [
 The completed value contains `phone = ~` and `nickname = ~`. An alias that accepts missing permits
 an explicitly supplied `~` but does not enable omission. A separately established Collection that
 lacks either field does not match, and explicit conversion does not complete it. Planned direct
-RuleDefinition literals use the same contextual rule for defaultable CATEN fields. Rules and this
-literal-completion behavior remain unimplemented.
+RuleDefinition literals use the same contextual rule for defaultable CATEN fields; those literals
+and their contextual completion remain unimplemented.
 
 ### Ordinary functions
 
@@ -311,10 +377,12 @@ non-callable metadata Dictionary: `type (@function)` is `"Dictionary"`, while `@
 `"Function"`. Its fields are computed lazily for the observing environment: hidden facts and names
 become `~`, known-empty facts remain `[]`, and moving metadata cannot increase visibility. Adjacent
 postfix `:` recovers the reflected value or callable only when that observer retains access.
+The same visibility check applies when using `getElement`, `keys`, `values`, `fields`, or `size`
+on retained reflective metadata.
 
 ## Values and collections
 
-The current prototype supports finite numbers, Unicode strings, Booleans, null, and missing. It also
+The current interpreter supports exact integers, finite floating-point numbers, Unicode strings, Booleans, null, and missing. It also
 provides persistent sequences and canonically ordered Dictionaries. Collection updates
 produce new values rather than mutating existing ones, and equality is structural for ordinary data.
 The bare `[]` value is a shape-neutral empty Collection accepted by compatible sequence and
@@ -346,11 +414,10 @@ print seqGet items 0
 print dictGet settings "theme"
 ```
 
-The prototype now has a general `Collection` contract, positional and static named `[...]` literals,
-and named Collections returned directly by exported blocks. The planned contextual model will let
-the same literal describe a list, set, dictionary, packed buffer, or heterogeneous structure while
-surrounding contracts select behavior and representation. Dynamic fields will become ordinary
-first-class collection elements rather than a separate object or JSON notation.
+The prototype has a general `Collection` contract, positional and static named `[...]` literals,
+and named Collections returned directly by exported blocks. Contextual contracts select Sequence,
+Set, Dictionary, or packed representations for the same literal where the requirement is
+unambiguous. Further representations and first-class dynamic fields remain planned.
 
 A collection literal containing holes now produces a reifiable collection constructor before a
 surrounding call receives it. These constructors retain positional or named shape, direct nesting,
@@ -457,10 +524,10 @@ constrains the result while `Output` is the callable's effect allowance. The ana
 clause once, so callable reflection reports `Number` only as a result requirement and `Output` only
 as an effect; source order does not change that meaning.
 
-The prototype implements `map transform values`, `filter values predicate`,
-`fold values initial combine`, `any values predicate`, and `all values predicate` for Sequences.
+The prototype implements `map transform collection`, `filter collection predicate`,
+`fold collection initial combine`, `any collection predicate`, and `all collection predicate`.
 They accept named, partial, composed, and lambda callables through the guarded call path and preserve
-callback effect bounds. Fold is a strict left fold; `any` and `all` short-circuit. Null and missing
+callback effect bounds. Map/filter are lazy; fold is a strict left fold; `any` and `all` short-circuit. Null and missing
 predicate results count as false. Declaration-wide variable schemes retain their substitutions
 through prefix and hole partials, including executable lambdas.
 
@@ -483,7 +550,8 @@ contravariant parameters, covariant results, inline clauses, and standalone vari
 implemented, including explicit allowances and variables shared across a complete declaration header.
 
 The implemented Phase 2 operator model preserves the prototype's compact behavior without adding hidden
-numeric promotion. Arithmetic and ordering initially operate on finite `Number` values. `+` is a
+numeric promotion. Arithmetic and ordering operate on exact integers and finite floating-point
+`Number` values. `+` is a
 closed overload set: it adds two numbers or concatenates when either operand is a string, rendering
 the other value through Caret's own deterministic formatter. Equality uses a recursive structural
 `Eq` capability and continues to reject live callables even when nested. Boolean operations retain
@@ -529,28 +597,26 @@ effect facts in stable source order; `~` means that a fact is unavailable rather
 
 ## Contained mutability
 
-Caret values remain immutable by default. Planned mutability is introduced only through an explicit
+Caret values remain immutable by default. Mutable state is introduced through an explicit
 stable-identity container:
 
 ```text
-health = { (Int) 100 }
+health = { (Number) 100 }
 player =
   ^health = health
 
 print player.health{}  // read the shared current value
-put health 80          // replace it after checking the Int contract
+put health 80          // replace it after checking the Number contract
 ```
 
-`player.health` returns the container itself, while `player.health{}` reads its contents and
-`player.@health` reifies the field binding. Sharing the container does not make `player` mutable and
-does not require special reference-assignment syntax. Container identity uses ordinary equality;
-comparing current contents requires explicit reads.
+`player.health` returns the container itself, while `player.health{}` reads its contents.
+`player.@health` is planned field-binding reification. Sharing the container does not make `player`
+mutable and does not require special reference-assignment syntax. Container identity uses ordinary
+equality; comparing current contents requires explicit reads.
 
-The planned effect system names content observation `StateRead` and replacement `StateWrite`.
-Passing or inspecting the container reference remains pure, and declaring an effect never grants
-authority over a container. Rule cycles can track explicit reads as reactive dependencies, while
-sandboxes may expose a real container, a restricted projection, or an immutable snapshot. These
-features are specified future work and are not available in the prototype.
+The effect system infers `StateRead` for content observation and `StateWrite` for replacement.
+Passing the container reference remains pure, and declaring an effect never grants authority over
+a container. Rule-cycle dependencies and sandbox projections remain planned.
 
 ## Environment-relative reflection
 
@@ -597,13 +663,14 @@ Closure analysis records deterministic, source-spanned upvalues by stable bindin
 closures use those same internal descriptors without exposing captures or lexical environments
 through reflection.
 An internal conservative ownership tracker may reuse ephemeral Sequence or Dictionary storage, but
-bindings, calls, captures, exports, nesting, and reflection force persistent updates. Ownership is
-not visible to Caret, and an optimization-disabled reference mode is covered by differential tests.
+bindings, calls, captures, exports, nesting, and reflection force persistent updates. Storage-reuse
+ownership is not visible to Caret; field metadata's owner references instead name visible containing
+Collections. An optimization-disabled reference mode is covered by differential tests.
 
 Parameterized contracts for later value kinds, contextual collection representations, modules,
 root reification, sandboxing,
 compile-time execution, separate compilation roots,
-mutability containers, and a compiler backend remain future work. The prototype exists to
+and a compiler backend remain future work. The prototype exists to
 make the language's ideas executable and testable while its larger design evolves.
 
 To explore the implementation, syntax reference, and runnable examples, see the project

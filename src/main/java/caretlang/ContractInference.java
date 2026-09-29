@@ -19,7 +19,7 @@ import java.util.Set;
  * empty; a parameter/result flow is retained explicitly rather than being collapsed to Any.
  */
 final class ContractInference {
-    enum BuiltinEffect { OUTPUT, TEST_REPORT }
+    enum BuiltinEffect { OUTPUT, STATE_READ, STATE_WRITE, TEST_REPORT }
 
     record EffectSummary(Set<BuiltinEffect> effects, Set<String> symbolicEffects, boolean unknownDynamicCall) {
         static final EffectSummary PURE = new EffectSummary(Set.of(), Set.of(), false);
@@ -28,6 +28,8 @@ final class ContractInference {
         EffectSummary(Set<BuiltinEffect> effects, boolean unknownDynamicCall) {
             this(effects, effects.stream().map(effect -> switch (effect) {
                 case OUTPUT -> "Output";
+                case STATE_READ -> "StateRead";
+                case STATE_WRITE -> "StateWrite";
                 case TEST_REPORT -> "TestReport";
             }).collect(java.util.stream.Collectors.toSet()), unknownDynamicCall);
         }
@@ -133,9 +135,17 @@ final class ContractInference {
     private final IdentityHashMap<List<EnumSet<BuiltinContract>>, DeclaredParameters>
             declaredParameterDomains = new IdentityHashMap<>();
     private final Resolution resolution;
+    private final EffectSummary providerEffects;
 
-    private ContractInference(Resolution resolution) {
+    private ContractInference(Resolution resolution, EffectCatalog catalog) {
         this.resolution = Objects.requireNonNull(resolution);
+        Set<String> names = catalog.canonicalNames();
+        EnumSet<BuiltinEffect> portable = EnumSet.noneOf(BuiltinEffect.class);
+        if (names.contains("Output")) portable.add(BuiltinEffect.OUTPUT);
+        if (names.contains("StateRead")) portable.add(BuiltinEffect.STATE_READ);
+        if (names.contains("StateWrite")) portable.add(BuiltinEffect.STATE_WRITE);
+        if (names.contains("TestReport")) portable.add(BuiltinEffect.TEST_REPORT);
+        this.providerEffects = new EffectSummary(portable, names, false);
     }
 
     static ContractInference analyze(List<Stmt> program) {
@@ -148,11 +158,19 @@ final class ContractInference {
 
     static ContractInference analyze(List<Stmt> program, Resolution resolution,
                                      Map<String, ExternalCallable> externalCallables) {
-        ContractInference inference = new ContractInference(resolution);
+        return analyze(program, resolution, externalCallables, EffectCatalog.standard(false));
+    }
+
+    static ContractInference analyze(List<Stmt> program, Resolution resolution,
+                                     Map<String, ExternalCallable> externalCallables,
+                                     EffectCatalog catalog) {
+        ContractInference inference = new ContractInference(resolution, catalog);
         HashMap<String, CallableEffects> visible = new HashMap<>(BUILTIN_EFFECTS);
         externalCallables.forEach((name, callable) -> {
             Set<BuiltinEffect> known = callable.effects().stream().map(effect -> switch (effect) {
                 case "Output" -> BuiltinEffect.OUTPUT;
+                case "StateRead" -> BuiltinEffect.STATE_READ;
+                case "StateWrite" -> BuiltinEffect.STATE_WRITE;
                 case "TestReport" -> BuiltinEffect.TEST_REPORT;
                 default -> null;
             }).filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
@@ -275,6 +293,17 @@ final class ContractInference {
             effects.put(function, inferredEffects);
             analyzeBlock(function.body(), visible, withConstrainedParameters(function, visibleEffects), false);
         }
+        for (Stmt statement : statements) {
+            Expr expression = switch (statement) {
+                case Assign assign -> assign.value();
+                case ExprStmt line -> line.expression();
+                case PrintLine line -> printExpression(line);
+                case FunctionDef ignored -> null;
+            };
+            if (expression != null) AstTraversal.walkPreOrder(expression, candidate -> {
+                if (candidate instanceof With with) analyzeBlock(with.body(), visible, visibleEffects, false);
+            });
+        }
         analyzeLambdas(statements, visible, visibleEffects);
         if (analyzeOrdinaryBindings) analyzeOrdinaryBindings(statements, visible);
     }
@@ -310,6 +339,11 @@ final class ContractInference {
 
     private void analyzeLambdas(Expr expression, Map<String, FunctionContract> visible,
                                 Map<String, CallableEffects> visibleEffects) {
+        if (expression instanceof With with) {
+            analyzeLambdas(with.target(), visible, visibleEffects);
+            analyzeLambdas(with.body(), visible, visibleEffects);
+            return;
+        }
         if (expression instanceof Lambda lambda) {
             if (lambdaFunctions.containsKey(lambda)) return;
             FunctionDef function = new FunctionDef("<lambda>", null, lambda.params(), lambda.body(), lambda.span());
@@ -346,7 +380,7 @@ final class ContractInference {
         for (Stmt statement : function.body()) {
             result = switch (statement) {
                 case Assign assign -> {
-                    Shape value = expression(assign.value(), parameters, locals, requirements, visible);
+                    Shape value = assignmentExpression(assign, parameters, locals, requirements, visible);
                     constrain(value, clause(assign.contracts()), requirements, assign.span());
                     locals.put(assign.name(), value);
                     yield value;
@@ -358,6 +392,15 @@ final class ContractInference {
             };
         }
         EnumSet<BuiltinContract> declaredResult = clause(function.resultContracts());
+        if ((declaredResult.contains(BuiltinContract.FLOAT) || declaredResult.contains(BuiltinContract.DOUBLE)
+                || declaredResult.contains(BuiltinContract.INTEGER)
+                || declaredResult.contains(BuiltinContract.NATURAL))
+                && function.body().getLast() instanceof ExprStmt line
+                && (line.expression() instanceof Literal(Value.Num ignored, SourceSpan ignoredSpan)
+                || line.expression() instanceof Binary binary
+                && Set.of("+", "-", "*", "/", "%", "div").contains(binary.operator()))) {
+            result = Shape.generic();
+        }
         constrain(result, declaredResult, requirements, function.span());
         EnumSet<BuiltinContract> inferredGuarantees = result.guarantees().clone();
         EnumSet<BuiltinContract> guarantees = inferredGuarantees.clone();
@@ -382,13 +425,21 @@ final class ContractInference {
             case Name name -> parameters.containsKey(name.name())
                     ? parameterShape(parameters.get(name.name()), requirements)
                     : locals.getOrDefault(name.name(), Shape.unknown());
+            case OuterPath ignored -> Shape.unknown();
+            case With with -> {
+                expression(with.target(), parameters, locals, requirements, visible);
+                yield Shape.unknown();
+            }
             case Group group -> expression(group.expression(), parameters, locals, requirements, visible);
             case Unary unary -> {
                 Shape operand = expression(unary.operand(), parameters, locals, requirements, visible);
                 yield switch (unary.operator()) {
                     case "-" -> {
                         constrain(operand, EnumSet.of(BuiltinContract.NUMBER), requirements, unary.operand().span());
-                        yield Shape.concrete(BuiltinContract.NUMBER);
+                        yield operand.guarantees().stream().anyMatch(contract ->
+                                ContractRelations.implies(contract, BuiltinContract.INTEGER))
+                                ? Shape.concrete(BuiltinContract.INTEGER)
+                                : Shape.concrete(BuiltinContract.NUMBER);
                     }
                     case "not" -> {
                         requireTruth(operand, unary.operand().span());
@@ -421,6 +472,8 @@ final class ContractInference {
             case DynamicField ignored -> Shape.unknown();
             case Reflect ignored -> Shape.unknown();
             case Dereference ignored -> Shape.unknown();
+            case ContainerRead ignored -> Shape.unknown();
+            case ContainerLiteral ignored -> Shape.concrete(BuiltinContract.CONTAINER);
             case ContractModifier ignored -> Shape.unknown();
             case ContractTerms ignored -> Shape.unknown();
             case Hole ignored -> Shape.unknown();
@@ -460,6 +513,11 @@ final class ContractInference {
         Shape right = expression(binary.right(), parameters, locals, requirements, visible);
         return switch (binary.operator()) {
             case "+" -> plus(left, right);
+            case "div" -> {
+                constrain(left, EnumSet.of(BuiltinContract.INTEGER), requirements, binary.left().span());
+                constrain(right, EnumSet.of(BuiltinContract.INTEGER), requirements, binary.right().span());
+                yield Shape.concrete(BuiltinContract.INTEGER);
+            }
             case "-", "*", "/", "%", "<", "<=", ">", ">=" -> {
                 constrain(left, EnumSet.of(BuiltinContract.NUMBER), requirements, binary.left().span());
                 constrain(right, EnumSet.of(BuiltinContract.NUMBER), requirements, binary.right().span());
@@ -483,8 +541,10 @@ final class ContractInference {
                 || right.guarantees().contains(BuiltinContract.STRING)) {
             return Shape.concrete(BuiltinContract.STRING);
         }
-        if (left.guarantees().contains(BuiltinContract.NUMBER)
-                && right.guarantees().contains(BuiltinContract.NUMBER)) {
+        if (left.guarantees().stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.NUMBER))
+                && right.guarantees().stream().anyMatch(contract ->
+                ContractRelations.implies(contract, BuiltinContract.NUMBER))) {
             return Shape.concrete(BuiltinContract.NUMBER);
         }
         // `+` is relational: an unresolved operand may be Number or String. Do not invent a
@@ -528,6 +588,20 @@ final class ContractInference {
             arguments.addFirst(apply.argument());
             target = apply.function();
         }
+        if (target instanceof Group group && !(arguments.size() == 1
+                && ungroup(arguments.getFirst()) instanceof Hole)) {
+            BuiltinContract conversion = ungroup(group.expression()) instanceof Name name
+                    ? BuiltinContract.named(name.name()).orElse(null) : null;
+            if (conversion != null && conversion.parameterArity() == 0) {
+                Expr operand = arguments.getFirst();
+                for (int index = 1; index < arguments.size(); index++) {
+                    Expr argument = arguments.get(index);
+                    operand = new Apply(operand, argument, SourceSpan.cover(operand.span(), argument.span()));
+                }
+                expression(operand, parameters, locals, requirements, visible);
+                return Shape.concrete(conversion);
+            }
+        }
         if (!(target instanceof Name name) || !visible.containsKey(name.name())) {
             for (Expr argument : arguments) expression(argument, parameters, locals, requirements, visible);
             return Shape.unknown();
@@ -536,6 +610,20 @@ final class ContractInference {
         ArrayList<Shape> shapes = new ArrayList<>();
         for (int i = 0; i < arguments.size(); i++) {
             Shape shape = expression(arguments.get(i), parameters, locals, requirements, visible);
+            Expr supplied = ungroup(arguments.get(i));
+            if ((supplied instanceof Literal(Value.Num ignored, SourceSpan ignoredSpan)
+                    || supplied instanceof Binary binary
+                    && Set.of("+", "-", "*", "/", "%", "div").contains(binary.operator()))
+                    && i < called.parameterRequirements().size()
+                    && called.parameterRequirements().get(i).stream().anyMatch(contract ->
+                    contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE
+                            || contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL)) {
+                shape = Shape.generic();
+            }
+            if (supplied instanceof CollectionLiteral && i < called.parameterRequirements().size()
+                    && called.parameterRequirements().get(i).contains(BuiltinContract.PACKED)) {
+                shape = Shape.generic();
+            }
             shapes.add(shape);
             if (i < called.parameterRequirements().size()) {
                 constrain(shape, called.parameterRequirements().get(i), requirements, arguments.get(i).span());
@@ -554,6 +642,13 @@ final class ContractInference {
     }
 
     private static Shape literal(Value value) {
+        if (value instanceof Value.Num number) {
+            if (number.exactInteger() != null) {
+                return Shape.concrete(number.exactInteger().signum() >= 0
+                        ? BuiltinContract.NATURAL : BuiltinContract.INTEGER);
+            }
+            return Shape.concrete(BuiltinContract.DOUBLE);
+        }
         return switch (ValueKind.of(value)) {
             case NUMBER -> Shape.concrete(BuiltinContract.NUMBER);
             case STRING -> Shape.concrete(BuiltinContract.STRING);
@@ -565,6 +660,7 @@ final class ContractInference {
             case SEQUENCE -> Shape.concrete(BuiltinContract.SEQUENCE);
             case DICTIONARY -> Shape.concrete(BuiltinContract.DICTIONARY);
             case FIELD -> Shape.concrete(BuiltinContract.FIELD);
+            case CONTAINER -> Shape.concrete(BuiltinContract.CONTAINER);
             default -> Shape.unknown();
         };
     }
@@ -710,6 +806,8 @@ final class ContractInference {
         result.put("dictHas", builtin(2, EffectSummary.PURE));
         result.put("dictKeys", builtin(1, EffectSummary.PURE));
         result.put("field", builtin(2, EffectSummary.PURE));
+        result.put("getElement", builtin(2, EffectSummary.PURE));
+        result.put("put", builtin(2, new EffectSummary(Set.of(BuiltinEffect.STATE_WRITE), false)));
         result.put("assert", builtin(2, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         result.put("assertEqual", builtin(3, new EffectSummary(Set.of(BuiltinEffect.TEST_REPORT), false)));
         return Map.copyOf(result);
@@ -751,6 +849,8 @@ final class ContractInference {
             EnumSet<BuiltinEffect> effects = EnumSet.noneOf(BuiltinEffect.class);
             for (EffectDescriptor effect : allowance) {
                 if (effect == EffectCatalog.OUTPUT) effects.add(BuiltinEffect.OUTPUT);
+                if (effect == EffectCatalog.STATE_READ) effects.add(BuiltinEffect.STATE_READ);
+                if (effect == EffectCatalog.STATE_WRITE) effects.add(BuiltinEffect.STATE_WRITE);
                 if (effect == EffectCatalog.TEST_REPORT) effects.add(BuiltinEffect.TEST_REPORT);
             }
             visible.put(parameter.name(), new CallableEffects(
@@ -891,6 +991,9 @@ final class ContractInference {
                 CallableEffects callable = resolvedCallable(name, visible);
                 yield callable != null && callable.arity() == 0 ? callable.summary() : EffectSummary.PURE;
             }
+            case OuterPath ignored -> EffectSummary.PURE;
+            case With with -> expressionEffects(with.target(), visible)
+                    .plus(inferEffects(with.body(), visible)).plus(providerEffects);
             case Group group -> expressionEffects(group.expression(), visible);
             case Unary unary -> expressionEffects(unary.operand(), visible);
             case Binary binary -> expressionEffects(binary.left(), visible)
@@ -904,12 +1007,20 @@ final class ContractInference {
             case AmbiguousCall call -> ambiguousCallEffects(call, visible);
             case Compose compose -> expressionEffects(compose.left(), visible)
                     .plus(expressionEffects(compose.right(), visible));
-            case Field field -> expressionEffects(field.target(), visible);
+            case Field field -> expressionEffects(field.target(), visible).plus(accessorEffects(visible));
             case DynamicField field -> expressionEffects(field.target(), visible)
-                    .plus(expressionEffects(field.name(), visible));
-            case Reflect reflect -> reflect.target() instanceof Name
-                    ? EffectSummary.PURE : expressionEffects(reflect.target(), visible);
+                    .plus(expressionEffects(field.name(), visible)).plus(accessorEffects(visible));
+            case Reflect reflect -> reflect.target() instanceof Name || reflect.target() instanceof OuterPath
+                    ? resolution.scopedLookup(reflect.target()) == null
+                    || resolution.scopedLookup(reflect.target()).withDepths().isEmpty()
+                    ? EffectSummary.PURE : providerEffects
+                    : reflect.target() instanceof Field field
+                    ? expressionEffects(field.target(), visible).plus(providerEffects)
+                    : expressionEffects(reflect.target(), visible);
             case Dereference dereference -> expressionEffects(dereference.target(), visible);
+            case ContainerRead read -> expressionEffects(read.target(), visible)
+                    .plus(new EffectSummary(Set.of(BuiltinEffect.STATE_READ), false));
+            case ContainerLiteral container -> expressionEffects(container.value(), visible);
             case ContractModifier modifier -> expressionEffects(modifier.target(), visible);
             case ContractTerms terms -> terms.terms().stream().map(term -> expressionEffects(term, visible))
                     .reduce(EffectSummary.PURE, EffectSummary::plus);
@@ -921,12 +1032,35 @@ final class ContractInference {
         };
     }
 
+    private static EffectSummary accessorEffects(Map<String, CallableEffects> visible) {
+        CallableEffects accessor = visible.get("getElement");
+        return accessor != null && accessor.arity() == 2 ? accessor.summary() : EffectSummary.UNKNOWN;
+    }
+
     private EffectSummary applicationEffects(Apply application, Map<String, CallableEffects> visible) {
         ArrayList<Expr> arguments = new ArrayList<>();
         Expr target = application;
         while (target instanceof Apply apply) {
             arguments.addFirst(apply.argument());
             target = apply.function();
+        }
+        if (target instanceof Group group && !(arguments.size() == 1
+                && ungroup(arguments.getFirst()) instanceof Hole)) {
+            BuiltinContract conversion = ungroup(group.expression()) instanceof Name name
+                    ? BuiltinContract.named(name.name()).orElse(null) : null;
+            if (conversion != null && conversion.parameterArity() == 0) {
+                Expr operand = arguments.getFirst();
+                for (int index = 1; index < arguments.size(); index++) {
+                    Expr argument = arguments.get(index);
+                    operand = new Apply(operand, argument, SourceSpan.cover(operand.span(), argument.span()));
+                }
+                EffectSummary result = expressionEffects(operand, visible);
+                if (conversion == BuiltinContract.STRING) {
+                    CallableEffects renderer = visible.get("toString");
+                    result = result.plus(renderer == null ? EffectSummary.UNKNOWN : renderer.summary());
+                }
+                return result;
+            }
         }
         EffectSummary result = EffectSummary.PURE;
         for (Expr argument : arguments) result = result.plus(expressionEffects(argument, visible));
@@ -1038,6 +1172,11 @@ final class ContractInference {
 
     private void collectRefinementBindings(Expr expression, Map<Integer, FunctionDef> functions,
                                            Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        if (expression instanceof With with) {
+            collectRefinementBindings(with.target(), functions, aliases, eligibility);
+            collectRefinementBindings(with.body(), functions, aliases, eligibility);
+            return;
+        }
         if (expression instanceof Lambda lambda) {
             collectRefinementBindings(lambda.body(), functions, aliases, eligibility);
             return;
@@ -1069,6 +1208,11 @@ final class ContractInference {
 
     private void validateClauses(Expr expression, Map<Integer, FunctionDef> functions,
                                  Map<Integer, Integer> aliases, Map<Integer, Boolean> eligibility) {
+        if (expression instanceof With with) {
+            validateClauses(with.target(), functions, aliases, eligibility);
+            validateClauses(with.body(), functions, aliases, eligibility);
+            return;
+        }
         if (expression instanceof Lambda lambda) {
             lambda.params().forEach(parameter -> validateClause(
                     parameter.contracts(), functions, aliases, eligibility));
@@ -1108,7 +1252,7 @@ final class ContractInference {
         List<Map.Entry<Assign, Shape>> pending = new ArrayList<>();
         for (Stmt statement : statements) {
             if (statement instanceof Assign assign) {
-                Shape shape = expression(assign.value(), Map.of(), locals, List.of(), visible);
+                Shape shape = assignmentExpression(assign, Map.of(), locals, List.of(), visible);
                 constrain(shape, clause(assign.contracts()), List.of(), assign.value().span());
                 locals.put(assign.name(), shape);
                 pending.add(Map.entry(assign, shape));
@@ -1125,6 +1269,32 @@ final class ContractInference {
                         "Ambiguous contract at use: binding " + assign.name(), assign.value().span());
             }
         }
+    }
+
+    private Shape assignmentExpression(Assign assign, Map<String, Integer> parameters,
+                                       Map<String, Shape> locals,
+                                       List<EnumSet<BuiltinContract>> requirements,
+                                       Map<String, FunctionContract> visible) {
+        Set<BuiltinContract> declared = clause(assign.contracts());
+        if (assign.value() instanceof CollectionLiteral && declared.stream().anyMatch(contract ->
+                contract == BuiltinContract.SEQUENCE || contract == BuiltinContract.PACKED
+                        || contract == BuiltinContract.DICTIONARY
+                        || contract == BuiltinContract.SET || contract == BuiltinContract.COLLECTION)) {
+            return Shape.generic();
+        }
+        boolean numericTarget = declared.stream().anyMatch(contract -> contract == BuiltinContract.REAL
+                || contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL
+                || contract == BuiltinContract.INT8 || contract == BuiltinContract.UINT8
+                || contract == BuiltinContract.INT16 || contract == BuiltinContract.UINT16
+                || contract == BuiltinContract.INT32 || contract == BuiltinContract.UINT32
+                || contract == BuiltinContract.INT64 || contract == BuiltinContract.UINT64
+                || contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE);
+        if (numericTarget && (ungroup(assign.value()) instanceof Literal(Value.Num ignored, SourceSpan ignoredSpan)
+                || ungroup(assign.value()) instanceof Binary binary && Set.of("+", "-", "*", "/", "%", "div")
+                .contains(binary.operator()))) {
+            return Shape.generic();
+        }
+        return expression(assign.value(), parameters, locals, requirements, visible);
     }
 
     private Expr printExpression(PrintLine line) {
@@ -1155,6 +1325,8 @@ final class ContractInference {
             case DynamicField field -> containsHole(field.target()) || containsHole(field.name());
             case Reflect reflect -> containsHole(reflect.target());
             case Dereference dereference -> containsHole(dereference.target());
+            case ContainerRead read -> containsHole(read.target());
+            case ContainerLiteral container -> containsHole(container.value());
             case ContractModifier modifier -> containsHole(modifier.target());
             case ContractTerms terms -> terms.terms().stream().anyMatch(ContractInference::containsHole);
             case Group group -> containsHole(group.expression());
@@ -1164,6 +1336,8 @@ final class ContractInference {
             case Lambda ignored -> false;
             case Literal ignored -> false;
             case Name ignored -> false;
+            case OuterPath ignored -> false;
+            case With with -> containsHole(with.target());
         };
     }
 }

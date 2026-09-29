@@ -1,0 +1,14 @@
+maximum = 18446744073709551615
+print maximum
+print UInt64 maximum
+print UInt64 (maximum + 1)
+print Integer (maximum + 1)
+print 10 div 3 + 2
+print 5 / 2
+(Float) rounded = 0.1
+print Float rounded
+print Float 0.1
+(Double) roundedInteger = 9007199254740993
+print roundedInteger == 9007199254740992
+print Int 7
+print Byte 255

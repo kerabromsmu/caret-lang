@@ -262,8 +262,8 @@ identities form a flat set: one effect does not imply another, and repeated name
 same identity normalize to one set member. `pure` is reserved declaration syntax for the empty
 allowed set, not an effect descriptor.
 
-The initial portable standard effect is `Output`, used by `print`. `StateRead` and `StateWrite` are
-reserved portable identities for the [container model](07-state-containers-and-scoped-lookup.md#mutability-containers).
+The portable standard effects are `Output`, used by `print`, and `StateRead`/`StateWrite`, used by
+explicit [container reads and writes](sections/07-01-containers-core.md#mutability-containers).
 Other domains are supplied by
 the active execution environment through an explicit effect catalog. For example, an environment
 may expose `fs` and `net` for filesystem and network integrations, and the prototype test

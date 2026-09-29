@@ -11,8 +11,9 @@ final class CollectionConstructorDescriptor {
         CollectionNode { elements = List.copyOf(elements); }
     }
 
-    record Element(String name, Node value, SourceSpan span) {
+    record Element(String name, Node value, SourceSpan span, boolean defaultsMissing) {
         Element { Objects.requireNonNull(value); }
+        Element(String name, Node value, SourceSpan span) { this(name, value, span, false); }
     }
 
     record FixedNode(Value value, SourceSpan span) implements Node {

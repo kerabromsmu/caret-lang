@@ -23,6 +23,164 @@ class CaretSandboxTest {
     Path temporaryDirectory;
 
     @Test
+    void exactIntegerCarrierRoundTripsThroughBindingsAndInvocations() {
+        java.math.BigInteger huge = new java.math.BigInteger("18446744073709551615");
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
+                .value("supplied", () -> CaretValue.integer(huge)).build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("exact.caret", """
+                    (Number) result = supplied + 1
+                    identity value = value
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            assertEquals(CaretValue.integer(huge.add(java.math.BigInteger.ONE)),
+                    executed.value().orElseThrow().find("result").orElseThrow());
+            CaretCallable identity = (CaretCallable) executed.value().orElseThrow()
+                    .find("identity").orElseThrow();
+            CaretInvocationResult invoked = sandbox.invoke(identity, List.of(CaretValue.integer(huge)));
+            assertEquals(CaretOperationResult.Code.SUCCESS, invoked.code(), invoked.diagnostics().toString());
+            assertEquals(CaretValue.integer(huge), invoked.value().orElseThrow());
+        }
+    }
+
+    @Test
+    void exactIntegerCarrierRoundTripsThroughNestedValuesAndCallbacks() {
+        java.math.BigInteger huge = java.math.BigInteger.ONE.shiftLeft(90).add(java.math.BigInteger.ONE);
+        CaretValue nested = CaretValue.sequence(List.of(CaretValue.integer(huge)));
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
+                .value("nested", () -> nested)
+                .callback("echo", 1, Set.of(), List::getFirst).build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("nested-numeric.caret", """
+                    supplied = nested
+                    returned = echo 1237940039285380274899124225
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            CaretValue.CollectionValue values = executed.value().orElseThrow();
+            assertEquals(nested, values.find("supplied").orElseThrow());
+            assertEquals(CaretValue.integer(huge), values.find("returned").orElseThrow());
+        }
+    }
+
+    @Test
+    void nonStringFieldKeysRoundTripThroughJavaCallbacks() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
+                .callback("echo", 1, Set.of(), List::getFirst).build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("field-keys.caret", """
+                    before = field 1 "one"
+                    after = echo before
+                    keyed = [(field 2 "two") (field "three" 3)]
+                    returned = echo keyed
+                    numericKey = Number (@after).key
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            CaretValue.CollectionValue values = executed.value().orElseThrow();
+            CaretValue numeric = CaretValue.field(CaretValue.number(1), CaretValue.text("one"));
+            assertEquals(numeric, values.find("before").orElseThrow());
+            assertEquals(numeric, values.find("after").orElseThrow());
+            assertEquals(CaretValue.bool(true), values.find("numericKey").orElseThrow());
+            assertEquals(CaretValue.sequence(List.of(
+                    CaretValue.field(CaretValue.number(2), CaretValue.text("two")),
+                    new CaretValue.FieldValue("three", CaretValue.number(3)))),
+                    values.find("returned").orElseThrow());
+        }
+    }
+
+    @Test
+    void packedValuesCrossEmbeddingAsExactSemanticSequencesWithoutPhysicalMetadata() {
+        java.math.BigInteger maximum = new java.math.BigInteger("18446744073709551615");
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
+                .callback("echo", 1, Set.of(), List::getFirst).build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("packed-embedding.caret", """
+                    (Packed UInt64) packed = [18446744073709551615]
+                    selected = Packed UInt64 packed
+                    roundtrip = echo packed
+                    roundtripSelected = Packed UInt64 roundtrip
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            CaretValue.CollectionValue values = executed.value().orElseThrow();
+            CaretValue sequence = CaretValue.sequence(List.of(CaretValue.integer(maximum)));
+            assertEquals(sequence, values.find("packed").orElseThrow());
+            assertEquals(sequence, values.find("roundtrip").orElseThrow());
+            assertEquals(CaretValue.bool(true), values.find("selected").orElseThrow());
+            assertEquals(CaretValue.bool(false), values.find("roundtripSelected").orElseThrow());
+        }
+    }
+
+    @Test
+    void precisionWarningsRemainSeparateAcrossEmbeddingOperations() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
+                .value("input", () -> CaretValue.number(1)).build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("warnings.caret", """
+                    ratio = input / 3
+                    divide value = value / 3
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            assertTrue(loaded.warnings().isEmpty());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            assertEquals(1, executed.warnings().size());
+            assertEquals("IMPLICIT_PRECISION_LOSS", executed.warnings().getFirst().code());
+            assertEquals(1, executed.warnings().getFirst().location().startLine());
+            CaretCallable divide = (CaretCallable) executed.value().orElseThrow()
+                    .find("divide").orElseThrow();
+            CaretInvocationResult invoked = sandbox.invoke(divide, List.of(CaretValue.number(1)));
+            assertEquals(CaretOperationResult.Code.SUCCESS, invoked.code(), invoked.diagnostics().toString());
+            assertEquals(1, invoked.warnings().size());
+            assertEquals(2, invoked.warnings().getFirst().location().startLine());
+        }
+    }
+
+    @Test
+    void loadReportsProvenPrecisionWarningWithoutRepeatingItOnExecution() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("static-loss.caret", """
+                    ratio = 1 / 3
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            assertEquals(1, loaded.warnings().size());
+            assertEquals("IMPLICIT_PRECISION_LOSS", loaded.warnings().getFirst().code());
+            assertEquals(CaretDiagnostic.Phase.SEMANTIC, loaded.warnings().getFirst().phase());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            assertTrue(executed.warnings().isEmpty());
+        }
+    }
+
+    @Test
+    void embeddingProjectsFieldAndContainerMetadataWithoutExposingMutableContents() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("field-metadata.caret", """
+                    (Output StateRead StateWrite) make ignored =
+                      cell = { (Number) 1 }
+                      record = [^cell = cell]
+                      ^fieldInfo = record.@cell
+                      ^cellInfo = @cell
+                    data = make 0
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code(), executed.diagnostics().toString());
+            CaretValue.CollectionValue data = (CaretValue.CollectionValue)
+                    executed.value().orElseThrow().find("data").orElseThrow();
+            CaretValue.CollectionValue field = (CaretValue.CollectionValue) data.find("fieldInfo").orElseThrow();
+            CaretValue.CollectionValue container = (CaretValue.CollectionValue) data.find("cellInfo").orElseThrow();
+            assertEquals(CaretValue.text("FieldBinding"), field.find("kind").orElseThrow());
+            assertTrue(field.find("value").isEmpty());
+            assertInstanceOf(CaretValue.CollectionValue.class, field.find("owner").orElseThrow());
+            assertEquals(CaretValue.text("Container"), container.find("kind").orElseThrow());
+            assertTrue(container.find("content").isEmpty());
+            assertInstanceOf(CaretValue.SequenceValue.class, container.find("contentContracts").orElseThrow());
+        }
+    }
+
+    @Test
     void loadsExecutesRegistersAndInvokesOneScript() {
         try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder()
                 .enableCallbackRegistration().build())) {
@@ -66,6 +224,33 @@ class CaretSandboxTest {
             assertEquals(CaretOperationResult.Code.SUCCESS, executed.code());
             assertEquals(CaretValue.number(2),
                     executed.value().orElseThrow().find("answer").orElseThrow());
+        }
+    }
+
+    @Test
+    void embeddedCallablesSharePrivateContainerStateWithoutExportingTheReference() {
+        try (CaretSandbox sandbox = sandbox(CaretEnvironment.builder().build())) {
+            CaretLoadResult loaded = sandbox.load(CaretSource.text("container.caret", """
+                    make ignored =
+                      cell = { (Number) 1 }
+                      (StateRead Number) read unused = cell{}
+                      (StateWrite Number) write (Number) value = put cell value
+                      ^get = read
+                      ^set = write
+                    api = make 0
+                    """));
+            assertEquals(CaretOperationResult.Code.SUCCESS, loaded.code(), loaded.diagnostics().toString());
+            CaretExecutionResult executed = sandbox.execute(loaded.value().orElseThrow());
+            assertEquals(CaretOperationResult.Code.SUCCESS, executed.code());
+            CaretValue.CollectionValue exports = executed.value().orElseThrow();
+            CaretValue.CollectionValue api = (CaretValue.CollectionValue) exports.find("api").orElseThrow();
+            CaretCallable read = (CaretCallable) api.find("get").orElseThrow();
+            CaretCallable write = (CaretCallable) api.find("set").orElseThrow();
+            assertTrue(exports.find("cell").isEmpty());
+            assertTrue(api.find("cell").isEmpty());
+            assertEquals(CaretValue.number(1), read.invoke(List.of(CaretValue.missing())).value().orElseThrow());
+            assertEquals(CaretValue.number(2), write.invoke(List.of(CaretValue.number(2))).value().orElseThrow());
+            assertEquals(CaretValue.number(2), read.invoke(List.of(CaretValue.missing())).value().orElseThrow());
         }
     }
 
@@ -205,6 +390,8 @@ class CaretSandboxTest {
                     () -> secondIdentity.invoke(List.of(CaretValue.collection(Map.of("nested", firstIdentity)))));
             assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
                     () -> secondIdentity.invoke(List.of(new CaretValue.FieldValue("nested", firstIdentity))));
+            assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
+                    () -> secondIdentity.invoke(List.of(CaretValue.field(firstIdentity, CaretValue.number(1)))));
             assertEmbeddingCode(CaretEmbeddingException.Code.FOREIGN_HANDLE,
                     () -> second.invoke(firstIdentity, List.of(CaretValue.missing())));
         }
@@ -361,7 +548,7 @@ class CaretSandboxTest {
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
                     () -> first.invoke(identity, null));
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
-                    () -> first.invoke(identity, Collections.singletonList((CaretValue) null)));
+                    () -> first.invoke(identity, Collections.singletonList(null)));
             assertEmbeddingCode(CaretEmbeddingException.Code.INVALID_ARGUMENT,
                     () -> first.swapEnvironment(null));
         }

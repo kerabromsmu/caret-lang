@@ -4,14 +4,24 @@ Caret provides a Java 21 API for running one Caret script inside a host-controll
 `caretlang.embedding.CaretSandbox`. The API exposes language-owned values and diagnostics without
 exposing interpreter, parser, AST, lexical-scope, or Java-reflection implementation objects.
 
-## Planned Phase 4 additions
+## Phase 4 numeric carriers and warnings
 
-The approved [numeric and conversion design](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
-will add an exact arbitrary-precision integer carrier alongside the current finite-double
-`NumberValue`, including lossless exports, arguments, nested data, and callback round trips.
-Load, execution, and invocation results will expose nonfatal precision warnings separately from
-failure diagnostics. These APIs are not implemented yet; the examples below describe the current
-SDK. Packed storage will not expose host buffers or change sandbox authority.
+The [numeric design](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+provides `CaretValue.ExactIntegerValue(BigInteger)` and `CaretValue.integer(BigInteger)` for lossless
+input, output, nested values, and callback arguments. The existing finite-double
+`NumberValue` and `CaretValue.number(double)` remain available. Values with exact integer storage
+beyond binary64's consecutive-integer range export through `ExactIntegerValue`; smaller numeric
+values retain the existing double carrier. Use the exact carrier when Java must preserve integer
+identity at any size.
+
+`CaretLoadResult`, `CaretExecutionResult`, and `CaretInvocationResult` expose `warnings()`
+separately from failure `diagnostics()`. A broad numeric result can report
+`IMPLICIT_PRECISION_LOSS` without failing the operation. Inspect warnings even after a successful
+operation; warnings do not grant output authority or replace failure diagnostics. Explicit
+conversion (#83) and selected packed storage (#78) are implemented. Packed values cross the Java
+embedding boundary as ordinary semantic sequences; their selected layout is not inferred again
+when returned by a host callback. Packed storage does not expose host buffers or change sandbox
+authority.
 
 ## Get the SDK
 
@@ -97,10 +107,15 @@ new sandbox for another script.
 
 ## Exchange values and call functions
 
-`CaretValue` is a sealed public model for finite numbers, text, Booleans, null, missing, fields,
+`CaretValue` is a sealed public model for finite numbers and exact integers, text, Booleans, null, missing, fields,
 Sequences, named Collections, and callables. Convenience factories include `number`, `text`,
 `bool`, `nullValue`, `missing`, `sequence`, and `collection`; construct a `FieldValue` directly.
 Null and missing remain distinct.
+`FieldValue(String name, CaretValue value)` remains the string-key form. Use
+`KeyedFieldValue(CaretValue key, CaretValue value)` or `CaretValue.field(key, value)` for numeric,
+Boolean, or other non-string keys. Caret-to-Java conversion emits the typed form for non-string
+keys; both forms round-trip through callbacks, including fields within keyed Collections. Callable
+keys and values must belong to the receiving sandbox.
 
 A successful execution returns a named `CollectionValue` containing every binding in the script's
 top lexical layer. Java can invoke a returned `CaretCallable` directly or through `sandbox.invoke`:

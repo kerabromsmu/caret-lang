@@ -23,8 +23,10 @@ The current prototype supports:
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
 - persistent sequences and canonically ordered Dictionaries with structural equality;
-- higher-order Sequence `map`, `filter`, strict left `fold`, `any`, and `all` through named,
-  partial, composed, and lambda callables;
+- ordinary Collection `keys`, `values`, `fields`, `size`, Boolean-or-missing guarantee queries,
+  matching reflection fields, and the non-negative integer `Natural` contract;
+- lazy Collection `map` and `filter`, plus strict left `fold`, `any`, and `all`, through named,
+  partial, composed, and lambda callables over keyless values or keyed Field tuples;
 - polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
@@ -40,7 +42,9 @@ The current prototype supports:
 - first-class pure callable arrow contracts such as `[Number] -> Number`, including exact arity,
   structural predicate checks, inline higher-order clauses, and declaration-wide numbered variables.
 - environment-relative effect identities and mixed declaration clauses, including explicit function
-  allowances, callable-value constraints, and effectful arrow contracts.
+  allowances, callable-value constraints, and effectful arrow contracts;
+- stable-identity mutable containers with fixed content contracts, explicit reads and writes,
+  identity equality, and `StateRead`/`StateWrite` effect inference.
 
 This is deliberately a language experiment, not a production compiler. The
 [language specification index](LANGUAGE.md) and its linked canonical feature documents describe
@@ -59,15 +63,15 @@ Contracts form derivation graphs and act as predicates, while the prototype now 
 contract-based multiple dispatch for ordinary functions. Collections use one universal `[...]`
 literal. The prototype implements positional and String-keyed Dictionary forms, and exported blocks are
 shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-resolution
-environments. The planned contextual contract model will determine whether a positional value is a
-list, set, dictionary, packed buffer, or another representation; first-class dynamic fields also
+environments. Contextual contracts select Sequence, Set, Dictionary, and Packed representations
+where their requirements are unambiguous; further representations and first-class dynamic fields
 remain planned. A non-empty Collection is entirely positional or
 entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes is an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
 or a concrete fixed collection, to the implemented `template` function creates an exact structural
 contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
 generic three-field `Result` contract remains the planned public success/failure envelope.
-Every value satisfying a template contains every declared field. In the planned contextual-literal
+Every value satisfying a template contains every declared field. In the implemented contextual-literal
 rule, omitting a field whose template hole directly uses `T~` or `T?~` materializes that field with
 value `~`; `T?~` also permits an explicitly supplied null. Aliases of those contracts accept an
 explicit `~` but do not enable omission. Existing Collections remain exact-shape values: template
@@ -79,17 +83,21 @@ application, partial application, aliasing, dispatch, effects, reflection, and c
 execution rules, even though they may consume or produce specialized semantic values. The
 prototype implements `contract` and `template`; the other listed facilities remain planned.
 
-Explicit mutability is planned through stable-identity containers rather than mutable bindings or
-deeply mutable objects. `{ (Int) 100 }` constructs a container, `container{}` reads its current
-content, and `put container value` performs a contract-checked replacement. Containers can be
-shared through otherwise immutable fields and collections; reads and writes participate in the
-planned effect system. This syntax is specified but not implemented by the current prototype.
+Explicit mutability uses stable-identity containers rather than mutable bindings or deeply mutable
+objects. `{ (Number) 100 }` constructs a container, `container{}` reads its current content, and
+`put container value` performs a contract-checked replacement. Containers can be shared through
+otherwise immutable fields and collections; reads and writes participate in effect inference.
+`object.@field` reifies a named Collection field binding without reading a container's content.
+The resulting metadata records its key, declared contracts, immutable binding status, and visible
+owner references; `@container.contentContracts` describes a container without reading it. See
+[the runnable field-reification example](examples/features/field_reification.caret).
 
 Right-associative `$` supplies application below composition, conditionals, and ordinary expressions
-(`print $ calculate value`). Planned `with value` expressions will make a value's public named
+(`print $ calculate value`). Implemented `with value` expressions make a value's public named
 members available for lexical lookup without copying them, while resolver-only paths such as
 `outer.name` recover shadowed enclosing names without exposing lexical environments as values.
-`with` and `outer` are specified but not implemented by the current prototype.
+`with` and `outer` preserve local declaration precedence and bind only enumerated public keys;
+see [the runnable example](examples/features/with_outer.caret).
 
 Layout markers `\\` and `\*` remap physical indentation to effective logical indentation
 before ordinary layout parsing. `\\` establishes an adjusted baseline for a following
@@ -166,8 +174,8 @@ named embedding module, generated API documentation, and a standalone example.
 ### Release versions
 
 The tracked [`VERSION`](VERSION) file is the source of the release version in
-`MAJOR.MINOR.UPDATE` form. The completed `0.1.x` line represents Phase 1, and `0.2.x` represents the
-Phase 2 release line from [`PLAN.md`](PLAN.md).
+`MAJOR.MINOR.UPDATE` form. The completed `0.1.x`, `0.2.x`, `0.3.x`, and `0.4.x` lines represent
+Phases 1 through 4 respectively in [`PLAN.md`](PLAN.md).
 
 - Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
 - Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
@@ -312,21 +320,32 @@ shadows this builtin-only grouping and follows ordinary application rules.
 
 ## Current limitations
 
-The approved [Phase 4 numeric and packed design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-planned)
-also remains unimplemented. It adds exact arbitrary-precision integers, signed/unsigned formats
-through 64 bits, `Float`/`Double`, true `/` alongside truncating integer `div`, and precision
-warnings or errors according to explicit result requirements. Planned `(Contract) expression`
-converts a value; declarations and directly contracted holes remain checks. Packed storage will
-cover finite positional sequences of fixed-format scalars or fixed-size templates, preserving
+The [Phase 4 numeric foundation](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+now provides exact arbitrary-precision integers, signed/unsigned formats through 64 bits,
+value-based `Natural`/`Integer`/`Real`/`Number` domains, `Float`/`Double`, true `/` alongside
+truncating integer `div`, and precision warnings or errors according to result requirements.
+The packed-layout portion of the [approved design](spec/sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented)
+is implemented. `(Contract) expression` converts a value; declarations and directly contracted
+holes remain checks. Packed storage covers finite positional sequences of fixed-format scalars or fixed-size templates, preserving
 template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
 conversion through this new syntax are deferred. See the canonical
-[acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
+[acceptance matrix](spec/sections/06-02-packed-layouts.md#packed-and-prerequisite-acceptance-matrix).
+Packed Collections use contiguous payloads in optimized execution, with reference storage when
+optimizations are disabled. Both retain selected `Packed T` membership, while equally shaped
+ordinary sequences do not gain it merely by being homogeneous. Reflection exposes
+`@packed.elementContract` when visible but never the physical layout or buffer.
 
-The newly settled [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
-is not implemented yet. It adds the common enumeration/guarantee protocol, lazy map/filter,
-Field tuples and Sets, unified missing-returning dot/bracket lookup, revised equality, and
-collection-value `eager`. The implementation descriptions and runnable examples below describe
-the existing prototype. Phase 4 includes expected-template completion for Collection literals but
+The [Phase 4 Collection design](spec/sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,
+`values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
+two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,
+first-key settlement, shape-neutral empty facts, and unified missing-returning
+dot/bracket/`getElement` access, lazy shape-aware map/filter, strict Field-based consumers,
+two-input `zip`/`zipWithKeys` construction, contract/order-sensitive Collection equality, and
+Collection-value `eager` are implemented. `eager` snapshots enumerated content, recursively
+replaces reflection references with `[]`, and preserves mutable container identity.
+Phase 4 includes expected-template
+completion for Collection literals but
 does not add a context-dependent `Template value` constructor call: ordinary template application
 remains a membership predicate. General computations, custom providers, resumable failure handlers,
 template constructor/predicate invocation, and callable `eager` forms are deferred beyond Phase 4.
@@ -339,7 +358,7 @@ template constructor/predicate invocation, and callable `eager` forms are deferr
   analysis are implemented, including the read-only `caret inspect` report;
   nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
   implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
-- Contract-selected collection representations, first-class dynamic fields, formats,
+- Additional contract-selected collection representations and formats,
   cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
 - Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
@@ -348,8 +367,9 @@ template constructor/predicate invocation, and callable `eager` forms are deferr
   planned headers become eligible as their syntax is implemented.
 - Higher-order Sequence operations propagate known callback effects; generalized collection
   element/result variables remain planned.
-- Mutability containers are specified but not implemented. Public `addElement`, `removeElement`,
-  `replaceElement`, their construction-selection interface, and additional immutable-update syntax
+- Field-binding reification and container content-contract metadata are implemented for the current
+  named-Collection and container subset. Public `addElement`,
+  `removeElement`, `replaceElement`, their construction-selection interface, and additional immutable-update syntax
   are deferred beyond Phase 4. There is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
   conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
   observable persistent semantics.
@@ -384,8 +404,10 @@ The ordinary runtime provides:
 
 - `print value` and `type value`;
 - `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`,
-  `Field`, and `Dictionary` as first-class contracts; `Field K V` and `Dictionary K V` are curried;
+  `Field`, `Set`, and `Dictionary` as first-class contracts; `Field K V`, `Set K`, and
+  `Dictionary K V` are curried;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
+- `getElement collection key`, with dot and bracket access lowering through the same lexical binding;
 - `seqEmpty`, `seqAdd`, `seqGet`, `seqSize`, and callable-first `map`; and
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
 
@@ -402,10 +424,17 @@ print (@source).kind
 print (@source).ids
 ```
 
-Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `ids`. Field keys are
+Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `ids`. String Field keys are
 ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
 or update order; their value expressions are still evaluated in source order. Identifier shorthand
 `^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
+Fields accept arbitrary non-missing keys, expose `key` and `value` metadata, and participate in the
+Collection protocol as two-position tuples. Set context treats plain elements and key-only Fields as
+members; Dictionary context distinguishes a stored `~` value from absence.
+Valid absent access returns `~` for every spelling. Brackets accept equality-comparable keys allowed
+by the Collection, including null and composite keys; missing keys, fractional sequence indices,
+and keys outside the access contract are located errors. `collection[_]` and `_[key]` are ordinary
+partials, and a local `getElement` binding controls the sugar.
 Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
 non-callable metadata Dictionary exposing `kind`, visible
 declaration `id`, remaining arity, a language-owned `signature`, and surviving overload `variants`.

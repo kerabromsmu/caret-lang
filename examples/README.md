@@ -28,6 +28,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `CORE-SCOPE-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | Named Collection export and lookup sections; missing-field and invalid-key fixtures |
 | `CORE-EQ-001` | Named Collection and positional collection equality sections; `errors/callable_equality.caret` |
 | `CORE-REFLECT-001` | Collection, scalar, operator, and function reflection section |
+| `CONTAINER-FIELD-001` | `features/field_reification.caret`; value lookup, explicit content read, stable field binding reference, owner and container metadata |
 | `CORE-INFIX-001` | Named infix precedence, associativity, partial, and callable-parameter examples; invalid-target/arity fixtures |
 | `CORE-INFIX-002` | Symbolic prefix, infix, grouped subtraction, and symbolic partial examples |
 | `CORE-COMP-001` | Left-to-right pipelines, chaining, partial left operands, reflection, and invalid operand/arity fixtures |
@@ -43,7 +44,7 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `CALL-SIG-001`, `CALL-SIG-002`, `CALL-SIG-PART-001`, `CALL-SIG-COMP-001`, `CALL-SIG-EFFECT-001` | `features/callable_reflection.caret`, `features/arrow_contracts.caret`, and `features/effects.caret`; declared/inferred schemes and derived specialization |
 | `CALL-CONTRACT-SYNTAX-001`, `CALL-CONTRACT-VAR-001`, `CALL-CONTRACT-SUBTYPE-001`, `CALL-CONTRACT-PRED-001` | `features/arrow_contracts.caret`; exact arity, generalized variables, variance, effects, and observational predicates |
 | `CALL-REFLECT-SCHEMA-001`, `CALL-REFLECT-DERIVED-001`, `CALL-REFLECT-OVERLOAD-001`, `CALL-REFLECT-IDENTITY-001`, `CALL-REFLECT-SAFE-001` | `features/callable_reflection.caret`; fixed schema, partials, compositions, overload survivors, identity, and safe dereference |
-| `CALL-REFLECT-VIS-001` | `features/callable_reflection.caret` demonstrates defining-environment projection; `InterpreterTest#callableReflectionProjectsLazilyWithoutAmplifyingVisibilityOrAuthority` covers external/sandbox projection because observation contexts are intentionally not Caret values |
+| `CALL-REFLECT-VIS-001` | `features/callable_reflection.caret` demonstrates defining-environment projection; `CoreCallableInterpreterTest#callableReflectionProjectsLazilyWithoutAmplifyingVisibilityOrAuthority` covers external/sandbox projection because observation contexts are intentionally not Caret values |
 | `DISPATCH-001`, `DISPATCH-SPEC-001`, `DISPATCH-DECL-001`, `DISPATCH-APPLY-001`, `DISPATCH-APPLY-003`, `DISPATCH-DIAG-001` | `features/overloads.caret` plus inconsistent, missing, and ambiguous overload error fixtures |
 | `DISPATCH-PART-001`, `DISPATCH-PART-002`, `DISPATCH-PART-003`, `DISPATCH-SIG-001` | Overload partial narrowing in `features/overloads.caret` and survivor metadata in `features/callable_reflection.caret` |
 | `EFFECT-002` foundation | Focused Java tests cover the completed Phase 2 propagation through named, aliased, partial, composed, overloaded, closure, and recursive callable forms; later lambdas, cycles, codecs, rules, and containers extend the still-planned full requirement |
@@ -52,6 +53,13 @@ conformance rows without an existing Caret example and fixtures not exercised by
 | `CORE-MAP-001` | `features/map.caret`; empty, named, partial, composed, and identity transforms |
 | `CORE-RENDER-001`, `CORE-RENDER-002` | `features/rendering.caret`; overload selection and recursive default rendering |
 | `DATA-COLL-001`, `DATA-001`, `DATA-002`, `DATA-005`, `DATA-COLL-002`, `DATA-COLL-007`, `DATA-COLL-004` | Collection sections in the master test, `features/collection_order.caret`, and the mixed-shape error fixture |
+| `COLL-PROTOCOL-001`, `DATA-COLL-003` | `features/collection_protocol.caret`; common enumeration, size, guarantees, reflection, `Natural`, and shape-neutral empty behavior; `errors/expected_collection.caret` |
+| `COLL-SHAPE-001`, `COLL-CONSTRUCT-001`, `COLL-DICT-ORDER-001`, `COLL-FIELD-ACCESS-001`, `DATA-003`, `DATA-004` | `features/field_shapes.caret`; Field tuples, missing-part interpretation, Sets, general keyed Collections, contextual shapes, settlement, first-key retention, and sorted Dictionaries; `errors/mixed_collection_shape.caret`; `errors/ambiguous_collection_shape.caret` |
+| `COLL-ACCESS-001`, `COLL-FIELD-ACCESS-001`, `CORE-SCOPE-002`, `CORE-SCOPE-003` | `features/collection_access.caret`; equivalent dot/bracket/getElement lookup, composite/null keys, Set and Field access, lexical shadowing, and partials; `errors/invalid_collection_key.caret` |
+| `COLL-LAZY-001` | `features/lazy_collection.caret`; lazy keyless map demand, alias sharing, known size without forcing, and fresh invocation results with effect traces |
+| `COLL-TRANSFORM-001` | `features/collection_transforms.caret`; lazy sequence/keyed/Set map and filter, duplicate-key retention, and strict Field-based consumers |
+| `COLL-ZIP-001` | `features/zip.caret`; tuple pairing, general and Dictionary keyed construction, lazy duplicate suppression, and numbered-hole partials; `errors/zip_length_mismatch.caret` |
+| `COLL-EQUALITY-001` | `features/collection_equality.caret`; compatible contracts, shape-sensitive empties, contextual empty adaptation, and left-before-right lazy short-circuiting |
 
 Run all examples with:
 

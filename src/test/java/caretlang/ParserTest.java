@@ -9,6 +9,29 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ParserTest {
     @Test
+    void parsesContainerLiteralsContractsAndPostfixReads() {
+        ContainerLiteral inferred = assertInstanceOf(ContainerLiteral.class, expression("{ 1 }"));
+        assertNull(inferred.contracts());
+        assertInstanceOf(Literal.class, inferred.value());
+
+        ContainerLiteral explicit = assertInstanceOf(ContainerLiteral.class,
+                expression("{ (Number Natural) 1 }"));
+        assertEquals(List.of("Number", "Natural"), explicit.contracts().names().stream()
+                .map(ContractName::name).toList());
+        assertEquals(1, explicit.span().start().column());
+        assertEquals(23, explicit.span().end().column());
+
+        ContainerRead read = assertInstanceOf(ContainerRead.class, expression("player.health{}"));
+        assertInstanceOf(Field.class, read.target());
+        assertEquals(16, read.span().end().column());
+
+        ContainerLiteral groupedValue = assertInstanceOf(ContainerLiteral.class,
+                expression("{ (1 + 2) }"));
+        assertNull(groupedValue.contracts());
+        assertInstanceOf(Group.class, groupedValue.value());
+    }
+
+    @Test
     void parsesLambdaFormsAndPreservesTheirExtent() {
         Lambda unary = assertInstanceOf(Lambda.class, expression("x -> x + 1"));
         assertEquals(List.of("x"), unary.params().stream().map(Parameter::name).toList());
@@ -534,8 +557,9 @@ final class ParserTest {
     @Test
     void rejectsNonFiniteNumberLiteralsAsLocatedParserDiagnostics() {
         String huge = "9".repeat(400);
+        assertDoesNotThrow(() -> new Parser("value = " + huge).parseProgram());
         LangException error = assertThrows(LangException.class,
-                () -> new Parser("value = " + huge).parseProgram());
+                () -> new Parser("value = " + huge + ".0").parseProgram());
         assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
         assertEquals(9, error.span().start().column());
         assertTrue(error.getMessage().contains("outside the finite range"));
