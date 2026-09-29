@@ -18,7 +18,7 @@ establishment model: an alias shares demanded positions, while a fresh map invoc
 fresh result context. Do not impose permanent Collection-wide memoization or
 a special `eager` context. Stronger provider contracts, such as sequential stability, still apply.
 The Collection protocol is owned by the
-[Phase 4 revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions).
+[Phase 4 revision](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions).
 
 ### Deferred computations and synchronization
 

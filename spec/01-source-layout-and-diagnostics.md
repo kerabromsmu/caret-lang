@@ -22,7 +22,7 @@ that operand rather than the complete call.
 
 Internally, diagnostics retain their phase, a stable diagnostic code, message, primary source span,
 related source spans, an optional language diagnostic cause, and Collection-valued subsystem details. These use the
-[`ErrorTemplate`](06-collections-fields-and-templates.md#standard-error-template) model. A diagnostic that
+[`ErrorTemplate`](sections/06-07-templates-advanced.md#standard-error-template) model. A diagnostic that
 aborts lexing, parsing, analysis, or evaluation is not thereby an ordinary catchable Caret value.
 The CLI renders the primary location in the compact form below and follows it
 with located `Note:` lines when a diagnostic has related locations, such as the first declaration

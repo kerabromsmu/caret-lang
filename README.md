@@ -324,18 +324,18 @@ The [Phase 4 numeric foundation](spec/02-values-bindings-and-evaluation.md#phase
 now provides exact arbitrary-precision integers, signed/unsigned formats through 64 bits,
 value-based `Natural`/`Integer`/`Real`/`Number` domains, `Float`/`Double`, true `/` alongside
 truncating integer `div`, and precision warnings or errors according to result requirements.
-The packed-layout portion of the [approved design](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-implemented)
+The packed-layout portion of the [approved design](spec/sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented)
 is implemented. `(Contract) expression` converts a value; declarations and directly contracted
 holes remain checks. Packed storage covers finite positional sequences of fixed-format scalars or fixed-size templates, preserving
 template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
 conversion through this new syntax are deferred. See the canonical
-[acceptance matrix](spec/06-collections-fields-and-templates.md#packed-and-prerequisite-acceptance-matrix).
+[acceptance matrix](spec/sections/06-02-packed-layouts.md#packed-and-prerequisite-acceptance-matrix).
 Packed Collections use contiguous payloads in optimized execution, with reference storage when
 optimizations are disabled. Both retain selected `Packed T` membership, while equally shaped
 ordinary sequences do not gain it merely by being homogeneous. Reflection exposes
 `@packed.elementContract` when visible but never the physical layout or buffer.
 
-The [Phase 4 Collection design](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+The [Phase 4 Collection design](spec/sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,
 `values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
 two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,

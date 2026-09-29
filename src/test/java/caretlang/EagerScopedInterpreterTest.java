@@ -1,0 +1,330 @@
+package caretlang;
+
+import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static caretlang.InterpreterTestSupport.*;
+
+final class EagerScopedInterpreterTest {
+    @Test
+    void eagerMaterializesCaretValuesAndPreservesContainersAndCallables() {
+        assertEquals("""
+                [ 1 2 ]
+                [ 1 2 ]
+                []
+                true
+                """, execute("""
+                identity value = value
+                source = map identity [1 2]
+                result = eager source
+                print result
+                print source
+                print getElement (eager [42 (@source)]) 1
+                cell = { (Number) 3 }
+                print (getElement (eager [cell]) 0) == cell
+                """));
+        assertEquals("true\n", execute("""
+                (Sequence Number) result = eager [1 2]
+                print (Sequence Number result)
+                """));
+        assertEquals("1\n2\n[ 1 2 ]\n", execute("""
+                (Output Number) emit value =
+                  print value
+                  value
+                source = map emit [1 2]
+                print eager source
+                """));
+        Value.Callable callable = new Value.FunctionValue("identity", List.of("value"),
+                (args, ignored) -> args.getFirst().value());
+        assertSame(callable, EagerRuntime.materialize(callable, null, ReflectionContext.defining()));
+    }
+
+    @Test
+    void eagerEnumeratesBeforeDepthFirstTraversalAndDropsUneumeratedAccess() {
+        class TracedProvider implements Value.Reflective, CollectionRuntime.Provider {
+            final List<String> trace;
+            final String name;
+            final List<Value> values;
+            TracedProvider(List<String> trace, String name, List<Value> values) {
+                this.trace = trace; this.name = name; this.values = values;
+            }
+            @Override public Optional<Value> find(String key) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { return new Value.Num(999); }
+            @Override public Value keys() { trace.add(name + ":keys"); return new Value.Seq(List.of(new Value.Num(0))); }
+            @Override public Value valueEntries() { trace.add(name + ":values"); return new Value.Seq(values); }
+            @Override public Value fieldEntries() { return valueEntries(); }
+            @Override public Value size() { return new Value.Num(values.size()); }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        List<String> trace = new java.util.ArrayList<>();
+        TracedProvider nested = new TracedProvider(trace, "nested", List.of(new Value.Num(7)));
+        TracedProvider root = new TracedProvider(trace, "root", List.of(nested));
+        Value result = EagerRuntime.materialize(root, new SourceSpan(new SourcePosition(0, 1, 1),
+                new SourcePosition(5, 1, 6)), ReflectionContext.defining());
+        assertEquals(List.of("root:keys", "root:values", "nested:keys", "nested:values"), trace);
+        assertSame(Value.Missing.INSTANCE, ((CollectionRuntime.Provider) result).getElement(new Value.Num(2)));
+        assertEquals(new Value.Num(999), root.getElement(new Value.Num(2)));
+    }
+
+    @Test
+    void eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors() {
+        Value.Seq cycle = new Value.Seq(List.of());
+        cycle.appendOwned(cycle);
+        SourceSpan span = new SourceSpan(new SourcePosition(14, 3, 5), new SourcePosition(19, 3, 10));
+        LangException cyclic = assertThrows(LangException.class, () -> EagerRuntime.materialize(cycle, span,
+                ReflectionContext.defining()));
+        assertEquals(Diagnostic.Codes.EAGER_CYCLE, cyclic.diagnostic().code());
+        assertEquals(3, cyclic.span().start().line());
+        assertEquals(5, cyclic.span().start().column());
+        class InfiniteProvider implements Value.Reflective, CollectionRuntime.Provider {
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { return Value.Missing.INSTANCE; }
+            @Override public Value keys() { throw new AssertionError("Infinite source must not enumerate"); }
+            @Override public Value valueEntries() { throw new AssertionError("Infinite source must not enumerate"); }
+            @Override public Value fieldEntries() { throw new AssertionError("Infinite source must not enumerate"); }
+            @Override public Value size() { return Value.Missing.INSTANCE; }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.UNKNOWN,
+                        CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        LangException infinite = assertThrows(LangException.class,
+                () -> EagerRuntime.materialize(new InfiniteProvider(), span, ReflectionContext.defining()));
+        assertEquals(Diagnostic.Codes.EAGER_INFINITE, infinite.diagnostic().code());
+        assertEquals(3, infinite.span().start().line());
+    }
+
+    @Test
+    void eagerMaterializedKeyCollisionsSkipIgnoredValuesAndKeepSharedDag() {
+        Value.Dictionary firstKey = Value.Dictionary.reflection(Map.of("id", new Value.Num(1)),
+                new Value.Num(1), ReflectionContext.defining());
+        Value.Dictionary secondKey = Value.Dictionary.reflection(Map.of("id", new Value.Num(2)),
+                new Value.Num(2), ReflectionContext.defining());
+        Value.Seq ignoredCycle = new Value.Seq(List.of());
+        ignoredCycle.appendOwned(ignoredCycle);
+        Value.KeyedCollection source = new Value.KeyedCollection(Value.KeyedCollection.Shape.GENERAL,
+                List.of(new Value.KeyedCollection.Entry(firstKey, new Value.Num(10)),
+                        new Value.KeyedCollection.Entry(secondKey, ignoredCycle)));
+        Value.SettledCollection result = (Value.SettledCollection) EagerRuntime.materialize(source, null,
+                ReflectionContext.defining());
+        assertEquals(1, result.entries().size());
+        assertSame(Value.EmptyCollection.INSTANCE, result.entries().getFirst().key());
+        assertEquals(new Value.Num(10), result.entries().getFirst().value());
+        assertEquals(2, source.entries().size());
+
+        Value.Seq shared = new Value.Seq(List.of(new Value.Num(5)));
+        Value.SettledCollection dag = (Value.SettledCollection) EagerRuntime.materialize(
+                new Value.Seq(List.of(shared, shared)), null, ReflectionContext.defining());
+        assertSame(dag.entries().get(0).value(), dag.entries().get(1).value());
+        Value.Field sharedField = new Value.Field(new Value.Str("x"), shared);
+        Value.SettledCollection fieldDag = (Value.SettledCollection) EagerRuntime.materialize(
+                new Value.Seq(List.of(sharedField, sharedField)), null, ReflectionContext.defining());
+        assertSame(fieldDag.entries().get(0).value(), fieldDag.entries().get(1).value());
+    }
+
+    @Test
+    void eagerPreservesUnavailableKeysAndAdaptsInvalidatedContracts() {
+        class KeylessProvider implements Value.Reflective, CollectionRuntime.Provider {
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { return new Value.Num(99); }
+            @Override public Value keys() { return Value.Missing.INSTANCE; }
+            @Override public Value valueEntries() { return new Value.Seq(List.of(new Value.Num(1))); }
+            @Override public Value fieldEntries() { return valueEntries(); }
+            @Override public Value size() { return new Value.Num(1); }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.TRUE,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        KeylessProvider source = new KeylessProvider();
+        CollectionRuntime.Provider result = (CollectionRuntime.Provider) EagerRuntime.materialize(source, null,
+                ReflectionContext.defining());
+        assertSame(Value.Missing.INSTANCE, result.keys());
+        assertSame(Value.Missing.INSTANCE, result.getElement(new Value.Num(0)));
+        assertEquals(new Value.Num(99), source.getElement(new Value.Num(0)));
+        assertEquals(CollectionRuntime.Guarantee.UNKNOWN, result.facts().unique());
+
+        ContractDescriptor numbers = BuiltinContract.SEQUENCE.parameterize(List.of(BuiltinContract.NUMBER));
+        Value.Attributed attributed = new Value.Attributed(new Value.Seq(List.of(new Value.Num(1))),
+                Set.of(numbers));
+        Value.Attributed materialized = assertInstanceOf(Value.Attributed.class,
+                EagerRuntime.materialize(attributed, null, ReflectionContext.defining()));
+        assertTrue(materialized.contracts().contains(numbers));
+        assertTrue(numbers.accepts(materialized));
+    }
+
+    @Test
+    void withReturnsBodyResultAndOuterTraversesNestedMemberLayers() {
+        assertEquals("""
+                2
+                1
+                3
+                2
+                1
+                5
+                """, execute("""
+                x = 1
+                a = [^x = 2 ^z = 3]
+                b = [^x = 3]
+                result = with a
+                  print x
+                  print outer.x
+                  with b
+                    print x
+                    print outer.x
+                    print outer.outer.x
+                  z + 2
+                print result
+                """));
+        assertEquals("2\ntrue\n", execute("""
+                cell = { (Number) 2 }
+                a = [^cell = cell]
+                with a
+                  print cell{}
+                  print cell == outer.cell
+                """));
+        assertEquals("2\n", execute("""
+                x = 1
+                a = [^x = 2]
+                with a
+                  (Output StateRead StateWrite) getter ignored = x
+                  with [^x = 3]
+                    print getter 0
+                """));
+        assertEquals("2\n2\n1\n", execute("""
+                calls = { (Number) 0 }
+                (StateRead StateWrite) make ignored =
+                  put calls (calls{} + 1)
+                  [^x = 2]
+                with make 0
+                  print x
+                  print x
+                print calls{}
+                """));
+        assertEquals("7\n", execute("""
+                custom receiver key = 7
+                record = [^getElement = custom ^target = [^x = 1]]
+                with record
+                  print target.x
+                """));
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(output));
+        Value shadowedPrint = interpreter.execute(new Parser("""
+                increment value = value + 1
+                record = [^print = increment]
+                with record
+                  print 4
+                """).parseProgram());
+        assertEquals(new Value.Num(5), shadowedPrint);
+        assertEquals("", output.toString());
+    }
+
+    @Test
+    void withBindsOnlyEnumeratedNamesBeforeBodyAndKeepsMembersLazy() {
+        List<String> trace = new java.util.ArrayList<>();
+        class NamedProvider implements Value.Reflective, CollectionRuntime.Provider {
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) {
+                String name = ((Value.Str) key).value();
+                trace.add("read:" + name);
+                return name.equals("a") ? Value.Missing.INSTANCE : new Value.Num(20);
+            }
+            @Override public Value keys() {
+                trace.add("keys");
+                return new Value.LazySeq(3, index -> {
+                    trace.add("key:" + index);
+                    return new Value.Str(List.of("a", "b", "later").get(index));
+                });
+            }
+            @Override public Value valueEntries() { throw new AssertionError(); }
+            @Override public Value fieldEntries() { throw new AssertionError(); }
+            @Override public Value size() { return new Value.Num(3); }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                        CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
+                        CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        Interpreter interpreter = new Interpreter(new PrintStream(new ByteArrayOutputStream()));
+        interpreter.defineEmbeddingValue("target", NamedProvider::new);
+        Value result = interpreter.execute(new Parser("""
+                a = 9
+                with target
+                  a
+                  b
+                """).parseProgram());
+        assertEquals(new Value.Num(20), result);
+        assertEquals(List.of("keys", "key:0", "key:1", "read:a", "read:b"), trace);
+
+        trace.clear();
+        Interpreter missing = new Interpreter(new PrintStream(new ByteArrayOutputStream()));
+        missing.defineEmbeddingValue("target", NamedProvider::new);
+        Value shadowed = missing.execute(new Parser("""
+                a = 9
+                with target
+                  a
+                """).parseProgram());
+        assertSame(Value.Missing.INSTANCE, shadowed);
+        assertEquals(List.of("keys", "key:0", "read:a"), trace);
+
+        trace.clear();
+        Interpreter absent = new Interpreter(new PrintStream(new ByteArrayOutputStream()));
+        absent.defineEmbeddingValue("target", NamedProvider::new);
+        Value fallback = absent.execute(new Parser("""
+                age = 9
+                with target
+                  age
+                """).parseProgram());
+        assertEquals(new Value.Num(9), fallback);
+        assertEquals(List.of("keys", "key:0", "key:1", "key:2"), trace);
+    }
+
+    @Test
+    void withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue() {
+        LangException target = expectDiagnostic("with [1]\n  2", "with target must expose", 1, 6);
+        assertEquals(Diagnostic.Codes.EXPECTED_WITH_TARGET, target.diagnostic().code());
+        for (String source : List.of("value = outer", "value = @outer", "value = outer[\"x\"]",
+                "with [^x = 1]\n  outer.outer.x")) {
+            LangException failure = assertThrows(LangException.class, () -> execute(source));
+            assertEquals(Diagnostic.Codes.INVALID_OUTER_PATH, failure.diagnostic().code());
+            assertNotNull(failure.span());
+        }
+        LangException privateName = expectDiagnostic("""
+                make ignored =
+                  internal = 1
+                  ^public = 2
+                person = make 0
+                with person
+                  internal
+                """, "Unknown name: internal", 6, 3);
+        assertEquals(Diagnostic.Codes.UNKNOWN_NAME, privateName.diagnostic().code());
+        LangException local = expectDiagnostic("""
+                record = [^x = 2]
+                with record
+                  x = x
+                """, "Binding read before initialization", 3, 7);
+        assertEquals(Diagnostic.Codes.READ_BEFORE_INITIALIZATION, local.diagnostic().code());
+    }
+
+}

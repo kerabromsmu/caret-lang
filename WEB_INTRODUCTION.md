@@ -19,7 +19,7 @@ remaining predictable, statically analyzable, and pleasant to work with?
 
 ### Collection evolution
 
-Phase 4's [Collection protocol](spec/06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+Phase 4's [Collection protocol](spec/sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 now provides ordinary `keys`, `values`, `fields`, and `size` operations for the implemented
 Collection shapes, with `isOrdered`, `isSequential`, `isUnique`, `isFinite`, `isKeyed`, and
 `hasValues` queries and matching reflection fields. `Natural` describes non-negative integer
@@ -189,7 +189,7 @@ is retained with a packed value, so an ordinary homogeneous sequence does not sa
 The
 [numeric rules](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented),
 [conversion rules](spec/04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented),
-and [packed specification](spec/06-collections-fields-and-templates.md#phase-4-packed-layouts-implemented)
+and [packed specification](spec/sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented)
 define the implementation requirements.
 
 ### Template fields and missing values

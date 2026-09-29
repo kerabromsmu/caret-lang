@@ -20,11 +20,24 @@ final class ConformanceMatrixTest {
 
     @Test
     void requirementIdsStatusesAndImplementedEvidenceAreValid() throws IOException {
-        String markdown = Files.readString(Path.of("CONFORMANCE.md"));
+        String index = Files.readString(Path.of("CONFORMANCE.md"));
         String integrationScript = Files.readString(Path.of("test.sh"));
         Set<String> ids = new HashSet<>();
         int requirements = 0;
 
+        try (var files = Files.list(Path.of("conformance"))) {
+            for (Path document : files.filter(path -> path.toString().endsWith(".md")).toList()) {
+                assertTrue(index.contains("conformance/" + document.getFileName()),
+                        "Conformance index does not link " + document);
+                requirements += validateRequirements(Files.readString(document), integrationScript, ids);
+            }
+        }
+
+        assertTrue(requirements >= 70, "The conformance inventory is unexpectedly incomplete");
+    }
+
+    private int validateRequirements(String markdown, String integrationScript, Set<String> ids) {
+        int requirements = 0;
         for (String line : markdown.lines().toList()) {
             if (!line.matches("\\| [A-Z][A-Z0-9-]*-[0-9]{3} +\\|.*")) continue;
             String[] cells = line.split("\\|", -1);
@@ -44,8 +57,7 @@ final class ConformanceMatrixTest {
             }
             requirements++;
         }
-
-        assertTrue(requirements >= 70, "The conformance inventory is unexpectedly incomplete");
+        return requirements;
     }
 
     @Test

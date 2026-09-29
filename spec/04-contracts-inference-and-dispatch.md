@@ -9,7 +9,7 @@ Phase 4 provides the format-independent `Natural` domain of non-negative integer
 arbitrary-precision support under the numeric revision below. It does not introduce infinite
 numeric values. Collection `size` has result contract `Natural~`.
 
-The [Collection protocol revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+The [Collection protocol revision](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 owns guarantee queries, shape inference, Field tuples, and contextual empty-Collection equality.
 Runtime validation of lazy membership is unnecessary when inferred/declared producer contracts
 already establish the answer; otherwise necessary computation contributes its ordinary effects.
@@ -18,7 +18,7 @@ are errors.
 
 Existing template calls remain predicates in Phase 4. The later dual predicate/constructor
 interpretation selected by result contracts and arity is
-[explicitly deferred](06-collections-fields-and-templates.md#deferred-template-construction-and-callable-eager).
+[explicitly deferred](sections/06-01-collection-protocol.md#deferred-template-construction-and-callable-eager).
 That overload and its ambiguity diagnostics are not Phase 4 requirements.
 
 ## Phase 4 numeric contracts (implemented)
@@ -55,7 +55,7 @@ Aliases are the same contract identities: `Int = Integer`, `Byte = UInt8`, `Floa
 `Float64 = Double`. A concrete format selects a layout only when representation is requested.
 `Packed Integer`, `Packed Natural`, `Packed Real`, and `Packed Number` have no concrete fixed-width
 layout; homogeneity alone cannot make them eligible. Packed membership is separately defined by
-[the selected-layout contract](06-collections-fields-and-templates.md#phase-4-packed-layouts-implemented).
+[the selected-layout contract](sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented).
 
 ## Phase 4 explicit contract conversion (implemented)
 
@@ -107,7 +107,7 @@ behavior; these exclusions concern the new conversion form.
 Only built-in conversion behavior is included. User-defined conversion registration is deferred;
 whether it belongs with `format` is a future decision. This syntax neither implements contextual
 template predicate/constructor calls nor adds a public conversion-registration API. The separate
-[expected-template literal rule](06-collections-fields-and-templates.md#named-fields) applies while
+[expected-template literal rule](sections/06-06-templates-foundations.md#named-fields) applies while
 constructing a literal, not while converting an established value; even `(Template) [literal]` is
 the explicit conversion form and therefore requires the source literal's complete field set.
 
@@ -218,7 +218,7 @@ planned [layout modifiers](01-source-layout-and-diagnostics.md#planned-layout-ba
 will first translate physical indentation into effective
 logical indentation; the ordinary block rules will then consume that logical indentation. If a
 body contains exported bindings (`^`), calling the function returns the immutable named `Collection`
-specified in the [collections document](06-collections-fields-and-templates.md#collections-and-lexical-scopes).
+specified in the [collections document](sections/06-03-collection-baseline.md#collections-and-lexical-scopes).
 It is observationally equivalent to the explicit named literal containing those exports. Otherwise
 the prototype returns the final expression or assigned value.
 

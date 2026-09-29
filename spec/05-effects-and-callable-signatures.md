@@ -263,7 +263,7 @@ same identity normalize to one set member. `pure` is reserved declaration syntax
 allowed set, not an effect descriptor.
 
 The portable standard effects are `Output`, used by `print`, and `StateRead`/`StateWrite`, used by
-explicit [container reads and writes](07-state-containers-and-scoped-lookup.md#mutability-containers).
+explicit [container reads and writes](sections/07-01-containers-core.md#mutability-containers).
 Other domains are supplied by
 the active execution environment through an explicit effect catalog. For example, an environment
 may expose `fs` and `net` for filesystem and network integrations, and the prototype test
