@@ -21,4 +21,3 @@
   or GitHub issue/project mutations.
 * Run `./gradlew test`, `./test.sh`, `bash scripts/check-example-coverage.sh`, and `git diff --check`.
   Report gaps found and repaired, tests run, remaining limitations, and any GitHub state changes.
-

@@ -164,4 +164,3 @@ numeric domains, explicit conversion, packed layouts, diagnostics, embedding, ex
 optimization parity passed the baseline suites. The project cards #64–#78 and prerequisite cards
 #82/#83 are Done. Public element-operation APIs, custom providers, computations, resumable handlers,
 and callable `eager` forms remain deferred as stated above.
-

@@ -23,4 +23,3 @@
   the version transition. If the branch already has an open pull request to `main`, update it rather
   than creating a duplicate.
 * Never merge the pull request, force-push, or include unrelated changes.
-

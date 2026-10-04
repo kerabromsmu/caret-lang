@@ -139,4 +139,3 @@ target, which shadow enclosing lexical bindings. `outer` is valid only as an exp
 member path and cannot be stored, reflected, dynamically indexed, or used to bypass export or
 sandbox visibility. `$` is right-associative syntax-level application below `>>`, conditionals,
 lambdas, and ordinary expressions; it lowers to the ordinary callable path.
-

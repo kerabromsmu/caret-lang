@@ -29,4 +29,3 @@
   with an explicit checklist for metadata, license, formatting, highlighting, links, and submission.
 - Version the language and runtime ABI only after the complete conformance suite passes on supported
   platforms.
-

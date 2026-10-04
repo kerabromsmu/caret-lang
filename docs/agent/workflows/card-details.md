@@ -16,4 +16,3 @@
   exclusions.
 * Move fully clarified cards to `Todo`. Leave cards with unresolved decisions in `Underspecified`.
 * Do not implement the cards under this alias.
-

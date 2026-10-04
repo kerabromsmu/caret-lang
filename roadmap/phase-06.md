@@ -18,4 +18,3 @@
   provide a portable fallback only where it preserves the explicit `::` contract.
 - Test multiple lane widths and hardware capability profiles in interpreter/emulation and compiler
   modes; never make program meaning depend on host vector width.
-

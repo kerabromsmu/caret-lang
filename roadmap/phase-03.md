@@ -25,4 +25,3 @@ and direct declaration clauses.
   `any`, `all`) using the unified callable/effect model.
 - Complete `LAMBDA-LOWAPP-001`: lambda construction binds above `$`, with parser and runtime
   coverage for ungrouped lambdas used as complete low-precedence arguments.
-

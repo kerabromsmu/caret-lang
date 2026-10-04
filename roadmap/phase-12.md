@@ -27,4 +27,3 @@
 - Every optimization has an off switch and differential/property tests. It must not expose source
   order for unordered rules, merge null with missing, execute an unselected conditional branch, or
   change effect/contract behavior.
-

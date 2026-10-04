@@ -26,4 +26,3 @@
 - Support nesting, collection traversal helpers, format use, and final-state return. Keep `Break` /
   `Continue`, changing shapes, labels, effectful conditions, and automatic parallelism deferred as
   `LANGUAGE.md` allows.
-

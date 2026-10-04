@@ -125,4 +125,3 @@ reference mode complete the Phase 2 storage-reuse foundation without changing Ca
 - Ownership remains an internal optimization. Differential tests establish that enabled execution
   matches the authoritative optimization-disabled persistent behavior. This foundation later supports
   efficient cycles, collection updates, SIMD memory, and compiled execution.
-

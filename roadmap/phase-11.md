@@ -26,4 +26,3 @@
 - Test pure/effectful staging, invalid cross-stage dependencies, import visibility, target-specific
   rule filtering, shared dependency retention, discarded dependency removal, reproducible dependency
   manifests, and adversarial authority/reflection boundaries.
-

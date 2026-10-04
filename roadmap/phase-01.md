@@ -82,4 +82,3 @@ survivor signatures with conservative summaries.
   internal non-amplifying observation-context seam, target/descriptor identity, and the prohibition
   on exposing captures, bound values, provenance, implementation objects, or authority. Keep
   `@function` itself non-callable.
-

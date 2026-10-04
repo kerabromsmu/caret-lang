@@ -19,4 +19,3 @@
 - The shared structured-error payload is specified through `ErrorTemplate`, and the parameterized
   `Result` contract defines the public success/failure envelope. Dynamically supplied host
   capabilities remain environment bindings rather than serialized code dependencies.
-

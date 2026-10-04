@@ -35,4 +35,3 @@
   corpus record the completed phase, and final verification passes.
 * Repetition does not authorize changing `VERSION`, pushing a branch, or creating, reopening, or
   updating a pull request. Those actions retain their separate explicit authorization rules.
-

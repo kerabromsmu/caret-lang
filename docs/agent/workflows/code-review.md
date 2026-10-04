@@ -17,4 +17,3 @@
   residual testing or coverage risks; do not create cards for those risks alone.
 * This workflow authorizes issue and project changes only to track findings as described above.
   Do not edit code or move cards to `In Progress` or `Done` unless the user explicitly requests fixes.
-

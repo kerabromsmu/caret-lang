@@ -48,4 +48,3 @@
   prevent reentrant traversal.
 - Extend reflection across rules, contexts, rulesets, cycle state, dependencies, and public object
   interfaces without exposing private bindings.
-

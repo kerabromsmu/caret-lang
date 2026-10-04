@@ -29,4 +29,3 @@
 - Define and test a threat model covering name lookup, reflection, code metadata, imports, effects,
   retained references, nested environments, and interpreter/compiler parity. Keep revocation,
   quotas, OS/process isolation, and advanced information-flow enforcement deferred.
-

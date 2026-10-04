@@ -22,4 +22,3 @@
   known, and tooling/generator use. Keep transport independent from formats.
 - Defer general relational solving, arbitrary inversion, nondeterminism/backtracking, streaming,
   zero-copy, and async transport as permitted, without changing the compositional relation model.
-
