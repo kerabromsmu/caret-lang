@@ -64,6 +64,8 @@ The binding remains immutable even when its value is a container. `@container.co
 exposes its permitted content contracts; an explicit `container{}` performs the state read.
 Dot and bracket access share implemented `getElement` semantics: absent valid keys yield missing,
 invalid keys are errors, and keys may be composite values supporting equality.
+An `eager` snapshot keeps those key checks: a fractional Sequence index or non-String
+Dictionary key still produces a located error.
 
 Dictionaries retain sorted keys of one sortable type; general keyed Collections need only equality
 keys and retain their established entry order. Repeated keys retain the first entry. Implemented `zip`

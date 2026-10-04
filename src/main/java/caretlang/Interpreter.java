@@ -2693,18 +2693,21 @@ final class Interpreter {
             throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                     "Collection access key must support equality, got: " + ValueSemantics.kind(key), span);
         }
+        Value.SettledCollection settled = collection instanceof Value.SettledCollection snapshot ? snapshot : null;
         if (collection instanceof Value.Seq || collection instanceof Value.PackedCollection
                 || collection instanceof Value.LazySeq
                 || collection instanceof Value.Field
                 || collection instanceof Value.LazyCollection lazy
-                && lazy.resolvedShape() == Value.LazyCollection.Shape.KEYLESS) {
+                && lazy.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
+                || settled != null && settled.kind() == ValueKind.SEQUENCE) {
             if (!(key instanceof Value.Num numeric) || NumericValues.integral(numeric) == null) {
                 throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                         "Sequential Collection key must be an integer, got: " + key, span);
             }
             return;
         }
-        if (collection instanceof Value.Dictionary || collection instanceof Value.ProjectedDictionary) {
+        if (collection instanceof Value.Dictionary || collection instanceof Value.ProjectedDictionary
+                || settled != null && settled.kind() == ValueKind.DICTIONARY) {
             if (!(key instanceof Value.Str)) {
                 throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                         "Dictionary access key must be a String, got: " + ValueSemantics.kind(key), span);
@@ -2715,6 +2718,11 @@ final class Interpreter {
                 && keyed.shape() != Value.KeyedCollection.Shape.GENERAL
                 && !keyed.entries().isEmpty()
                 && ValueKind.of(key) != ValueKind.of(keyed.entries().getFirst().key())) {
+            throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
+                    "Key does not satisfy the Collection access contract", span);
+        }
+        if (settled != null && settled.kind() == ValueKind.SET && !settled.entries().isEmpty()
+                && ValueKind.of(key) != ValueKind.of(settled.entries().getFirst().key())) {
             throw runtime(Diagnostic.Codes.INVALID_COLLECTION_KEY,
                     "Key does not satisfy the Collection access contract", span);
         }

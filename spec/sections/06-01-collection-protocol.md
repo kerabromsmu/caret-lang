@@ -146,6 +146,8 @@ The sugar follows ordinary lexical resolution of `getElement`, including local s
 
 Valid absent keys return `~` without recording an operation failure. Invalid keys violate the
 access contract: wrong key types, fractional sequence indices, and `~` as a key are errors.
+A fully materialized `eager` snapshot retains the source's access-key contract, so the same
+key is valid or invalid before and after materialization.
 A valid integer outside a sequence's range is absent. Null `?` is a permitted key if its
 contract allows it. Keys must support equality but need not be sortable. Key equality may force
 lazy values or perform effects, which lookup and duplicate detection must account for.

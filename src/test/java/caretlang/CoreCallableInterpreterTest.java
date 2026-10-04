@@ -875,6 +875,27 @@ final class CoreCallableInterpreterTest {
     }
 
     @Test
+    void eagerSnapshotsKeepTheirAccessKeyContracts() {
+        LangException sequence = expectDiagnostic("values = eager [10 20]\nprint values[0.5]",
+                "Sequential Collection key must be an integer", 2, 14);
+        assertEquals(Diagnostic.Codes.INVALID_COLLECTION_KEY, sequence.diagnostic().code());
+        LangException dictionary = expectDiagnostic("record = eager [^name = \"Ada\"]\nprint record[1]",
+                "Dictionary access key must be a String", 2, 14);
+        assertEquals(Diagnostic.Codes.INVALID_COLLECTION_KEY, dictionary.diagnostic().code());
+        LangException set = expectDiagnostic("(Set String) members = [\"member\"]\nprint (eager members)[1]",
+                "Key does not satisfy the Collection access contract", 2, 23);
+        assertEquals(Diagnostic.Codes.INVALID_COLLECTION_KEY, set.diagnostic().code());
+        assertEquals("~\n~\n~\n", execute("""
+                values = eager [10 20]
+                print values[2]
+                record = eager [^name = "Ada"]
+                print record["absent"]
+                general = eager [(field [1] "nested")]
+                print general[2]
+                """));
+    }
+
+    @Test
     void supportsDirectAndMutualRecursionThroughBlockPredeclaration() {
         assertEquals("120\ntrue\n", execute("""
                 factorial n = n == 0 & 1 ! n * factorial (n - 1)

@@ -40,3 +40,10 @@ custom collection key = "shadow"
   print value["present"]
 
 shadowAccess record
+
+// Materialization retains the receiver's key contract and valid absence behavior.
+snapshot = eager [10 20]
+print snapshot[2]
+namedSnapshot = eager [^name = "Ada"]
+print namedSnapshot["absent"]
+print namedSnapshot["name"]

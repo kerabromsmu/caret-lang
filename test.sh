@@ -282,6 +282,7 @@ expect_failure examples/errors/mixed_collection_shape.caret 'Line 1, column 9: A
 expect_failure examples/errors/ambiguous_collection_shape.caret 'Line 1, column 9: Fields without values require a Set or Dictionary contract'
 expect_failure examples/errors/invalid_dynamic_key.caret 'Line 2, column 9: Dynamic field name must be a string'
 expect_failure examples/errors/invalid_collection_key.caret 'Line 1, column 11: Sequential Collection key must be an integer'
+expect_failure examples/errors/eager_invalid_collection_key.caret 'Line 2, column 14: Dictionary access key must be a String'
 expect_failure examples/errors/division_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/remainder_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/non_finite_result.caret 'Line 1, column 7: Numeric result is not finite'

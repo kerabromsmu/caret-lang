@@ -82,7 +82,7 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-CONVERSION-INFINITE | public | EAGER_INFINITE | `ConversionInterpreterTest#conversionRejectsDeclaredInfiniteInputBeforeEnumeration` |
 | RUNTIME-EAGER-CYCLE | public | EAGER_CYCLE | `EagerScopedInterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |
 | RUNTIME-INVALID-DICTIONARY-KEY | public | INVALID_DICTIONARY_KEY | `examples/errors/invalid_dictionary_key.caret` |
-| RUNTIME-INVALID-COLLECTION-KEY | public | INVALID_COLLECTION_KEY | `examples/errors/invalid_collection_key.caret`; `CoreCallableInterpreterTest#unifiedCollectionAccessSupportsSugarContractsCompositeKeysAndPartials` |
+| RUNTIME-INVALID-COLLECTION-KEY | public | INVALID_COLLECTION_KEY | `examples/errors/invalid_collection_key.caret`; `examples/errors/eager_invalid_collection_key.caret`; `CoreCallableInterpreterTest#unifiedCollectionAccessSupportsSugarContractsCompositeKeysAndPartials`; `CoreCallableInterpreterTest#eagerSnapshotsKeepTheirAccessKeyContracts` |
 | RUNTIME-AMBIGUOUS-COLLECTION-SHAPE | public | AMBIGUOUS_COLLECTION_SHAPE | `examples/errors/ambiguous_collection_shape.caret` |
 | RUNTIME-DIVISION-BY-ZERO | public | DIVISION_BY_ZERO | `examples/errors/division_by_zero.caret` |
 | RUNTIME-NONFINITE-RESULT | public | NON_FINITE_RESULT | `examples/errors/non_finite_result.caret` |
