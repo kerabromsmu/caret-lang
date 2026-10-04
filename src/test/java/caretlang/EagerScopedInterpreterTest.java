@@ -106,6 +106,56 @@ final class EagerScopedInterpreterTest {
     }
 
     @Test
+    void eagerRefreshesInferredShapeAfterKeyEnumeration() {
+        assertEquals("true\ntrue\n1\n2\n2\n", execute("""
+                makeField value = field ("k" + value) value
+                settled = eager (map makeField [1 2])
+                print isKeyed settled
+                print (@settled).keyed
+                print settled["k1"]
+                print size (fields settled)
+                print (map (entry -> entry[1]) settled)[1]
+                """));
+        assertEquals("false\nfalse\n2\n2\n", execute("""
+                settled = eager (map (value -> value) [1 2])
+                print isKeyed settled
+                print (@settled).keyed
+                print size (fields settled)
+                print (map (value -> value + 1) settled)[0]
+                """));
+        assertEquals("true\nfalse\nfalse\n11\n2\n", execute("""
+                (Set Number) source = [1 2]
+                settled = eager (map (value -> value[0] + 10) source)
+                print isKeyed settled
+                print hasValues settled
+                print (@settled).hasValues
+                print settled[11]
+                print size (fields settled)
+                """));
+
+        class ChangingFacts implements Value.Reflective, CollectionRuntime.Provider {
+            boolean enumerated;
+            @Override public Optional<Value> find(String name) { return Optional.empty(); }
+            @Override public Map<String, Value> fields() { return Map.of(); }
+            @Override public Value getElement(Value key) { return Value.Missing.INSTANCE; }
+            @Override public Value keys() { enumerated = true; return Value.EmptyCollection.INSTANCE; }
+            @Override public Value valueEntries() { return Value.EmptyCollection.INSTANCE; }
+            @Override public Value fieldEntries() { return Value.EmptyCollection.INSTANCE; }
+            @Override public Value size() { return new Value.Num(0); }
+            @Override public CollectionRuntime.Facts facts() {
+                return new CollectionRuntime.Facts(enumerated ? CollectionRuntime.Guarantee.TRUE
+                        : CollectionRuntime.Guarantee.FALSE,
+                        enumerated ? CollectionRuntime.Guarantee.FALSE : CollectionRuntime.Guarantee.TRUE,
+                        CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.TRUE,
+                        CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE);
+            }
+        }
+        LangException changed = assertThrows(LangException.class,
+                () -> EagerRuntime.materialize(new ChangingFacts(), null, ReflectionContext.defining()));
+        assertEquals(Diagnostic.Codes.CONTRADICTORY_COLLECTION_GUARANTEES, changed.diagnostic().code());
+    }
+
+    @Test
     void eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors() {
         Value.Seq cycle = new Value.Seq(List.of());
         cycle.appendOwned(cycle);

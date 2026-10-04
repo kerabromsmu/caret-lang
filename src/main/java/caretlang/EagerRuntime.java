@@ -66,6 +66,12 @@ final class EagerRuntime {
             Value keyEnumeration = provider.keys();
             boolean keysAvailable = ValueSemantics.underlying(keyEnumeration) != Value.Missing.INSTANCE;
             List<Value> enumeratedKeys = keysAvailable ? snapshot(keyEnumeration) : List.of();
+            facts = provider.facts();
+            facts.validate(span);
+            if (facts.finite() == CollectionRuntime.Guarantee.FALSE) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.EAGER_INFINITE,
+                        "eager cannot materialize a declared-infinite Collection", span);
+            }
             Value raw = ValueSemantics.underlying(value);
             boolean incremental = keysAvailable && (raw instanceof Value.LazySeq
                     || raw instanceof Value.LazyCollection);

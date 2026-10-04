@@ -364,7 +364,9 @@ there is no special traversal-wide cache/context overriding fresh versus inherit
    attempt enumeration, which may never finish.
 2. Complete key enumeration before materializing any entry. If keys are unavailable, complete
    value enumeration instead. Enumeration itself may demand computations needed to produce its
-   results, such as key-changing maps and filtering.
+   results, such as key-changing maps and filtering. Refresh and validate provider guarantees
+   after enumeration, because a lazy transform may have settled its keyed, keyless, or Set shape.
+   Use those settled guarantees for entry traversal and the resulting snapshot.
 3. Process entries in enumeration order, depth-first. Materialize a key immediately before its
    retained value, completing nested content before advancing to the next entry. When keys are
    already known, entry production must also be incremental; a later outer entry cannot run

@@ -25,3 +25,11 @@ print eager ~
   print "outer" + value
   [^nested = map inner [value]]
 print eager (map makeNested [1 2])
+
+// Key enumeration settles a shape-inferred map before the snapshot records its facts.
+makeField value = field ("k" + value) value
+keyedSnapshot = eager (map makeField [1 2])
+print isKeyed keyedSnapshot
+print (@keyedSnapshot).keyed
+print keyedSnapshot["k1"]
+print size (fields keyedSnapshot)

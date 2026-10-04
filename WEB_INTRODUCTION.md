@@ -45,7 +45,8 @@ and their function contracts describe any effects. The implemented `eager` mater
 depth-first after key enumeration, completing each nested entry before demanding the next. It leaves
 mutable containers and stored functions intact. It replaces
 reflection references with empty Collections and reports cyclic containment or known-infinite
-input. Unknown finiteness may mean it never completes.
+input. Key enumeration can settle a lazy transform's shape; the snapshot's guarantees and
+reflection then describe that settled shape. Unknown finiteness may mean it never completes.
 
 ```caret
 source = map (value -> value + 1) [1 2]
