@@ -36,7 +36,7 @@ retries, when implemented, leave that result unsettled. These are deferred synch
 constraints, not a Phase 4 concurrency implementation.
 
 Runtime dependency-cycle detection is deferred with concurrency/synchronization; lazy dependency
-cycles may deadlock for now. This permission does not replace the separate planned `eager`
+cycles may deadlock for now. This permission does not replace the separate implemented `eager`
 diagnostic for cyclic Collection containment. No universal timeout or cancellation policy is
 selected here.
 
@@ -316,9 +316,9 @@ Function invocation has an interpreter-owned maximum depth. Both ordinary applic
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
 
-The initial operator matrix records this implemented runtime behavior. The explicitly planned
-[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-implemented) specifies the changes
-for exact integers, concrete formats, and `div`; it does not claim current runtime support.
+The initial operator matrix and the
+[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-implemented) are implemented,
+including exact integers, concrete formats, and `div`.
 
 The self-interpreter may represent successful and failed operations as named result collections. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
@@ -328,4 +328,4 @@ CLI adapter can then render a failed result as the normal located `Error:` diagn
 
 The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
 lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
-immutable collections, named exported collections, and the planned text operations are sufficient.
+immutable collections, named exported collections, and implemented text operations are sufficient.

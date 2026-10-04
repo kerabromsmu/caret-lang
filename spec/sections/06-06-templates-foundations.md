@@ -127,7 +127,7 @@ unconstrained and contracted holes, repeated numbered-hole equality, direct nest
 field keys participate in membership. Dynamic keys and fixed expressions are evaluated once during
 constructor creation. Template contracts compose with aliases, null/missing modifiers,
 parameterized collection contracts, conservative implication, overload dispatch, and ordinary
-contract reflection. Every field remains required during membership. The planned
+contract reflection. Every field remains required during membership. The implemented
 `TEMPLATE-OPTIONAL-001` rule adds contextual literal completion without weakening that exact
 membership rule.
 

@@ -27,7 +27,9 @@ Unicode code-point order. `dictHas` distinguishes
 an absent key from a present key whose value is
 `~`.
 Positional and String-keyed Dictionary literal syntax is implemented, including static `^name`
-shorthand and dynamic first-class Field construction. Context-selected representations remain planned.
+shorthand and dynamic first-class Field construction. Initial context-selected Sequence, Set,
+Dictionary, and Packed representations are implemented where requirements are unambiguous;
+further representations remain planned.
 
 ### Higher-order Sequence operations
 

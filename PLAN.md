@@ -95,25 +95,12 @@ baseline.
 
 ## Recommended next implementation step
 
-Low-precedence application, runtime user-contract derivation, generalized contract inference, the
-minimum purity/effect analysis, proven-predicate refinements, and nullable/optional contract unions
-are complete. Initial parameterized contracts are complete through callable `Sequence T`,
-`Field K V`, and `Dictionary K V` constructors. The shared
-callable-signature scheme and safe callable reflection are now implemented for the current callable
-kinds. Exact-arity higher-order arrow contracts are now parsed and analyzed over that metadata,
-including inline clauses, variance checks, declaration-wide variables, explicit effects, and runnable examples.
-The environment-relative effect catalog and mixed-clause analysis enforce public declaration
-allowances and callable-value constraints; unknown higher-order invocation rejection, catalog
-aliases, and Phase 2 higher-order effect propagation are complete. Callable signatures, reflection,
-explicit higher-order arrow contracts, and the initial static operator matrix are settled.
-Mixed-clause and callable-effect diagnostic codes and attribution are also settled; no conformance
-item in Phases 1, 2, or 3 remains formally unresolved. The lambda-refinement correction, Phase 4
-common Collection protocol, Field tuples, contextual shapes, general keyed Collections, internal
-settlement, unified dot/bracket/`getElement` access, lexical lazy establishment, generalized lazy
-transforms, strict Collection consumers, paired `zip`/`zipWithKeys` construction, and revised
-Collection equality are complete; implement mutable containers and state effects next.
-`with`/`outer` wait for the public named-member protocol
-rather than introducing a separate exported Scope value model.
+Phase 4 is complete, including mutable containers, state effects, field reification,
+`with`/`outer`, Collection-value `eager`, contextual templates, numeric conversion, and packed
+layouts. The next dependency-ordered work is [Phase 5](roadmap/phase-05.md): a Caret-written
+interpreter subset as a conformance client and ordinary four-argument `cycle`. Keep the
+explicitly deferred Collection APIs, callable `eager`, and later module/sandbox/compiler work in
+their assigned or unresolved stages rather than treating them as Phase 4 prerequisites.
 
 ## Explicit assumptions and allowed deferrals
 

@@ -65,7 +65,7 @@ with value
   body
 ```
 
-The body is determined by effective logical indentation. The planned `\\` and `\*` layout markers
+The body is determined by effective logical indentation. The implemented `\\` and `\*` layout markers
 may shift its physical baseline but do not change `with` name resolution or block semantics.
 
 `with` and `outer` are reserved spellings and cannot be declared as bindings or parameters.

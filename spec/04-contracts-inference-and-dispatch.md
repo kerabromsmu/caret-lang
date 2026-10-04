@@ -3,7 +3,7 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
-## Planned Collection contract integration
+## Collection contract integration (implemented foundation)
 
 Phase 4 provides the format-independent `Natural` domain of non-negative integers, with exact
 arbitrary-precision support under the numeric revision below. It does not introduce infinite
@@ -210,13 +210,15 @@ When the target's contract status depends on runtime evaluation, failure is inst
 
 The unparameterized unary `Collection` predicate and the callable `Sequence T`, `Field K V`, and
 `Dictionary K V` parameterized-contract constructors are
-implemented as described in the collection section below. General parameterization, complete static
-inference/proof, and contextual collection representation selection remain planned.
+implemented as described in the collection section below. Initial contextual Collection
+representation selection is also implemented where its requirements are unambiguous; general
+parameterization and complete static inference/proof remain planned.
 
-In the current prototype, physical indentation directly defines a multiline function body. The
-planned [layout modifiers](01-source-layout-and-diagnostics.md#planned-layout-baseline-modifiers)
-will first translate physical indentation into effective
-logical indentation; the ordinary block rules will then consume that logical indentation. If a
+Effective logical indentation defines a multiline function body. Implemented
+[layout modifiers](01-source-layout-and-diagnostics.md#planned-layout-baseline-modifiers)
+first translate physical indentation into effective logical indentation for supported
+indentation-opening headers; without a marker, physical indentation is effective indentation.
+The ordinary block rules then consume that logical indentation. If a
 body contains exported bindings (`^`), calling the function returns the immutable named `Collection`
 specified in the [collections document](sections/06-03-collection-baseline.md#collections-and-lexical-scopes).
 It is observationally equivalent to the explicit named literal containing those exports. Otherwise

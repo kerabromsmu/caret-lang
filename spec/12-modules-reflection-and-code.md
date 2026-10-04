@@ -20,7 +20,7 @@ handler facilities remain deferred; the
 [effects specification](05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)
 owns their design.
 
-The [planned Collection protocol](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+The [implemented Collection protocol](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
 an ordinary protocol operation, not restricted to metadata access.
 For a reflective Collection, `getElement`, `keys`, `values`, `fields`, `size`, equality, and

@@ -16,9 +16,9 @@ makePerson name age =
   ^age = age
 ```
 
-The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the planned lexical forms
-`with`, `outer`, `root`, and `module`, `_`, and numbered holes such as `_1` are reserved and cannot
-be used as binding or parameter names.
+The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the implemented `with` and
+`outer` forms, the planned `root` and `module` forms, `_`, and numbered holes such as `_1` are
+reserved and cannot be used as binding or parameter names.
 
 Nested functions capture referenced enclosing bindings by resolver-owned symbol identity. The
 analyzed function representation records each distinct upvalue once, in first semantic source-use
@@ -174,7 +174,7 @@ expression or its deeper indentation block. Evaluation lowers through ordinary c
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
-The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, `:`, and `#`,
+The implemented layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, `:`, and `#`,
 they are consumed by layout handling before expression parsing and have no expression precedence.
 The roles remain separate: `$` groups syntax-level application, `@` reifies one identifier, literal,
 or parenthesized expression, adjacent postfix `:` restores its opaque target, `#` changes execution
@@ -298,8 +298,9 @@ operand, or a non-unary right operand produce located runtime diagnostics. Nulla
 deferred until Caret has a separate first-class callable-value design; `@function` remains a
 non-callable reflective reference. The completed left result is passed as one value even when that
 value is itself callable. Composition uses the ordinary invocation path and therefore preserves
-call-depth checks and argument locations. Contract and effect propagation will be added with the
-planned contract/effect system.
+call-depth checks and argument locations. The implemented callable-signature model propagates
+compatible parameter and result contracts and unions invocation-effect bounds; proven
+incompatibilities receive a located diagnostic.
 
 <a id="lambda-functions"></a>
 ## Lambda Functions
@@ -368,7 +369,7 @@ x ->
 ```
 
 The result of the final expression is the result of the lambda, following the same rules as an
-ordinary function body. Planned layout modifiers may shift the block physically, but do not change
+ordinary function body. Implemented layout modifiers may shift the block physically, but do not change
 its extent, captures, parameters, or result.
 
 Example:

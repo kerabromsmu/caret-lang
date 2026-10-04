@@ -15,7 +15,7 @@ strings rather than a separate name-literal syntax.
 Lexical, parse, and runtime errors include the one-based line and column of the smallest relevant
 source expression. Columns count raw source characters. A tab therefore advances the displayed
 column by one, although a leading tab still contributes two spaces to indentation depth.
-The planned layout-baseline modifiers do not change these coordinates: diagnostics continue to use
+The implemented layout-baseline modifiers do not change these coordinates: diagnostics continue to use
 physical source lines and columns even when effective logical indentation differs.
 Built-in argument validation retains individual argument spans, so an invalid operand points to
 that operand rather than the complete call.

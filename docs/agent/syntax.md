@@ -134,8 +134,8 @@ with value
 print $ toString $ calculate value
 ```
 
-Planned `with` and `outer` are reserved. Local declarations shadow public members of the current `with`
-target, which shadow enclosing lexical bindings. `outer` is valid only as an explicit lexical
-member path and cannot be stored, reflected, dynamically indexed, or used to bypass export or
-sandbox visibility. `$` is right-associative syntax-level application below `>>`, conditionals,
-lambdas, and ordinary expressions; it lowers to the ordinary callable path.
+`with` and `outer` are implemented reserved spellings. Local declarations shadow public members
+of the current `with` target, which shadow enclosing lexical bindings. `outer` is valid only as an
+explicit lexical member path and cannot be stored, reflected, dynamically indexed, or used to
+bypass export or sandbox visibility. `$` is right-associative syntax-level application below `>>`,
+conditionals, lambdas, and ordinary expressions; it lowers to the ordinary callable path.

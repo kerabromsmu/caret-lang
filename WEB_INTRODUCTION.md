@@ -337,9 +337,9 @@ to writing an explicit `[...]` named collection. The same recursive equality rul
 values are nested, while callable values are deliberately not comparable. Lexical scopes remain
 private name-resolution environments rather than first-class values.
 
-Planned `with person` blocks will make public named members available directly inside an expression.
+Implemented `with person` blocks make public named members available directly inside an expression.
 Local declarations take priority, followed by the current `with` members and then enclosing lexical
-bindings. Explicit `outer.name` paths recover shadowed names, but `outer` will not be a first-class
+bindings. Explicit `outer.name` paths recover shadowed names, but `outer` is not a first-class
 or reflectable environment value; exports and sandbox visibility remain unchanged.
 
 ## Partial application without ceremony
@@ -615,9 +615,9 @@ put health 80          // replace it after checking the Number contract
 ```
 
 `player.health` returns the container itself, while `player.health{}` reads its contents.
-`player.@health` is planned field-binding reification. Sharing the container does not make `player`
-mutable and does not require special reference-assignment syntax. Container identity uses ordinary
-equality; comparing current contents requires explicit reads.
+`player.@health` reifies the implemented field binding without reading its container. Sharing the
+container does not make `player` mutable and does not require special reference-assignment syntax.
+Container identity uses ordinary equality; comparing current contents requires explicit reads.
 
 The effect system infers `StateRead` for content observation and `StateWrite` for replacement.
 Passing the container reference remains pure, and declaring an effect never grants authority over
