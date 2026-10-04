@@ -6,8 +6,10 @@ by [`implemented_features_test.caret`](implemented_features_test.caret) and inde
 by the focused scripts under `features/`. Each `.caret` file under
 `errors/` contains one intentional failure, has an adjacent `.expected` file containing its exact
 stderr, and is exercised by `test.sh`. [The diagnostic matrix](../DIAGNOSTICS.md) also records
-internal and host variants that require focused Java or host-level tests. Every public diagnostic
-variant has executable `.caret` evidence. `scripts/check-example-coverage.sh` rejects implemented
+internal and host variants that require focused Java or host-level tests. Public diagnostic variants
+have runnable `.caret` fixtures or focused Java evidence; the diagnostic matrix identifies the
+cataloged semantic unknown-call-effects variant whose coverage is catalog-only.
+`scripts/check-example-coverage.sh` rejects implemented
 conformance rows without an existing Caret example and fixtures not exercised by the harness.
 
 | Conformance requirements | Example coverage |

@@ -51,6 +51,36 @@ final class NumericTemplateInterpreterTest {
     }
 
     @Test
+    void dynamicPrecisionLossRetainsRuntimePhaseAndExactLocation() {
+        String source = """
+                one = 1
+                three = 3
+                (Number) ratio = one / three
+                """;
+        Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        List<Ast.Stmt> program = new Parser(source).parseProgram();
+        interpreter.validate(program);
+        assertTrue(interpreter.warnings().isEmpty());
+        interpreter.execute(program);
+        assertEquals(1, interpreter.warnings().size());
+        Diagnostic warning = interpreter.warnings().getFirst();
+        assertEquals(Diagnostic.Phase.RUNTIME, warning.phase());
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, warning.code());
+        assertSame(DiagnosticCatalog.IMPLICIT_PRECISION_LOSS,
+                DiagnosticCatalog.identify(warning.phase(), warning.code(), warning.message()));
+        assertEquals(3, warning.primarySpan().start().line());
+        assertEquals(18, warning.primarySpan().start().column());
+        assertEquals("Line 3, column 18: Implicit numeric precision loss", warning.render());
+
+        LangException strict = assertThrows(LangException.class,
+                () -> execute(source.replace("(Number)", "(Double)")));
+        assertSame(DiagnosticCatalog.IMPLICIT_PRECISION_LOSS, strict.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, strict.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, strict.diagnostic().code());
+        assertEquals(warning.render(), strict.getMessage());
+    }
+
+    @Test
     void literalPrecisionLossIsReportedAtAnalysisOnce() {
         Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
         List<Ast.Stmt> program = new Parser("(Number) ratio = 1 / 3").parseProgram();
@@ -61,6 +91,10 @@ final class NumericTemplateInterpreterTest {
         assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, warning.code());
         assertEquals(1, warning.primarySpan().start().line());
         assertEquals(18, warning.primarySpan().start().column());
+        assertSame(DiagnosticCatalog.STATIC_IMPLICIT_PRECISION_LOSS,
+                DiagnosticCatalog.identify(warning.phase(), warning.code(), warning.message()));
+        assertEquals("Line 1, column 18: Implicit numeric precision loss\n"
+                + "  Note: Line 1, column 1: Numeric result requirement", warning.render());
         interpreter.execute(program);
         assertTrue(interpreter.warnings().isEmpty());
 

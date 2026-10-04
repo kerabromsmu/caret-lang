@@ -106,6 +106,37 @@ final class EagerScopedInterpreterTest {
     }
 
     @Test
+    void eagerCompletesUnknownShapeKeyEnumerationBeforeNestedValues() {
+        assertEquals("outer1\nouter2\ninner1\ninner2\n[ 1 ]\n[ 2 ]\n", execute("""
+                (Output Number) inner value =
+                  print "inner" + value
+                  value
+                (Output Field) makeNestedField value =
+                  print "outer" + value
+                  field ("k" + value) (map inner [value])
+                result = eager (map makeNestedField [1 2])
+                print result["k1"]
+                print result["k2"]
+                """));
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(output));
+        LangException failure = assertThrows(LangException.class, () -> interpreter.execute(new Parser("""
+                (Output Number) inner value =
+                  print "inner" + value
+                  1 / (value - 1)
+                (Output Field) makeNestedField value =
+                  print "outer" + value
+                  field ("k" + value) (map inner [value])
+                eager (map makeNestedField [1 2])
+                """).parseProgram()));
+        assertEquals("outer1\nouter2\ninner1\n", output.toString());
+        assertEquals(Diagnostic.Phase.RUNTIME, failure.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.DIVISION_BY_ZERO, failure.diagnostic().code());
+        assertEquals("Line 3, column 7: Division by zero", failure.getMessage());
+    }
+
+    @Test
     void eagerRefreshesInferredShapeAfterKeyEnumeration() {
         assertEquals("true\ntrue\n1\n2\n2\n", execute("""
                 makeField value = field ("k" + value) value
@@ -163,6 +194,10 @@ final class EagerScopedInterpreterTest {
         LangException cyclic = assertThrows(LangException.class, () -> EagerRuntime.materialize(cycle, span,
                 ReflectionContext.defining()));
         assertEquals(Diagnostic.Codes.EAGER_CYCLE, cyclic.diagnostic().code());
+        assertEquals(Diagnostic.Phase.RUNTIME, cyclic.diagnostic().phase());
+        assertSame(DiagnosticCatalog.EAGER_CYCLE, cyclic.catalogEntry());
+        assertEquals(span, cyclic.span());
+        assertEquals("Line 3, column 5: eager encountered cyclic Collection containment", cyclic.getMessage());
         assertEquals(3, cyclic.span().start().line());
         assertEquals(5, cyclic.span().start().column());
         class InfiniteProvider implements Value.Reflective, CollectionRuntime.Provider {
@@ -183,7 +218,11 @@ final class EagerScopedInterpreterTest {
         LangException infinite = assertThrows(LangException.class,
                 () -> EagerRuntime.materialize(new InfiniteProvider(), span, ReflectionContext.defining()));
         assertEquals(Diagnostic.Codes.EAGER_INFINITE, infinite.diagnostic().code());
-        assertEquals(3, infinite.span().start().line());
+        assertEquals(Diagnostic.Phase.RUNTIME, infinite.diagnostic().phase());
+        assertSame(DiagnosticCatalog.EAGER_INFINITE, infinite.catalogEntry());
+        assertEquals(span, infinite.span());
+        assertEquals("Line 3, column 5: eager cannot materialize a declared-infinite Collection",
+                infinite.getMessage());
     }
 
     @Test
@@ -380,11 +419,22 @@ final class EagerScopedInterpreterTest {
     void withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue() {
         LangException target = expectDiagnostic("with [1]\n  2", "with target must expose", 1, 6);
         assertEquals(Diagnostic.Codes.EXPECTED_WITH_TARGET, target.diagnostic().code());
-        for (String source : List.of("value = outer", "value = @outer", "value = outer[\"x\"]",
-                "with [^x = 1]\n  outer.outer.x")) {
-            LangException failure = assertThrows(LangException.class, () -> execute(source));
+        assertEquals(Diagnostic.Phase.RUNTIME, target.diagnostic().phase());
+        assertSame(DiagnosticCatalog.EXPECTED_WITH_TARGET, target.catalogEntry());
+        assertEquals("Line 1, column 6: with target must expose public named members", target.getMessage());
+        record InvalidOuter(String source, int line, int column) {}
+        for (InvalidOuter invalid : List.of(new InvalidOuter("value = outer", 1, 9),
+                new InvalidOuter("value = @outer", 1, 10),
+                new InvalidOuter("value = outer[\"x\"]", 1, 9),
+                new InvalidOuter("with [^x = 1]\n  outer.outer.x", 2, 3))) {
+            LangException failure = assertThrows(LangException.class, () -> execute(invalid.source()));
             assertEquals(Diagnostic.Codes.INVALID_OUTER_PATH, failure.diagnostic().code());
-            assertNotNull(failure.span());
+            assertEquals(Diagnostic.Phase.SEMANTIC, failure.diagnostic().phase());
+            assertSame(DiagnosticCatalog.INVALID_OUTER_PATH, failure.catalogEntry());
+            assertEquals(invalid.line(), failure.span().start().line());
+            assertEquals(invalid.column(), failure.span().start().column());
+            assertEquals("Line " + invalid.line() + ", column " + invalid.column()
+                    + ": outer is only valid as a lexical member path inside with", failure.getMessage());
         }
         LangException privateName = expectDiagnostic("""
                 make ignored =

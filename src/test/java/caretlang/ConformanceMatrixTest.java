@@ -1,6 +1,7 @@
 package caretlang;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -87,8 +88,10 @@ final class ConformanceMatrixTest {
                 return;
             }
             assertTrue(Set.of(testClass.getDeclaredMethods()).stream()
-                            .anyMatch(method -> method.getName().equals(methodName)),
-                    "Unknown test method for " + id + ": " + className + "#" + methodName);
+                            .anyMatch(method -> method.getName().equals(methodName)
+                                    && (method.isAnnotationPresent(Test.class)
+                                    || method.isAnnotationPresent(TestFactory.class))),
+                    "Evidence is not a registered JUnit test for " + id + ": " + className + "#" + methodName);
         } while (references.find());
     }
 

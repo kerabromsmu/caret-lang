@@ -117,13 +117,33 @@ final class ParserTest {
     }
 
     @Test
-    void requiresACompleteAndUnambiguousLambdaHeaderAndBody() {
-        for (String source : List.of("value = x ->", "value = 1 x -> x", "value = (_) x -> x")) {
-            LangException error = assertThrows(LangException.class, () -> new Parser(source).parseProgram(), source);
-            assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
-            assertTrue(error.span().start().line() > 0);
-            assertTrue(error.span().start().column() > 0);
-        }
+    void rejectsInvalidLambdaHeadersWithExactDiagnostics() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = 1 x ->\n  x\n").parseProgram());
+        assertSame(DiagnosticCatalog.PARSE_LAMBDA_HEADER, error.catalogEntry());
+        assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_SYNTAX, error.diagnostic().code());
+        assertEquals("Line 1, column 9: Lambda parameters must be binding names", error.getMessage());
+    }
+
+    @Test
+    void rejectsMissingLambdaBodiesWithExactDiagnostics() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = x ->").parseProgram());
+        assertSame(DiagnosticCatalog.PARSE_LAMBDA_BODY, error.catalogEntry());
+        assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_SYNTAX, error.diagnostic().code());
+        assertEquals("Line 1, column 11: Lambda body must follow '->' or be indented", error.getMessage());
+    }
+
+    @Test
+    void rejectsExpressionHolesInLambdaParameterContracts() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = (_) x ->\n  x\n").parseProgram());
+        assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_CONTRACT, error.diagnostic().code());
+        assertEquals("Line 1, column 9: Lambda parameter contracts cannot contain expression holes",
+                error.getMessage());
     }
 
     @Test

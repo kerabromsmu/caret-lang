@@ -161,6 +161,10 @@ final class PackedLayoutTest {
                         List.of(Value.Missing.INSTANCE), SPAN));
         assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, invalidPayload.diagnostic().code());
         assertEquals("Packed value does not match its fixed layout", invalidPayload.diagnostic().message());
+        assertSame(DiagnosticCatalog.PACKED_LAYOUT_VIOLATION, invalidPayload.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, invalidPayload.diagnostic().phase());
+        assertEquals(SPAN, invalidPayload.span());
+        assertEquals("Line 1, column 1: Packed value does not match its fixed layout", invalidPayload.getMessage());
     }
 
     private static Value.Num number(long value) { return new Value.Num(value); }

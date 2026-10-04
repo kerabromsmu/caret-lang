@@ -1,0 +1,2 @@
+invoke callback value = callback value
+invoke print "not printed"

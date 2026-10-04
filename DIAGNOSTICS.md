@@ -3,6 +3,16 @@
 Every stable message variant in `DiagnosticCatalog` and `HostMessageCatalog` is listed here. Public
 fixtures compare complete stderr with the adjacent `.expected` file. Entries that cannot be reached
 from ordinary Caret source use focused Java evidence.
+`DiagnosticCoverageTest#errorFixturesExerciseTheirActualCatalogVariants` executes each cited error
+fixture and checks its actual catalog variant, phase, code, location, and complete golden output.
+The call-depth fixture uses a dedicated test thread with sufficient host stack to reach the ordinary
+call guard; `test.sh` independently checks its CLI output. On the smaller JUnit worker stack, the
+same recursion can reach the internal evaluation-depth fallback first.
+
+`SEMANTIC-UNKNOWN-CALL-EFFECTS` is listed in the catalog but has no current semantic emission
+path. Its evidence checks catalog representation only; actual unknown-bound invocation and
+callable-value constraint failures use the runtime variant. This is a remaining reachability gap,
+not evidence of an implemented semantic rejection path.
 
 Phase 4 numeric warnings, conversion errors, and contiguous packed-storage diagnostics are specified in
 [the diagnostic owner](spec/01-source-layout-and-diagnostics.md#phase-4-numeric-template-conversion-and-packed-diagnostics-implemented)
@@ -34,8 +44,8 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | PARSE-FUNCTION-BODY | public | PARSE_INVALID_SYNTAX | `examples/errors/missing_function_body.caret` |
 | PARSE-INVALID-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/invalid_definition.caret` |
 | PARSE-CONTINUATION-DEFINITION | public | PARSE_INVALID_SYNTAX | `examples/errors/definition_in_continuation.caret` |
-| PARSE-LAMBDA-HEADER | public | PARSE_INVALID_SYNTAX | `ParserTest#requiresACompleteAndUnambiguousLambdaHeaderAndBody` |
-| PARSE-LAMBDA-BODY | public | PARSE_INVALID_SYNTAX | `examples/errors/missing_lambda_body.caret` |
+| PARSE-LAMBDA-HEADER | public | PARSE_INVALID_SYNTAX | `ParserTest#rejectsInvalidLambdaHeadersWithExactDiagnostics`; `examples/errors/invalid_lambda_header.caret` |
+| PARSE-LAMBDA-BODY | public | PARSE_INVALID_SYNTAX | `ParserTest#rejectsMissingLambdaBodiesWithExactDiagnostics`; `examples/errors/missing_lambda_body.caret` |
 | PARSE-RESERVED-BINDING | public | PARSE_RESERVED_BINDING | `examples/errors/reserved_binding.caret` |
 | PARSE-INVALID-CONTRACT | public | PARSE_INVALID_CONTRACT | `examples/errors/invalid_contract.caret` |
 | PARSE-UNCLOSED-DELIMITER | public | PARSE_UNCLOSED_DELIMITER | `examples/errors/unclosed_delimiter.caret` |
@@ -75,8 +85,8 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-EXPECTED-DICTIONARY | public | EXPECTED_DICTIONARY | `examples/errors/expected_dictionary.caret` |
 | RUNTIME-EXPECTED-COLLECTION | public | EXPECTED_COLLECTION | `examples/errors/expected_collection.caret` |
 | RUNTIME-EXPECTED-CONTAINER | public | EXPECTED_CONTAINER | `examples/errors/expected_container.caret`; `CollectionStateInterpreterTest#containerReadsAndWritesRejectNonContainersAtLocatedOperands` |
-| RUNTIME-EXPECTED-WITH-TARGET | public | EXPECTED_WITH_TARGET | `EagerScopedInterpreterTest#withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue` |
-| SEMANTIC-INVALID-OUTER-PATH | public | INVALID_OUTER_PATH | `EagerScopedInterpreterTest#withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue` |
+| RUNTIME-EXPECTED-WITH-TARGET | public | EXPECTED_WITH_TARGET | `EagerScopedInterpreterTest#withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue`; `examples/errors/invalid_with_target.caret` |
+| SEMANTIC-INVALID-OUTER-PATH | public | INVALID_OUTER_PATH | `EagerScopedInterpreterTest#withRejectsInvalidTargetsAndOuterCannotBecomeAScopeValue`; `examples/errors/invalid_outer_path.caret` |
 | RUNTIME-CONTRADICTORY-COLLECTION-GUARANTEES | public | CONTRADICTORY_COLLECTION_GUARANTEES | `CollectionStateInterpreterTest#internalCollectionProvidersRejectContradictoryGuaranteesWithoutReadingContent` |
 | RUNTIME-EAGER-INFINITE | public | EAGER_INFINITE | `EagerScopedInterpreterTest#eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors` |
 | RUNTIME-CONVERSION-INFINITE | public | EAGER_INFINITE | `ConversionInterpreterTest#conversionRejectsDeclaredInfiniteInputBeforeEnumeration` |
@@ -86,7 +96,7 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-AMBIGUOUS-COLLECTION-SHAPE | public | AMBIGUOUS_COLLECTION_SHAPE | `examples/errors/ambiguous_collection_shape.caret` |
 | RUNTIME-DIVISION-BY-ZERO | public | DIVISION_BY_ZERO | `examples/errors/division_by_zero.caret` |
 | RUNTIME-NONFINITE-RESULT | public | NON_FINITE_RESULT | `examples/errors/non_finite_result.caret` |
-| RUNTIME-IMPLICIT-PRECISION-LOSS | public | IMPLICIT_PRECISION_LOSS | `NumericTemplateInterpreterTest#broadDivisionReportsPrecisionWarningAndStrictResultRejectsLoss`; `CaretSandboxTest#precisionWarningsRemainSeparateAcrossEmbeddingOperations` |
+| RUNTIME-IMPLICIT-PRECISION-LOSS | public | IMPLICIT_PRECISION_LOSS | `NumericTemplateInterpreterTest#dynamicPrecisionLossRetainsRuntimePhaseAndExactLocation`; `CaretSandboxTest#precisionWarningsRemainSeparateAcrossEmbeddingOperations` |
 | RUNTIME-UNSUPPORTED-CONVERSION | public | UNSUPPORTED_CONVERSION | `examples/errors/unsupported_conversion.caret`; `ConversionInterpreterTest#conversionUsesSelectedToStringAndConsumesLazyInput` |
 | RUNTIME-INVALID-PACKED-LAYOUT | public | INVALID_PACKED_LAYOUT | `examples/errors/invalid_packed_layout.caret`; `ConversionInterpreterTest#packedConversionSelectsMembershipAndSequenceConversionRemovesIt` |
 | SEMANTIC-IMPLICIT-PRECISION-LOSS | public | IMPLICIT_PRECISION_LOSS | `NumericTemplateInterpreterTest#literalPrecisionLossIsReportedAtAnalysisOnce` |
@@ -102,9 +112,9 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-PACKED-APPEND-VIOLATION | public | CONTRACT_VIOLATION | `ConversionInterpreterTest#packedAppendEnumerationEagerAndAliasesPreserveSelectedLayout` |
 | RUNTIME-PACKED-LAYOUT-VIOLATION | public | CONTRACT_VIOLATION | `PackedLayoutTest#broadAndNullableLayoutsFailBeforeReadingAnyPayload` |
 | RUNTIME-CONVERSION-SHAPE-VIOLATION | public | CONTRACT_VIOLATION | `examples/errors/conversion_shape.caret`; `ConversionInterpreterTest#structuralConversionUsesExactShapeAndValidatesRepeatedAndFixedValues` |
-| RUNTIME-EFFECT-CONSTRAINT-REQUIRES-CALLABLE | public | EFFECT_CONSTRAINT_REQUIRES_CALLABLE | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| RUNTIME-EFFECT-CONSTRAINT-REQUIRES-CALLABLE | public | EFFECT_CONSTRAINT_REQUIRES_CALLABLE | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `examples/errors/effect_constraint_noncallable.caret` |
 | RUNTIME-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
-| RUNTIME-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| RUNTIME-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `ReflectionContractInterpreterTest#invocationRejectsUnavailableEffectBoundsBeforeExecutingTheCallable`; `TransformInterpreterTest#mapRejectsInvalidInputsAndRetainsLocatedElementFailures`; `examples/errors/unknown_call_effects.caret` |
 | SEMANTIC-INCOMPATIBLE-CONTRACTS | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_inferred_contracts.caret`; `examples/errors/incompatible_declared_inference.caret`; `examples/errors/invalid_condition.caret` |
 | SEMANTIC-INCOMPATIBLE-COMPOSITION | public | INCOMPATIBLE_CONTRACTS | `examples/errors/incompatible_composition_contracts.caret` |
 | SEMANTIC-AMBIGUOUS-CONTRACT | public | AMBIGUOUS_CONTRACT | `examples/errors/ambiguous_inferred_contract.caret` |
@@ -112,13 +122,13 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | RUNTIME-MIXED-COLLECTION-SHAPE | public | MIXED_COLLECTION_SHAPE | `examples/errors/mixed_collection_shape.caret`; `CollectionStateInterpreterTest#fieldCollectionsSupportContextualShapesMissingPartsAndGeneralKeys` |
 | SEMANTIC-INVALID-REFINEMENT | public | INVALID_REFINEMENT | `ContractInferenceTest#validatesOnlyProvenPureUnaryBooleanRefinements`; `ContractInferenceTest#validatesLambdaRefinementsWithTheOrdinaryCallableProof`; `DispatchDiagnosticInterpreterTest#invalidRefinementsAreRejectedBeforeProgramEffects`; `ContractInterpreterTest#rejectsInvalidLambdaRefinementsBeforeProgramEffects`; `examples/errors/invalid_refinement.caret`; `examples/errors/invalid_lambda_refinement.caret` |
 | SEMANTIC-INVALID-CONTRACT-VARIABLE | public | INVALID_CONTRACT_VARIABLE | `ReflectionContractInterpreterTest#arrowContractVariablesAreContiguousAndRequireGenericRelationships`; `ReflectionContractInterpreterTest#declarationVariablesIncludeNestedArrowsAndRejectUnrelatedOccurrences` |
-| SEMANTIC-AMBIGUOUS-CLAUSE-NAME | public | AMBIGUOUS_CLAUSE_NAME | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
-| SEMANTIC-UNKNOWN-CLAUSE-NAME | public | UNKNOWN_CLAUSE_NAME | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
-| SEMANTIC-CONFLICTING-EFFECT-ALLOWANCE | public | CONFLICTING_EFFECT_ALLOWANCE | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
-| SEMANTIC-INVALID-EFFECT-MODIFIER | public | INVALID_EFFECT_MODIFIER | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
-| SEMANTIC-EFFECT-AS-CONTRACT-ARGUMENT | public | EFFECT_AS_CONTRACT_ARGUMENT | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
-| SEMANTIC-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `ReflectionContractInterpreterTest#lazyMemberReificationUsesEstablishedProviderEntriesAndRemainsPureForContainers` |
-| SEMANTIC-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced` |
+| SEMANTIC-AMBIGUOUS-CLAUSE-NAME | public | AMBIGUOUS_CLAUSE_NAME | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `examples/errors/ambiguous_clause_name.caret` |
+| SEMANTIC-UNKNOWN-CLAUSE-NAME | public | UNKNOWN_CLAUSE_NAME | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `examples/errors/unknown_clause_name.caret` |
+| SEMANTIC-CONFLICTING-EFFECT-ALLOWANCE | public | CONFLICTING_EFFECT_ALLOWANCE | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `examples/errors/conflicting_effect_allowance.caret` |
+| SEMANTIC-INVALID-EFFECT-MODIFIER | public | INVALID_EFFECT_MODIFIER | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `examples/errors/invalid_effect_modifier.caret` |
+| SEMANTIC-EFFECT-AS-CONTRACT-ARGUMENT | public | EFFECT_AS_CONTRACT_ARGUMENT | `ReflectionContractInterpreterTest#effectCatalogMixedClausesAndExplicitArrowAllowancesAreEnforced`; `examples/errors/effect_contract_argument.caret` |
+| SEMANTIC-EFFECT-ALLOWANCE-EXCEEDED | public | EFFECT_ALLOWANCE_EXCEEDED | `ReflectionContractInterpreterTest#inferredAllowanceViolationsAbortBeforeAnyProgramEffects`; `ReflectionContractInterpreterTest#lazyMemberReificationUsesEstablishedProviderEntriesAndRemainsPureForContainers`; `examples/errors/function_effect_allowance.caret` |
+| SEMANTIC-UNKNOWN-CALL-EFFECTS | public | UNKNOWN_CALL_EFFECTS | `DiagnosticCoverageTest#catalogedSemanticUnknownCallEffectsHasExactRepresentation` (catalog-only; no current semantic emitter) |
 | SEMANTIC-INCONSISTENT-OVERLOAD-ARITY | public | INCONSISTENT_OVERLOAD_ARITY | `examples/errors/inconsistent_overload_arity.caret` |
 | RUNTIME-NO-APPLICABLE-OVERLOAD | public | NO_APPLICABLE_OVERLOAD | `examples/errors/no_applicable_overload.caret` |
 | RUNTIME-AMBIGUOUS-OVERLOAD | public | AMBIGUOUS_OVERLOAD | `examples/errors/ambiguous_overload.caret` |

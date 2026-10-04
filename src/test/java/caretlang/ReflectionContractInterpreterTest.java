@@ -261,6 +261,26 @@ final class ReflectionContractInterpreterTest {
     }
 
     @Test
+    void assignmentEffectConstraintsApplyToCallableRatherThanInitializerOrResult() {
+        assertEquals("initialized\n[ \"result\" ]\n", execute("""
+                (Output) make ignored =
+                  print "initialized"
+                  value -> [value]
+                (pure) callback = make 0
+                print callback "result"
+                """));
+        LangException failure = expectDiagnostic("""
+                (Output) noisy value = print value
+                (pure) callback = noisy
+                """, "Callable effect allowance exceeded: Output", 2, 19);
+        assertSame(DiagnosticCatalog.EFFECT_ALLOWANCE_EXCEEDED, failure.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, failure.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.EFFECT_ALLOWANCE_EXCEEDED, failure.diagnostic().code());
+        assertEquals("Line 2, column 19: Callable effect allowance exceeded: Output\n"
+                + "  Note: Line 2, column 1: Effect constraint declared here", failure.getMessage());
+    }
+
+    @Test
     void effectCatalogAliasesPreserveIdentityAndRemainSeparateFromBindings() {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         EffectCatalog catalog = EffectCatalog.standard(false).alias("console", "Output");
@@ -346,6 +366,10 @@ final class ReflectionContractInterpreterTest {
         LangException skipped = assertThrows(LangException.class,
                 () -> execute("Transform = [_2] -> _2"));
         assertEquals(Diagnostic.Codes.INVALID_CONTRACT_VARIABLE, skipped.diagnostic().code());
+        assertEquals(Diagnostic.Phase.SEMANTIC, skipped.diagnostic().phase());
+        assertSame(DiagnosticCatalog.INVALID_CONTRACT_VARIABLE, skipped.catalogEntry());
+        assertEquals("Line 1, column 14: Contract variable indices must be contiguous from _1",
+                skipped.getMessage());
     }
 
     @Test

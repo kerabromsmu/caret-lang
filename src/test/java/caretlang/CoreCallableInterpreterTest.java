@@ -611,6 +611,8 @@ final class CoreCallableInterpreterTest {
         LangException ordinary = assertThrows(LangException.class, () -> execute("value = 1\nprint value:\n"));
         assertEquals(Diagnostic.Codes.NOT_DEREFERENCEABLE, ordinary.diagnostic().code());
         assertEquals(Diagnostic.Phase.RUNTIME, ordinary.diagnostic().phase());
+        assertSame(DiagnosticCatalog.NOT_DEREFERENCEABLE, ordinary.catalogEntry());
+        assertEquals("Line 2, column 7: Value is not dereferenceable: 1", ordinary.getMessage());
         assertEquals(7, ordinary.span().start().column());
 
         LangException reflectedFunctionApplied = assertThrows(LangException.class,
@@ -686,6 +688,24 @@ final class CoreCallableInterpreterTest {
         assertEquals("yes\nno\n", execute("""
                 print true & "yes" ! absent
                 print false & absent ! "no"
+                """));
+    }
+
+    @Test
+    void booleanOperatorsShortCircuitAndNormalizeNullableOperands() {
+        assertEquals("false\ntrue\nand\ntrue\nor\ntrue\nfalse\nfalse\nnull\ntrue\nmissing\ntrue\n",
+                execute("""
+                (Output Boolean) right label =
+                  print label
+                  true
+                print false and absent
+                print true or absent
+                print true and right "and"
+                print false or right "or"
+                print ? and absent
+                print ~ and absent
+                print ? or right "null"
+                print ~ or right "missing"
                 """));
     }
 

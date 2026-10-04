@@ -1,0 +1,2 @@
+Error: Line 1, column 16: Effect constraint requires a callable value
+  Note: Line 1, column 1: Effect constraint declared here

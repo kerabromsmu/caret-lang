@@ -35,6 +35,17 @@ expect_failure examples/errors/keyed_conversion.caret
 expect_failure examples/errors/conversion_range.caret
 expect_failure examples/errors/conversion_shape.caret
 expect_failure examples/errors/packed_invalid_append.caret
+expect_failure examples/errors/invalid_lambda_header.caret
+expect_failure examples/errors/invalid_with_target.caret
+expect_failure examples/errors/invalid_outer_path.caret
+expect_failure examples/errors/effect_constraint_noncallable.caret
+expect_failure examples/errors/conflicting_effect_allowance.caret
+expect_failure examples/errors/invalid_effect_modifier.caret
+expect_failure examples/errors/effect_contract_argument.caret
+expect_failure examples/errors/unknown_clause_name.caret
+expect_failure examples/errors/ambiguous_clause_name.caret
+expect_failure examples/errors/unknown_call_effects.caret
+expect_failure examples/errors/function_effect_allowance.caret
 
 expect_test_failure() {
   local source_file=$1

@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static caretlang.InterpreterTestSupport.*;
@@ -149,6 +151,35 @@ final class DispatchDiagnosticInterpreterTest {
                 print (describe "hello")
                 print (describe true)
                 """));
+    }
+
+    @Test
+    void overloadApplicabilityCachesSharedRefinementsPerArgumentPosition() {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(output, true, StandardCharsets.UTF_8));
+        List<Value> checks = new ArrayList<>();
+        // The host probe records test instrumentation only; Caret observes a pure Boolean predicate.
+        interpreter.defineEmbeddingCallable("probe", 1, arguments -> {
+            Value value = arguments.getFirst();
+            checks.add(value);
+            return new Value.Bool(!(value instanceof Value.Bool));
+        }, List.of());
+        interpreter.execute(new Parser("""
+                (Boolean) accepted value = probe value
+                choose (accepted) first (Number) second = "number"
+                choose (accepted) first (String) second = "string"
+                choose (Any) first (Any) second = "fallback"
+                print choose 1 2
+                print choose 1 "text"
+                print choose true 2
+
+                pair (accepted) first (accepted Number) second = "number-pair"
+                pair (accepted) first (accepted String) second = "string-pair"
+                print pair 1 1
+                """).parseProgram());
+        assertEquals("number\nstring\nfallback\nnumber-pair\n", output.toString(StandardCharsets.UTF_8));
+        assertEquals(List.of(new Value.Num(1), new Value.Num(1), new Value.Bool(true),
+                new Value.Num(1), new Value.Num(1)), checks);
     }
 
     @Test
@@ -472,7 +503,12 @@ final class DispatchDiagnosticInterpreterTest {
 
     @Test
     void toStringRejectsUnsupportedCallablesAndNonStringSpecializationResults() {
-        assertDiagnostic("print toString print", "Callable values do not have", 1, 7);
+        LangException callable = expectDiagnostic("print toString print", "Callable values do not have", 1, 7);
+        assertSame(DiagnosticCatalog.CALLABLE_RENDERING, callable.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, callable.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.CALLABLE_RENDERING, callable.diagnostic().code());
+        assertEquals("Line 1, column 7: Callable values do not have a standard textual representation",
+                callable.getMessage());
         LangException result = expectDiagnostic("""
                 (String) toString (Number) value = 1
                 print toString 2

@@ -33,3 +33,11 @@ print isKeyed keyedSnapshot
 print (@keyedSnapshot).keyed
 print keyedSnapshot["k1"]
 print size (fields keyedSnapshot)
+
+// Unknown mapped shape requires all outer key-producing transforms before nested values.
+(Output Field) makeNestedField value =
+  print "outer" + value
+  field ("k" + value) (map inner [value])
+discovered = eager (map makeNestedField [1 2])
+print discovered["k1"]
+print discovered["k2"]

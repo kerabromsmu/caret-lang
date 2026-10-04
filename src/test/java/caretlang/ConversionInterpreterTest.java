@@ -246,6 +246,9 @@ final class ConversionInterpreterTest {
         assertEquals(1, failure.span().start().line());
         assertEquals(15, failure.span().start().column());
         assertEquals("Cannot convert a declared-infinite Collection", failure.diagnostic().message());
+        assertSame(DiagnosticCatalog.CONVERSION_INFINITE, failure.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, failure.diagnostic().phase());
+        assertEquals("Line 1, column 15: Cannot convert a declared-infinite Collection", failure.getMessage());
     }
 
     @Test
