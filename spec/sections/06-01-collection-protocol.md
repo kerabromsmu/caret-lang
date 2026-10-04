@@ -361,7 +361,10 @@ there is no special traversal-wide cache/context overriding fresh versus inherit
    value enumeration instead. Enumeration itself may demand computations needed to produce its
    results, such as key-changing maps and filtering.
 3. Process entries in enumeration order, depth-first. Materialize a key immediately before its
-   retained value, completing nested content before advancing to the next entry.
+   retained value, completing nested content before advancing to the next entry. When keys are
+   already known, entry production must also be incremental; a later outer entry cannot run
+   before the current entry's nested content completes or fails. When a mapped result's shape
+   is unknown, enumerating keys may invoke all outer transforms first to discover that shape.
 4. If materialized keys collide, retain the first entry and do not force the later ignored value.
    Retain enumerated dictionary keys whose value settles to `~`.
 5. Produce a separate fully defined Collection of that enumerated content, without retaining its

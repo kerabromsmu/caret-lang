@@ -42,7 +42,8 @@ result, while a fresh invocation gets a fresh result. Keyed transforms consume F
 filtered key enumeration performs the predicate work needed to discover retained entries, and
 strict `fold`, `any`, and `all` traverse the same field stream. Values are obtained when demanded,
 and their function contracts describe any effects. The implemented `eager` materializes enumerated content
-in order, recursively, leaving mutable containers and stored functions intact. It replaces
+depth-first after key enumeration, completing each nested entry before demanding the next. It leaves
+mutable containers and stored functions intact. It replaces
 reflection references with empty Collections and reports cyclic containment or known-infinite
 input. Unknown finiteness may mean it never completes.
 

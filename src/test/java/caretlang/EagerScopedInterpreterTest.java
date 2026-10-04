@@ -80,6 +80,32 @@ final class EagerScopedInterpreterTest {
     }
 
     @Test
+    void eagerVisitsEachLazyEntryBeforeProducingTheNext() {
+        List<String> trace = new java.util.ArrayList<>();
+        Value.LazySeq outer = new Value.LazySeq(2, index -> {
+            trace.add("outer" + index);
+            return new Value.LazySeq(1, inner -> {
+                trace.add("inner" + index);
+                return new Value.Num(index);
+            });
+        });
+        EagerRuntime.materialize(outer, null, ReflectionContext.defining());
+        assertEquals(List.of("outer0", "inner0", "outer1", "inner1"), trace);
+
+        trace.clear();
+        Value.LazySeq failing = new Value.LazySeq(2, index -> {
+            trace.add("outer" + index);
+            return new Value.LazySeq(1, inner -> {
+                trace.add("inner" + index);
+                throw new IllegalStateException("nested failure");
+            });
+        });
+        assertThrows(IllegalStateException.class,
+                () -> EagerRuntime.materialize(failing, null, ReflectionContext.defining()));
+        assertEquals(List.of("outer0", "inner0"), trace);
+    }
+
+    @Test
     void eagerRejectsInfiniteAndCyclicCollectionsWithLocatedErrors() {
         Value.Seq cycle = new Value.Seq(List.of());
         cycle.appendOwned(cycle);

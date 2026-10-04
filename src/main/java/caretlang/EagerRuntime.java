@@ -66,15 +66,15 @@ final class EagerRuntime {
             Value keyEnumeration = provider.keys();
             boolean keysAvailable = ValueSemantics.underlying(keyEnumeration) != Value.Missing.INSTANCE;
             List<Value> enumeratedKeys = keysAvailable ? snapshot(keyEnumeration) : List.of();
-            Value entryEnumeration = facts.keyed() == CollectionRuntime.Guarantee.TRUE
-                    ? provider.fieldEntries() : provider.valueEntries();
-            if (ValueSemantics.underlying(entryEnumeration) == Value.Missing.INSTANCE) {
-                entryEnumeration = provider.fieldEntries();
-            }
-            List<Value> sourceEntries = snapshot(entryEnumeration);
+            Value raw = ValueSemantics.underlying(value);
+            boolean incremental = keysAvailable && (raw instanceof Value.LazySeq
+                    || raw instanceof Value.LazyCollection);
+            List<Value> sourceEntries = incremental ? List.of() : snapshotEntries(provider, facts);
             ArrayList<Value.SettledCollection.Entry> entries = new ArrayList<>();
-            int index = 0;
-            for (Value sourceEntry : sourceEntries) {
+            for (int index = 0; ; index++) {
+                Value sourceEntry = incremental ? lazyEntry(raw, facts, index)
+                        : index < sourceEntries.size() ? sourceEntries.get(index) : null;
+                if (sourceEntry == null) break;
                 Value key;
                 Value entryValue;
                 if (facts.keyed() == CollectionRuntime.Guarantee.TRUE) {
@@ -93,7 +93,6 @@ final class EagerRuntime {
                     entryValue = visit(sourceEntry);
                 }
                 entries.add(new Value.SettledCollection.Entry(key, entryValue));
-                index++;
             }
             CollectionRuntime.Guarantee unique = facts.keyed() == CollectionRuntime.Guarantee.TRUE
                     && facts.hasValues() == CollectionRuntime.Guarantee.FALSE
@@ -105,6 +104,27 @@ final class EagerRuntime {
             completed.put(value, result);
             return result;
         } finally { active.remove(value); }
+    }
+
+    private List<Value> snapshotEntries(CollectionRuntime.Provider provider, CollectionRuntime.Facts facts) {
+        Value enumeration = facts.keyed() == CollectionRuntime.Guarantee.TRUE
+                ? provider.fieldEntries() : provider.valueEntries();
+        if (ValueSemantics.underlying(enumeration) == Value.Missing.INSTANCE) {
+            enumeration = provider.fieldEntries();
+        }
+        return snapshot(enumeration);
+    }
+
+    private Value lazyEntry(Value raw, CollectionRuntime.Facts facts, int index) {
+        if (raw instanceof Value.LazySeq sequence) {
+            return index < sequence.length() ? sequence.at(index) : null;
+        }
+        Value.LazyCollection collection = (Value.LazyCollection) raw;
+        return collection.entryAt(index).map(entry -> {
+            if (facts.keyed() != CollectionRuntime.Guarantee.TRUE) return entry.value();
+            return (Value) new Value.Field(entry.key(), facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                    ? Value.Missing.INSTANCE : entry.value());
+        }).orElse(null);
     }
 
     private List<Value> snapshot(Value enumeration) {

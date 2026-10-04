@@ -9,3 +9,15 @@ true
 3
 ?
 ~
+outer1
+inner1
+outer2
+inner2
+[
+  [
+    "nested" = [ 1 ]
+  ]
+  [
+    "nested" = [ 2 ]
+  ]
+]
