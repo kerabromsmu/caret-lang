@@ -474,6 +474,33 @@ final class TransformInterpreterTest {
     }
 
     @Test
+    void zipWithKeysSkipsIgnoredValuesWhenLazySizeIsUnknown() {
+        assertEquals("10\n[\n  \"same\" = 10\n]\n", execute("""
+                (Output Number) trace value =
+                  print value
+                  value
+                filtered = filter [10 20] (value -> true)
+                lazyValues = map trace filtered
+                print zipWithKeys ["same" "same"] lazyValues
+                """));
+        assertEquals("[\n  \"same\" = 10\n]\n", execute("""
+                (Number) failOnIgnored value = value == 20 & (1 / 0) ! value
+                filtered = filter [10 20] (value -> true)
+                print zipWithKeys ["same" "same"] (map failOnIgnored filtered)
+                """));
+        LangException shorter = assertThrows(LangException.class, () -> execute("""
+                filtered = filter [10] (value -> true)
+                print zipWithKeys ["same" "same"] (map (value -> value) filtered)
+                """));
+        assertEquals(Diagnostic.Codes.ZIP_LENGTH_MISMATCH, shorter.diagnostic().code());
+        LangException longer = assertThrows(LangException.class, () -> execute("""
+                filtered = filter [10 20 30] (value -> true)
+                print zipWithKeys ["same" "same"] (map (value -> value) filtered)
+                """));
+        assertEquals(Diagnostic.Codes.ZIP_LENGTH_MISMATCH, longer.diagnostic().code());
+    }
+
+    @Test
     void zipRejectsUnequalLengthsInvalidShapesAndMixedDictionaryKeys() {
         LangException eager = expectDiagnostic("zip [1] []", "equal lengths", 1, 1);
         assertEquals(Diagnostic.Codes.ZIP_LENGTH_MISMATCH, eager.diagnostic().code());

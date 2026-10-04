@@ -649,6 +649,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Integer knownSize;
         private final SourceSpan sourceSpan;
         private final boolean dictionarySelectable;
+        private final java.util.function.IntPredicate positionExists;
         private boolean dictionarySelected;
         private boolean shapeLocked;
         private final ArrayList<Produced> established = new ArrayList<>();
@@ -658,6 +659,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         LazyCollection(Shape shape, Producer producer, CollectionRuntime.Facts facts, Integer knownSize,
                        SourceSpan sourceSpan, boolean dictionarySelectable, boolean dictionarySelected) {
+            this(shape, producer, facts, knownSize, sourceSpan, dictionarySelectable, dictionarySelected, null);
+        }
+
+        LazyCollection(Shape shape, Producer producer, CollectionRuntime.Facts facts, Integer knownSize,
+                       SourceSpan sourceSpan, boolean dictionarySelectable, boolean dictionarySelected,
+                       java.util.function.IntPredicate positionExists) {
             this.shape = Objects.requireNonNull(shape);
             this.producer = Objects.requireNonNull(producer);
             this.initialFacts = Objects.requireNonNull(facts);
@@ -665,6 +672,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.sourceSpan = sourceSpan;
             this.dictionarySelectable = dictionarySelectable;
             this.dictionarySelected = dictionarySelected;
+            this.positionExists = positionExists;
+        }
+
+        boolean hasIndex(int index) {
+            return index >= 0 && (knownSize != null ? index < knownSize
+                    : positionExists != null ? positionExists.test(index) : entryAt(index).isPresent());
         }
 
         synchronized Optional<Produced> entryAt(int index) {

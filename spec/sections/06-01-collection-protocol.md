@@ -286,6 +286,9 @@ Different lengths are contract errors when discovered; do not silently truncate 
 For `zipWithKeys`, duplicate-key positions still consume positions for alignment but do not
 force ignored values; the first entry is retained. Construction from defined data is eager;
 if either source is lazy the result is lazy, retaining already-computed data.
+When a lazy one-to-one map has unknown length, alignment can inspect source position existence
+without invoking the map transform at an ignored duplicate position. Work needed to establish
+the source positions, such as a filter predicate, still occurs.
 
 `zipWithKeys` defaults to a general keyed Collection. An expected Dictionary contract selects
 Dictionary construction with homogeneous sortable keys and sorted enumeration. General keyed

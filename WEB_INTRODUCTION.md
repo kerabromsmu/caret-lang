@@ -71,7 +71,8 @@ Dictionaries retain sorted keys of one sortable type; general keyed Collections 
 keys and retain their established entry order. Repeated keys retain the first entry. Implemented `zip`
 pairs two sequences into ordinary tuples, while `zipWithKeys` uses its
 first sequence as keys and its second as values. A Dictionary result contract selects sorted
-Dictionary construction. Field positions zero and one use the same bracket/`getElement` path.
+Dictionary construction. Duplicate keys retain the first value without evaluating an ignored
+one-to-one lazy mapped value, even when the source size is unknown. Field positions zero and one use the same bracket/`getElement` path.
 Access sugar follows lexical `getElement`, including local shadowing and ordinary hole partials.
 Collection equality respects keyed/value shape and declared ordering, compares unordered content by
 key or multiplicity, short-circuits lazy demand, and treats known-infinite Collections as unequal.

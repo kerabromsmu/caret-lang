@@ -617,18 +617,21 @@ final class Interpreter {
                     CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE);
             boolean sourceSet = sourceFacts.keyed() == CollectionRuntime.Guarantee.TRUE
                     && sourceFacts.hasValues() == CollectionRuntime.Guarantee.FALSE;
-            if (!sourceSet && source.knownSize() != null && definitelyNonField(transform)) {
+            boolean oneToOne = !sourceSet && definitelyNonField(transform);
+            if (oneToOne && source.knownSize() != null) {
                 return ownership.fresh(new Value.LazySeq(source.knownSize(), index -> invoke(transform,
                         new Value.Argument(source.at(index).orElseThrow(), argument.span()), callSpan), keylessFacts));
             }
             int[] next = {0};
             Value.LazyCollection.Shape initialShape = sourceSet
-                    ? Value.LazyCollection.Shape.SET : Value.LazyCollection.Shape.INFER;
+                    ? Value.LazyCollection.Shape.SET
+                    : oneToOne ? Value.LazyCollection.Shape.KEYLESS : Value.LazyCollection.Shape.INFER;
             CollectionRuntime.Facts facts = new CollectionRuntime.Facts(sequential, sourceFacts.ordered(),
                     sourceSet ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN,
                     sourceFacts.finite(), sourceSet ? CollectionRuntime.Guarantee.TRUE
-                    : CollectionRuntime.Guarantee.UNKNOWN, sourceSet ? CollectionRuntime.Guarantee.FALSE
-                    : CollectionRuntime.Guarantee.UNKNOWN);
+                    : oneToOne ? CollectionRuntime.Guarantee.FALSE : CollectionRuntime.Guarantee.UNKNOWN,
+                    sourceSet ? CollectionRuntime.Guarantee.FALSE
+                    : oneToOne ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN);
             return ownership.fresh(new Value.LazyCollection(initialShape, () -> {
                 while (true) {
                     Optional<Value> input = source.at(next[0]++);
@@ -637,7 +640,7 @@ final class Interpreter {
                     Value.LazyCollection.Produced produced = transformedEntry(mapped, sourceSet, callSpan);
                     if (produced != null) return produced;
                 }
-            }, facts, null, callSpan, true, true));
+            }, facts, null, callSpan, true, true, oneToOne ? source::hasIndex : null));
         }
 
         @Override public int remainingArity() { return transform == null ? 2 : 1; }
@@ -2368,12 +2371,18 @@ final class Interpreter {
     }
 
     private record IndexedCollection(java.util.function.IntFunction<Optional<Value>> accessor,
-                                     Integer knownSize, CollectionRuntime.Facts facts) {
+                                     Integer knownSize, CollectionRuntime.Facts facts,
+                                     java.util.function.IntPredicate positionExists) {
+        private IndexedCollection(java.util.function.IntFunction<Optional<Value>> accessor,
+                                  Integer knownSize, CollectionRuntime.Facts facts) {
+            this(accessor, knownSize, facts, null);
+        }
         private Optional<Value> at(int index) {
             return index < 0 ? Optional.empty() : accessor.apply(index);
         }
         private boolean hasIndex(int index) {
-            return index >= 0 && (knownSize != null ? index < knownSize : at(index).isPresent());
+            return index >= 0 && (knownSize != null ? index < knownSize
+                    : positionExists != null ? positionExists.test(index) : at(index).isPresent());
         }
     }
 
@@ -2397,7 +2406,7 @@ final class Interpreter {
                             "Expected sequence, got a keyed Collection", argument.span());
                 }
                 return entry.value();
-            }), null, collection.facts());
+            }), null, collection.facts(), collection::hasIndex);
         }
         if (raw instanceof Value.SettledCollection collection
                 && collection.kind() == ValueKind.SEQUENCE
@@ -2540,7 +2549,8 @@ final class Interpreter {
                     collection.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
                             ? entry.value() : new Value.Field(entry.key(),
                             collection.resolvedShape() == Value.LazyCollection.Shape.SET
-                                    ? Value.Missing.INSTANCE : entry.value())), null, provider.facts());
+                                    ? Value.Missing.INSTANCE : entry.value())), null, provider.facts(),
+                    collection::hasIndex);
         }
         Value enumeration = provider.fieldEntries();
         if (underlying(enumeration) == raw) {
