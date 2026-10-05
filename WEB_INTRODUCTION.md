@@ -18,8 +18,9 @@ remaining predictable, statically analyzable, and pleasant to work with?
 ## Planned releases
 
 The [v1 roadmap](PLAN.md#release-targets-and-implementation-order) includes everything already
-implemented plus ordinary cycles, modules, root/module identity and visible-binding metadata,
-shared structured results, and initial sandboxes. These additions are still planned. Initial
+implemented plus template sugar (#61), multiline REPL submission (#81), ordinary cycles, modules,
+root/module identity and visible-binding metadata, shared structured results, and initial sandboxes.
+These additions are still planned. Initial
 sandboxes will load module paths with fixed environments, expose explicit capabilities, and support
 termination/unloading. Passing a mutable container explicitly shares read/write access; passing
 its immutable contents supplies a snapshot. Nested sandboxes and reflection must preserve the
@@ -30,7 +31,28 @@ provisionally as 1.1; approved incompatible changes would require 2.0. Semantic 
 serialization/quines, Code-based sandboxes, environment swapping/reload, read-only or virtual
 container views, the Caret-written self-interpreter, SIMD, formats, staging, the compiler backend,
 and remaining tooling belong to later releases. Existing Java embedding and its environment
-swapping remain available. Additional GitHub feature cards will be assigned in a separate review.
+swapping remain available. Gated computations (#60) are to be specified soon in a later discussion,
+with v1 inclusion undecided. Language-wide tail calls (#57) are an early v1 candidate awaiting a
+later design discussion; cycles can proceed independently.
+
+The planned template notation makes the specimen's boundary explicit and uses ordinary lexical
+lookup of `template`, including shadowing:
+
+<!-- caret-example: planned -->
+```caret
+Person = <[^name = (String) _ ^phone = (String~) _]>
+```
+
+It is sugar for `template [^name = (String) _ ^phone = (String~) _]`, with the same template and
+hole rules. The [template specification](spec/sections/06-06-templates-foundations.md#planned-template-sugar)
+defines nested Collections and contracted nested templates. The notation is not implemented yet.
+
+The planned multiline REPL keeps complete one-line input immediate, accumulates incomplete source
+without executing it, and submits complete indentation bodies on a valid blank line or effective
+dedent. EOF executes a complete pending source unit; incomplete input produces a located diagnostic.
+Cancellation discards the pending submission, and history recalls an accepted block as one entry.
+See the [submission rules](spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions).
+The current REPL still accepts only single-line submissions.
 
 ## Designed around expressions
 

@@ -97,6 +97,14 @@ pair _1 _1
 The highest numbered hole determines the resulting arity. Numbered and unnumbered holes may not be
 mixed in one partial expression.
 
+### Planned template sugar
+
+V1 card #61 specifies `<[ … ]>` as a grouped ordinary `template [ … ]` application with normal
+lexical lookup, including shadowing. The notation is not implemented yet. Follow the
+[owning specification](../../spec/sections/06-06-templates-foundations.md#planned-template-sugar).
+Use `^name = (String) _` for a contracted named field. Bare nested Collections remain recursive
+structure; reusable nested template Contracts constrain fields through `(NestedContract) _`.
+
 ### Reflection
 
 ```caret

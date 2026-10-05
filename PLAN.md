@@ -31,11 +31,13 @@ containers, scoped lookup, and Java embedding. All implemented behavior belongs 
 
 | Target | Required work | Work excluded from that target |
 |---|---|---|
-| **1.0** | Implemented baseline; Phase 5 cycles; Phase 9A modules; Phase 9B execution environments and metadata; shared `Result T`; Phase 10A initial sandboxes | Self-interpreter, semantic Code, canonical serialization, environment swaps/reload, restricted container views, rules, SIMD, formats, staging, compiler backend, and remaining Phase 13 work |
+| **1.0** | Implemented baseline; #61 template sugar; Phase 13A/#81 multiline REPL; Phase 5 cycles; Phase 9A modules; Phase 9B execution environments and metadata; shared `Result T`; Phase 10A initial sandboxes | Self-interpreter, semantic Code, canonical serialization, environment swaps/reload, restricted container views, rules, SIMD, formats, staging, compiler backend, and remaining Phase 13B work; #60/#57 remain unassigned candidates |
 | **1.1 provisionally** | Complete Phase 8: contexts, rules, scheduling, chains, rulesets, objects, container dependencies, and `ruleCycle` | Existing advanced-rule deferrals remain deferred; use 2.0 instead only if approved design changes break v1 compatibility |
-| **Later releases** | Phase 9C semantic Code; Phase 9D canonical serialization/quines; Phase 10B swaps/reload; Phase 10C richer projections; standalone self-interpreter phase; Phases 6, 7, 11, 12, and remaining Phase 13 | Exact version assignments await later planning |
+| **Later releases** | Phase 9C semantic Code; Phase 9D canonical serialization/quines; Phase 10B swaps/reload; Phase 10C richer projections; standalone self-interpreter phase; Phases 6, 7, 11, 12, and Phase 13B | Exact version assignments await later planning; #60/#57 design and release placement remain open |
 
-The v1 implementation order is **5 → 9A → 9B → 10A**. The shared
+The core v1 implementation order remains **5 → 9A → 9B → 10A**. Template sugar (#61) and
+multiline REPL submission (#81/13A) can be implemented independently using the existing foundation;
+neither adds a prerequisite to this sequence. The shared
 [`Result T` contract](spec/sections/06-07-templates-advanced.md#standard-error-template) is a
 Phase 9B prerequisite for sandboxes, independent of formats. Cycles need the existing callable,
 contract/effect, Collection, and resolver foundations; they do not need a Caret-written interpreter.
@@ -49,9 +51,23 @@ formats, rules, staging, and a compiler backend are not prerequisites for this v
 | [9B — Environments and metadata](roadmap/phase-09.md#phase-9b-execution-environments-metadata-and-results-v1) | Execution context across closures/imports/REPL/tests, metadata-only roots/modules, and shared results | Moderate to high |
 | [10A — Initial sandboxes](roadmap/phase-10.md#phase-10a-initial-sandboxes-v1) | Fixed environments, projected calls and shared containers, restricted imports/effects/reflection, nested authority, termination/unloading | High |
 
-GitHub card assignment is pending a separate review. Additional v1 cards must have settled semantics,
-fit the core language, and avoid introducing a dependency on a postponed subsystem. Existing planned
-or deferred work is not promoted into v1 merely because it is described in a completed phase file.
+## Reviewed Todo cards
+
+The initial Todo review establishes the assignments below. It updates repository planning, not
+GitHub card bodies or column status. Additional v1 cards must have settled semantics, fit the core
+language, and avoid introducing a dependency on a postponed subsystem. Existing planned or deferred
+work is not promoted into v1 merely because it is described in a completed phase file.
+
+| Card | Assignment | Readiness and required follow-up |
+|---|---|---|
+| [#61 — Template sugar](https://github.com/kerabromsmu/caret-lang/issues/61) | **V1** | Implementable using existing templates. Planned `<[ … ]>` lowers to ordinary lexical `template` application, including shadowing; use established field/contract and nested-template rules. |
+| [#81 — Multiline REPL](https://github.com/kerabromsmu/caret-lang/issues/81) | **V1 / Phase 13A** | Implementable using the existing parser/layout and JLine foundation. Add shared completion/submission handling for both REPL paths; EOF executes complete pending source, including valid active mappings, and diagnoses incomplete input. |
+| [#60 — Gated computations](https://github.com/kerabromsmu/caret-lang/issues/60) | **Specify soon in a later discussion; v1 inclusion undecided** | Specification-only card. Invocation-context resolution, authority, contracts/effects, producer holes, and staging integration need decisions before runtime implementation. Do not assign it to post-v1 merely because design is postponed. |
+| [#57 — Language-wide tail calls](https://github.com/kerabromsmu/caret-lang/issues/57) | **Early v1 candidate; design discussion postponed** | Settle the guarantee, tail positions, callable coverage, contract/effect checks, depth diagnostics, and host/boundary behavior before implementation. Substantial interpreter work; no compiler prerequisite. Ordinary cycles can use an internal loop independently. |
+
+V1 completion includes #61 and #81. It does not yet require #60 or #57; their design discussions
+must explicitly decide release placement before either becomes a release gate. Neither is being
+designed or implemented by this documentation update.
 
 ## Release policy and completion
 
@@ -80,7 +96,9 @@ or deferred work is not promoted into v1 merely because it is described in a com
   for `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox`. Lookup, aliases, shadowing,
   arity, partial application, dispatch, effects, reflection, and staging use ordinary function rules.
   Specialized analysis and lowering recognize resolved language-owned callable identities, never
-  lexical spellings; these bindings introduce no feature-specific application or declaration grammar.
+  lexical spellings; their semantic behavior introduces no feature-specific application or declaration
+  grammar. Planned `<[ … ]>` is surface sugar lowering to an ordinary `template` application with
+  lexical lookup, not spelling-triggered runtime behavior.
 - Pass an explicit execution environment through interpretation, imports, tests, REPL sessions, and
   compiled entry points. Reflection and authority are always relative to that environment.
 - Assign stable diagnostic phase/code/span data before expanding error messages. All new syntax and
@@ -142,6 +160,10 @@ each feature only when that feature is available.
 - V1 module tests cover exports/privacy, catalog collisions, path/ID identity, initialization,
   failed loads, import cycles, and environment-local caches. V1 cycle tests cover previous/next
   state, atomic commits, stable shape/contracts, purity, effects, and ordinary callable behavior.
+- Template-sugar tests compare ordinary application with sugar, including lexical shadowing,
+  nested Collections/contracted templates, fixed captures, holes, layout, and located delimiter errors.
+  Multiline REPL tests cover both input paths, immediate one-line execution, completion versus invalid
+  input, dedents, mappings, cancellation, EOF, history, and source locations without probe-time effects.
 - Sandbox stages require a documented threat model and adversarial tests for hidden-name lookup,
   reflective traversal, imports, effects, retained references, shared containers, termination,
   and nested authority. Add semantic-code visibility and interpreter/compiler parity when available.
@@ -159,9 +181,11 @@ Phase 4 is complete, including mutable containers, state effects, field reificat
 `with`/`outer`, Collection-value `eager`, contextual templates, numeric conversion, and packed
 layouts. The next dependency-ordered work is [Phase 5](roadmap/phase-05.md): ordinary four-argument
 `cycle`, including its state lookup and commit semantics. Continue with 9A, 9B, and 10A for v1.
+#61 template sugar and #81 multiline REPL are independent ready v1 work. Keep #60 and #57 for
+their requested upcoming design discussions without selecting their unresolved semantics now.
 The [self-interpreter](roadmap/self-interpreter.md), explicitly deferred Collection APIs, callable
-`eager`, and advanced module/sandbox/compiler work remain outside this target unless the separate
-GitHub card review explicitly revises it.
+`eager`, and advanced module/sandbox/compiler work remain outside this target unless a subsequent
+card review explicitly revises it.
 
 ## Explicit assumptions and allowed deferrals
 

@@ -13,10 +13,13 @@ reused for another behavior.
 ## Release allocation and partial requirements
 
 [`PLAN.md`](PLAN.md#release-targets-and-implementation-order) owns release allocation, independently
-of the statuses here. V1 includes all implemented rows plus ordinary cycles, Phase 9A modules,
+of the statuses here. V1 includes all implemented rows plus #61 template sugar, #81/Phase 13A
+multiline REPL submission, ordinary cycles, Phase 9A modules,
 Phase 9B environments/metadata and shared `Result T`, and Phase 10A initial sandboxes. The complete
 rules/rulesets/objects/`ruleCycle` phase targets the next release, provisionally 1.1. Advanced
-module/sandbox work and the remaining phases target later releases.
+module/sandbox work and the remaining Phase 13B and other assigned phases target later releases.
+#60 gated computations are to be specified soon in a later discussion, with v1 inclusion undecided;
+#57 tail calls remain an early v1 candidate awaiting design. Neither is yet a v1 completion gate.
 
 Existing IDs, statuses, and evidence remain intact. A row combining v1 and later behavior must
 remain planned with partial evidence until the whole requirement is implemented. In particular,
@@ -42,9 +45,9 @@ deferred or planned in their own rows.
 
 - [Core](conformance/core.md) — 55 requirements
 - [Callables](conformance/callables.md) — 33 requirements
-- [Contracts](conformance/contracts.md) — 34 requirements
+- [Contracts](conformance/contracts.md) — 35 requirements
 - [Collections](conformance/collections.md) — 46 requirements
 - [Numeric Formats](conformance/numeric-formats.md) — 26 requirements
 - [Cycles Rules](conformance/cycles-rules.md) — 28 requirements
 - [Modules Security](conformance/modules-security.md) — 30 requirements
-- [Staging Tools](conformance/staging-tools.md) — 21 requirements
+- [Staging Tools](conformance/staging-tools.md) — 22 requirements

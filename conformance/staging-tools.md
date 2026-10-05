@@ -9,9 +9,15 @@ post-v1 releases under [the release roadmap](../PLAN.md). Quines require Phase 9
 staging retains module/environment prerequisites and the unresolved standard compiler-environment
 interface. Current implemented tooling remains in the v1 baseline. Backend parity and generated
 documentation-site checks become gates when those later facilities exist, not prerequisites for v1.
+The exception is #81/Phase 13A multiline REPL submission, which targets v1 independently of broader
+tooling. Its planned rules execute complete pending source at EOF, including valid active mappings.
+#57 general tail calls remain an early v1 candidate awaiting design, not an implicit prerequisite
+or automatically post-v1 part of `OPT-001`. #60 computations need a later specification discussion,
+with release placement undecided; the deferred failure-handler machinery is not being designed here.
 
 | ID | Requirement | Status | Automated test evidence | Runnable example | Dependency or note |
 |---|---|---|---|---|---|
+| REPL-MULTILINE-001 | Interactive and plain-input REPLs share grammar-owned multiline completion/submission, preserving mappings, cancellation, EOF, history, and physical diagnostics without probe-time effects. | planned | — | — | [Submission rules](../spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions); #81/Phase 13A targets v1. Existing one-line REPL behavior remains implemented; this row awaits dedicated tests and actual REPL integration evidence. |
 | QUINE-001          | `print toString @root.code` reproduces the canonical code visible in the current environment.                            | planned     | `—`                                                                                                                                                                       | `—`                                        | A sandbox quine cannot reveal hidden host code.                                        |
 | STAGE-001          | `# name = expression` creates a compile-time-only binding available to later staged computation.                          | planned     | `—` | `—` | It is absent from the runtime root unless a result deliberately crosses the boundary. |
 | STAGE-002          | Expression-form `#` stages the complete remainder of its nearest syntactic expression boundary.                          | planned     | `—` | `—` | Parentheses and explicitly delimited nested expressions provide smaller boundaries.   |

@@ -433,3 +433,64 @@ preserving logical nesting, and `\*` restores the previous baseline. The adjuste
 until explicitly restored or EOF; ordinary physical dedentation cannot end it because physical
 indentation is what the modifier changes. After effective logical indentation is calculated, all
 normal Caret parsing and semantic rules apply unchanged.
+
+<a id="planned-multiline-repl-submissions"></a>
+## Multiline REPL submissions (planned for v1, #81)
+
+The current interactive and plain-input REPLs execute one line at a time. The planned multiline
+submission layer uses the existing grammar and effective logical layout without changing source-file
+semantics. The same submission rules apply to both input paths:
+
+1. A complete one-line expression or binding executes immediately, once. Do not delay it merely
+   because a later indented line could hypothetically extend it.
+2. Incomplete but continuable source, such as an empty function-body header or an open delimiter,
+   opens a pending submission. Accumulate the original source without executing any prefix.
+   Invalid source produces a located diagnostic rather than automatically requesting more input.
+3. A grouped expression or Collection completes when its enclosing delimiters close and the full
+   accumulated expression is syntactically complete. A nested closing delimiter or a same-line
+   suffix requiring continuation does not submit an incomplete enclosing expression. Delimiters
+   inside strings/comments do not participate in grouping.
+4. An ordinary indentation-bodied function remains open while body lines arrive, even if its
+   current prefix could parse as a complete function. A blank line submits a complete definition.
+   A following unindented line closes a complete definition and is retained as the first line of
+   the next submission, which may itself be multiline. An incomplete or invalid definition is
+   diagnosed rather than executing a malformed prefix.
+5. Boundaries use effective logical indentation. With an active `\\` mapping, a physically
+   column-zero body line remains in its logical body. During interactive collection of that body,
+   wait for `\*` restoration; restoring one nested mapping must not prematurely close an outer
+   pending construct. Existing mapping stacks and marker rules remain authoritative.
+6. EOF ends the pending source unit. Execute it once if it is syntactically complete, including
+   when an active indentation mapping is valid under file EOF semantics. Otherwise report its
+   incomplete or invalid source through located diagnostics without executing a truncated prefix.
+   EOF does not require an otherwise redundant restoration marker or terminating blank line.
+7. Ctrl-C cancels the whole pending submission and returns to a fresh prompt. It executes none of
+   that pending input and preserves earlier session bindings. A standalone one-line `exit` retains
+   its existing command behavior; text inside a pending definition or string is ordinary source.
+
+Provide continuation prompts and store each accepted multiline submission as one recallable
+history entry, preserving newlines and the existing limits and duplicate/blank/exit filtering.
+Completion probing uses lexer/layout/parser-owned information to distinguish complete, incomplete,
+and invalid input; it must not execute code, perform effects, mutate session bindings, inspect
+English diagnostic messages, or maintain a separate incompatible REPL grammar.
+
+All diagnostics use the complete submission's physical line/column positions. Execution retains
+the existing binding-commit and failure rules: this feature does not promise rollback of external
+effects or introduce transactional execution. Pending-input cancellation is distinct from stopping
+code that has already been submitted.
+
+This planned transcript defines a function, submits it with a blank line, and then invokes it:
+
+```text
+> add a b =
+...   a + b
+...
+> print add 2 3
+5
+```
+
+Acceptance requires both interactive and plain-input tests for functions, nested bodies, lambdas,
+grouped expressions, Collections, continuation application, closure of nested delimiters, trailing
+incomplete suffixes, comment/string boundaries, blank/dedent submission, nested layout restoration,
+complete/incomplete EOF, cancellation, `exit`, paste/history recall, located errors, and recovery
+without losing prior bindings. Completion probes must be demonstrably free of runtime effects.
+Future template-sugar delimiters follow their normal grammar when that feature is implemented.

@@ -50,8 +50,9 @@ Templates use the ordinary Caret contract system.
 
 They do not introduce a separate type system.
 
-`template specimen` is ordinary whitespace application. There is no `template` parser production,
-template-only invocation syntax, or spelling-based semantic rule. Inspection of a collection
+`template specimen` is ordinary whitespace application. The `template` binding is not a parser
+keyword or spelling-based semantic rule. The planned notation below lowers to that same ordinary
+application rather than introducing special construction or invocation semantics. Inspection of a collection
 constructor descriptor is behavior of the resolved language-owned `template` callable and its
 contracts. Aliases retain the same ordinary callable behavior.
 
@@ -91,7 +92,8 @@ template : CollectionConstructor -> Contract
 
 A concrete collection produces a fixed-only exact template. A `CollectionConstructor` is an
 ordinary hole function whose retained descriptor is structurally a collection construction.
-`template` is not syntax and creates no exception to ordinary application or hole evaluation.
+`template` remains an ordinary binding, not a keyword, and creates no exception to ordinary
+application or hole evaluation. Planned sugar does not change this callable model.
 
 For example, the compact form above is equivalent to:
 
@@ -107,6 +109,70 @@ Point = template PointConstructor
 
 Calling `PointConstructor 10.0 20.0` produces `[10.0 20.0]`; calling
 `template PointConstructor` instead derives the corresponding membership contract.
+
+<a id="planned-template-sugar"></a>
+### Template sugar (planned for v1, #61)
+
+The planned `<[ … ]>` notation is sugar for the ordinary application `template [ … ]`, grouped
+as one expression. Its contents are always a Collection literal, including an empty literal;
+it does not enclose an arbitrary specimen expression. The ordinary callable form still accepts
+concrete Collections or eligible constructors supplied through bindings.
+
+The emitted `template` reference uses normal lexical lookup. A local binding or parameter named
+`template` shadows the standard callable for this notation exactly as it does for a written
+`template [ … ]` application. Sugar does not force the built-in identity, guarantee a Contract
+under shadowing, add a scope, or change argument evaluation, effects, or runtime kinds.
+
+This example is planned notation; named-field contracts retain their established spelling:
+
+<!-- caret-example: planned -->
+```caret
+Form = <[
+  ^formType = 10
+  ^name = (String) _
+  ^data = (Collection) _
+]>
+```
+
+It denotes the same application as `template [^formType = 10 ^name = (String) _ ^data = (Collection) _]`.
+Collection literals remain hole-expression boundaries. Contracted holes, numbered/repeated holes,
+fixed captures, missing defaults, and named/positional structure retain their existing rules.
+The enclosing sugar must not turn the specimen's holes into parameters of an outer template call.
+
+Nested ordinary `[...]` literals remain Collection structure; they are not separately constructed
+template Contracts. Within an eligible constructor, that structure contributes recursively to
+the enclosing template as specified below:
+
+<!-- caret-example: planned -->
+```caret
+Person = <[
+  ^name = (String) _
+  ^address = [
+    ^street = (String) _
+    ^city = (String) _
+  ]
+]>
+```
+
+An explicit nested template expression produces an ordinary Contract. To constrain a field using
+that Contract, use the existing contracted-hole form rather than placing the Contract in a fixed
+field value, where ordinary fixed-value comparability requirements still apply:
+
+<!-- caret-example: planned -->
+```caret
+Address = <[^street = (String) _ ^city = (String) _]>
+Person = <[^name = (String) _ ^address = (Address) _]>
+```
+
+Ordinary Collection layout, application, and expression grouping apply inside and around the
+notation. Diagnostics retain physical source locations and cover the original delimiters.
+Implementation acceptance requires sugar/call equivalence, local shadowing, empty/positional/named
+specimens, nested Collections and contracted templates, fixed capture order, all existing hole
+rules, multiline layout, and located malformed/unclosed-delimiter diagnostics. This notation is
+planned; the current interpreter still requires the ordinary `template` callable form.
+
+<a id="template-constructor-eligibility"></a>
+### Constructor eligibility and implemented behavior
 
 Only reifiable hole functions whose expression directly constructs a collection are accepted
 initially. Named functions, opaque/native callables, and partial expressions such as `[transform _]`

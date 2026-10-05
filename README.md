@@ -55,15 +55,19 @@ their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS
 every current diagnostic message variant and its exact fixture or focused test evidence.
 
 The [release roadmap](PLAN.md#release-targets-and-implementation-order) defines **1.0** as the
-implemented baseline plus ordinary cycles, modules, metadata-only root/module reflection, the
-shared `Result T` contract, and initial path-based sandboxes. Those additions are planned, not
+implemented baseline plus template sugar (#61), multiline REPL submission (#81), ordinary cycles,
+modules, metadata-only root/module reflection, the shared `Result T` contract, and initial path-based
+sandboxes. Those additions are planned, not
 implemented by this roadmap change. V1 sandboxes will use fixed environments, exported calls,
 termination/unloading, explicitly shared read/write containers, and immutable data snapshots.
 Semantic Code/serialization, Code-based sandboxes, environment swaps/reload, and restricted
 container views follow later. The complete rules/rulesets/objects/`ruleCycle` phase targets the
 next release, provisionally **1.1**, or **2.0** if approved changes break v1 compatibility.
 Self-hosting, SIMD, formats, staging, the compiler backend, and remaining tooling are later work.
-GitHub card allocation awaits a separate review.
+Gated computations (#60) are to be specified soon in a later discussion, with v1 inclusion undecided.
+Language-wide tail calls (#57) remain an early v1 candidate awaiting a later design discussion;
+ordinary cycles do not depend on them. The [reviewed Todo assignments](PLAN.md#reviewed-todo-cards)
+record these decisions without changing GitHub cards.
 
 For a conceptual comparison with related language families, see
 [Caret Doesn’t Look Like One Language — and That’s the Point](docs/language-comparison.md). That
@@ -262,6 +266,15 @@ and `exit` are not saved, and history is limited to 1,000 entries.
 Enter one-line expressions or assignments and type `exit` (or press Ctrl-D) to leave. Ctrl-C cancels
 the current input and opens a fresh prompt. Bindings remain available for the rest of the session.
 The REPL does not yet accept multiline function definitions or other multiline input.
+
+Multiline submission is planned for v1 in #81. The
+[planned submission rules](spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions)
+keep complete one-line input immediate, collect incomplete constructs without execution, and
+submit complete indentation bodies on a valid blank line or effective dedent. Interactive layout
+adjustments require restoration; EOF executes a complete pending source unit even when a mapping
+may validly remain active, and diagnoses incomplete input. Both input paths will preserve physical
+locations, whole-submission cancellation, and multiline history. This specification does not add
+multiline support to the current REPL.
 
 Do not launch the interactive REPL with `./gradlew run`: Gradle forwards ordinary input but does not
 give the Java child process ownership of the terminal, so terminal editing and arrow keys cannot
