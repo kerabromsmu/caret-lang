@@ -4,6 +4,21 @@
 
 ## Phase 8 — Rules, rulesets, objects, and `ruleCycle`
 
+## Release target and design milestone
+
+Target the release immediately after v1, provisionally **1.1**. Keep the complete phase together:
+contexts/rules, ordering/chains, rulesets/`ruleCycle`, objects, and container dependency tracking.
+Use **2.0** instead only if approved language-design changes require breaking v1 compatibility;
+feature size alone does not determine the major version. No exact release number is committed yet.
+
+The existing contracts/effects, contextual templates, containers, and v1 cycle state semantics are
+the foundation. SIMD, formats, semantic Code, staging, and a compiler backend are not prerequisites.
+Before implementation, settle `RULE-PHASE-CONTRACT-001` and explicitly reconcile tracked container
+reads with the purity requirements for reevaluable `C`/`T` values. Do not silently invent syntax or
+special-case deferred expressions. This design milestone is followed by the implementation chunks
+below. Extend sandbox projection/code metadata when the new value kinds are supported, rather than
+treating those later integrations as prerequisites for rule construction.
+
 ### Contexts and rules
 
 - Before rule construction, settle `RULE-PHASE-CONTRACT-001`:

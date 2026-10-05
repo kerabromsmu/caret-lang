@@ -4,6 +4,10 @@
 
 ## Phase 12 — Compiler backend and optimization
 
+Target a later release after v1 and the rules release; no exact version is assigned. Java 21 and
+the tree-walking interpreter remain the reference for earlier releases. Backend/ABI support and
+differential parity become completion gates here, not prerequisites for v1 or ordinary rules.
+
 ### Compiler backend
 
 - Define a lowered typed/effect-checked IR shared with the interpreter. Preserve source maps and

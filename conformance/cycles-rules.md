@@ -2,6 +2,15 @@
 
 [Conformance index](../CONFORMANCE.md) · [Language specification index](../LANGUAGE.md)
 
+## Release allocation
+
+[Phase 5 cycles](../roadmap/phase-05.md), including previous/next state and atomic commits, target
+v1; the format integration in `CYCLE-005` follows formats and does not gate v1. The complete
+[Phase 8](../roadmap/phase-08.md) rules/rulesets/objects/`ruleCycle` target follows v1, provisionally
+as 1.1. Its first milestone settles `RULE-PHASE-CONTRACT-001` and tracked container-read/purity
+semantics. Release assignment does not resolve that design blocker or change any implementation
+status. Advanced cycle/rule deferrals remain deferred.
+
 | ID | Requirement | Status | Automated test evidence | Runnable example | Dependency or note |
 |---|---|---|---|---|---|
 | CYCLE-001          | `cycle` repeatedly applies condition/body/prepare and returns final state.                                                | planned     | `—`                                                                                                                                                                       | `—`                                        | Condition is pure; body/prepare may carry declared effects.                            |

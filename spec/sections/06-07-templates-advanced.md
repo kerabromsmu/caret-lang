@@ -641,6 +641,11 @@ This lets templates serve simultaneously as structural types, reusable schemas, 
 <a id="standard-error-template"></a>
 ### Standard error template
 
+The existing `ErrorTemplate` is implemented; the shared parameterized `Result` contract below
+targets v1 in [Phase 9B](../../roadmap/phase-09.md#phase-9b-execution-environments-metadata-and-results-v1)
+as a sandbox prerequisite. It does not depend on the later format system or broad standard-library
+release. This release assignment does not change current implementation status.
+
 Caret uses one structural information model for recoverable operation failures and aborting
 diagnostics. The planned standard library defines an exact outer error shape equivalent to:
 

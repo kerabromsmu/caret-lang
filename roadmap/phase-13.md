@@ -4,6 +4,13 @@
 
 ## Phase 13 — Tooling, standard library, and release hardening
 
+The remaining work in this phase is post-v1. Existing launchers, releases, inspection, testing,
+embedding, and REPL behavior remain part of the compatibility baseline. V1 still requires complete
+tests, runnable feature examples, and accurate documentation for its selected feature set.
+The ordinary `identity` callable belongs to Phase 5, and the shared `Result T` contract belongs
+to Phase 9B; neither waits for a broad standard-library release. Do not make a compiler backend,
+self-interpreter, or generated documentation site a v1 release prerequisite.
+
 - Build standard-library modules for identity, collection transforms/reductions, field manipulation,
   common contracts, formats/codecs, cycle helpers, and reusable rulesets using ordinary Caret where
   feasible.
@@ -27,5 +34,6 @@
 - Author a shared-source “Learn Caret in Y Minutes” tutorial using only implemented behavior and
   runnable examples. Produce both a site page and an upstream-compatible Markdown/YAML contribution,
   with an explicit checklist for metadata, license, formatting, highlighting, links, and submission.
-- Version the language and runtime ABI only after the complete conformance suite passes on supported
-  platforms.
+- Release each selected language milestone only after its applicable conformance suite passes on
+  supported platforms. Establish and version the compiled runtime ABI when Phase 12 exists; the
+  current release numbering follows the release policy in `PLAN.md`.

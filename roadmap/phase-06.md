@@ -4,6 +4,10 @@
 
 ## Phase 6 — SIMD values and lifted execution
 
+Target a later release after v1 and the rules release; no exact version is assigned. SIMD is not a
+prerequisite for ordinary cycles, modules, sandboxes, or rules. Integrate compiler lowering/parity
+when the backend exists; historical phase numbering does not impose release order.
+
 - Introduce fixed-arity `Simd native Scalar` and `Simd lanes Scalar` contracts and Boolean masks.
 - Lift supported pure numeric scalar operations and functions lane-wise. Implement mask selection so
   vector conditionals do not inherit scalar lazy-branch semantics incorrectly.

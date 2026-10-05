@@ -10,9 +10,12 @@
   `main`, inspect the complete diff, and run the full baseline suites before creating or updating
   the pull request.
 * Before selecting the version transition, inspect `PLAN.md`, the complete GitHub project, every
-  card relevant to the current roadmap phase, and the current version documentation. Increment
-  `MINOR` and reset `UPDATE` only when those sources consistently establish that the phase is
-  complete; otherwise increment `UPDATE`. If roadmap text, project status, or completion evidence
+  card relevant to the selected release milestone, and the current version documentation. A
+  milestone may be an explicitly defined phase, phase chunk, or release target; historical phase
+  IDs need not match release numbers. Increment `MINOR` and reset `UPDATE` only when those sources
+  consistently establish that the selected milestone is complete; otherwise increment `UPDATE`.
+  A v1 chunk does not complete a larger phase or mixed conformance requirement whose later work
+  remains unimplemented. If roadmap text, project status, or completion evidence
   conflicts, ask the project owner before changing `VERSION` or creating or updating the pull
   request. Never increment `MAJOR` without explicit project-owner authorization. Validate the
   transition with the repository script.

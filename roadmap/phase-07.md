@@ -4,6 +4,10 @@
 
 ## Phase 7 — First-class bidirectional formats
 
+Target a later release after v1 and the rules release; no exact version is assigned. Formats are
+not a prerequisite for those targets. Reuse the shared `Result T` and existing `ErrorTemplate`
+foundation introduced before v1 sandboxes rather than delaying that result protocol until this phase.
+
 - Add immutable `Format` values representing bidirectional relations. `decode` and `encode` return
   `Result`, with expected failures carrying an `ErrorTemplate` payload. Implement ordinary nullary
   `format : [] -> Format`; bare `format` invokes it under normal nullary rules to produce an empty

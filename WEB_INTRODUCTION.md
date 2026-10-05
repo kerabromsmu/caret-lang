@@ -15,6 +15,23 @@ print answer
 The project explores a simple question: how compact can a programming language become while
 remaining predictable, statically analyzable, and pleasant to work with?
 
+## Planned releases
+
+The [v1 roadmap](PLAN.md#release-targets-and-implementation-order) includes everything already
+implemented plus ordinary cycles, modules, root/module identity and visible-binding metadata,
+shared structured results, and initial sandboxes. These additions are still planned. Initial
+sandboxes will load module paths with fixed environments, expose explicit capabilities, and support
+termination/unloading. Passing a mutable container explicitly shares read/write access; passing
+its immutable contents supplies a snapshot. Nested sandboxes and reflection must preserve the
+same authority boundary.
+
+The next release will add the complete rules, rulesets, objects, and `ruleCycle` feature set,
+provisionally as 1.1; approved incompatible changes would require 2.0. Semantic code reflection,
+serialization/quines, Code-based sandboxes, environment swapping/reload, read-only or virtual
+container views, the Caret-written self-interpreter, SIMD, formats, staging, the compiler backend,
+and remaining tooling belong to later releases. Existing Java embedding and its environment
+swapping remain available. Additional GitHub feature cards will be assigned in a separate review.
+
 ## Designed around expressions
 
 ### Collection evolution

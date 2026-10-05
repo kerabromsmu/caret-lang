@@ -2,6 +2,14 @@
 
 [Conformance index](../CONFORMANCE.md) · [Language specification index](../LANGUAGE.md)
 
+## Release allocation
+
+The unimplemented quine, staging, compiler/backend, and broad tooling requirements here target
+post-v1 releases under [the release roadmap](../PLAN.md). Quines require Phase 9C/9D code work;
+staging retains module/environment prerequisites and the unresolved standard compiler-environment
+interface. Current implemented tooling remains in the v1 baseline. Backend parity and generated
+documentation-site checks become gates when those later facilities exist, not prerequisites for v1.
+
 | ID | Requirement | Status | Automated test evidence | Runnable example | Dependency or note |
 |---|---|---|---|---|---|
 | QUINE-001          | `print toString @root.code` reproduces the canonical code visible in the current environment.                            | planned     | `—`                                                                                                                                                                       | `—`                                        | A sandbox quine cannot reveal hidden host code.                                        |
