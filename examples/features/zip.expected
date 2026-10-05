@@ -9,6 +9,11 @@ Collection
   [ 1 ]
 ]
 [ "a" "b" ]
+[ 1 2 ]
+[ "a" = 1 "b" = 2 ]
+ab
+[ "a" "b" ]
+true
 10
 [
   "same" = 10

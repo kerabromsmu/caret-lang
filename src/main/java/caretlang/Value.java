@@ -656,6 +656,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Map<String, Field> fieldBindings = new HashMap<>();
         private RuntimeException failure;
         private boolean exhausted;
+        private boolean enumerationSorted;
 
         LazyCollection(Shape shape, Producer producer, CollectionRuntime.Facts facts, Integer knownSize,
                        SourceSpan sourceSpan, boolean dictionarySelectable, boolean dictionarySelected) {
@@ -682,6 +683,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
 
         synchronized Optional<Produced> entryAt(int index) {
             if (index < 0) return Optional.empty();
+            if (shape == Shape.INFER && !exhausted) establishNext();
+            if (dictionarySelected && shape == Shape.KEYED) materializeEntries();
             while (established.size() <= index && !exhausted) establishNext();
             if (failure != null) throw failure;
             return index < established.size() ? Optional.of(established.get(index)) : Optional.empty();
@@ -707,6 +710,12 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         synchronized List<Produced> materializeEntries() {
             while (!exhausted) establishNext();
             if (failure != null) throw failure;
+            if (dictionarySelected && shape == Shape.KEYED && !enumerationSorted
+                    && homogeneousSortable(established.stream()
+                    .map(entry -> new KeyedCollection.Entry(entry.key(), entry.value())).toList())) {
+                established.sort((left, right) -> compareKeys(left.key(), right.key()));
+                enumerationSorted = true;
+            }
             return List.copyOf(established);
         }
 
@@ -722,7 +731,6 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             if (current == Shape.SET) settled = Value.KeyedCollection.Shape.SET;
             else if (dictionarySelected && homogeneousSortable(keyed)) {
                 settled = Value.KeyedCollection.Shape.DICTIONARY;
-                keyed.sort((left, right) -> compareKeys(left.key(), right.key()));
             } else settled = Value.KeyedCollection.Shape.GENERAL;
             return new KeyedCollection(settled, keyed);
         }

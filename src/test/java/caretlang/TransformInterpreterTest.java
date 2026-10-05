@@ -11,6 +11,26 @@ import caretlang.InterpreterTestSupport.ModeFailure;
 
 final class TransformInterpreterTest {
     @Test
+    void dictionaryConsumersShareSortedEnumerationAndRetainFirstDuplicates() {
+        assertEquals("[ \"a\" \"b\" ]\n[ 1 2 ]\n[ \"a\" = 1 \"b\" = 2 ]\nab\n[ \"a\" \"b\" ]\ntrue\n[ field 1 10 field 2 20 ]\n12\n[ \"b\" \"a\" ]\nba\n", execute("""
+                (Dictionary String Number) source = zipWithKeys ["b" "a" "b"] [2 1 99]
+                print keys source
+                print values source
+                print fields source
+                key accumulator entry = accumulator + entry[0]
+                print fold source "" key
+                print keys (eager source)
+                print source == [^a = 1 ^b = 2]
+                (Dictionary Number Number) numeric = zipWithKeys [2 1 2] [20 10 99]
+                print fields numeric
+                print fold numeric "" key
+                general = zipWithKeys ["b" "a"] [2 1]
+                print keys general
+                print fold general "" key
+                """));
+    }
+
+    @Test
     void mapTransformsSequencesInOrderThroughOrdinaryCallableForms() {
         assertEquals("[]\n[ 2 ]\n[ 2 4 6 ]\n[ 4 6 ]\n[ 4 8 ]\n[ ? ~ 3 ]\n", execute("""
                 double value = value * 2

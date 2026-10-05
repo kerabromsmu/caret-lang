@@ -158,6 +158,9 @@ than assigned an implicit cross-type ordering. Existing String Dictionary order 
 locale-independent Unicode code-point order. General keyed Collections do not require sortable
 or homogeneous keys; their access contracts still determine permitted keys. First-key retention
 chooses the retained entry during construction, not a replacement for Dictionary sorted enumeration.
+The sorted enumeration is shared by `keys`, `values`, `fields`, transform and fold consumers,
+`eager` traversal, and ordered equality, including Dictionaries constructed from lazy producers.
+Discovering sortable output keys may complete outer production before visiting nested values.
 
 Holes lower through ordinary partial application: `collection[_]` corresponds to
 `getElement collection _`, and `_[key]` awaits a Collection. Ordinary fixed-operand evaluation,

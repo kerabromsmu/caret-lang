@@ -137,6 +137,20 @@ final class EagerScopedInterpreterTest {
     }
 
     @Test
+    void eagerTraversesMappedDictionaryNestedValuesInSortedKeyOrder() {
+        assertEquals("outer2\nouter1\ninner1\ninner2\n[ field 1 [ 1 ] field 2 [ 2 ] ]\n", execute("""
+                (Output Number) inner value =
+                  print "inner" + value
+                  value
+                (Output Field) makeField value =
+                  print "outer" + value
+                  field value (map inner [value])
+                result = eager (map makeField [2 1])
+                print fields result
+                """));
+    }
+
+    @Test
     void eagerRefreshesInferredShapeAfterKeyEnumeration() {
         assertEquals("true\ntrue\n1\n2\n2\n", execute("""
                 makeField value = field ("k" + value) value

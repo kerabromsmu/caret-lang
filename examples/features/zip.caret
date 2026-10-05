@@ -10,6 +10,12 @@ print keys general
 // A Dictionary contract selects homogeneous sorted keys.
 (Dictionary String Number) sorted = zipWithKeys ["b" "a"] [2 1]
 print keys sorted
+print values sorted
+print fields sorted
+key accumulator entry = accumulator + entry[0]
+print fold sorted "" key
+print keys (eager sorted)
+print sorted == [^a = 1 ^b = 2]
 
 // Duplicate keys retain the first position without demanding a known ignored lazy value.
 (Output Number) trace value =
