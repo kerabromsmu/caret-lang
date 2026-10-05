@@ -3,6 +3,15 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Release availability
+
+The complete rules, rulesets, objects, and `ruleCycle` target follows v1 in
+[Phase 8](../roadmap/phase-08.md), provisionally as 1.1. Approved incompatible changes require 2.0
+instead. Rule phase contracts and the tracked container-read/purity interaction must be settled
+before implementation; assigning a release does not settle those language-design questions.
+SIMD, formats, semantic Code, staging, and a compiler backend are not prerequisites. Later
+reflection/projection/backend interactions follow their owning phases.
+
 The canonical text of this chapter is organized into the following sections:
 
 - [Rules](sections/11-01-rules.md)

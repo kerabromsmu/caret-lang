@@ -10,6 +10,21 @@ decision.
 Requirement IDs are permanent. Rows may change status, evidence, or wording, but an ID must not be
 reused for another behavior.
 
+## Release allocation and partial requirements
+
+[`PLAN.md`](PLAN.md#release-targets-and-implementation-order) owns release allocation, independently
+of the statuses here. V1 includes all implemented rows plus ordinary cycles, Phase 9A modules,
+Phase 9B environments/metadata and shared `Result T`, and Phase 10A initial sandboxes. The complete
+rules/rulesets/objects/`ruleCycle` phase targets the next release, provisionally 1.1. Advanced
+module/sandbox work and the remaining phases target later releases.
+
+Existing IDs, statuses, and evidence remain intact. A row combining v1 and later behavior must
+remain planned with partial evidence until the whole requirement is implemented. In particular,
+metadata plus `.code`, path plus Code sandbox construction, termination/unloading plus reload,
+all container projection modes, and effect propagation through future facilities cannot be marked
+fully implemented by completing only their v1 portion. Chunk completion audits must identify their
+covered behavior explicitly and may add focused requirements without reusing an existing ID.
+
 ## Phase 4 completion record
 
 The Phase 4 completion audit (#79) verifies the implemented Collection protocol, contextual

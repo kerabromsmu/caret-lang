@@ -443,6 +443,11 @@ The exact derived-context declaration mechanism is specified separately, but con
 <a id="containers-and-sandboxes"></a>
 ### Containers and sandboxes
 
+The [v1 sandbox subset](../../roadmap/phase-10.md#phase-10a-initial-sandboxes-v1) supports explicitly
+shared read/write containers and immutable value snapshots. Read-only views and richer
+mediated/virtual replacements below target Phase 10C. All implemented in-environment container
+behavior remains part of v1; only its sandbox integration is currently planned.
+
 A container passed into a sandbox is a capability to observe and potentially modify shared mutable state.
 
 The sandbox boundary must therefore preserve access restrictions.

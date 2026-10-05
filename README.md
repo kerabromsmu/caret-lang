@@ -54,6 +54,17 @@ implementation roadmap, and [CONFORMANCE.md](CONFORMANCE.md) maps specification 
 their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS.md) inventories
 every current diagnostic message variant and its exact fixture or focused test evidence.
 
+The [release roadmap](PLAN.md#release-targets-and-implementation-order) defines **1.0** as the
+implemented baseline plus ordinary cycles, modules, metadata-only root/module reflection, the
+shared `Result T` contract, and initial path-based sandboxes. Those additions are planned, not
+implemented by this roadmap change. V1 sandboxes will use fixed environments, exported calls,
+termination/unloading, explicitly shared read/write containers, and immutable data snapshots.
+Semantic Code/serialization, Code-based sandboxes, environment swaps/reload, and restricted
+container views follow later. The complete rules/rulesets/objects/`ruleCycle` phase targets the
+next release, provisionally **1.1**, or **2.0** if approved changes break v1 compatibility.
+Self-hosting, SIMD, formats, staging, the compiler backend, and remaining tooling are later work.
+GitHub card allocation awaits a separate review.
+
 For a conceptual comparison with related language families, see
 [Caret Doesn’t Look Like One Language — and That’s the Point](docs/language-comparison.md). That
 article covers both implemented foundations and explicitly labeled planned features.
@@ -128,9 +139,9 @@ stages the remainder of its current expression boundary rather than participatin
 operator precedence. The standard compiler environment remains unresolved, and no staging support
 is implemented yet.
 
-After the language and conformance roadmap is complete, the project plans to publish the canonical
+In a later documentation release, the project plans to publish the canonical
 feature documents as a searchable MkDocs Material learning site with a left-hand table of contents.
-The same release-hardening work will produce a runnable, implemented-only
+That release-hardening work will produce a runnable, implemented-only
 “Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
 
 See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret) for a runnable
@@ -177,10 +188,18 @@ The tracked [`VERSION`](VERSION) file is the source of the release version in
 `MAJOR.MINOR.UPDATE` form. The completed `0.1.x`, `0.2.x`, `0.3.x`, and `0.4.x` lines represent
 Phases 1 through 4 respectively in [`PLAN.md`](PLAN.md).
 
-- Increment `UPDATE` by exactly one for a release that does not complete a roadmap phase.
-- Increment `MINOR` by exactly one and reset `UPDATE` to zero when the current phase is completed.
+Phase IDs are historical identifiers. Future release numbers need not match them; the roadmap now
+defines release targets and separately completable phase chunks.
+
+- Increment `UPDATE` by exactly one for a release that does not complete an agreed roadmap milestone.
+- Increment `MINOR` by exactly one and reset `UPDATE` to zero when an explicitly defined phase,
+  phase chunk, or release milestone is completed and its evidence agrees with the GitHub project.
 - Increment `MAJOR` by exactly one and reset both lower components only when the project owner
   explicitly authorizes a major release.
+
+The v1 target and provisional rules-release assignment do not themselves change `VERSION` or
+authorize publishing a major release. After v1, use a major transition for approved incompatible
+changes rather than merely for a large feature addition.
 
 Ordinary feature commits do not update `VERSION`. Select and increment it only while preparing a
 pull request whose target is `main`; pull-request and release automation reject unchanged,

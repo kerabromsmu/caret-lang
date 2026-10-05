@@ -4,6 +4,11 @@
 
 ## Phase 11 — Compile-time execution and separate compilation
 
+Target a later release after v1 and the rules release; no exact version is assigned. Retain
+module/execution-environment prerequisites and settle the standard compiler-environment interface
+before implementation. Add format/rule/Code integrations when their owning features exist; none
+makes staging a prerequisite for the v1 runtime.
+
 - Parse binding-form `#` separately and represent expression-form `#` as an explicit staged region
   covering the remainder of its nearest expression boundary. Preserve its complete source span;
   parentheses and other explicit delimiters bound smaller regions, while later operators never

@@ -3,6 +3,27 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Release availability
+
+The Caret-language sandbox feature is still planned. Its
+[v1 subset](../roadmap/phase-10.md#phase-10a-initial-sandboxes-v1) accepts module paths with fixed
+environment snapshots, returns `Result Sandbox`, mediates exported calls, and supports `terminate`
+and `unload`. Restricted imports/catalogs, environment-relative effects/metadata, reflective
+mediation, retained-reference invalidation, and bounded nested authority are required in v1.
+An import path must not bypass module visibility through host filesystem discovery or aliases.
+
+V1 supports explicitly supplied shared read/write containers through mediation that preserves
+identity, content contracts, and effects. A caller may instead pass immutable contents as an
+ordinary value snapshot; reading those contents retains its normal `StateRead` effect. Unsupported
+boundary values must fail explicitly rather than leak native or private implementation state.
+
+Semantic Code input and `.code` await Phase 9C; canonical code/quines await 9D. `swapEnv` and
+`reload` target Phase 10B, and read-only/virtual container views and richer projection mechanisms
+target 10C. The corresponding requirements/examples below describe later planned behavior.
+Caller-supplied filtered or virtual callable implementations can use the v1 environment without
+requiring those later projection mechanisms. The implemented Java embedding API, including its
+environment swapping, retains its existing behavior.
+
 <a id="sandboxes"></a>
 ## Sandboxes
 
@@ -782,7 +803,9 @@ Sandbox isolation therefore applies to both ordinary name resolution and reflect
 <a id="implementation-requirements"></a>
 ## Implementation requirements
 
-The initial implementation should support at minimum:
+The complete sandbox target across releases should support at minimum the following. For v1,
+the release-availability section above selects the required subset; code, swaps/reload, and richer
+projections are later work. Interpreter/compiler parity becomes a gate when the backend exists.
 
 1. Global availability of:
 

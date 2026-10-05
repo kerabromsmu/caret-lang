@@ -13,14 +13,17 @@ boilerplate while retaining clear, predictable, statically analyzable semantics.
 
 - [`CONFORMANCE.md`](CONFORMANCE.md) is the authoritative implemented/planned/deferred status matrix
   and points to automated evidence.
-- [`PLAN.md`](PLAN.md) is the dependency-ordered implementation roadmap.
+- [`PLAN.md`](PLAN.md) owns release targets and dependency-ordered implementation chunks; phase
+  identifiers do not determine release numbers or execution order.
 - [`README.md`](README.md) describes the current prototype and how to run it.
 - [`WEB_INTRODUCTION.md`](WEB_INTRODUCTION.md) is a public-facing introduction, not a normative source.
 
 Unless a section explicitly says otherwise, specification text describes the intended language.
 “Implemented” means the current prototype has automated evidence in the conformance matrix;
-“planned” means normative but not yet implemented; “deferred” means intentionally outside the
-initial implementation target.
+“planned” means normative but not yet implemented; “deferred” means explicitly postponed by its
+owning specification. Release allocation is separate from implementation status: a planned feature
+may target a later release, and a requirement spanning several releases remains incomplete until
+all its behavior has evidence. A release implements its selected subset, not the whole corpus.
 
 ## Core invariants
 
@@ -139,5 +142,5 @@ belongs to the effects specification. Those sections distinguish Phase 4 work fr
 none changes the prototype's implementation status by documentation alone.
 
 Deferred work remains documented in the feature document that owns the affected semantics. The
-current deferred inventory and initial implementation boundary are tracked in
-[`CONFORMANCE.md`](CONFORMANCE.md); future implementation sequencing belongs in [`PLAN.md`](PLAN.md).
+current implementation and deferred inventory are tracked in [`CONFORMANCE.md`](CONFORMANCE.md);
+release boundaries and future implementation sequencing belong in [`PLAN.md`](PLAN.md).

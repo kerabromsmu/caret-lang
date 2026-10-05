@@ -112,6 +112,12 @@ Expected reflection failures such as a missing binding must produce `~` or a str
 
 ### Planned root/module reflection and sandbox isolation
 
+Follow the release chunks in `PLAN.md`: v1 includes metadata-only root/module identity and visible
+binding information, path-based sandboxes with fixed environments, terminate/unload, shared
+read/write containers, and immutable snapshots. Semantic Code/serialization, Code input,
+swaps/reload, and read-only/virtual container views are later features. The implemented Java
+embedding environment-swap API remains available. Do not infer whole-phase completion from v1.
+
 The planned `@root` form denotes the root of the current Caret execution environment, not an
 unconditional process-global root. In a sandbox it must resolve to the substituted sandbox root.
 Program/code metadata must expose only code and references visible in that environment.

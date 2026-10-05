@@ -2,6 +2,19 @@
 
 [Conformance index](../CONFORMANCE.md) · [Language specification index](../LANGUAGE.md)
 
+## Release allocation
+
+[Phases 9A/9B](../roadmap/phase-09.md) and [10A](../roadmap/phase-10.md) target v1: imports,
+environment-relative root/module identity and visible-binding metadata, path-based sandboxes,
+fixed environments, exported calls, termination/unloading, and explicit shared read/write
+containers with immutable value snapshots. All existing Java embedding evidence remains implemented.
+
+Code descriptors/serialization, Code input, swaps/reload, and restricted container projections
+target later chunks. `ROOT-SCHEMA-001`, `MODULE-REFLECT-001`, `SANDBOX-SYNTAX-001`,
+`SANDBOX-RESULT-001`, `SANDBOX-CONTAINER-001`, `SANDBOX-LIFECYCLE-001`, and `MODULE-VIS-001`
+span v1 and later behavior; completing their v1 subset does not complete the whole row.
+Keep statuses/evidence accurate and record covered portions explicitly in chunk completion audits.
+
 | ID | Requirement | Status | Automated test evidence | Runnable example | Dependency or note |
 |---|---|---|---|---|---|
 | ROOT-001           | `@root` refers to the root of the current execution environment, including tests, REPLs, and sandboxes.                   | planned     | `—`                                                                                                                                                                       | `—`                                        | Must not expose a process-global host root from a restricted environment.              |
