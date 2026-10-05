@@ -51,6 +51,69 @@ final class NumericTemplateInterpreterTest {
     }
 
     @Test
+    void mixedNumericOperationsReportLossBeforePromotingExactIntegers() {
+        for (String operator : List.of("+", "-", "*", "/", "%")) {
+            for (String expression : List.of("large " + operator + " 0.5", "0.5 " + operator + " large")) {
+                for (String broad : List.of("Number", "Real")) {
+                    Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+                    interpreter.execute(new Parser("large = 9007199254740993\n(" + broad
+                            + ") result = " + expression).parseProgram());
+                    assertEquals(1, interpreter.warnings().size(), expression);
+                    Diagnostic warning = interpreter.warnings().getFirst();
+                    assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, warning.code());
+                    assertEquals(Diagnostic.Phase.RUNTIME, warning.phase());
+                    assertEquals(2, warning.primarySpan().start().line());
+                    assertEquals(broad.equals("Number") ? 19 : 17, warning.primarySpan().start().column());
+                }
+                LangException error = assertThrows(LangException.class, () -> execute(
+                        "large = 9007199254740993\n(Double) result = " + expression));
+                assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, error.diagnostic().code());
+                assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
+                assertEquals(2, error.span().start().line());
+                assertEquals(19, error.span().start().column());
+            }
+        }
+    }
+
+    @Test
+    void mixedPrecisionPolicyRespectsParameterAndDeclaredResultBoundaries() {
+        LangException parameter = assertThrows(LangException.class, () -> execute("""
+                large = 9007199254740993
+                identity (Double) value = value
+                identity (large + 0.5)
+                """));
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, parameter.diagnostic().code());
+        assertEquals(3, parameter.span().start().line());
+        LangException result = assertThrows(LangException.class, () -> execute("""
+                (Double) calculate value = value + 0.5
+                calculate 9007199254740993
+                """));
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, result.diagnostic().code());
+        assertEquals(1, result.span().start().line());
+        Interpreter broad = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        broad.execute(new Parser("""
+                (Number) calculate value = value + 0.5
+                result = calculate 9007199254740993
+                """).parseProgram());
+        assertEquals(1, broad.warnings().size());
+    }
+
+    @Test
+    void exactPromotionAndExplicitConversionDoNotWarnAboutFloatingRounding() {
+        Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        interpreter.execute(new Parser("""
+                exact = 9007199254740992
+                (Double) rounded = exact + 0.5
+                large = 9007199254740993
+                converted = (Double) large
+                (Double) deliberate = converted + 0.5
+                (Integer) sum = large + 1
+                (Double) ordinary = 0.1 + 0.2
+                """).parseProgram());
+        assertTrue(interpreter.warnings().isEmpty());
+    }
+
+    @Test
     void dynamicPrecisionLossRetainsRuntimePhaseAndExactLocation() {
         String source = """
                 one = 1

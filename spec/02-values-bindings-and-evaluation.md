@@ -112,6 +112,11 @@ creation and ordinary floating-point arithmetic rounding are permitted by their 
 they do not generate precision warnings. Explicit conversion deliberately authorizes its documented
 rounding or truncation and does not generate an implicit-precision warning.
 
+Mixed integer/non-integral arithmetic checks exact integer operands before promoting them to
+`Double`. If that promotion changes an operand, the same warning/error policy applies at the
+operation's source location, for `+`, `-`, `*`, `/`, and `%`. An exactly representable integer
+operand does not warn merely because subsequent floating-point arithmetic rounds its result.
+
 An explicit `Float` result requirement does not select binary32 arithmetic: non-integral arithmetic
 still uses `Double`, and the resulting value must satisfy the requirement. A declaration checks an
 existing value without converting it. Inferred default `Double` results alone do not turn the

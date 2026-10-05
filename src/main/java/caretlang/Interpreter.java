@@ -1911,6 +1911,7 @@ final class Interpreter {
                     }
                     yield result;
                 }
+                checkFloatingOperands(dividend, divisor, callSpan);
                 yield finiteNumber(dividend.value() / divisor.value(), callSpan);
             }
             case "div" -> {
@@ -1935,8 +1936,9 @@ final class Interpreter {
                 }
                 java.math.BigInteger a = NumericValues.integral(dividend);
                 java.math.BigInteger b = NumericValues.integral(divisor);
-                yield a != null && b != null ? new Value.Num(a.remainder(b))
-                        : finiteNumber(dividend.value() % divisor.value(), callSpan);
+                if (a != null && b != null) yield new Value.Num(a.remainder(b));
+                checkFloatingOperands(dividend, divisor, callSpan);
+                yield finiteNumber(dividend.value() % divisor.value(), callSpan);
             }
             case ">" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) > 0);
             case ">=" -> new Value.Bool(NumericValues.compare(numeric(leftArgument), numeric(rightArgument)) >= 0);
@@ -1971,8 +1973,15 @@ final class Interpreter {
         Value.Num b = numeric(right);
         java.math.BigInteger ai = NumericValues.integral(a);
         java.math.BigInteger bi = NumericValues.integral(b);
-        return ai != null && bi != null ? new Value.Num(exact.apply(ai, bi))
-                : finiteNumber(floating.applyAsDouble(a.value(), b.value()), span);
+        if (ai != null && bi != null) return new Value.Num(exact.apply(ai, bi));
+        checkFloatingOperands(a, b, span);
+        return finiteNumber(floating.applyAsDouble(a.value(), b.value()), span);
+    }
+
+    private void checkFloatingOperands(Value.Num left, Value.Num right, SourceSpan span) {
+        if (!NumericValues.exactlyDouble(left) || !NumericValues.exactlyDouble(right)) {
+            reportImplicitPrecisionLoss(span);
+        }
     }
 
     private Value.Num finiteNumber(double value) {

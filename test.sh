@@ -35,6 +35,7 @@ expect_failure examples/errors/keyed_conversion.caret
 expect_failure examples/errors/conversion_range.caret
 expect_failure examples/errors/conversion_shape.caret
 expect_failure examples/errors/packed_invalid_append.caret
+expect_failure examples/errors/mixed_precision_loss_strict.caret
 expect_failure examples/errors/invalid_lambda_header.caret
 expect_failure examples/errors/invalid_with_target.caret
 expect_failure examples/errors/invalid_outer_path.caret
