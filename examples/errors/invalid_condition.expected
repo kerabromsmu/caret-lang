@@ -1,1 +1,1 @@
-Error: Line 1, column 7: Incompatible inferred contracts: [Number] and [Boolean, Missing, Null]
+Error: Line 1, column 7: Incompatible inferred contracts: [Natural] and [Boolean, Missing, Null]

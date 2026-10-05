@@ -1,0 +1,37 @@
+// Construction is lazy; access and rendering demand only the required predicate calls.
+(Output Boolean) tracedEven value =
+  print value
+  value % 2 == 0
+
+selected = filter [1 2 3 4] tracedEven
+print "created"
+print selected[0]
+print selected
+print isSequential selected
+print isFinite selected
+
+// Keyed Collections expose Fields to transforms and retain the first transformed key.
+keepLarge pair = pair[1] > 1
+print filter [^a = 1 ^b = 2 ^c = 3] keepLarge
+
+collide pair = field "same" (pair[1] * 10)
+print map collide [^a = 1 ^b = 2]
+
+// Sets also expose Fields; plain map results remain Set members.
+(Set Number) members = [1 2 2]
+squareMember pair = pair[0] * pair[0]
+print map squareMember members
+print isUnique (filter members (pair -> true))
+
+// Key enumeration performs the predicate work needed to discover retained keyed entries.
+(Output Boolean) tracedField pair =
+  print pair[0]
+  pair[1] > 1
+keyedSelection = filter [^a = 1 ^b = 2 ^c = 3] tracedField
+print "key demand"
+print keys keyedSelection
+
+// Strict consumers traverse the same Field stream in order.
+sumField accumulator pair = accumulator + pair[1]
+print fold [^left = 2 ^right = 3] 0 sumField
+print any [^first = 1 ^second = 4] (pair -> pair[1] > 3)

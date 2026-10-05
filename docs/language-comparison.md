@@ -155,11 +155,11 @@ This creates a rather different type-system philosophy:
 
 > describe what values satisfy; keep behavior in functions.
 
-## Collections are deliberately underspecified — Planned
+## Collections use context — Partly implemented
 
-The planned universal collection model tries to avoid encoding representation decisions into basic
-syntax. The prototype currently provides eager sequence literals plus persistent sequence and
-dictionary primitives; the contract-selected representations below are conceptual.
+The universal Collection model avoids encoding representation decisions into basic syntax. The
+prototype supports contract-selected Sequence, Set, Dictionary, and packed representations;
+additional list and array forms remain planned.
 
 The literal:
 
@@ -173,10 +173,10 @@ means essentially:
 
 It does not inherently mean "list."
 
-Context may determine that it is a list, array, set, packed buffer, or some other collection representation:
+Context can select a Sequence, Set, or packed representation:
 
 ```caret
-(List Int) a =
+(Sequence Int) a =
   [1 2 3]
 
 (Set Int) b =

@@ -3,11 +3,14 @@ package caretlang;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.math.BigInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Null, Value.Missing,
-        Value.Field, Value.Reflective, Value.Seq, Value.Callable, Value.Attributed {
+        Value.Field, Value.Container, Value.KeyedCollection, Value.LazyCollection, Value.LazySeq,
+        Value.Reflective, Value.Seq, Value.Callable, Value.Attributed, Value.SettledCollection,
+        Value.PackedCollection {
 
     record Attributed(Value value, Set<ContractDescriptor> contracts) implements Value {
         public Attributed {
@@ -24,13 +27,27 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
-    record Num(double value) implements Value {
+    record Num(double value, BigInteger exactInteger, String literalText) implements Value {
         public Num {
-            if (!Double.isFinite(value)) throw new IllegalArgumentException("Caret numbers must be finite");
+            if (exactInteger == null && !Double.isFinite(value))
+                throw new IllegalArgumentException("Caret numbers must be finite");
         }
+        public Num(double value) { this(value, null, null); }
+        public Num(long value) { this((double) value, BigInteger.valueOf(value), null); }
+        public Num(BigInteger value) { this(value.doubleValue(), Objects.requireNonNull(value), null); }
+        public Num(BigInteger value, String literalText) {
+            this(value.doubleValue(), Objects.requireNonNull(value), literalText);
+        }
+        public Num(double value, String literalText) { this(value, null, literalText); }
+        @Override public boolean equals(Object other) {
+            return other instanceof Num number && NumericValues.compare(this, number) == 0;
+        }
+        @Override public int hashCode() { return NumericValues.decimal(this).stripTrailingZeros().hashCode(); }
         @Override public @NotNull String toString() {
+            if (exactInteger != null) return exactInteger.toString();
             long asLong = (long) value;
-            return value == asLong ? Long.toString(asLong) : Double.toString(value);
+            return value >= Long.MIN_VALUE && value < 0x1.0p63 && value == asLong
+                    ? Long.toString(asLong) : Double.toString(value);
         }
     }
 
@@ -53,12 +70,326 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         @Override public String toString() { return "~"; }
     }
 
-    record Field(String key, Value value) implements Value {
-        public Field {
-            Objects.requireNonNull(key, "field key");
-            Objects.requireNonNull(value, "field value");
+    @FunctionalInterface
+    interface ContainerValidator {
+        Value validate(Value candidate, SourceSpan span);
+    }
+
+    /** Stable-identity mutable cell. Reading and replacement remain explicit language operations. */
+    final class Container implements Value {
+        private Value content;
+        private final List<ContractDescriptor> contentContracts;
+        private final boolean singleContentContract;
+        private final ContainerValidator validator;
+
+        Container(Value content, List<ContractDescriptor> contentContracts, boolean singleContentContract,
+                  ContainerValidator validator) {
+            this.content = Objects.requireNonNull(content);
+            this.contentContracts = List.copyOf(contentContracts);
+            this.singleContentContract = singleContentContract;
+            this.validator = Objects.requireNonNull(validator);
+        }
+
+        synchronized Value current() { return content; }
+        synchronized Value replace(Value candidate, SourceSpan span) {
+            Value validated = Objects.requireNonNull(validator.validate(candidate, span));
+            content = validated;
+            return validated;
+        }
+        List<ContractDescriptor> contentContracts() { return contentContracts; }
+        boolean acceptsContentContract(ContractDescriptor required) {
+            return singleContentContract && contentContracts.size() == 1
+                    && ContractRelations.sameInvariantArgument(contentContracts.getFirst(), required);
+        }
+        @Override public String toString() { return "<container>"; }
+    }
+
+    final class Field implements Value, CollectionRuntime.Provider {
+        private final Value key;
+        private final Value value;
+        private final List<ContractDescriptor> contracts;
+        private final List<Value> owners = new ArrayList<>();
+
+        public Field(Value key, Value value) {
+            this(key, value, List.of());
+        }
+
+        Field(Value key, Value value, List<ContractDescriptor> contracts) {
+            this.key = Objects.requireNonNull(key, "field key");
+            this.value = Objects.requireNonNull(value, "field value");
+            this.contracts = List.copyOf(contracts);
+        }
+
+        public Value key() { return key; }
+        public Value value() { return value; }
+        List<ContractDescriptor> contracts() { return contracts; }
+        synchronized void addOwner(Value owner) {
+            for (Value existing : owners) if (existing == owner) return;
+            owners.add(owner);
+        }
+        synchronized List<Value> owners() { return List.copyOf(owners); }
+        @Override public boolean equals(Object other) {
+            return other instanceof Field field && key.equals(field.key) && value.equals(field.value);
+        }
+        @Override public int hashCode() { return Objects.hash(key, value); }
+        @Override public Value getElement(Value index) {
+            int position = NumericValues.nonNegativeInt(index);
+            return position == 0 ? key : position == 1 ? value : Missing.INSTANCE;
+        }
+        @Override public Value keys() { return new Seq(List.of(new Num(0), new Num(1))); }
+        @Override public Value valueEntries() { return new Seq(List.of(key, value)); }
+        @Override public Value fieldEntries() { return valueEntries(); }
+        @Override public Value size() { return new Num(2); }
+        // The provider protocol is internal; Value variants are public as members of Value.
+        @SuppressWarnings("ClassEscapesDefinedScope")
+        @Override public CollectionRuntime.Facts facts() {
+            return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                    CollectionRuntime.Guarantee.TRUE);
         }
         @Override public @NotNull String toString() { return ValueSemantics.render(this); }
+    }
+
+    /** Settled keyed content whose keys need not be Java Strings. */
+    final class KeyedCollection implements Value, CollectionRuntime.Provider {
+        enum Shape { GENERAL, DICTIONARY, SET }
+        record Entry(Value key, Value value) {
+            Entry { Objects.requireNonNull(key); Objects.requireNonNull(value); }
+        }
+
+        private final Shape shape;
+        private final List<Entry> entries;
+        private final Map<String, Field> fieldBindings = new HashMap<>();
+
+        KeyedCollection(Shape shape, Collection<Entry> entries) {
+            this.shape = Objects.requireNonNull(shape);
+            this.entries = List.copyOf(entries);
+        }
+
+        Shape shape() { return shape; }
+        List<Entry> entries() { return entries; }
+
+        synchronized Field fieldBinding(String name) {
+            Field cached = fieldBindings.get(name);
+            if (cached != null) return cached;
+            for (Entry entry : entries) {
+                if (ValueSemantics.underlying(entry.key()) instanceof Str(String key) && key.equals(name)) {
+                    Field field = new Field(new Str(name), shape == Shape.SET ? Missing.INSTANCE : entry.value());
+                    fieldBindings.put(name, field);
+                    return field;
+                }
+            }
+            return null;
+        }
+
+        @Override public Value getElement(Value key) {
+            for (Entry entry : entries) {
+                if (ValueSemantics.equal(entry.key(), key)) {
+                    return shape == Shape.SET ? entry.key() : entry.value();
+                }
+            }
+            return Missing.INSTANCE;
+        }
+
+        @Override public Value keys() {
+            return new Seq(entries.stream().map(Entry::key).toList());
+        }
+
+        @Override public Value valueEntries() {
+            return shape == Shape.SET ? Missing.INSTANCE
+                    : new Seq(entries.stream().map(Entry::value).toList());
+        }
+
+        @Override public Value fieldEntries() {
+            return new Seq(entries.stream().map(entry -> {
+                Value key = ValueSemantics.underlying(entry.key());
+                return (Value) (key instanceof Str(String name) ? fieldBinding(name)
+                        : new Field(entry.key(), shape == Shape.SET ? Missing.INSTANCE : entry.value()));
+            }).toList());
+        }
+
+        @Override public Value size() { return new Num(entries.size()); }
+
+        @SuppressWarnings("ClassEscapesDefinedScope")
+        @Override public CollectionRuntime.Facts facts() {
+            return new CollectionRuntime.Facts(CollectionRuntime.Guarantee.FALSE,
+                    CollectionRuntime.Guarantee.TRUE,
+                    shape == Shape.SET ? CollectionRuntime.Guarantee.TRUE : CollectionRuntime.Guarantee.UNKNOWN,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
+                    shape == Shape.SET ? CollectionRuntime.Guarantee.FALSE : CollectionRuntime.Guarantee.TRUE);
+        }
+
+        @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
+    /** Fully materialized provider snapshot; keeps source access and guarantee distinctions. */
+    final class SettledCollection implements Value, CollectionRuntime.Provider {
+        record Entry(Value key, Value value) {}
+        private final List<Entry> entries;
+        private final CollectionRuntime.Facts facts;
+        private final boolean keysAvailable;
+        private final ValueKind kind;
+        private final Map<String, Field> fieldBindings = new HashMap<>();
+
+        SettledCollection(List<Entry> entries, CollectionRuntime.Facts facts, boolean keysAvailable,
+                          ValueKind kind) {
+            this.entries = List.copyOf(entries);
+            this.facts = facts;
+            this.keysAvailable = keysAvailable;
+            this.kind = kind;
+        }
+
+        List<Entry> entries() { return entries; }
+        ValueKind kind() { return kind; }
+
+        synchronized Field fieldBinding(String name) {
+            if (!keysAvailable) return null;
+            Field cached = fieldBindings.get(name);
+            if (cached != null) return cached;
+            for (Entry entry : entries) {
+                if (entry.key() != null && ValueSemantics.underlying(entry.key()) instanceof Str(String key)
+                        && key.equals(name)) {
+                    Field field = new Field(new Str(name), facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                            ? Missing.INSTANCE : entry.value());
+                    fieldBindings.put(name, field);
+                    return field;
+                }
+            }
+            return null;
+        }
+        @Override public Value getElement(Value key) {
+            if (!keysAvailable) return Missing.INSTANCE;
+            for (Entry entry : entries) {
+                if (ValueSemantics.equal(entry.key(), key)) {
+                    return facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                            ? entry.key() : entry.value();
+                }
+            }
+            return Missing.INSTANCE;
+        }
+        @Override public Value keys() {
+            return keysAvailable ? new Seq(entries.stream().map(Entry::key).toList()) : Missing.INSTANCE;
+        }
+        @Override public Value valueEntries() {
+            return facts.hasValues() == CollectionRuntime.Guarantee.FALSE ? Missing.INSTANCE
+                    : new Seq(entries.stream().map(Entry::value).toList());
+        }
+        @Override public Value fieldEntries() {
+            if (facts.keyed() != CollectionRuntime.Guarantee.TRUE) {
+                return new Seq(entries.stream().map(Entry::value).toList());
+            }
+            return new Seq(entries.stream().map(entry -> {
+                Value key = entry.key() == null ? null : ValueSemantics.underlying(entry.key());
+                return (Value) (key instanceof Str(String name) && keysAvailable ? fieldBinding(name)
+                        : new Field(entry.key(), facts.hasValues() == CollectionRuntime.Guarantee.FALSE
+                        ? Missing.INSTANCE : entry.value()));
+            }).toList());
+        }
+        @Override public Value size() { return new Num(entries.size()); }
+        @SuppressWarnings("ClassEscapesDefinedScope")
+        @Override public CollectionRuntime.Facts facts() { return facts; }
+        @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
+    /** Selected packed semantics backed by one immutable contiguous payload. */
+    final class PackedCollection implements Value, CollectionRuntime.Provider {
+        private final ContractDescriptor elementContract;
+        private final PackedLayout layout;
+        private final byte[] payload;
+        private final List<Value> referenceValues;
+        private final List<PackedLayout.Metadata> metadata;
+        private final int count;
+        private static final CollectionRuntime.Facts FACTS = new CollectionRuntime.Facts(
+                CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
+                CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.TRUE,
+                CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.TRUE);
+
+        PackedCollection(ContractDescriptor elementContract, List<Value> values, SourceSpan span) {
+            this(elementContract, values, span, true);
+        }
+        PackedCollection(ContractDescriptor elementContract, List<Value> values, SourceSpan span,
+                         boolean optimized) {
+            this.elementContract = Objects.requireNonNull(elementContract);
+            this.layout = PackedLayout.of(elementContract, span);
+            this.count = values.size();
+            long byteCount = (long) layout.stride() * count;
+            if (byteCount > Integer.MAX_VALUE) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                        "Packed payload too large", span);
+            }
+            this.payload = optimized ? new byte[(int) byteCount] : null;
+            this.referenceValues = optimized ? null : List.copyOf(values);
+            ArrayList<PackedLayout.Metadata> captured = optimized ? new ArrayList<>(count) : null;
+            for (int index = 0; index < count; index++) {
+                if (layout.rejects(values.get(index))) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CONTRACT_VIOLATION,
+                            "Packed value does not match its fixed layout", span);
+                }
+                if (optimized) {
+                    layout.write(values.get(index), payload, index * layout.stride());
+                    captured.add(layout.captureMetadata(values.get(index)));
+                }
+            }
+            this.metadata = optimized ? List.copyOf(captured) : null;
+        }
+        private PackedCollection(ContractDescriptor elementContract, PackedLayout layout,
+                                 byte[] payload, List<Value> referenceValues,
+                                 List<PackedLayout.Metadata> metadata, int count) {
+            this.elementContract = elementContract;
+            this.layout = layout;
+            this.payload = payload;
+            this.referenceValues = referenceValues;
+            this.metadata = metadata;
+            this.count = count;
+        }
+        ContractDescriptor elementContract() { return elementContract; }
+        PackedLayout layout() { return layout; }
+        boolean usesContiguousPayload() { return payload != null; }
+        int payloadSize() { return payload == null ? 0 : payload.length; }
+        int length() { return count; }
+        Value at(int index) { return referenceValues == null
+                ? layout.restoreMetadata(layout.read(payload, index * layout.stride()), metadata.get(index))
+                : referenceValues.get(index); }
+        List<Value> values() {
+            if (referenceValues != null) return referenceValues;
+            ArrayList<Value> decoded = new ArrayList<>(count);
+            for (int index = 0; index < count; index++) decoded.add(at(index));
+            return List.copyOf(decoded);
+        }
+        PackedCollection append(Value value) { return append(value, null); }
+        PackedCollection append(Value value, SourceSpan span) {
+            if (referenceValues != null) {
+                ArrayList<Value> appended = new ArrayList<>(referenceValues);
+                appended.add(value);
+                return new PackedCollection(elementContract, layout, null, List.copyOf(appended), null, count + 1);
+            }
+            long byteCount = (long) payload.length + layout.stride();
+            if (byteCount > Integer.MAX_VALUE) {
+                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INVALID_PACKED_LAYOUT,
+                        "Packed payload too large", span);
+            }
+            byte[] appended = Arrays.copyOf(payload, (int) byteCount);
+            layout.write(value, appended, payload.length);
+            ArrayList<PackedLayout.Metadata> captured = new ArrayList<>(metadata);
+            captured.add(layout.captureMetadata(value));
+            return new PackedCollection(elementContract, layout, appended, null, List.copyOf(captured), count + 1);
+        }
+        @Override public Value getElement(Value key) {
+            int index = NumericValues.nonNegativeInt(key);
+            return index >= 0 && index < count ? at(index) : Missing.INSTANCE;
+        }
+        @Override public Value keys() {
+            ArrayList<Value> keys = new ArrayList<>(count);
+            for (int index = 0; index < count; index++) keys.add(new Num(index));
+            return new Seq(keys);
+        }
+        @Override public Value valueEntries() { return new Seq(values()); }
+        @Override public Value fieldEntries() { return valueEntries(); }
+        @Override public Value size() { return new Num(count); }
+        @SuppressWarnings("ClassEscapesDefinedScope")
+        @Override public CollectionRuntime.Facts facts() { return FACTS; }
+        @Override public String toString() { return ValueSemantics.render(new Seq(values())); }
     }
 
     /** The single shape-neutral empty collection literal. */
@@ -103,6 +434,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return reflectedTarget != null && effective(observer).dereference()
                     ? Optional.of(reflectedTarget) : Optional.empty();
         }
+        boolean isReflection() { return reflectedTarget != null; }
         Object semanticIdentity() { return semanticIdentity; }
         @Override public String toString() { return ValueSemantics.render(this); }
     }
@@ -237,6 +569,312 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         }
     }
 
+    /** Language-owned lazy sequential adapter; each position establishes once in this result context. */
+    final class LazySeq implements Value, CollectionRuntime.Provider {
+        private final int size;
+        private final java.util.function.IntFunction<Value> producer;
+        private final Value[] established;
+        private final RuntimeException[] failures;
+        private final boolean[] demanded;
+        private final CollectionRuntime.Facts facts;
+
+        LazySeq(int size, java.util.function.IntFunction<Value> producer) {
+            this(size, producer, new CollectionRuntime.Facts(CollectionRuntime.Guarantee.TRUE,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.UNKNOWN,
+                    CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.FALSE,
+                    CollectionRuntime.Guarantee.TRUE));
+        }
+
+        LazySeq(int size, java.util.function.IntFunction<Value> producer, CollectionRuntime.Facts facts) {
+            if (size < 0) throw new IllegalArgumentException("negative lazy sequence size");
+            this.size = size;
+            this.producer = Objects.requireNonNull(producer);
+            this.facts = Objects.requireNonNull(facts);
+            this.established = new Value[size];
+            this.failures = new RuntimeException[size];
+            this.demanded = new boolean[size];
+        }
+
+        int length() { return size; }
+        synchronized Value at(int index) {
+            if (index < 0 || index >= size) return Missing.INSTANCE;
+            if (!demanded[index]) {
+                demanded[index] = true;
+                try { established[index] = Objects.requireNonNull(producer.apply(index)); }
+                catch (RuntimeException failure) { failures[index] = failure; }
+            }
+            if (failures[index] != null) throw failures[index];
+            return established[index];
+        }
+        List<Value> materialize() {
+            ArrayList<Value> values = new ArrayList<>(size);
+            for (int index = 0; index < size; index++) values.add(at(index));
+            return List.copyOf(values);
+        }
+        @Override public Value getElement(Value key) {
+            int index = NumericValues.nonNegativeInt(key);
+            return index < 0 ? Missing.INSTANCE : at(index);
+        }
+        @Override public Value keys() {
+            ArrayList<Value> keys = new ArrayList<>(size);
+            for (int index = 0; index < size; index++) keys.add(new Num(index));
+            return new Seq(keys);
+        }
+        @Override public Value valueEntries() { return new Seq(materialize()); }
+        @Override public Value fieldEntries() { return valueEntries(); }
+        @Override public Value size() { return new Num(size); }
+        @SuppressWarnings("ClassEscapesDefinedScope")
+        @Override public CollectionRuntime.Facts facts() { return facts; }
+        @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
+    /** Incremental transform result backed by an ordered stream of keyless values or keyed fields. */
+    final class LazyCollection implements Value, CollectionRuntime.Provider {
+        enum Shape { INFER, KEYLESS, KEYED, SET }
+        record Produced(Value key, Value value, Shape shape) {
+            Produced {
+                Objects.requireNonNull(value);
+                Objects.requireNonNull(shape);
+                if (shape == Shape.KEYLESS && key != null) throw new IllegalArgumentException("keyless result has a key");
+                if ((shape == Shape.KEYED || shape == Shape.SET) && key == null) {
+                    throw new IllegalArgumentException("keyed result has no key");
+                }
+            }
+        }
+        @FunctionalInterface interface Producer { Produced next(); }
+
+        private Shape shape;
+        private final Producer producer;
+        private final CollectionRuntime.Facts initialFacts;
+        private final Integer knownSize;
+        private final SourceSpan sourceSpan;
+        private final boolean dictionarySelectable;
+        private final java.util.function.IntPredicate positionExists;
+        private boolean dictionarySelected;
+        private boolean shapeLocked;
+        private final ArrayList<Produced> established = new ArrayList<>();
+        private final Map<String, Field> fieldBindings = new HashMap<>();
+        private RuntimeException failure;
+        private boolean exhausted;
+        private boolean enumerationSorted;
+
+        LazyCollection(Shape shape, Producer producer, CollectionRuntime.Facts facts, Integer knownSize,
+                       SourceSpan sourceSpan, boolean dictionarySelectable, boolean dictionarySelected) {
+            this(shape, producer, facts, knownSize, sourceSpan, dictionarySelectable, dictionarySelected, null);
+        }
+
+        LazyCollection(Shape shape, Producer producer, CollectionRuntime.Facts facts, Integer knownSize,
+                       SourceSpan sourceSpan, boolean dictionarySelectable, boolean dictionarySelected,
+                       java.util.function.IntPredicate positionExists) {
+            this.shape = Objects.requireNonNull(shape);
+            this.producer = Objects.requireNonNull(producer);
+            this.initialFacts = Objects.requireNonNull(facts);
+            this.knownSize = knownSize;
+            this.sourceSpan = sourceSpan;
+            this.dictionarySelectable = dictionarySelectable;
+            this.dictionarySelected = dictionarySelected;
+            this.positionExists = positionExists;
+        }
+
+        boolean hasIndex(int index) {
+            return index >= 0 && (knownSize != null ? index < knownSize
+                    : positionExists != null ? positionExists.test(index) : entryAt(index).isPresent());
+        }
+
+        synchronized Optional<Produced> entryAt(int index) {
+            if (index < 0) return Optional.empty();
+            if (shape == Shape.INFER && !exhausted) establishNext();
+            if (dictionarySelected && shape == Shape.KEYED) materializeEntries();
+            while (established.size() <= index && !exhausted) establishNext();
+            if (failure != null) throw failure;
+            return index < established.size() ? Optional.of(established.get(index)) : Optional.empty();
+        }
+
+        synchronized Field fieldBinding(String name) {
+            Field cached = fieldBindings.get(name);
+            if (cached != null) return cached;
+            for (int index = 0; ; index++) {
+                Optional<Produced> entry = entryAt(index);
+                if (entry.isEmpty()) return null;
+                Value key = entry.get().key();
+                if (key != null && ValueSemantics.underlying(key) instanceof Str(String identifier)
+                        && identifier.equals(name)) {
+                    Field field = new Field(new Str(name), entry.get().shape() == Shape.SET
+                            ? Missing.INSTANCE : entry.get().value());
+                    fieldBindings.put(name, field);
+                    return field;
+                }
+            }
+        }
+
+        synchronized List<Produced> materializeEntries() {
+            while (!exhausted) establishNext();
+            if (failure != null) throw failure;
+            if (dictionarySelected && shape == Shape.KEYED && !enumerationSorted
+                    && homogeneousSortable(established.stream()
+                    .map(entry -> new KeyedCollection.Entry(entry.key(), entry.value())).toList())) {
+                established.sort((left, right) -> compareKeys(left.key(), right.key()));
+                enumerationSorted = true;
+            }
+            return List.copyOf(established);
+        }
+
+        Value materializedValue() {
+            List<Produced> entries = materializeEntries();
+            Shape current = resolvedShape();
+            if (current == Shape.KEYLESS || current == Shape.INFER) {
+                return new Seq(entries.stream().map(Produced::value).toList());
+            }
+            ArrayList<KeyedCollection.Entry> keyed = new ArrayList<>(entries.stream()
+                    .map(entry -> new KeyedCollection.Entry(entry.key(), entry.value())).toList());
+            Value.KeyedCollection.Shape settled;
+            if (current == Shape.SET) settled = Value.KeyedCollection.Shape.SET;
+            else if (dictionarySelected && homogeneousSortable(keyed)) {
+                settled = Value.KeyedCollection.Shape.DICTIONARY;
+            } else settled = Value.KeyedCollection.Shape.GENERAL;
+            return new KeyedCollection(settled, keyed);
+        }
+
+        private static boolean homogeneousSortable(List<KeyedCollection.Entry> entries) {
+            if (entries.isEmpty()) return false;
+            Value first = ValueSemantics.underlying(entries.getFirst().key());
+            Class<?> kind = first.getClass();
+            if (!(first instanceof Num || first instanceof Str || first instanceof Bool || first instanceof Null)) {
+                return false;
+            }
+            return entries.stream().allMatch(entry -> ValueSemantics.underlying(entry.key()).getClass() == kind);
+        }
+
+        private static int compareKeys(Value left, Value right) {
+            left = ValueSemantics.underlying(left);
+            right = ValueSemantics.underlying(right);
+            if (left instanceof Num a && right instanceof Num b) return NumericValues.compare(a, b);
+            if (left instanceof Str(String a) && right instanceof Str(String b)) {
+                return CollectionRuntime.FIELD_ORDER.compare(a, b);
+            }
+            if (left instanceof Bool(boolean a) && right instanceof Bool(boolean b)) return Boolean.compare(a, b);
+            if (left instanceof Null && right instanceof Null) return 0;
+            throw new IllegalArgumentException("Non-sortable transformed Dictionary key");
+        }
+
+        Shape resolvedShape() {
+            synchronized (this) { return shape; }
+        }
+
+        synchronized void selectDictionary() {
+            if (!dictionarySelectable || shapeLocked) return;
+            dictionarySelected = true;
+        }
+
+        synchronized boolean dictionarySelected() { return dictionarySelected; }
+        synchronized void lockShape() { shapeLocked = true; }
+
+        private void establishNext() {
+            try {
+                Produced produced = producer.next();
+                if (produced == null) {
+                    exhausted = true;
+                    return;
+                }
+                if (shape == Shape.INFER) shape = produced.shape();
+                if (produced.shape() != shape) {
+                    throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
+                            "A transformed Collection cannot mix keyed and keyless elements", sourceSpan);
+                }
+                if (shape != Shape.KEYLESS) {
+                    for (Produced existing : established) {
+                        if (ValueSemantics.equal(existing.key(), produced.key())) return;
+                    }
+                }
+                established.add(produced);
+            } catch (RuntimeException problem) {
+                failure = problem;
+                exhausted = true;
+            }
+        }
+
+        @Override public Value getElement(Value key) {
+            Shape current = resolvedShape();
+            if (current == Shape.INFER) {
+                if (entryAt(0).isEmpty()) return Missing.INSTANCE;
+                current = resolvedShape();
+            }
+            if (current == Shape.KEYLESS) {
+                int index = NumericValues.nonNegativeInt(key);
+                return index < 0 ? Missing.INSTANCE
+                        : entryAt(index).map(Produced::value).orElse(Missing.INSTANCE);
+            }
+            int index = 0;
+            Optional<Produced> entry;
+            while ((entry = entryAt(index++)).isPresent()) {
+                if (ValueSemantics.equal(entry.get().key(), key)) {
+                    return current == Shape.SET ? entry.get().key() : entry.get().value();
+                }
+            }
+            return Missing.INSTANCE;
+        }
+
+        @Override public Value keys() {
+            if (resolvedShape() == Shape.KEYLESS && knownSize != null) {
+                ArrayList<Value> keys = new ArrayList<>(knownSize);
+                for (int index = 0; index < knownSize; index++) keys.add(new Num(index));
+                return new Seq(keys);
+            }
+            List<Produced> entries = materializeEntries();
+            if (resolvedShape() == Shape.KEYLESS || resolvedShape() == Shape.INFER) {
+                ArrayList<Value> keys = new ArrayList<>(entries.size());
+                for (int index = 0; index < entries.size(); index++) keys.add(new Num(index));
+                return new Seq(keys);
+            }
+            return ((CollectionRuntime.Provider) materializedValue()).keys();
+        }
+
+        @Override public Value valueEntries() {
+            List<Produced> entries = materializeEntries();
+            if (resolvedShape() == Shape.SET) return Missing.INSTANCE;
+            if (resolvedShape() == Shape.KEYLESS || resolvedShape() == Shape.INFER) {
+                return new Seq(entries.stream().map(Produced::value).toList());
+            }
+            return ((CollectionRuntime.Provider) materializedValue()).valueEntries();
+        }
+
+        @Override public Value fieldEntries() {
+            List<Produced> entries = materializeEntries();
+            if (resolvedShape() == Shape.KEYLESS || resolvedShape() == Shape.INFER) {
+                return new Seq(entries.stream().map(Produced::value).toList());
+            }
+            return new Seq(entries.stream().map(entry -> {
+                Value key = ValueSemantics.underlying(entry.key());
+                return (Value) (key instanceof Str(String name) ? fieldBinding(name)
+                        : new Field(entry.key(), entry.shape() == Shape.SET
+                        ? Missing.INSTANCE : entry.value()));
+            }).toList());
+        }
+
+        @Override public Value size() {
+            return new Num(knownSize != null ? knownSize : materializeEntries().size());
+        }
+
+        @SuppressWarnings("ClassEscapesDefinedScope")
+        @Override public CollectionRuntime.Facts facts() {
+            Shape current = resolvedShape();
+            CollectionRuntime.Guarantee keyed = switch (current) {
+                case KEYLESS -> CollectionRuntime.Guarantee.FALSE;
+                case KEYED, SET -> CollectionRuntime.Guarantee.TRUE;
+                case INFER -> initialFacts.keyed();
+            };
+            CollectionRuntime.Guarantee hasValues = switch (current) {
+                case KEYLESS, KEYED -> CollectionRuntime.Guarantee.TRUE;
+                case SET -> CollectionRuntime.Guarantee.FALSE;
+                case INFER -> initialFacts.hasValues();
+            };
+            return new CollectionRuntime.Facts(initialFacts.sequential(), initialFacts.ordered(),
+                    initialFacts.unique(), initialFacts.finite(), keyed, hasValues);
+        }
+
+        @Override public String toString() { return ValueSemantics.render(this); }
+    }
+
     final class Dictionary implements Reflective {
         private sealed interface Tree permits EmptyTree, Node {}
 
@@ -255,6 +893,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private int size;
         private final Value reflectedTarget;
         private final ReflectionContext reflectionContext;
+        private final Map<String, Field> fieldBindings;
         private volatile Map<String, Value> materialized;
 
         public Dictionary(Map<String, Value> entries) {
@@ -267,29 +906,51 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             this.size = checked.size();
             this.reflectedTarget = null;
             this.reflectionContext = null;
+            this.fieldBindings = bindingsFor(checked);
         }
 
-        private Dictionary(Tree root, int size) {
-            this(root, size, null, null);
+        private Dictionary(Tree root, int size, Map<String, Field> bindings) {
+            this(root, size, null, null, bindings);
         }
 
-        private Dictionary(Tree root, int size, Value reflectedTarget, ReflectionContext reflectionContext) {
+        private Dictionary(Tree root, int size, Value reflectedTarget, ReflectionContext reflectionContext,
+                           Map<String, Field> bindings) {
             this.root = Objects.requireNonNull(root);
             this.size = size;
             this.reflectedTarget = reflectedTarget;
             this.reflectionContext = reflectionContext;
+            this.fieldBindings = new LinkedHashMap<>(bindings);
         }
 
         static Dictionary reflection(Map<String, Value> entries, Value target, ReflectionContext context) {
             Dictionary dictionary = new Dictionary(entries);
             return new Dictionary(dictionary.root, dictionary.size, Objects.requireNonNull(target),
-                    Objects.requireNonNull(context));
+                    Objects.requireNonNull(context), dictionary.fieldBindings);
         }
+
+        private static Map<String, Field> bindingsFor(Map<String, Value> entries) {
+            LinkedHashMap<String, Field> bindings = new LinkedHashMap<>();
+            entries.forEach((key, value) -> bindings.put(key, new Field(new Str(key), value)));
+            return bindings;
+        }
+
+        static Dictionary fromFields(Map<String, Field> fields) {
+            LinkedHashMap<String, Value> values = new LinkedHashMap<>();
+            fields.forEach((key, field) -> values.put(key, field.value()));
+            Dictionary dictionary = new Dictionary(values);
+            dictionary.fieldBindings.clear();
+            dictionary.fieldBindings.putAll(fields);
+            return dictionary;
+        }
+
+        Field fieldBinding(String key) { return fieldBindings.get(key); }
+        Map<String, Field> fieldBindings() { return Collections.unmodifiableMap(fieldBindings); }
 
         Optional<Value> reflectedTarget(ReflectionContext observer) {
             return reflectedTarget != null && reflectionContext.intersect(Objects.requireNonNull(observer)).dereference()
                     ? Optional.of(reflectedTarget) : Optional.empty();
         }
+        boolean isReflection() { return reflectedTarget != null; }
 
         public Map<String, Value> entries() {
             Map<String, Value> result = materialized;
@@ -318,7 +979,9 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             Objects.requireNonNull(key);
             Objects.requireNonNull(value);
             boolean present = containsKey(key);
-            return new Dictionary(putNode(root, key, value), present ? size : size + 1);
+            LinkedHashMap<String, Field> bindings = new LinkedHashMap<>(fieldBindings);
+            bindings.put(key, new Field(new Str(key), value));
+            return new Dictionary(putNode(root, key, value), present ? size : size + 1, bindings);
         }
 
         void putOwned(String key, Value value) {
@@ -327,6 +990,8 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             boolean present = containsKey(key);
             root = putNode(root, key, value);
             if (!present) size++;
+            Field field = new Field(new Str(key), value);
+            fieldBindings.put(key, field);
             materialized = null;
         }
 
@@ -458,24 +1123,46 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
         private final Callable target;
         private final int parameterIndex;
         private final java.util.function.BiFunction<Integer, Argument, Argument> validator;
+        private final java.util.function.IntFunction<TemplateContract> expectedTemplate;
+        private final java.util.function.IntFunction<ParameterizedContract> expectedPacked;
+        private final java.util.function.IntFunction<BuiltinContract> expectedNumericFormat;
+        private final java.util.function.IntFunction<Boolean> strictNumeric;
 
-        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator) {
-            this(target, 0, validator);
+        ContractedCallable(Callable target, java.util.function.BiFunction<Integer, Argument, Argument> validator,
+                           java.util.function.IntFunction<TemplateContract> expectedTemplate,
+                           java.util.function.IntFunction<ParameterizedContract> expectedPacked,
+                           java.util.function.IntFunction<BuiltinContract> expectedNumericFormat,
+                           java.util.function.IntFunction<Boolean> strictNumeric) {
+            this(target, 0, validator, expectedTemplate, expectedPacked, expectedNumericFormat, strictNumeric);
         }
 
         private ContractedCallable(Callable target, int parameterIndex,
-                                   java.util.function.BiFunction<Integer, Argument, Argument> validator) {
+                                   java.util.function.BiFunction<Integer, Argument, Argument> validator,
+                                   java.util.function.IntFunction<TemplateContract> expectedTemplate,
+                                   java.util.function.IntFunction<ParameterizedContract> expectedPacked,
+                                   java.util.function.IntFunction<BuiltinContract> expectedNumericFormat,
+                                   java.util.function.IntFunction<Boolean> strictNumeric) {
             this.target = Objects.requireNonNull(target);
             this.parameterIndex = parameterIndex;
             this.validator = Objects.requireNonNull(validator);
+            this.expectedTemplate = Objects.requireNonNull(expectedTemplate);
+            this.expectedPacked = Objects.requireNonNull(expectedPacked);
+            this.expectedNumericFormat = Objects.requireNonNull(expectedNumericFormat);
+            this.strictNumeric = Objects.requireNonNull(strictNumeric);
         }
+
+        TemplateContract expectedTemplate() { return expectedTemplate.apply(parameterIndex); }
+        ParameterizedContract expectedPacked() { return expectedPacked.apply(parameterIndex); }
+        BuiltinContract expectedNumericFormat() { return expectedNumericFormat.apply(parameterIndex); }
+        boolean strictNumeric() { return strictNumeric.apply(parameterIndex); }
 
         @Override public Value apply(Argument argument, SourceSpan callSpan) {
             argument = validator.apply(parameterIndex, argument);
             int before = target.remainingArity();
             Value result = target.apply(argument, callSpan);
             return before > 1 && result instanceof Callable callable
-                    ? new ContractedCallable(callable, parameterIndex + 1, validator) : result;
+                    ? new ContractedCallable(callable, parameterIndex + 1, validator,
+                    expectedTemplate, expectedPacked, expectedNumericFormat, strictNumeric) : result;
         }
 
         @Override public int remainingArity() { return target.remainingArity(); }
@@ -680,7 +1367,7 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                     "result", resultValue(signature.result(), context),
                     "effects", effectsValue(signature.effects(), context),
                     "variables", new Seq(signature.variables().stream()
-                            .map(variable -> variableValue(variable, context)).toList())), null, "Signature");
+                            .map(variable -> variableValue(variable, context)).toList())), "Signature");
         }
 
         private static Value parameterValue(CallableSignature.Parameter parameter, int position,
@@ -690,26 +1377,26 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
                     "id", parameter.name() == null ? Missing.INSTANCE : new Str(parameter.name()),
                     "requirements", refs(effective(parameter.requirements(), parameter.declared(), context), context),
                     "declared", nullableRefs(parameter.declared(), context),
-                    "inferred", inferredRefs(parameter.inferred(), parameter.declared(), context)), null, "Parameter");
+                    "inferred", inferredRefs(parameter.inferred(), parameter.declared(), context)), "Parameter");
         }
 
         private static Value resultValue(CallableSignature.Result result, ReflectionContext captured) {
             return projected(captured, context -> Map.of(
                     "guarantees", refs(effective(result.guarantees(), result.declared(), context), context),
                     "declared", nullableRefs(result.declared(), context),
-                    "inferred", inferredRefs(result.inferred(), result.declared(), context)), null, "FunctionResult");
+                    "inferred", inferredRefs(result.inferred(), result.declared(), context)), "FunctionResult");
         }
 
         private static Value effectsValue(CallableSignature.Effects effects, ReflectionContext captured) {
             return projected(captured, context -> Map.of(
                     "upperBound", nullableEffects(effective(effects.upperBound(), effects.declared(), context), context),
                     "declared", nullableEffects(effects.declared(), context),
-                    "inferred", inferredEffects(effects.inferred(), effects.declared(), context)), null, "FunctionEffects");
+                    "inferred", inferredEffects(effects.inferred(), effects.declared(), context)), "FunctionEffects");
         }
 
         private static Value variableValue(CallableSignature.Variable variable, ReflectionContext captured) {
             return projected(captured, context -> Map.of("index", new Num(variable.index()),
-                    "requirements", refs(variable.requirements(), context)), null, "SignatureVariable");
+                    "requirements", refs(variable.requirements(), context)), "SignatureVariable");
         }
 
         private static Value refs(List<CallableSignature.ContractTerm> terms, ReflectionContext context) {
@@ -758,11 +1445,11 @@ public sealed interface Value permits Value.Num, Value.Str, Value.Bool, Value.Nu
             return !context.inferredFacts() && declared != null ? declared : complete;
         }
         private static Value metadata(String kind, ReflectionContext captured, Map<String, Value> values) {
-            return projected(captured, ignored -> values, null, kind);
+            return projected(captured, ignored -> values, kind);
         }
         private static Value projected(ReflectionContext captured, ProjectionBody body,
-                                       Value target, String kind) {
-            return projected(captured, body, target, null, kind);
+                                       String kind) {
+            return projected(captured, body, null, null, kind);
         }
         private static Value projected(ReflectionContext captured, ProjectionBody body,
                                        Value target, Object semanticIdentity, String kind) {

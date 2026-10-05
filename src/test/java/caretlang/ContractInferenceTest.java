@@ -65,7 +65,7 @@ final class ContractInferenceTest {
         Ast.FunctionDef choose = (Ast.FunctionDef) program.get(0);
         Ast.FunctionDef mixed = (Ast.FunctionDef) program.get(1);
         assertEquals(Set.of(), inference.contract(choose).parameterRequirements().getFirst());
-        assertEquals(Set.of(BuiltinContract.NUMBER), inference.contract(choose).resultGuarantees());
+        assertEquals(Set.of(BuiltinContract.NATURAL), inference.contract(choose).resultGuarantees());
         assertEquals(Set.of(), inference.contract(mixed).resultGuarantees());
     }
 
@@ -133,7 +133,7 @@ final class ContractInferenceTest {
                 .contract((Ast.FunctionDef) program.getFirst());
         assertEquals(List.of(Set.of(BuiltinContract.NUMBER)), contract.parameterRequirements());
         assertEquals(List.of(Set.of()), contract.inferredParameterRequirements());
-        assertEquals(Set.of(BuiltinContract.NUMBER), contract.resultGuarantees());
+        assertEquals(Set.of(BuiltinContract.NATURAL, BuiltinContract.NUMBER), contract.resultGuarantees());
     }
 
     @Test

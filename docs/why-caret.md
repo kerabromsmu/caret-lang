@@ -324,8 +324,9 @@ is fast. Graphics, GPU, audio, and scientific programmers are later adopters: th
 layout and alignment guarantees, profiling, native interoperability, device APIs, and evidence that
 abstraction does not cost throughput. Caret's planned SIMD model is relevant here—pure scalar
 functions can lift lane-wise, while `collection :: function` requires vectorized execution or a
-diagnostic rather than silently becoming scalar. But without a compiler backend, packed runtime,
-and hardware integration, it remains a direction rather than a reason to migrate workloads.
+diagnostic rather than silently becoming scalar. Packed Collections now have fixed contiguous
+layouts, but without a compiler backend and hardware integration, this remains a direction rather
+than a reason to migrate workloads.
 
 ## Workflow and automation users: possible, but later
 

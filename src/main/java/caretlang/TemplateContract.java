@@ -1,11 +1,9 @@
 package caretlang;
 
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.BiFunction;
 
 /** Exact structural collection contract derived from a language-owned constructor descriptor. */
@@ -32,6 +30,7 @@ final class TemplateContract implements ContractDescriptor {
 
     private boolean matches(CollectionConstructorDescriptor.Node node, Value value,
                             Map<Integer, Value> repeated) {
+        Value attributed = value;
         value = ValueSemantics.underlying(value);
         if (node instanceof CollectionConstructorDescriptor.FixedNode fixed) {
             return ValueSemantics.equal(fixed.value(), value);
@@ -39,14 +38,14 @@ final class TemplateContract implements ContractDescriptor {
         if (node instanceof CollectionConstructorDescriptor.HoleNode(
                 int parameter, List<Object> requirements, SourceSpan span
         )) {
-            Value prior = repeated.putIfAbsent(parameter, value);
-            if (prior != null && !ValueSemantics.equal(prior, value)) return false;
+            Value prior = repeated.putIfAbsent(parameter, attributed);
+            if (prior != null && !ValueSemantics.equal(prior, attributed)) return false;
             for (Object requirement : requirements) {
                 if (requirement instanceof ContractDescriptor contract) {
-                    if (!contract.accepts(value)) return false;
+                    if (!contract.accepts(attributed)) return false;
                 } else {
                     Value result = ValueSemantics.underlying(refinementInvoker.apply(
-                            (Value.Callable) requirement, new Value.Argument(value, span)));
+                            (Value.Callable) requirement, new Value.Argument(attributed, span)));
                     if (!(result instanceof Value.Bool(boolean accepted)) || !accepted) return false;
                 }
             }
@@ -55,7 +54,7 @@ final class TemplateContract implements ContractDescriptor {
         CollectionConstructorDescriptor.CollectionNode collection =
                 (CollectionConstructorDescriptor.CollectionNode) node;
         if (collection.named()) {
-            if (!(value instanceof Value.Dictionary dictionary)
+            if (!(value instanceof Value.Dictionary)
                     && !(value instanceof Value.ProjectedDictionary)) return false;
             Map<String, Value> fields = value instanceof Value.Dictionary dictionary
                     ? dictionary.entries() : ((Value.ProjectedDictionary) value).fields(ReflectionContext.defining());
@@ -78,12 +77,11 @@ final class TemplateContract implements ContractDescriptor {
     }
 
     boolean implies(TemplateContract required) {
-        return nodeImplies(descriptor.root(), required.descriptor.root(),
-                java.util.Collections.newSetFromMap(new IdentityHashMap<>()));
+        return nodeImplies(descriptor.root(), required.descriptor.root());
     }
 
     private boolean nodeImplies(CollectionConstructorDescriptor.Node left,
-                                CollectionConstructorDescriptor.Node right, Set<Object> visiting) {
+                                CollectionConstructorDescriptor.Node right) {
         if (left == right) return true;
         if (right instanceof CollectionConstructorDescriptor.HoleNode target) {
             if (left instanceof CollectionConstructorDescriptor.HoleNode source) {
@@ -106,7 +104,7 @@ final class TemplateContract implements ContractDescriptor {
         for (int index = 0; index < source.elements().size(); index++) {
             CollectionConstructorDescriptor.Element a = source.elements().get(index);
             CollectionConstructorDescriptor.Element b = target.elements().get(index);
-            if (!java.util.Objects.equals(a.name(), b.name()) || !nodeImplies(a.value(), b.value(), visiting)) {
+            if (!java.util.Objects.equals(a.name(), b.name()) || !nodeImplies(a.value(), b.value())) {
                 return false;
             }
         }
@@ -136,6 +134,11 @@ final class TemplateContract implements ContractDescriptor {
             case CollectionConstructorDescriptor.FixedNode ignored -> "fixed";
             case CollectionConstructorDescriptor.HoleNode ignored -> "hole";
         }));
+        fields.put("defaultsMissing", new Value.Bool(element.defaultsMissing()));
+        if (element.value() instanceof CollectionConstructorDescriptor.CollectionNode nested) {
+            fields.put("shape", new Value.Str(nested.named() ? "named" : "positional"));
+            fields.put("elements", new Value.Seq(nested.elements().stream().map(this::elementMetadata).toList()));
+        }
         if (element.value() instanceof CollectionConstructorDescriptor.HoleNode hole) {
             fields.put("parameter", new Value.Num(hole.parameter()));
             fields.put("requirements", new Value.Seq(hole.requirements().stream().map(requirement ->

@@ -16,9 +16,9 @@ makePerson name age =
   ^age = age
 ```
 
-The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the planned lexical forms
-`with`, `outer`, `root`, and `module`, `_`, and numbered holes such as `_1` are reserved and cannot
-be used as binding or parameter names.
+The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the implemented `with` and
+`outer` forms, the planned `root` and `module` forms, `_`, and numbered holes such as `_1` are
+reserved and cannot be used as binding or parameter names.
 
 Nested functions capture referenced enclosing bindings by resolver-owned symbol identity. The
 analyzed function representation records each distinct upvalue once, in first semantic source-use
@@ -161,7 +161,7 @@ From lower to higher precedence:
 7. comparison `< <= > >=`
 8. named binary infix functions
 9. addition `+ -`
-10. multiplication `* / %` (Phase 4 adds `div` at this same level)
+10. multiplication `* / % div`
 11. unary `- not` (Phase 4 conversion also covers the following application)
 12. function application
 13. reflection primary `@`
@@ -174,7 +174,7 @@ expression or its deeper indentation block. Evaluation lowers through ordinary c
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
-The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, `:`, and `#`,
+The implemented layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, `:`, and `#`,
 they are consumed by layout handling before expression parsing and have no expression precedence.
 The roles remain separate: `$` groups syntax-level application, `@` reifies one identifier, literal,
 or parenthesized expression, adjacent postfix `:` restores its opaque target, `#` changes execution
@@ -229,19 +229,18 @@ That spelling is only a design direction and is not valid Caret syntax.
 Analyzed named infix calls invoke the same callable values as prefix application. A non-callable
 infix target or a callable whose remaining arity is not two produces a located runtime diagnostic.
 
-## Phase 4 conversion syntax and div (planned)
+## Phase 4 conversion syntax and div (implemented)
 
-These are approved future syntax changes, not current parser support.
+`div` and parenthesized contract conversion are implemented.
 
 `div` is a built-in operator with the same precedence and left associativity as `*`, `/`, and `%`.
 It is not an ordinary named-infix spelling and is reserved against user declaration/shadowing.
 Like the existing binary operators, its value supports prefix calls, aliases, reflection, and
 ordinary partial application. An alias has ordinary named-function syntax, not the reserved
 spelling's special precedence. The operator's pure contract is `[Integer Integer] -> Integer`.
-[Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-planned)
+[Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
 defines truncation toward zero, exactness, remainder, and zero-divisor behavior.
 
-<!-- caret-example: planned -->
 ```caret
 10 div 3 + 2           // (10 div 3) + 2 == 5
 div 7 3                // 2
@@ -276,7 +275,7 @@ function or lambda to convert a subsequently supplied value.
 
 Declaration, parameter, and result clauses stay strict checks; contextual literal creation is
 specified separately. Conversion behavior and its exclusions belong to
-[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-planned).
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented).
 
 <a id="function-composition"></a>
 ## Function composition
@@ -299,8 +298,9 @@ operand, or a non-unary right operand produce located runtime diagnostics. Nulla
 deferred until Caret has a separate first-class callable-value design; `@function` remains a
 non-callable reflective reference. The completed left result is passed as one value even when that
 value is itself callable. Composition uses the ordinary invocation path and therefore preserves
-call-depth checks and argument locations. Contract and effect propagation will be added with the
-planned contract/effect system.
+call-depth checks and argument locations. The implemented callable-signature model propagates
+compatible parameter and result contracts and unions invocation-effect bounds; proven
+incompatibilities receive a located diagnostic.
 
 <a id="lambda-functions"></a>
 ## Lambda Functions
@@ -369,7 +369,7 @@ x ->
 ```
 
 The result of the final expression is the result of the lambda, following the same rules as an
-ordinary function body. Planned layout modifiers may shift the block physically, but do not change
+ordinary function body. Implemented layout modifiers may shift the block physically, but do not change
 its extent, captures, parameters, or result.
 
 Example:

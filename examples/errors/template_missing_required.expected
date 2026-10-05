@@ -1,0 +1,2 @@
+Error: Line 2, column 16: Contract violation for collection literal: missing field name
+  Note: Line 1, column 20: Template field declared here

@@ -1,0 +1,28 @@
+created
+1
+2
+2
+3
+4
+[ 2 4 ]
+~
+true
+[
+  "b" = 2
+  "c" = 3
+]
+[
+  "same" = 10
+]
+[
+  1
+  4
+]
+true
+key demand
+a
+b
+c
+[ "b" "c" ]
+5
+true

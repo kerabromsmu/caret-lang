@@ -1,11 +1,14 @@
 package caretlang;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 
 /** Language-owned policies for public kinds, reflection, equality, and value rendering. */
 final class ValueSemantics {
@@ -26,6 +29,29 @@ final class ValueSemantics {
         LinkedHashMap<String, Value> fields = new LinkedHashMap<>();
         fields.put("kind", new Value.Str(kind(value)));
         switch (value) {
+            case Value.Field field -> {
+                fields.put("key", field.key());
+                fields.put("value", field.value());
+            }
+            case Value.Container container -> fields.put("contentContracts", new Value.Seq(
+                    container.contentContracts().stream().filter(context::names).map(contract -> {
+                        Value.ContractValue target = new Value.ContractValue(contract);
+                        return (Value) Value.Dictionary.reflection(reflectionFields(target, context), target, context);
+                    }).toList()));
+            case Value.KeyedCollection collection -> {
+                fields.put("shape", new Value.Str(collection.shape() == Value.KeyedCollection.Shape.SET
+                        ? "set" : "keyed"));
+                fields.put("size", new Value.Num(collection.entries().size()));
+            }
+            case Value.SettledCollection collection -> fields.put("size", collection.size());
+            case Value.PackedCollection collection -> {
+                fields.put("size", collection.size());
+                if (context.names(collection.elementContract())) {
+                    Value.ContractValue target = new Value.ContractValue(collection.elementContract());
+                    fields.put("elementContract", Value.Dictionary.reflection(
+                            reflectionFields(target, context), target, context));
+                }
+            }
             case Value.EmptyCollection ignored -> {
                 fields.put("shape", new Value.Str("empty"));
                 fields.put("size", new Value.Num(0));
@@ -42,14 +68,29 @@ final class ValueSemantics {
                 fields.put("ids", new Value.Str(String.join(",", projected.keySet())));
             }
             case Value.Seq sequence -> fields.put("size", new Value.Num(sequence.size()));
-            case Value.Reflective reflective -> fields.putAll(reflective instanceof Value.ProjectedDictionary projected
-                    ? projected.fields(context) : reflective.fields());
+            case Value.LazySeq sequence -> fields.put("size", new Value.Num(sequence.length()));
+            case Value.LazyCollection collection -> fields.put("size", collection.size());
+            case Value.Reflective reflective -> fields.putAll(reflective.fields());
             default -> { }
         }
+        CollectionRuntime.provider(value, context).ifPresent(provider -> {
+            CollectionRuntime.Facts facts = provider.facts();
+            facts.validate(null);
+            fields.put("sequential", facts.sequential().value());
+            fields.put("ordered", facts.ordered().value());
+            fields.put("unique", facts.unique().value());
+            fields.put("finite", facts.finite().value());
+            fields.put("keyed", facts.keyed().value());
+            fields.put("hasValues", facts.hasValues().value());
+            fields.put("size", provider.size());
+        });
         return fields;
     }
 
-    private record Pair(Value left, Value right) {}
+    private record CollectionEntry(Value key, Value value) {}
+    private record CollectionView(CollectionRuntime.Facts facts,
+                                  IntFunction<Optional<CollectionEntry>> entryAt) {}
+    private record EqualityShape(CollectionRuntime.Facts facts, boolean neutral) {}
     private record RenderValue(Value value, int indent, boolean quoteStrings) {}
     private record RenderNested(Value value, int indent, Function<Value, String> renderer) {}
 
@@ -58,57 +99,231 @@ final class ValueSemantics {
     }
 
     static boolean equal(Value left, Value right, ReflectionContext context) {
-        ArrayDeque<Pair> pending = new ArrayDeque<>();
-        pending.push(new Pair(left, right));
-        while (!pending.isEmpty()) {
-            Pair pair = pending.pop();
-            Value a = pair.left();
-            Value b = pair.right();
-            if (a instanceof Value.Attributed attributed) a = attributed.value();
-            if (b instanceof Value.Attributed attributed) b = attributed.value();
-            if (a instanceof Value.ContractValue x && b instanceof Value.ContractValue y) {
-                if (x.descriptor() != y.descriptor()) return false;
-                continue;
-            }
-            if (a instanceof Value.ProjectedDictionary x && x.semanticIdentity() != null
-                    || b instanceof Value.ProjectedDictionary y && y.semanticIdentity() != null) {
-                if (!(a instanceof Value.ProjectedDictionary x)
-                        || !(b instanceof Value.ProjectedDictionary y)
-                        || x.semanticIdentity() != y.semanticIdentity()) return false;
-                continue;
-            }
-            if (a instanceof Value.Field(String key, Value value) && b instanceof Value.Field(
-                    String key1, Value value1
-            )) {
-                if (!key.equals(key1)) return false;
-                pending.push(new Pair(value, value1));
-                continue;
-            }
-            if (isEmptyCollection(a) && isEmptyCollection(b)) continue;
-            if (a instanceof Value.Callable || b instanceof Value.Callable) {
-                throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY,
-                        "Callable values cannot be compared for equality", null);
-            }
-            if (a instanceof Value.Num(double x) && b instanceof Value.Num(double y)) {
-                if (x != y) return false;
-            } else if (a instanceof Value.ProjectedDictionary x && b instanceof Value.ProjectedDictionary y) {
-                if (!enqueueFields(x.fields(context), y.fields(context), pending)) return false;
-            } else if (a instanceof Value.ProjectedDictionary x && b instanceof Value.Dictionary y) {
-                if (!enqueueFields(x.fields(context), y.entries(), pending)) return false;
-            } else if (a instanceof Value.Dictionary x && b instanceof Value.ProjectedDictionary y) {
-                if (!enqueueFields(x.entries(), y.fields(context), pending)) return false;
-            } else if (a instanceof Value.Dictionary x && b instanceof Value.Dictionary y) {
-                if (!enqueueFields(x.entries(), y.entries(), pending)) return false;
-            } else if (a instanceof Value.Seq x && b instanceof Value.Seq y) {
-                if (x.size() != y.size()) return false;
-                var xs = x.iterator();
-                var ys = y.iterator();
-                while (xs.hasNext()) pending.push(new Pair(xs.next(), ys.next()));
-            } else if (!Objects.equals(a, b)) {
-                return false;
-            }
+        Value a = underlying(left);
+        Value b = underlying(right);
+        if (a instanceof Value.ContractValue x && b instanceof Value.ContractValue y) {
+            return x.descriptor() == y.descriptor();
         }
-        return true;
+        if (a instanceof Value.ProjectedDictionary x && x.semanticIdentity() != null
+                || b instanceof Value.ProjectedDictionary y && y.semanticIdentity() != null) {
+            return a instanceof Value.ProjectedDictionary x
+                    && b instanceof Value.ProjectedDictionary y
+                    && x.semanticIdentity() == y.semanticIdentity();
+        }
+        if (a instanceof Value.Field || b instanceof Value.Field) {
+            return a instanceof Value.Field x && b instanceof Value.Field y
+                    && equal(x.key(), y.key(), context) && equal(x.value(), y.value(), context);
+        }
+        if (a instanceof Value.Callable || b instanceof Value.Callable) {
+            throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.CALLABLE_EQUALITY,
+                    "Callable values cannot be compared for equality", null);
+        }
+        Optional<CollectionRuntime.Provider> leftProvider = CollectionRuntime.provider(a, context);
+        Optional<CollectionRuntime.Provider> rightProvider = CollectionRuntime.provider(b, context);
+        if (leftProvider.isPresent() || rightProvider.isPresent()) {
+            return leftProvider.isPresent() && rightProvider.isPresent()
+                    && equalCollections(a, leftProvider.get(), b, rightProvider.get(), context);
+        }
+        if (a instanceof Value.Num leftNumber && b instanceof Value.Num rightNumber) {
+            return NumericValues.compare(leftNumber, rightNumber) == 0;
+        }
+        return Objects.equals(a, b);
+    }
+
+    private static boolean equalCollections(Value left, CollectionRuntime.Provider leftProvider,
+                                            Value right, CollectionRuntime.Provider rightProvider,
+                                            ReflectionContext context) {
+        CollectionRuntime.Facts leftFacts = leftProvider.facts();
+        CollectionRuntime.Facts rightFacts = rightProvider.facts();
+        leftFacts.validate(null);
+        rightFacts.validate(null);
+        if (leftFacts.finite() == CollectionRuntime.Guarantee.FALSE
+                || rightFacts.finite() == CollectionRuntime.Guarantee.FALSE) return false;
+        boolean leftNeutral = left == Value.EmptyCollection.INSTANCE;
+        boolean rightNeutral = right == Value.EmptyCollection.INSTANCE;
+        if (leftNeutral || rightNeutral) {
+            CollectionView leftView = collectionView(left, leftProvider, context);
+            CollectionView rightView = collectionView(right, rightProvider, context);
+            return leftView.entryAt().apply(0).isEmpty() && rightView.entryAt().apply(0).isEmpty();
+        }
+        if (leftFacts.ordered() == CollectionRuntime.Guarantee.UNKNOWN
+                || rightFacts.ordered() == CollectionRuntime.Guarantee.UNKNOWN) return false;
+
+        EqualityShape leftShape = equalityShape(left, leftFacts);
+        EqualityShape rightShape = equalityShape(right, rightFacts);
+        leftFacts = leftShape.facts();
+        rightFacts = rightShape.facts();
+        leftNeutral = leftShape.neutral();
+        rightNeutral = rightShape.neutral();
+        if (!leftNeutral && !rightNeutral) {
+            if (leftFacts.ordered() != rightFacts.ordered()) return false;
+            if (leftFacts.keyed() == CollectionRuntime.Guarantee.UNKNOWN
+                    || rightFacts.keyed() == CollectionRuntime.Guarantee.UNKNOWN
+                    || leftFacts.keyed() != rightFacts.keyed()) return false;
+            if (leftFacts.keyed() == CollectionRuntime.Guarantee.TRUE
+                    && (leftFacts.hasValues() == CollectionRuntime.Guarantee.UNKNOWN
+                    || rightFacts.hasValues() == CollectionRuntime.Guarantee.UNKNOWN
+                    || leftFacts.hasValues() != rightFacts.hasValues())) return false;
+        }
+
+        CollectionView leftView = collectionView(left, leftProvider, context);
+        CollectionView rightView = collectionView(right, rightProvider, context);
+        if (leftNeutral || rightNeutral) {
+            return leftView.entryAt().apply(0).isEmpty() && rightView.entryAt().apply(0).isEmpty();
+        }
+        if (leftFacts.ordered() == CollectionRuntime.Guarantee.TRUE) {
+            return equalOrdered(leftView, rightView, context);
+        }
+        return leftFacts.keyed() == CollectionRuntime.Guarantee.TRUE
+                ? equalUnorderedKeyed(leftView, rightView, context)
+                : equalUnorderedValues(leftView, rightView, context);
+    }
+
+    private static EqualityShape equalityShape(Value value, CollectionRuntime.Facts facts) {
+        if (value == Value.EmptyCollection.INSTANCE) return new EqualityShape(facts, true);
+        if (facts.keyed() != CollectionRuntime.Guarantee.UNKNOWN
+                || !(value instanceof Value.LazyCollection collection)) {
+            return new EqualityShape(facts, false);
+        }
+        boolean empty = collection.entryAt(0).isEmpty();
+        return new EqualityShape(collection.facts(), empty);
+    }
+
+    private static boolean equalOrdered(CollectionView left, CollectionView right,
+                                        ReflectionContext context) {
+        for (int index = 0; ; index++) {
+            Optional<CollectionEntry> leftEntry = left.entryAt().apply(index);
+            Optional<CollectionEntry> rightEntry = right.entryAt().apply(index);
+            if (leftEntry.isEmpty() || rightEntry.isEmpty()) return leftEntry.isEmpty() && rightEntry.isEmpty();
+            if (left.facts().keyed() == CollectionRuntime.Guarantee.TRUE
+                    && !equal(leftEntry.get().key(), rightEntry.get().key(), context)) return false;
+            if (left.facts().hasValues() != CollectionRuntime.Guarantee.FALSE
+                    && !equal(leftEntry.get().value(), rightEntry.get().value(), context)) return false;
+        }
+    }
+
+    private static boolean equalUnorderedKeyed(CollectionView left, CollectionView right,
+                                               ReflectionContext context) {
+        ArrayList<CollectionEntry> rightEntries = new ArrayList<>();
+        ArrayList<Boolean> matched = new ArrayList<>();
+        int rightIndex = 0;
+        for (int leftIndex = 0; ; leftIndex++) {
+            Optional<CollectionEntry> candidate = left.entryAt().apply(leftIndex);
+            if (candidate.isEmpty()) break;
+            int match = matchingEntry(candidate.get().key(), rightEntries, matched, context);
+            while (match < 0) {
+                Optional<CollectionEntry> added = right.entryAt().apply(rightIndex++);
+                if (added.isEmpty()) return false;
+                rightEntries.add(added.get());
+                matched.add(false);
+                match = matchingEntry(candidate.get().key(), rightEntries, matched, context);
+            }
+            matched.set(match, true);
+            if (left.facts().hasValues() != CollectionRuntime.Guarantee.FALSE
+                    && !equal(candidate.get().value(), rightEntries.get(match).value(), context)) return false;
+        }
+        if (right.entryAt().apply(rightIndex).isPresent()) return false;
+        return matched.stream().allMatch(Boolean::booleanValue);
+    }
+
+    private static int matchingEntry(Value key, List<CollectionEntry> candidates, List<Boolean> matched,
+                                     ReflectionContext context) {
+        for (int index = 0; index < candidates.size(); index++) {
+            if (!matched.get(index) && equal(key, candidates.get(index).key(), context)) return index;
+        }
+        return -1;
+    }
+
+    private static boolean equalUnorderedValues(CollectionView left, CollectionView right,
+                                                ReflectionContext context) {
+        ArrayList<CollectionEntry> rightEntries = new ArrayList<>();
+        ArrayList<Boolean> matched = new ArrayList<>();
+        int rightIndex = 0;
+        for (int leftIndex = 0; ; leftIndex++) {
+            Optional<CollectionEntry> candidate = left.entryAt().apply(leftIndex);
+            if (candidate.isEmpty()) break;
+            int match = matchingValue(candidate.get().value(), rightEntries, matched, context);
+            while (match < 0) {
+                Optional<CollectionEntry> added = right.entryAt().apply(rightIndex++);
+                if (added.isEmpty()) return false;
+                rightEntries.add(added.get());
+                matched.add(false);
+                match = matchingValue(candidate.get().value(), rightEntries, matched, context);
+            }
+            matched.set(match, true);
+        }
+        if (right.entryAt().apply(rightIndex).isPresent()) return false;
+        return matched.stream().allMatch(Boolean::booleanValue);
+    }
+
+    private static int matchingValue(Value value, List<CollectionEntry> candidates, List<Boolean> matched,
+                                     ReflectionContext context) {
+        for (int index = 0; index < candidates.size(); index++) {
+            if (!matched.get(index) && equal(value, candidates.get(index).value(), context)) return index;
+        }
+        return -1;
+    }
+
+    private static CollectionView collectionView(Value value, CollectionRuntime.Provider provider,
+                                                 ReflectionContext context) {
+        CollectionRuntime.Facts facts = provider.facts();
+        if (value == Value.EmptyCollection.INSTANCE) {
+            return new CollectionView(facts, ignored -> Optional.empty());
+        }
+        if (value instanceof Value.Seq sequence) {
+            return new CollectionView(facts, index -> sequence.find(index)
+                    .map(element -> new CollectionEntry(null, element)));
+        }
+        if (value instanceof Value.LazySeq sequence) {
+            return new CollectionView(facts, index -> index >= 0 && index < sequence.length()
+                    ? Optional.of(new CollectionEntry(null, sequence.at(index))) : Optional.empty());
+        }
+        if (value instanceof Value.LazyCollection collection) {
+            return new CollectionView(facts, index -> collection.entryAt(index)
+                    .map(entry -> new CollectionEntry(entry.key(), entry.value())));
+        }
+        if (value instanceof Value.SettledCollection collection) {
+            return new CollectionView(facts, index -> index >= 0 && index < collection.entries().size()
+                    ? Optional.of(new CollectionEntry(collection.entries().get(index).key(),
+                    collection.entries().get(index).value())) : Optional.empty());
+        }
+        if (value instanceof Value.KeyedCollection collection) {
+            return new CollectionView(facts, index -> index >= 0 && index < collection.entries().size()
+                    ? Optional.of(new CollectionEntry(collection.entries().get(index).key(),
+                    collection.entries().get(index).value())) : Optional.empty());
+        }
+        if (value instanceof Value.Dictionary dictionary) {
+            List<Map.Entry<String, Value>> entries = List.copyOf(dictionary.entries().entrySet());
+            return dictionaryView(facts, entries);
+        }
+        if (value instanceof Value.ProjectedDictionary dictionary) {
+            List<Map.Entry<String, Value>> entries = List.copyOf(dictionary.fields(context).entrySet());
+            return dictionaryView(facts, entries);
+        }
+        Value fields = underlying(provider.fieldEntries());
+        return new CollectionView(facts, index -> sequenceValue(fields, index).map(element -> {
+            if (facts.keyed() != CollectionRuntime.Guarantee.TRUE) return new CollectionEntry(null, element);
+            if (!(underlying(element) instanceof Value.Field field)) {
+                throw new IllegalStateException("Keyed Collection provider returned a non-Field entry");
+            }
+            return new CollectionEntry(field.key(), field.value());
+        }));
+    }
+
+    private static CollectionView dictionaryView(CollectionRuntime.Facts facts,
+                                                  List<Map.Entry<String, Value>> entries) {
+        return new CollectionView(facts, index -> index >= 0 && index < entries.size()
+                ? Optional.of(new CollectionEntry(new Value.Str(entries.get(index).getKey()),
+                entries.get(index).getValue())) : Optional.empty());
+    }
+
+    private static Optional<Value> sequenceValue(Value sequence, int index) {
+        if (index < 0) return Optional.empty();
+        if (sequence == Value.EmptyCollection.INSTANCE) return Optional.empty();
+        if (sequence instanceof Value.Seq values) return values.find(index);
+        if (sequence instanceof Value.LazySeq values) return index < values.length()
+                ? Optional.of(values.at(index)) : Optional.empty();
+        throw new IllegalStateException("Collection provider enumeration is not a Sequence");
     }
 
     static boolean equalityEligible(Value root) {
@@ -117,13 +332,35 @@ final class ValueSemantics {
         while (!pending.isEmpty()) {
             Value value = underlying(pending.pop());
             if (value instanceof Value.Callable) return false;
-            if (value instanceof Value.Field field) pending.push(field.value());
+            if (value instanceof Value.Field field) {
+                pending.push(field.key());
+                pending.push(field.value());
+            }
+            else if (value instanceof Value.KeyedCollection collection) {
+                collection.entries().forEach(entry -> {
+                    pending.push(entry.key());
+                    pending.push(entry.value());
+                });
+            }
+            else if (value instanceof Value.SettledCollection collection) {
+                collection.entries().forEach(entry -> {
+                    if (collection.facts().keyed() == CollectionRuntime.Guarantee.TRUE) pending.push(entry.key());
+                    pending.push(entry.value());
+                });
+            }
+            else if (value instanceof Value.PackedCollection collection) {
+                collection.values().forEach(pending::push);
+            }
             else if (value instanceof Value.Dictionary dictionary) {
                 dictionary.entries().values().forEach(pending::push);
             } else if (value instanceof Value.ProjectedDictionary dictionary) {
                 dictionary.fields(ReflectionContext.defining()).values().forEach(pending::push);
             } else if (value instanceof Value.Seq sequence) {
                 sequence.values().forEach(pending::push);
+            } else if (value instanceof Value.LazySeq sequence) {
+                sequence.materialize().forEach(pending::push);
+            } else if (value instanceof Value.LazyCollection collection) {
+                pending.push(collection.materializedValue());
             }
         }
         return true;
@@ -131,10 +368,6 @@ final class ValueSemantics {
 
     static String render(Value root) {
         return render(root, null, ReflectionContext.defining());
-    }
-
-    static String render(Value root, Function<Value, String> nestedRenderer) {
-        return render(root, nestedRenderer, ReflectionContext.defining());
     }
 
     static String render(Value root, Function<Value, String> nestedRenderer, ReflectionContext context) {
@@ -218,7 +451,50 @@ final class ValueSemantics {
                 }
                 case RenderValue(Value.Field field, int indent, boolean ignoredQuote) -> {
                     pending.push(new RenderValue(field.value(), indent, true));
-                    pending.push(quoted(field.key()) + " = ");
+                    if (ValueSemantics.underlying(field.key()) instanceof Value.Str(String key)) {
+                        pending.push(quoted(key) + " = ");
+                    } else {
+                        pending.push(" ");
+                        pending.push(new RenderValue(field.key(), indent, true));
+                        pending.push("field ");
+                    }
+                }
+                case RenderValue(Value.LazySeq sequence, int indent, boolean quote) ->
+                        pending.push(new RenderValue(new Value.Seq(sequence.materialize()), indent, quote));
+                case RenderValue(Value.LazyCollection collection, int indent, boolean quote) ->
+                        pending.push(new RenderValue(collection.materializedValue(), indent, quote));
+                case RenderValue(Value.SettledCollection collection, int indent, boolean quote) -> {
+                    if (collection.facts().keyed() == CollectionRuntime.Guarantee.TRUE) {
+                        Value.KeyedCollection.Shape shape = collection.facts().hasValues()
+                                == CollectionRuntime.Guarantee.FALSE ? Value.KeyedCollection.Shape.SET
+                                : Value.KeyedCollection.Shape.GENERAL;
+                        pending.push(new RenderValue(new Value.KeyedCollection(shape,
+                                collection.entries().stream().map(entry ->
+                                        new Value.KeyedCollection.Entry(entry.key(), entry.value())).toList()),
+                                indent, quote));
+                    } else {
+                        pending.push(new RenderValue(new Value.Seq(collection.entries().stream()
+                                .map(Value.SettledCollection.Entry::value).toList()), indent, quote));
+                    }
+                }
+                case RenderValue(Value.KeyedCollection collection, int indent, boolean ignoredQuote) -> {
+                    if (collection.entries().isEmpty()) {
+                        output.append("[]");
+                        continue;
+                    }
+                    pending.push("\n" + spaces(indent) + "]");
+                    for (int index = collection.entries().size() - 1; index >= 0; index--) {
+                        Value.KeyedCollection.Entry entry = collection.entries().get(index);
+                        if (index + 1 < collection.entries().size()) pending.push("\n");
+                        if (collection.shape() == Value.KeyedCollection.Shape.SET) {
+                            pending.push(new RenderValue(entry.key(), indent + 2, true));
+                        } else {
+                            pending.push(new RenderValue(new Value.Field(entry.key(), entry.value()),
+                                    indent + 2, true));
+                        }
+                        pending.push(spaces(indent + 2));
+                    }
+                    pending.push("[\n");
                 }
                 case RenderValue(Value value, int ignoredIndent, boolean ignoredQuote) -> output.append(value);
                 default -> throw new IllegalStateException("Unknown render task: " + item);
@@ -229,7 +505,11 @@ final class ValueSemantics {
 
     private static boolean isCollection(Value value) {
         value = underlying(value);
-        return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary || value instanceof Value.Seq;
+        return value instanceof Value.EmptyCollection || value instanceof Value.Dictionary
+                || value instanceof Value.Seq || value instanceof Value.LazySeq
+                || value instanceof Value.LazyCollection || value instanceof Value.KeyedCollection
+                || value instanceof Value.SettledCollection
+                || value instanceof Value.PackedCollection;
     }
 
     private static String spaces(int count) { return " ".repeat(count); }
@@ -253,16 +533,4 @@ final class ValueSemantics {
         return result.append('"').toString();
     }
 
-    private static boolean isEmptyCollection(Value value) {
-        return value instanceof Value.EmptyCollection
-                || value instanceof Value.Seq sequence && sequence.size() == 0
-                || value instanceof Value.Dictionary dictionary && dictionary.size() == 0;
-    }
-
-    private static boolean enqueueFields(Map<String, Value> left, Map<String, Value> right,
-                                         ArrayDeque<Pair> pending) {
-        if (!left.keySet().equals(right.keySet())) return false;
-        for (String key : left.keySet()) pending.push(new Pair(left.get(key), right.get(key)));
-        return true;
-    }
 }

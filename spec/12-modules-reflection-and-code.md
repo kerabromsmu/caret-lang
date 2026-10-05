@@ -3,6 +3,22 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Release availability
+
+Modules and both path/ModuleId import forms target v1 in
+[Phase 9A](../roadmap/phase-09.md#phase-9a-modules-and-imports-v1). Environment-relative,
+metadata-only `@root`/`@module`, their identity relation, and public `kind`, `id`, and visible
+binding `ids` metadata target v1 in
+[Phase 9B](../roadmap/phase-09.md#phase-9b-execution-environments-metadata-and-results-v1).
+None of these planned additions is implemented merely by assigning that target.
+
+Semantic `.code`, `Code`/`CodeElement`, code snapshots, and Code-based sandbox input follow in 9C;
+canonical serialization, structural code equality, and quines follow in 9D. The code-related
+requirements and examples below describe that later target, not the v1 metadata surface. V1 must
+not expose raw source, Java AST/runtime objects, or host implementations as a substitute for Code.
+Later code visibility grants information without granting access to private bindings. Staging and
+persisted compiler interfaces/caches follow their owning later phases.
+
 <a id="planned-modules-and-compilation"></a>
 ## Planned lazy reflection integration
 
@@ -20,11 +36,16 @@ handler facilities remain deferred; the
 [effects specification](05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)
 owns their design.
 
-The [planned Collection protocol](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned)
+The [implemented Collection protocol](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
 exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
 an ordinary protocol operation, not restricted to metadata access.
+For a reflective Collection, `getElement`, `keys`, `values`, `fields`, `size`, equality, and
+Collection facts use the intersection of the reference's captured context and the current
+observer context. Merely checking Collection membership does not project metadata. Retaining a
+reference across observer changes cannot reveal names or inferred facts hidden from either
+context.
 
-Planned `eager` replaces a reflection reference with the empty Collection without traversing its
+Implemented Collection-value `eager` replaces a reflection reference with the empty Collection without traversing its
 metadata, including nested references. It does not snapshot the reflective target or recover
 anything hidden by an environment boundary. This behavior leaves ordinary reflection intact.
 
@@ -174,8 +195,9 @@ loaded as the root module:
 catalog lookup identity; `@module` reflects the current source module. Module metadata may eventually
 expose its ID when present, but this specification does not yet assign a field name for it.
 
-The initial metadata common to these references consists of `kind`, `id`, visible binding
-`ids`, and semantic `code`. Future catalogs such as `functions`, `contracts`, and `modules` may
+V1 metadata common to these references consists of `kind`, `id`, and visible binding `ids`.
+Phase 9C adds semantic `code`; the complete intended metadata includes all four fields.
+Future catalogs such as `functions`, `contracts`, and `modules` may
 be added, but their entries are non-callable descriptors; ordinary bindings remain the invocation
 path.
 

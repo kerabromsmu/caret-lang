@@ -51,6 +51,7 @@ final class Environment {
     }
 
     private final Environment parent;
+    private Value memberOwner;
     private final Map<String, Binding> values = new LinkedHashMap<>();
     private final List<Binding> slots = new ArrayList<>();
     private final List<String> slotNames = new ArrayList<>();
@@ -63,6 +64,20 @@ final class Environment {
     Environment(Environment parent, Map<Integer, BindingReference> captures) {
         this.parent = parent;
         this.captures = Map.copyOf(captures);
+    }
+
+    Environment parent() { return parent; }
+    void memberOwner(Value owner) { memberOwner = owner; }
+    Value memberOwner() { return memberOwner; }
+
+    Value inheritedValue(String name) {
+        return parent == null ? null : parent.findInitialized(name);
+    }
+
+    private Value findInitialized(String name) {
+        Binding binding = values.get(name);
+        if (binding != null && binding.initialized) return binding.read();
+        return parent == null ? null : parent.findInitialized(name);
     }
 
     void define(String name, Value value) {
@@ -123,6 +138,20 @@ final class Environment {
     Value localValue(String name) {
         Binding binding = values.get(name);
         return binding == null || !binding.initialized ? null : binding.read();
+    }
+    boolean hasLocal(String name) { return values.containsKey(name); }
+    Value readLocal(String name) {
+        Binding binding = values.get(name);
+        if (binding == null) throw new IllegalStateException("Missing local binding: " + name);
+        return binding.read();
+    }
+    Environment ancestor(int depth) {
+        Environment current = this;
+        for (int index = 0; index < depth; index++) {
+            if (current.parent == null) throw new IllegalStateException("Invalid lexical depth");
+            current = current.parent;
+        }
+        return current;
     }
 
     void replace(String name, Value value) {

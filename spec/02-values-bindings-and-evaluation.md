@@ -4,18 +4,21 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="values"></a>
-## Planned lazy values and lexical contexts
+<a id="planned-lazy-values-and-lexical-contexts"></a>
+## Lazy values and lexical contexts (partially implemented)
 
-This planned general rule applies to lazy values throughout the language, including Collection
+This general rule applies to lazy values throughout the language, including Collection
 access and reflection. It is not specific to handlers, `eager`, or any one runtime kind.
 
 First access computes or obtains the specific value; it is not fixed before access. Once obtained,
 the value stays fixed in that lexical context. Nested contexts using the same inherited established
 binding share it. A fresh invocation creating a new lazy access/binding may obtain a different
-value, even for the same provider and key. Do not impose permanent Collection-wide memoization or
+value, even for the same provider and key. The built-in keyless `map` adapter implements this
+establishment model: an alias shares demanded positions, while a fresh map invocation creates a
+fresh result context. Do not impose permanent Collection-wide memoization or
 a special `eager` context. Stronger provider contracts, such as sequential stability, still apply.
 The Collection protocol is owned by the
-[Phase 4 revision](06-collections-fields-and-templates.md#phase-4-collection-protocol-revision-planned).
+[Phase 4 revision](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions).
 
 ### Deferred computations and synchronization
 
@@ -33,7 +36,7 @@ retries, when implemented, leave that result unsettled. These are deferred synch
 constraints, not a Phase 4 concurrency implementation.
 
 Runtime dependency-cycle detection is deferred with concurrency/synchronization; lazy dependency
-cycles may deadlock for now. This permission does not replace the separate planned `eager`
+cycles may deadlock for now. This permission does not replace the separate implemented `eager`
 diagnostic for cyclic Collection containment. No universal timeout or cancellation policy is
 selected here.
 
@@ -54,14 +57,14 @@ Null and missing are separate runtime values.
 
 Number literals start with a digit and may contain at most one decimal point. Malformed number
 literals are reported as language errors rather than leaking a Java numeric-conversion exception.
-Numbers must remain finite. Literals outside the finite range and arithmetic producing a non-finite
-result are errors. Division and remainder by zero are errors.
+Floating-point numbers must remain finite. Floating literals outside the selected finite range
+and floating arithmetic producing a non-finite result are errors; whole-number literals have no
+fixed upper bound. Division and remainder by zero are errors.
 
-### Phase 4 numeric values and arithmetic (planned)
+### Phase 4 numeric values and arithmetic (implemented)
 
-The following approved design extends the current finite-`double` prototype. It is not implemented
-by the existing Number tests. Numeric contract membership is owned by
-[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-planned).
+The following design is implemented by the interpreter. Numeric contract membership is owned by
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-implemented).
 
 `Number` prescribes no storage format. Integer values support arbitrary precision, including every
 value in the signed and unsigned 64-bit domains. A runtime must not pass exact integers through
@@ -71,7 +74,6 @@ Storage choice is separate from the mathematical value and its public numeric co
 Whole-number tokens without a selecting context produce exact integers. Decimal tokens default to
 `Double`. An expected concrete numeric format can instead select the literal representation:
 
-<!-- caret-example: planned -->
 ```caret
 count = 123456789012345678901234567890  // exact integer
 ratio = 0.1                           // Double
@@ -101,7 +103,7 @@ the quotient, rather than overflowing a floating-point conversion of its integer
 An arithmetic result does not inherit an operand's fixed-width constraint; explicit result
 requirements validate it. In particular, adding `255` and `1` produces `256`, which fails `UInt8`.
 
-### Precision requirements and warnings (planned)
+### Precision requirements and warnings (implemented)
 
 An implicit conversion that changes a numeric value is a precision loss. In a broad `Number` or
 `Real` result context it warns and continues with the rounded value. Under an explicit concrete
@@ -109,6 +111,16 @@ numeric result requirement, or an `Integer`/`Natural` requirement, it is an erro
 creation and ordinary floating-point arithmetic rounding are permitted by their selected formats;
 they do not generate precision warnings. Explicit conversion deliberately authorizes its documented
 rounding or truncation and does not generate an implicit-precision warning.
+Numeric policy follows the semantic requirement through aliases, nullable/optional modifiers,
+and derived numeric bases. Modifiers continue to admit their declared null/missing alternatives;
+they do not weaken precision checks on numeric computation. A concrete or integral base remains
+strict even when another base is broad. Static analysis follows known contract construction without
+executing refinements; dynamic requirements receive the same checks during evaluation.
+
+Mixed integer/non-integral arithmetic checks exact integer operands before promoting them to
+`Double`. If that promotion changes an operand, the same warning/error policy applies at the
+operation's source location, for `+`, `-`, `*`, `/`, and `%`. An exactly representable integer
+operand does not warn merely because subsequent floating-point arithmetic rounds its result.
 
 An explicit `Float` result requirement does not select binary32 arithmetic: non-integral arithmetic
 still uses `Double`, and the resulting value must satisfy the requirement. A declaration checks an
@@ -122,7 +134,7 @@ Ordinary inference applies where there is no explicit declaration boundary. Fail
 the final result contract remain errors even if an earlier conversion emitted only a warning.
 
 Warnings do not excuse overflow, zero division, invalid operand contracts, or unsupported
-conversions. See [diagnostic delivery](01-source-layout-and-diagnostics.md#phase-4-numeric-and-conversion-diagnostics-planned).
+conversions. See [diagnostic delivery](01-source-layout-and-diagnostics.md#phase-4-numeric-template-conversion-and-packed-diagnostics-implemented).
 Future rational `Fractional`, `Complex`, wider named fixed-width formats, and bit fields are not
 part of this implementation boundary.
 
@@ -134,7 +146,7 @@ passing into an interpreted function, capture by a closure or partial, export, r
 insertion beneath a shared collection conservatively end uniqueness. Unknown ownership always uses
 persistent allocation.
 
-Ownership is neither a Caret value nor reflective metadata, and it does not affect equality,
+Storage-reuse ownership is neither a Caret value nor reflective metadata, and it does not affect equality,
 ordering, diagnostics, or effects. The prototype has an internal optimization-disabled mode whose
 persistent behavior is authoritative. Its enabled mode currently reuses proven-unique ephemeral
 Sequence and Dictionary storage for `seqAdd` and `dictPut`; both modes must produce identical
@@ -230,6 +242,9 @@ Current metadata:
 
 - all values: `kind`
 - named Collections: `shape = "named"`, `size`, `ids`
+- field bindings: stable `FieldBinding` identity, key, declared contracts, immutable binding status,
+  nullability/optionality, export status, and visible owner metadata references
+- containers: stable reflective identity and visible `contentContracts` references without reading content
 - function metadata: `kind = "Function"`, visible declaration `id` or `~`, `remaining`,
   language-owned `signature`, and surviving overload `variants`
 
@@ -311,9 +326,9 @@ Function invocation has an interpreter-owned maximum depth. Both ordinary applic
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
 
-The initial operator matrix records this implemented runtime behavior. The explicitly planned
-[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-planned) specifies the changes
-for exact integers, concrete formats, and `div`; it does not claim current runtime support.
+The initial operator matrix and the
+[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-implemented) are implemented,
+including exact integers, concrete formats, and `div`.
 
 The self-interpreter may represent successful and failed operations as named result collections. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
@@ -323,4 +338,4 @@ CLI adapter can then render a failed result as the normal located `Error:` diagn
 
 The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
 lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
-immutable collections, named exported collections, and the planned text operations are sufficient.
+immutable collections, named exported collections, and implemented text operations are sufficient.

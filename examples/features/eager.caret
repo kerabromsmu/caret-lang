@@ -1,0 +1,43 @@
+identity value = value
+source = map identity [1 2]
+copy = eager source
+print copy
+print source
+print isFinite copy
+print size copy
+print seqGet copy 1
+
+named = [^name = "Ada" ^phone = ~]
+print fields (eager named)
+print getElement (eager [42 (@named)]) 1
+
+cell = { (Number) 3 }
+stored = eager [cell]
+print (getElement stored 0) == cell
+print (getElement stored 0){}
+print eager ?
+print eager ~
+
+(Output Number) inner value =
+  print "inner" + value
+  value
+(Output Dictionary) makeNested value =
+  print "outer" + value
+  [^nested = map inner [value]]
+print eager (map makeNested [1 2])
+
+// Key enumeration settles a shape-inferred map before the snapshot records its facts.
+makeField value = field ("k" + value) value
+keyedSnapshot = eager (map makeField [1 2])
+print isKeyed keyedSnapshot
+print (@keyedSnapshot).keyed
+print keyedSnapshot["k1"]
+print size (fields keyedSnapshot)
+
+// Unknown mapped shape requires all outer key-producing transforms before nested values.
+(Output Field) makeNestedField value =
+  print "outer" + value
+  field ("k" + value) (map inner [value])
+discovered = eager (map makeNestedField [1 2])
+print discovered["k1"]
+print discovered["k2"]

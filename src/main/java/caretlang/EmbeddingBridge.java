@@ -12,7 +12,6 @@ import java.util.function.BiFunction;
 public final class EmbeddingBridge {
     public record Prepared(Object program) {}
 
-    private final CaretSandbox owner;
     private final AtomicReference<CaretEnvironment> environment;
     private final Consumer<Map<String, CaretCallable>> registrar;
     private final BiFunction<Object, Integer, CaretCallable> callableFactory;
@@ -23,7 +22,7 @@ public final class EmbeddingBridge {
     public EmbeddingBridge(CaretSandbox owner, AtomicReference<CaretEnvironment> environment,
                            PrintStream output, Consumer<Map<String, CaretCallable>> registrar,
                            BiFunction<Object, Integer, CaretCallable> callableFactory) {
-        this.owner = Objects.requireNonNull(owner);
+        Objects.requireNonNull(owner);
         this.environment = Objects.requireNonNull(environment);
         this.registrar = Objects.requireNonNull(registrar);
         this.callableFactory = Objects.requireNonNull(callableFactory);
@@ -73,6 +72,10 @@ public final class EmbeddingBridge {
         return diagnostic == null ? Optional.empty() : Optional.of(externalDiagnostic(diagnostic, sourceName));
     }
 
+    public List<CaretDiagnostic> warnings(String sourceName) {
+        return interpreter.warnings().stream().map(warning -> externalDiagnostic(warning, sourceName)).toList();
+    }
+
     public static boolean isExpectedFailure(Throwable failure) { return failure instanceof LangException; }
 
     private static CaretDiagnostic externalDiagnostic(Diagnostic diagnostic, String sourceName) {
@@ -94,11 +97,8 @@ public final class EmbeddingBridge {
                 "Host binding is not available in the current environment: " + name, null);
         try {
             return internal(supplier.get());
-        } catch (Error error) {
-            throw error;
-        } catch (CaretEmbeddingException misuse) {
-            throw misuse;
         } catch (Exception exception) {
+            if (exception instanceof CaretEmbeddingException misuse) throw misuse;
             throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                     "Host value provider failed", null);
         }
@@ -111,11 +111,8 @@ public final class EmbeddingBridge {
                     "Host callback is not available in the current environment: " + declaration.name(), null);
             try {
                 return internal(current.implementation().invoke(values.stream().map(this::external).toList()));
-            } catch (Error error) {
-                throw error;
-            } catch (CaretEmbeddingException misuse) {
-                throw misuse;
             } catch (Exception exception) {
+                if (exception instanceof CaretEmbeddingException misuse) throw misuse;
                 throw new LangException(Diagnostic.Phase.RUNTIME, Diagnostic.Codes.INTERNAL_ERROR,
                         "Host callback failed: " + declaration.name(), null);
             }
@@ -148,13 +145,41 @@ public final class EmbeddingBridge {
     private CaretValue external(Value original) {
         Value value = ValueSemantics.underlying(original);
         return switch (value) {
-            case Value.Num number -> new CaretValue.NumberValue(number.value());
+            case Value.Num number -> number.exactInteger() != null
+                    && number.exactInteger().abs().compareTo(java.math.BigInteger.ONE.shiftLeft(53)) > 0
+                    ? new CaretValue.ExactIntegerValue(number.exactInteger())
+                    : new CaretValue.NumberValue(number.value());
             case Value.Str text -> new CaretValue.TextValue(text.value());
             case Value.Bool bool -> new CaretValue.BooleanValue(bool.value());
             case Value.Null ignored -> CaretValue.NullValue.INSTANCE;
             case Value.Missing ignored -> CaretValue.MissingValue.INSTANCE;
-            case Value.Field field -> new CaretValue.FieldValue(field.key(), external(field.value()));
+            case Value.Container ignored -> throw new CaretEmbeddingException(
+                    CaretEmbeddingException.Code.INVALID_ARGUMENT,
+                    "Mutable Container values cannot cross the Java embedding boundary");
+            case Value.Field field -> externalField(field.key(), field.value());
+            case Value.KeyedCollection collection -> new CaretValue.SequenceValue(
+                    collection.entries().stream().map(entry -> externalField(entry.key(), entry.value())).toList());
+            case Value.SettledCollection collection -> collection.facts().keyed()
+                    == CollectionRuntime.Guarantee.TRUE
+                    ? new CaretValue.SequenceValue(collection.entries().stream().map(entry ->
+                            externalField(entry.key(), entry.value())).toList())
+                    : new CaretValue.SequenceValue(collection.entries().stream().map(
+                            entry -> external(entry.value())).toList());
+            case Value.PackedCollection collection -> new CaretValue.SequenceValue(
+                    collection.values().stream().map(this::external).toList());
             case Value.Seq sequence -> new CaretValue.SequenceValue(sequence.values().stream().map(this::external).toList());
+            case Value.LazySeq sequence -> new CaretValue.SequenceValue(sequence.materialize().stream().map(this::external).toList());
+            case Value.LazyCollection collection -> {
+                List<Value.LazyCollection.Produced> entries = collection.materializeEntries();
+                if (collection.resolvedShape() == Value.LazyCollection.Shape.KEYLESS
+                        || collection.resolvedShape() == Value.LazyCollection.Shape.INFER) {
+                    yield new CaretValue.SequenceValue(entries.stream().map(Value.LazyCollection.Produced::value)
+                            .map(this::external).toList());
+                }
+                yield new CaretValue.SequenceValue(entries.stream().map(entry ->
+                        externalField(entry.key(), collection.resolvedShape() == Value.LazyCollection.Shape.SET
+                                ? Value.Missing.INSTANCE : entry.value())).toList());
+            }
             case Value.Dictionary dictionary -> collection(dictionary.entries());
             case Value.EmptyCollection ignored -> new CaretValue.CollectionValue(Map.of());
             case Value.ProjectedDictionary dictionary -> collection(dictionary.fields());
@@ -162,6 +187,13 @@ public final class EmbeddingBridge {
             case Value.Reflective reflective -> collection(reflective.fields());
             case Value.Attributed ignored -> throw new IllegalStateException("Attributed value was not unwrapped");
         };
+    }
+
+    private CaretValue externalField(Value key, Value value) {
+        Value rawKey = ValueSemantics.underlying(key);
+        return rawKey instanceof Value.Str(String name)
+                ? new CaretValue.FieldValue(name, external(value))
+                : new CaretValue.KeyedFieldValue(external(key), external(value));
     }
 
     private CaretValue.CollectionValue collection(Map<String, Value> fields) {
@@ -174,11 +206,13 @@ public final class EmbeddingBridge {
         Objects.requireNonNull(value, "Caret value");
         return switch (value) {
             case CaretValue.NumberValue number -> new Value.Num(number.value());
+            case CaretValue.ExactIntegerValue number -> new Value.Num(number.value());
             case CaretValue.TextValue text -> new Value.Str(text.value());
             case CaretValue.BooleanValue bool -> new Value.Bool(bool.value());
             case CaretValue.NullValue ignored -> Value.Null.INSTANCE;
             case CaretValue.MissingValue ignored -> Value.Missing.INSTANCE;
-            case CaretValue.FieldValue field -> new Value.Field(field.name(), internal(field.value()));
+            case CaretValue.FieldValue field -> new Value.Field(new Value.Str(field.name()), internal(field.value()));
+            case CaretValue.KeyedFieldValue field -> new Value.Field(internal(field.key()), internal(field.value()));
             case CaretValue.SequenceValue sequence -> new Value.Seq(sequence.values().stream().map(this::internal).toList());
             case CaretValue.CollectionValue collection -> {
                 LinkedHashMap<String, Value> fields = new LinkedHashMap<>();

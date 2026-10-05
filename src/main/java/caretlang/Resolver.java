@@ -21,6 +21,8 @@ import caretlang.Ast.Hole;
 import caretlang.Ast.Lambda;
 import caretlang.Ast.Literal;
 import caretlang.Ast.Name;
+import caretlang.Ast.OuterPath;
+import caretlang.Ast.With;
 import caretlang.Ast.NamedInfix;
 import caretlang.Ast.Reflect;
 import caretlang.Ast.Stmt;
@@ -47,13 +49,18 @@ final class Resolver {
 
     private static final class Scope {
         private final Scope parent;
+        private final With withOwner;
         private final LinkedHashMap<String, Symbol> symbols = new LinkedHashMap<>();
         private int nextSlot;
 
-        private Scope(Scope parent) { this.parent = parent; }
+        private Scope(Scope parent) { this(parent, null); }
+        private Scope(Scope parent, With withOwner) { this.parent = parent; this.withOwner = withOwner; }
     }
 
     private final IdentityHashMap<Name, Resolution.Binding> names = new IdentityHashMap<>();
+    private final IdentityHashMap<Expr, Resolution.Lookup> scopedLookups = new IdentityHashMap<>();
+    private final IdentityHashMap<With, java.util.LinkedHashSet<String>> withNames = new IdentityHashMap<>();
+    private final IdentityHashMap<Expr, Resolution.Binding> accessors = new IdentityHashMap<>();
     private final IdentityHashMap<Ast.ContractClause, Resolution.AnalyzedClause> clauses = new IdentityHashMap<>();
     private final EffectCatalog effectCatalog;
     private final IdentityHashMap<AmbiguousCall, Resolution.CallMode> calls = new IdentityHashMap<>();
@@ -76,22 +83,30 @@ final class Resolver {
 
     static Resolution resolve(List<Stmt> program, Environment globals, EffectCatalog effectCatalog) {
         Resolver resolver = new Resolver(effectCatalog);
-        Scope root = new Scope(null);
-        for (Environment.LocalBinding binding : globals.localBindings()) {
-            ContractState state = BuiltinContract.named(binding.name()).isPresent()
-                    ? ContractState.CONTRACT : ContractState.UNKNOWN;
-            int symbolId = resolver.nextSymbolId++;
-            root.symbols.put(binding.name(), new Symbol(binding.slot(), symbolId, null, true,
-                    binding.callableArity(), state, binding.contractParameterArity(), binding.refinementEligible(), false));
-            if (binding.name().equals("Any") && state == ContractState.CONTRACT) {
-                resolver.anyContractSymbol = symbolId;
-            }
-            root.nextSlot = Math.max(root.nextSlot, binding.slot() + 1);
-        }
+        Scope root = resolver.environmentScope(globals);
         resolver.resolveBlock(program, root, false);
-        return new Resolution(resolver.names, resolver.clauses, resolver.calls,
+        IdentityHashMap<With, List<String>> needed = new IdentityHashMap<>();
+        resolver.withNames.forEach((with, names) -> needed.put(with, List.copyOf(names)));
+        return new Resolution(resolver.names, resolver.scopedLookups, needed,
+                resolver.accessors, resolver.clauses, resolver.calls,
                 resolver.builtinPrintLines, resolver.resolvedUpvalues(), resolver.resolvedLambdaUpvalues(),
                 resolver.analyzedArrows, resolver.declarations);
+    }
+
+    private Scope environmentScope(Environment environment) {
+        Scope scope = new Scope(environment.parent() == null ? null : environmentScope(environment.parent()));
+        for (Environment.LocalBinding binding : environment.localBindings()) {
+            ContractState state = binding.contractParameterArity() != null
+                    ? ContractState.CONTRACT : ContractState.UNKNOWN;
+            int symbolId = nextSymbolId++;
+            scope.symbols.put(binding.name(), new Symbol(binding.slot(), symbolId, null, true,
+                    binding.callableArity(), state, binding.contractParameterArity(), binding.refinementEligible(), false));
+            if (binding.name().equals("Any") && state == ContractState.CONTRACT) {
+                anyContractSymbol = symbolId;
+            }
+            scope.nextSlot = Math.max(scope.nextSlot, binding.slot() + 1);
+        }
+        return scope;
     }
 
     static Resolution resolve(List<Stmt> program, Environment globals) {
@@ -302,6 +317,15 @@ final class Resolver {
     private void resolvePrintLine(Ast.PrintLine line, Scope scope, boolean functionBody) {
         resolveName(line.target(), scope, functionBody, false);
         Resolution.Binding binding = names.get(line.target());
+        Resolution.Lookup lookup = scopedLookups.get(line.target());
+        if (lookup != null && !lookup.withDepths().isEmpty()) {
+            boolean fallbackBuiltin = lookup.fallback() != null
+                    && lookup.fallback().declarationSpan() == null;
+            builtinPrintLines.put(line, fallbackBuiltin);
+            resolveExpr(line.builtinArgument(), scope, functionBody, false);
+            resolveExpr(line.ordinaryCall(), scope, functionBody, false);
+            return;
+        }
         boolean builtin = binding != null && binding.declarationSpan() == null;
         builtinPrintLines.put(line, builtin);
         resolveExpr(builtin ? line.builtinArgument() : line.ordinaryCall(), scope, functionBody, false);
@@ -510,6 +534,12 @@ final class Resolver {
     private void resolveExpr(Expr expression, Scope scope, boolean functionBody, boolean deferred) {
         switch (expression) {
             case Name name -> resolveName(name, scope, functionBody, deferred);
+            case OuterPath path -> resolveOuter(path, scope, functionBody, deferred);
+            case With with -> {
+                resolveExpr(with.target(), scope, functionBody, deferred);
+                withNames.put(with, new java.util.LinkedHashSet<>());
+                resolveBlock(with.body(), new Scope(new Scope(scope, with)), functionBody);
+            }
             case Literal ignored -> { }
             case Hole ignored -> { }
             case ContractVariable ignored -> { }
@@ -549,13 +579,22 @@ final class Resolver {
                 resolveExpr(apply.function(), scope, functionBody, deferred);
                 resolveExpr(apply.argument(), scope, functionBody, deferred);
             }
-            case Field field -> resolveExpr(field.target(), scope, functionBody, deferred);
+            case Field field -> {
+                resolveExpr(field.target(), scope, functionBody, deferred);
+                resolveAccessor(field, scope, functionBody, deferred);
+            }
             case DynamicField field -> {
                 resolveExpr(field.target(), scope, functionBody, deferred);
                 resolveExpr(field.name(), scope, functionBody, deferred);
+                resolveAccessor(field, scope, functionBody, deferred);
             }
             case Reflect reflect -> resolveExpr(reflect.target(), scope, functionBody, deferred);
             case Dereference dereference -> resolveExpr(dereference.target(), scope, functionBody, deferred);
+            case Ast.ContainerRead read -> resolveExpr(read.target(), scope, functionBody, deferred);
+            case Ast.ContainerLiteral container -> {
+                resolverContracts(container.contracts(), scope);
+                resolveExpr(container.value(), scope, functionBody, deferred);
+            }
             case ContractModifier modifier -> {
                 resolveExpr(modifier.target(), scope, functionBody, deferred);
                 if (knownContractState(modifier.target(), scope) == ContractState.NON_CONTRACT) {
@@ -567,28 +606,7 @@ final class Resolver {
                     "Unanalyzed arrow contract terms reached expression resolution");
             case Group group -> resolveExpr(group.expression(), scope, functionBody, deferred);
             case Ast.CollectionLiteral collection -> {
-                Class<?> shape = null;
-                LinkedHashMap<String, SourceSpan> names = new LinkedHashMap<>();
                 for (Ast.CollectionElement element : collection.elements()) {
-                    Class<?> elementShape = element instanceof Ast.NamedElement
-                            || staticallyFieldExpression(element.value())
-                            ? Ast.NamedElement.class : Ast.PositionalElement.class;
-                    if (shape == null) shape = elementShape;
-                    else if (shape != elementShape) {
-                        throw new LangException(Diagnostic.Phase.SEMANTIC,
-                                Diagnostic.Codes.MIXED_COLLECTION_SHAPE,
-                                "A collection cannot mix named and positional elements", element.span());
-                    }
-                    if (element instanceof Ast.NamedElement named) {
-                        SourceSpan original = names.putIfAbsent(named.name(), named.span());
-                        if (original != null) {
-                            throw new LangException(new Diagnostic(Diagnostic.Phase.SEMANTIC,
-                                    Diagnostic.Codes.DUPLICATE_FIELD,
-                                    "Duplicate field: " + named.name(), named.span(),
-                                    List.of(new Diagnostic.Related(
-                                            "First field named " + named.name(), original))));
-                        }
-                    }
                     resolveExpr(element.value(), scope, functionBody, deferred);
                 }
             }
@@ -716,7 +734,8 @@ final class Resolver {
         if (expression instanceof ContractModifier) return ContractState.CONTRACT;
         if (expression instanceof Apply apply && apply.function() instanceof Name name
                 && name.name().equals("contract")) return ContractState.CONTRACT;
-        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral) {
+        if (expression instanceof Literal || expression instanceof Ast.CollectionLiteral
+                || expression instanceof Ast.ContainerLiteral) {
             return ContractState.NON_CONTRACT;
         }
         if (!(expression instanceof Name name)) return ContractState.UNKNOWN;
@@ -848,34 +867,85 @@ final class Resolver {
     }
 
     private void resolveName(Name name, Scope scope, boolean functionBody, boolean deferred) {
+        if (name.name().equals("outer")) throw invalidOuter(name.span());
+        resolveScopedName(name, name.name(), scope, functionBody, deferred, 0);
+    }
+
+    private void resolveOuter(OuterPath path, Scope scope, boolean functionBody, boolean deferred) {
+        if (path.name() == null) throw invalidOuter(path.span());
+        resolveScopedName(path, path.name(), scope, functionBody, deferred, path.hops());
+    }
+
+    private static LangException invalidOuter(SourceSpan span) {
+        return new LangException(Diagnostic.Phase.SEMANTIC, Diagnostic.Codes.INVALID_OUTER_PATH,
+                "outer is only valid as a lexical member path inside with", span);
+    }
+
+    private void resolveScopedName(Expr expression, String spelling, Scope scope,
+                                   boolean functionBody, boolean deferred, int skipWith) {
         int depth = 0;
+        int skipped = 0;
+        int fallbackDepth = 0;
         boolean premature = false;
+        ArrayList<Integer> candidates = new ArrayList<>();
         for (Scope current = scope; current != null; current = current.parent, depth++) {
-            Symbol symbol = current.symbols.get(name.name());
+            if (current.withOwner != null && skipped < skipWith) {
+                skipped++;
+                fallbackDepth = depth + 1;
+                continue;
+            }
+            if (skipped < skipWith) continue;
+            if (current.withOwner != null) {
+                if (premature) {
+                    throw new LangException(Diagnostic.Phase.SEMANTIC,
+                            Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
+                            "Binding read before initialization: " + spelling, expression.span());
+                }
+                candidates.add(depth);
+                withNames.get(current.withOwner).add(spelling);
+            }
+            Symbol symbol = current.symbols.get(spelling);
             if (symbol == null) continue;
             // A function body may close over a later outer assignment because invocation happens
             // dynamically. Its own block declarations and parameters must still be initialized.
             if (!symbol.initialized() && symbol.contractState() != ContractState.CONTRACT
                     && !(functionBody && depth >= 2)) {
                 if (deferred) {
-                    names.put(name, binding(symbol, depth, false));
+                    Resolution.Binding selected = binding(symbol, depth, false);
+                    if (candidates.isEmpty() && expression instanceof Name name) names.put(name, selected);
+                    else scopedLookups.put(expression, new Resolution.Lookup(candidates, fallbackDepth, selected));
                     return;
                 }
                 premature = true;
                 continue;
             }
             boolean captured = functionBody && depth >= 2;
-            names.put(name, binding(symbol, depth, captured));
-            if (captured) recordUpvalue(symbol, depth - 2, name.span());
+            Resolution.Binding selected = binding(symbol, depth, captured);
+            if (candidates.isEmpty() && expression instanceof Name name) names.put(name, selected);
+            else scopedLookups.put(expression, new Resolution.Lookup(candidates, fallbackDepth, selected));
+            if (captured) recordUpvalue(symbol, depth - 2, expression.span());
             return;
         }
+        if (skipped < skipWith) throw invalidOuter(expression.span());
         if (premature) {
             throw new LangException(Diagnostic.Phase.SEMANTIC,
                     Diagnostic.Codes.READ_BEFORE_INITIALIZATION,
-                    "Binding read before initialization: " + name.name(), name.span());
+                    "Binding read before initialization: " + spelling, expression.span());
+        }
+        if (!candidates.isEmpty() || expression instanceof OuterPath) {
+            scopedLookups.put(expression, new Resolution.Lookup(candidates, fallbackDepth, null));
         }
         // Preserve lazy conditional/Boolean behavior: an unresolved name in an unselected branch
         // is harmless. Selected unresolved reads retain the established runtime diagnostic.
+    }
+
+    private void resolveAccessor(Expr expression, Scope scope, boolean functionBody, boolean deferred) {
+        Name synthetic = new Name("getElement", expression.span());
+        resolveName(synthetic, scope, functionBody, deferred);
+        Resolution.Binding binding = names.get(synthetic);
+        if (binding != null) accessors.put(expression, binding);
+        Resolution.Lookup lookup = scopedLookups.get(synthetic);
+        if (lookup != null) scopedLookups.put(expression, lookup);
     }
 
     private static Resolution.Binding binding(Symbol symbol, int depth, boolean captured) {

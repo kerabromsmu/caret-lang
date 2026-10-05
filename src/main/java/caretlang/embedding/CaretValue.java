@@ -5,14 +5,19 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.TextValue,
+public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.ExactIntegerValue,
+        CaretValue.TextValue,
         CaretValue.BooleanValue, CaretValue.NullValue, CaretValue.MissingValue, CaretValue.FieldValue,
+        CaretValue.KeyedFieldValue,
         CaretValue.SequenceValue, CaretValue.CollectionValue, CaretCallable {
 
     record NumberValue(double value) implements CaretValue {
         public NumberValue {
             if (!Double.isFinite(value)) throw new IllegalArgumentException("Caret numbers must be finite");
         }
+    }
+    record ExactIntegerValue(java.math.BigInteger value) implements CaretValue {
+        public ExactIntegerValue { Objects.requireNonNull(value); }
     }
     record TextValue(String value) implements CaretValue {
         public TextValue { Objects.requireNonNull(value); }
@@ -22,6 +27,9 @@ public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.Te
     enum MissingValue implements CaretValue { INSTANCE }
     record FieldValue(String name, CaretValue value) implements CaretValue {
         public FieldValue { Objects.requireNonNull(name); Objects.requireNonNull(value); }
+    }
+    record KeyedFieldValue(CaretValue key, CaretValue value) implements CaretValue {
+        public KeyedFieldValue { Objects.requireNonNull(key); Objects.requireNonNull(value); }
     }
     record SequenceValue(List<CaretValue> values) implements CaretValue {
         public SequenceValue { values = List.copyOf(values); }
@@ -37,10 +45,12 @@ public sealed interface CaretValue permits CaretValue.NumberValue, CaretValue.Te
     }
 
     static NumberValue number(double value) { return new NumberValue(value); }
+    static ExactIntegerValue integer(java.math.BigInteger value) { return new ExactIntegerValue(value); }
     static TextValue text(String value) { return new TextValue(value); }
     static BooleanValue bool(boolean value) { return new BooleanValue(value); }
     static NullValue nullValue() { return NullValue.INSTANCE; }
     static MissingValue missing() { return MissingValue.INSTANCE; }
     static SequenceValue sequence(List<CaretValue> values) { return new SequenceValue(values); }
     static CollectionValue collection(Map<String, CaretValue> fields) { return new CollectionValue(fields); }
+    static KeyedFieldValue field(CaretValue key, CaretValue value) { return new KeyedFieldValue(key, value); }
 }

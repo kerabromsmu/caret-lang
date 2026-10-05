@@ -1,0 +1,33 @@
+[ 1 2 ]
+[ 1 2 ]
+true
+2
+2
+[ "name" = "Ada" "phone" = ~ ]
+[]
+true
+3
+?
+~
+outer1
+inner1
+outer2
+inner2
+[
+  [
+    "nested" = [ 1 ]
+  ]
+  [
+    "nested" = [ 2 ]
+  ]
+]
+true
+true
+1
+2
+outer1
+outer2
+inner1
+inner2
+[ 1 ]
+[ 2 ]
