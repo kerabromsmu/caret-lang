@@ -111,6 +111,11 @@ numeric result requirement, or an `Integer`/`Natural` requirement, it is an erro
 creation and ordinary floating-point arithmetic rounding are permitted by their selected formats;
 they do not generate precision warnings. Explicit conversion deliberately authorizes its documented
 rounding or truncation and does not generate an implicit-precision warning.
+Numeric policy follows the semantic requirement through aliases, nullable/optional modifiers,
+and derived numeric bases. Modifiers continue to admit their declared null/missing alternatives;
+they do not weaken precision checks on numeric computation. A concrete or integral base remains
+strict even when another base is broad. Static analysis follows known contract construction without
+executing refinements; dynamic requirements receive the same checks during evaluation.
 
 Mixed integer/non-integral arithmetic checks exact integer operands before promoting them to
 `Double`. If that promotion changes an operand, the same warning/error policy applies at the

@@ -185,6 +185,119 @@ final class NumericTemplateInterpreterTest {
     }
 
     @Test
+    void modifiedAndDerivedNumericRequirementsKeepStrictPolicyAcrossAliases() {
+        for (String modifier : List.of("?", "~", "?~")) {
+            for (String declarations : List.of("", "Alias = Double" + modifier + "\n",
+                    "First = Double" + modifier + "\nAlias = First\n",
+                    "Base = contract Double\nAlias = Base" + modifier + "\n")) {
+                String requirement = declarations.isEmpty() ? "Double" + modifier : "Alias";
+                for (boolean literal : List.of(true, false)) {
+                    String prefix = declarations + (literal ? "" : "one = 1\nthree = 3\n");
+                    String expression = literal ? "1 / 3" : "one / three";
+                    String binding = "(" + requirement + ") result = " + expression;
+                    LangException failure = assertThrows(LangException.class,
+                            () -> execute(prefix + binding), prefix + binding);
+                    assertEquals(literal ? Diagnostic.Phase.SEMANTIC : Diagnostic.Phase.RUNTIME,
+                            failure.diagnostic().phase());
+                    assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, failure.diagnostic().code());
+                    assertEquals(1 + prefix.lines().count(), failure.diagnostic().primarySpan().start().line());
+                    assertEquals(binding.indexOf(expression) + 1, failure.diagnostic().primarySpan().start().column());
+                }
+            }
+        }
+        for (String base : List.of("Double", "Integer", "Natural", "Float", "Int8", "[Number Double]")) {
+            LangException failure = assertThrows(LangException.class,
+                    () -> execute("Derived = contract " + base + "\n(Derived) result = 1 / 3"));
+            assertEquals(Diagnostic.Phase.SEMANTIC, failure.diagnostic().phase());
+            assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, failure.diagnostic().code());
+            assertEquals(2, failure.diagnostic().primarySpan().start().line());
+            assertEquals(20, failure.diagnostic().primarySpan().start().column());
+        }
+    }
+
+    @Test
+    void aliasedNumericPolicyAppliesAtParameterAndFunctionResultBoundaries() {
+        for (String declaration : List.of("Alias = Double?~", "Base = contract Double\nAlias = Base?~")) {
+            String prefix = declaration + "\none = 1\nthree = 3\n";
+            for (String argument : List.of("one / three", "1 / 3")) {
+                LangException parameter = assertThrows(LangException.class, () -> execute(prefix
+                        + "identity (Alias) value = value\nidentity (" + argument + ")"));
+                assertEquals(Diagnostic.Phase.RUNTIME, parameter.diagnostic().phase());
+                assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, parameter.diagnostic().code());
+                assertEquals(prefix.lines().count() + 2, parameter.diagnostic().primarySpan().start().line());
+                assertEquals(11, parameter.diagnostic().primarySpan().start().column());
+            }
+            for (boolean literal : List.of(true, false)) {
+                String body = literal ? "1 / 3" : "one / three";
+                LangException result = assertThrows(LangException.class, () -> execute(prefix
+                        + "(Alias) calculate ignored = " + body + "\ncalculate 0"));
+                assertEquals(literal ? Diagnostic.Phase.SEMANTIC : Diagnostic.Phase.RUNTIME,
+                        result.diagnostic().phase());
+                assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, result.diagnostic().code());
+                assertEquals(prefix.lines().count() + 1, result.diagnostic().primarySpan().start().line());
+                assertEquals(29, result.diagnostic().primarySpan().start().column());
+            }
+        }
+    }
+
+    @Test
+    void dynamicDerivedRequirementsDoNotLetStaticWarningsBypassStrictChecks() {
+        LangException failure = assertThrows(LangException.class, () -> execute("""
+                (Boolean) positive value = value > 0
+                Derived = contract [Double positive]
+                (Derived) result = 1 / 3
+                """));
+        assertEquals(Diagnostic.Phase.RUNTIME, failure.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.IMPLICIT_PRECISION_LOSS, failure.diagnostic().code());
+        assertEquals(3, failure.diagnostic().primarySpan().start().line());
+        assertEquals(20, failure.diagnostic().primarySpan().start().column());
+    }
+
+    @Test
+    void modifiedPoliciesPreserveAbsenceBroadResultsConversionsAndLexicalShadowing() {
+        assertEquals("?\n~\n?\n~\ntrue\n", execute("""
+                Alias = Double?~
+                (Alias) presentNull = ?
+                (Alias) missing = ~
+                identity (Alias) value = value
+                (Alias) absent ignored = ~
+                print presentNull
+                print missing
+                print identity ?
+                print absent 0
+                (Alias) converted = (Double) 9007199254740993
+                print converted == 9007199254740992
+                """));
+        for (String base : List.of("Number", "Real")) {
+            Interpreter interpreter = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+            interpreter.execute(new Parser("Alias = " + base + "?~\n(Alias) ratio = 1 / 3").parseProgram());
+            assertEquals(1, interpreter.warnings().size());
+            assertEquals(Diagnostic.Phase.SEMANTIC, interpreter.warnings().getFirst().phase());
+            interpreter.execute(new Parser("""
+                    StrictAlias = Double?~
+                    (Alias) calculate ignored =
+                      one = 1
+                      three = 3
+                      one / three
+                    (StrictAlias) result = calculate 0
+                    """).parseProgram());
+            assertEquals(1, interpreter.warnings().size());
+            assertEquals(Diagnostic.Phase.RUNTIME, interpreter.warnings().getFirst().phase());
+        }
+        Interpreter shadowing = new Interpreter(new PrintStream(java.io.OutputStream.nullOutputStream()));
+        shadowing.execute(new Parser("""
+                Alias = Double?~
+                calculate ignored =
+                  Alias = Number?~
+                  (Alias) ratio = 1 / 3
+                  ratio
+                calculate 0
+                """).parseProgram());
+        assertEquals(1, shadowing.warnings().size());
+        assertEquals(Diagnostic.Phase.SEMANTIC, shadowing.warnings().getFirst().phase());
+    }
+
+    @Test
     void knownNumericParameterAndResultContextsSelectLiteralFormats() {
         assertEquals("true\ntrue\ntrue\n", execute("""
                 identity (Float) value = value

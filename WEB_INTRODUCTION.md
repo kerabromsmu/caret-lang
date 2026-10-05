@@ -163,6 +163,7 @@ whole = (Integer) -3.75
 `Float value` is a membership test; `(Float) value` requests conversion. Declaration contracts
 and directly contracted holes remain checks. Implicit precision loss warns in broad Number/Real
 result contexts but is an error under explicit concrete numeric or integer result requirements.
+Aliases, nullable/optional modifiers, and derived numeric contracts preserve that policy.
 This also checks integer operands promoted by mixed floating-point arithmetic. Normal floating-point
 arithmetic rounding does not warn. Explicit conversion permits its specified
 rounding or truncation, but never bypasses range or final contract checks. Numeric text parsing and

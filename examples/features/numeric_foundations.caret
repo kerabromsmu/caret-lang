@@ -17,3 +17,11 @@ large = 9007199254740993
 print mixed
 converted = (Double) large // intentional conversion permits rounding
 print converted + 0.5
+MaybeDouble = Double?~
+Alias = MaybeDouble
+(Alias) presentNull = ?
+(Alias) missing = ~
+(Alias) permitted = (Double) large
+print presentNull
+print missing
+print permitted == converted

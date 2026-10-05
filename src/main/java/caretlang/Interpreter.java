@@ -67,7 +67,7 @@ final class Interpreter {
             validateEffectAllowances(program, resolution);
             validateCompositionCompatibility(program, resolution);
             if (!pendingValidatedProgram || program != staticallyAnalyzedProgram)
-                analyzeStaticPrecision(program);
+                analyzeStaticPrecision(program, resolution);
             pendingValidatedProgram = false;
             return executeBlock(program, globals, resolution);
         } catch (RuntimeException | Error failure) {
@@ -83,7 +83,7 @@ final class Interpreter {
         inference = ContractInference.analyze(program, resolution, embeddingCallables, effectCatalog);
         validateEffectAllowances(program, resolution);
         validateCompositionCompatibility(program, resolution);
-        analyzeStaticPrecision(program);
+        analyzeStaticPrecision(program, resolution);
         pendingValidatedProgram = true;
     }
 
@@ -2937,46 +2937,70 @@ final class Interpreter {
             } catch (LangException unavailable) {
                 continue;
             }
-            BuiltinContract contract = resolved instanceof Value.ContractValue value
-                    && value.descriptor() instanceof BuiltinContract builtin ? builtin : null;
-            if (contract == BuiltinContract.NUMBER || contract == BuiltinContract.REAL) broad = true;
-            else if (contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL
-                    || contract == BuiltinContract.INT8 || contract == BuiltinContract.UINT8
-                    || contract == BuiltinContract.INT16 || contract == BuiltinContract.UINT16
-                    || contract == BuiltinContract.INT32 || contract == BuiltinContract.UINT32
-                    || contract == BuiltinContract.INT64 || contract == BuiltinContract.UINT64
-                    || contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE) {
-                return NumericPolicy.STRICT;
-            }
+            NumericPolicy requirement = resolved instanceof Value.ContractValue value
+                    ? numericPolicy(value.descriptor()) : null;
+            if (requirement == NumericPolicy.STRICT) return requirement;
+            if (requirement == NumericPolicy.BROAD) broad = true;
         }
         return broad ? NumericPolicy.BROAD : fallback;
     }
 
-    /** Reports source-provable literal division once, before its dynamic evaluation. */
-    private void analyzeStaticPrecision(List<Stmt> program) {
-        staticallyAnalyzedProgram = null;
-        staticallyReportedPrecisionLosses.clear();
-        Map<String, BuiltinContract> aliases = new HashMap<>();
-        for (Stmt statement : program) {
-            if (statement instanceof Assign assign && assign.value() instanceof Name name) {
-                BuiltinContract contract = aliases.get(name.name());
-                if (contract == null) contract = BuiltinContract.named(name.name()).orElse(null);
-                if (contract != null) aliases.put(assign.name(), contract);
+    /** Numeric bases constrain precision even when wrapped or acquired through a derived contract. */
+    private static NumericPolicy numericPolicy(ContractDescriptor descriptor) {
+        Set<ContractDescriptor> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        ArrayDeque<ContractDescriptor> pending = new ArrayDeque<>();
+        pending.push(descriptor);
+        boolean broad = false;
+        while (!pending.isEmpty()) {
+            ContractDescriptor current = pending.pop();
+            if (!visited.add(current)) continue;
+            if (current instanceof BuiltinContract builtin) {
+                if (builtin == BuiltinContract.NUMBER || builtin == BuiltinContract.REAL) broad = true;
+                else if (builtin == BuiltinContract.INTEGER || builtin == BuiltinContract.NATURAL
+                        || builtin == BuiltinContract.INT8 || builtin == BuiltinContract.UINT8
+                        || builtin == BuiltinContract.INT16 || builtin == BuiltinContract.UINT16
+                        || builtin == BuiltinContract.INT32 || builtin == BuiltinContract.UINT32
+                        || builtin == BuiltinContract.INT64 || builtin == BuiltinContract.UINT64
+                        || builtin == BuiltinContract.FLOAT || builtin == BuiltinContract.DOUBLE)
+                    return NumericPolicy.STRICT;
+            } else if (current instanceof ModifiedContract || current instanceof UserContract) {
+                current.bases().forEach(pending::push);
             }
         }
-        analyzeStaticPrecisionStatements(program, NumericPolicy.BROAD, aliases);
+        return broad ? NumericPolicy.BROAD : null;
+    }
+
+    /** Reports source-provable literal division once, before its dynamic evaluation. */
+    private void analyzeStaticPrecision(List<Stmt> program, Resolution resolution) {
+        staticallyAnalyzedProgram = null;
+        staticallyReportedPrecisionLosses.clear();
+        Map<Integer, Expr> declarations = new HashMap<>();
+        collectPrecisionDeclarations(program, resolution, declarations);
+        analyzeStaticPrecisionStatements(program, NumericPolicy.BROAD, resolution, declarations);
         staticallyAnalyzedProgram = program;
     }
 
+    private void collectPrecisionDeclarations(List<Stmt> statements, Resolution resolution,
+                                              Map<Integer, Expr> declarations) {
+        for (Stmt statement : statements) {
+            if (statement instanceof Assign assign) {
+                declarations.put(resolution.symbolId(assign.span()), assign.value());
+            } else if (statement instanceof FunctionDef function) {
+                collectPrecisionDeclarations(function.body(), resolution, declarations);
+            }
+        }
+    }
+
     private void analyzeStaticPrecisionStatements(List<Stmt> statements, NumericPolicy inherited,
-                                                  Map<String, BuiltinContract> aliases) {
+                                                  Resolution resolution, Map<Integer, Expr> declarations) {
         for (Stmt statement : statements) {
             if (statement instanceof Assign assign) {
                 analyzeStaticPrecisionExpression(assign.value(), staticNumericPolicy(assign.contracts(), inherited,
-                        aliases), assign.contracts());
+                        resolution, declarations), assign.contracts());
             } else if (statement instanceof FunctionDef function) {
                 analyzeStaticPrecisionStatements(function.body(),
-                        staticNumericPolicy(function.resultContracts(), NumericPolicy.BROAD, aliases), aliases);
+                        staticNumericPolicy(function.resultContracts(), NumericPolicy.BROAD,
+                                resolution, declarations), resolution, declarations);
             } else if (statement instanceof ExprStmt expression) {
                 analyzeStaticPrecisionExpression(expression.expression(), inherited, null);
             } else if (statement instanceof PrintLine line) {
@@ -2986,27 +3010,75 @@ final class Interpreter {
     }
 
     private NumericPolicy staticNumericPolicy(ContractClause clause, NumericPolicy fallback,
-                                              Map<String, BuiltinContract> aliases) {
-        if (clause == null) return fallback;
+                                              Resolution resolution, Map<Integer, Expr> declarations) {
         boolean broad = false;
-        for (ContractName name : clause.names()) {
-            if (name.inline() != null || !name.arguments().isEmpty()) continue;
-            BuiltinContract contract = aliases.get(name.name());
-            if (contract == null) contract = BuiltinContract.named(name.name()).orElse(null);
-            if (contract == BuiltinContract.NUMBER || contract == BuiltinContract.REAL) broad = true;
-            else if (contract == BuiltinContract.INTEGER || contract == BuiltinContract.NATURAL
-                    || contract == BuiltinContract.INT8 || contract == BuiltinContract.UINT8
-                    || contract == BuiltinContract.INT16 || contract == BuiltinContract.UINT16
-                    || contract == BuiltinContract.INT32 || contract == BuiltinContract.UINT32
-                    || contract == BuiltinContract.INT64 || contract == BuiltinContract.UINT64
-                    || contract == BuiltinContract.FLOAT || contract == BuiltinContract.DOUBLE)
-                return NumericPolicy.STRICT;
+        boolean unknown = false;
+        for (Resolution.ContractBinding reference : valueRequirements(resolution.clause(clause))) {
+            if (!reference.arguments().isEmpty() || isContractVariable(reference.name())) continue;
+            ContractDescriptor descriptor = reference.inline() == null
+                    ? staticContract(reference.name(), reference.binding(), resolution, declarations, new HashSet<>())
+                    : staticContract(reference.inline(), resolution, declarations, new HashSet<>());
+            if (descriptor == null) {
+                unknown = true;
+                continue;
+            }
+            NumericPolicy requirement = numericPolicy(descriptor);
+            if (requirement == NumericPolicy.STRICT) return requirement;
+            if (requirement == NumericPolicy.BROAD) broad = true;
         }
+        // A dynamic requirement may be stricter; do not pre-report a broad warning for it.
+        if (unknown) return null;
         return broad ? NumericPolicy.BROAD : fallback;
+    }
+
+    private ContractDescriptor staticContract(String name, Resolution.Binding binding,
+                                               Resolution resolution, Map<Integer, Expr> declarations,
+                                               Set<Integer> visiting) {
+        if (binding == null || binding.declarationSpan() == null) {
+            Value value = underlying(globals.get(name));
+            return value instanceof Value.ContractValue contract ? contract.descriptor() : null;
+        }
+        Expr declaration = declarations.get(binding.symbolId());
+        if (declaration == null || !visiting.add(binding.symbolId())) return null;
+        try {
+            return staticContract(declaration, resolution, declarations, visiting);
+        } finally {
+            visiting.remove(binding.symbolId());
+        }
+    }
+
+    /** Recognizes contract construction without running source code or refinement predicates. */
+    private ContractDescriptor staticContract(Expr expression, Resolution resolution,
+                                               Map<Integer, Expr> declarations, Set<Integer> visiting) {
+        expression = ungroup(expression);
+        if (expression instanceof Name name) {
+            return staticContract(name.name(), resolution.binding(name), resolution, declarations, visiting);
+        }
+        if (expression instanceof ContractModifier modifier) {
+            ContractDescriptor base = staticContract(modifier.target(), resolution, declarations, visiting);
+            return base == null ? null : new ModifiedContract(base, modifier.nullable(), modifier.optional());
+        }
+        if (expression instanceof Apply apply && ungroup(apply.function()) instanceof Name name
+                && name.name().equals("contract")
+                && (resolution.binding(name) == null || resolution.binding(name).declarationSpan() == null)
+                && globals.get("contract") == builtins.get("contract")) {
+            Expr argument = ungroup(apply.argument());
+            List<Expr> terms = argument instanceof CollectionLiteral collection
+                    ? collection.elements().stream().map(CollectionElement::value).toList() : List.of(argument);
+            ArrayList<ContractDescriptor> bases = new ArrayList<>();
+            for (Expr term : terms) {
+                ContractDescriptor base = staticContract(term, resolution, declarations, visiting);
+                if (base == null) return null;
+                bases.add(base);
+            }
+            return new UserContract(bases);
+        }
+        return null;
     }
 
     private void analyzeStaticPrecisionExpression(Expr expression, NumericPolicy policy,
                                                   ContractClause context) {
+        if (policy == null) return;
         if (!(ungroup(expression) instanceof Binary(String operator, Expr leftExpr, Expr rightExpr,
                 SourceSpan binarySpan)) || !operator.equals("/")
                 || !(ungroup(leftExpr) instanceof Literal(Value.Num left, SourceSpan ignoredLeft))
@@ -3030,7 +3102,7 @@ final class Interpreter {
     }
 
     private void reportImplicitPrecisionLoss(SourceSpan span) {
-        if (staticallyReportedPrecisionLosses.contains(span)) return;
+        if (numericPolicy != NumericPolicy.STRICT && staticallyReportedPrecisionLosses.contains(span)) return;
         Diagnostic diagnostic = new Diagnostic(Diagnostic.Phase.RUNTIME,
                 Diagnostic.Codes.IMPLICIT_PRECISION_LOSS,
                 "Implicit numeric precision loss", span);
