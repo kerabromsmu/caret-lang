@@ -85,6 +85,11 @@ designed or implemented by this documentation update.
 
 ## Cross-cutting architecture
 
+- Apply [first-class by default](LANGUAGE.md#first-class-by-default) to new features: reuse ordinary
+  values, functions, contracts, and established lazy evaluation before adding syntax or separate
+  conceptual systems. Document unavoidable exceptions in their owning specifications, and keep
+  implementation limitations distinct from design exceptions. Preserve evaluation, effects,
+  visibility, and authority rules; optional sugar must retain the underlying semantics.
 - Keep source text, tokens/layout, AST, name resolution, contracts/types/effects, lowering, runtime
   values, evaluation, reflection, diagnostics, and CLI/backend orchestration as separate layers.
 - Replace ad-hoc runtime-only validation incrementally with a semantic-analysis result attached to

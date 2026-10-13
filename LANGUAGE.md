@@ -25,6 +25,29 @@ owning specification. Release allocation is separate from implementation status:
 may target a later release, and a requirement spanning several releases remains incomplete until
 all its behavior has evidence. A release implements its selected subset, not the whole corpus.
 
+## First-class by default
+
+**Everything in Caret is first-class by default.** New language features should integrate with
+ordinary values, functions, contracts, and the established lazy-evaluation model. Language entities
+should support binding, passing, returning, and storing as values, and composition where applicable.
+Designs should reuse these mechanisms and avoid unnecessary syntax or separate conceptual systems,
+so developers can apply a small, consistent set of concepts throughout the language. A special case
+is permitted only when it cannot be avoided; its owning specification must explain why.
+
+The [function model](spec/03-functions-operators-and-lambdas.md#function-application),
+[first-class contracts](spec/04-contracts-inference-and-dispatch.md#contract-foundation-currently-implemented),
+and [lazy-value rules](spec/02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts)
+provide the foundation. Optional syntax sugar may provide compact notation while preserving the
+underlying semantics. Evaluation demand, effect ordering, visibility, and authority continue to
+follow their owning specifications; this principle does not make every entity callable or every
+operation lazy, or grant additional authority.
+
+Explicitly specified exceptions include lexical scopes and resolver-only paths such as `outer.name`,
+which remain internal name-resolution mechanisms to preserve lexical privacy and visibility
+boundaries. Implementation limitations, such as the deferred first-class nullary callable-reference
+design, remain identified as limitations rather than becoming permanent exceptions to this
+principle. Adding this design rule does not itself implement deferred behavior.
+
 ## Core invariants
 
 1. Whitespace performs function application and indentation defines blocks.

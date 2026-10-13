@@ -15,6 +15,15 @@ print answer
 The project explores a simple question: how compact can a programming language become while
 remaining predictable, statically analyzable, and pleasant to work with?
 
+Caret's [base design principle](LANGUAGE.md#first-class-by-default) is that everything is first-class
+by default: language entities should be usable as values that can be bound, passed, returned, stored,
+and composed where applicable. New features build on the same functions, values, contracts, and
+lazy-evaluation rules, keeping the concepts developers need to learn consistent. Additional syntax
+or special treatment needs a reason; unavoidable exceptions are documented in the specification.
+Compact syntax sugar preserves the underlying semantics. Existing specified exceptions and
+implementation limitations remain explicit, including the deferred nullary callable-reference
+design; this principle does not change the prototype's current behavior.
+
 ## Planned releases
 
 The [v1 roadmap](PLAN.md#release-targets-and-implementation-order) includes everything already

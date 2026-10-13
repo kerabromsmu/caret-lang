@@ -39,6 +39,11 @@ before making architectural or syntactic changes.
 17. Expression-form `#` is a compile-time remainder marker, not a unary precedence operator. Its
     region extends to the nearest enclosing expression boundary, and no later operator resumes
     runtime execution; binding-form `# name = expression` stages the complete binding.
+18. Everything is first-class by default. New features should reuse ordinary values, functions,
+    contracts, and established lazy evaluation, avoiding unnecessary syntax and separate concepts.
+    Permit special cases only when unavoidable and document their reason in the owning specification.
+    Follow the [canonical principle](LANGUAGE.md#first-class-by-default), preserving specified
+    exceptions and distinguishing them from implementation limitations.
 
 For changes involving Caret syntax or semantics, read the [established syntax reference](docs/agent/syntax.md) before editing.
 Use the [repository map](docs/REPO_MAP.md) to find the relevant canonical section, implementation,
