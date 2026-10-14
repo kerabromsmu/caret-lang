@@ -12,6 +12,10 @@ The ordinary `identity` callable belongs to Phase 5, and the shared `Result T` c
 to Phase 9B; neither waits for a broad standard-library release. Do not make a compiler backend,
 self-interpreter, or generated documentation site a v1 release prerequisite.
 
+The separately scheduled [file/console I/O subset (#109)](v1-io.md) also targets v1 after Phase 9B,
+with sandbox integration coordinated with Phase 10A. It does not wait for Phase 13B or completion
+of the post-v1 generalized I/O design (#99); its bounded API must be specified before implementation.
+
 <a id="phase-13a-multiline-repl-submission-v1"></a>
 ### Phase 13A — Multiline REPL submission (v1, #81)
 

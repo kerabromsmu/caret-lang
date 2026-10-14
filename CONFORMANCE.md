@@ -15,7 +15,12 @@ reused for another behavior.
 [`PLAN.md`](PLAN.md#release-targets-and-implementation-order) owns release allocation, independently
 of the statuses here. V1 includes all implemented rows plus #61 template sugar, #81/Phase 13A
 multiline REPL submission, ordinary cycles, Phase 9A modules,
-Phase 9B environments/metadata and shared `Result T`, and Phase 10A initial sandboxes. The complete
+Phase 9B environments/metadata and shared `Result T`, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and Phase 10A initial sandboxes. #109 requires
+whole-file UTF-8 text/binary reads, replacement/append, console lines/text output, and explicit
+recoverable Results, but remains Underspecified until its public API and semantics are settled.
+This allocation changes no conformance IDs, statuses, or evidence. The complete generalized I/O
+design (#99) targets post-v1; completing #109 does not complete it. The complete
 rules/rulesets/objects/`ruleCycle` phase targets the next release, provisionally 1.1. Advanced
 module/sandbox work and the remaining Phase 13B and other assigned phases target later releases.
 #60 gated computations are to be specified soon in a later discussion, with v1 inclusion undecided;

@@ -56,10 +56,17 @@ every current diagnostic message variant and its exact fixture or focused test e
 
 The [release roadmap](PLAN.md#release-targets-and-implementation-order) defines **1.0** as the
 implemented baseline plus template sugar (#61), multiline REPL submission (#81), ordinary cycles,
-modules, metadata-only root/module reflection, the shared `Result T` contract, and initial path-based
-sandboxes. Those additions are planned, not
-implemented by this roadmap change. V1 sandboxes will use fixed environments, exported calls,
-termination/unloading, explicitly shared read/write containers, and immutable data snapshots.
+modules, metadata-only root/module reflection, the shared `Result T` contract, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and initial path-based sandboxes. Those additions
+are planned, not implemented by this roadmap change. The I/O subset covers whole-file UTF-8
+text/binary reads, replacement and append, console line input and text output, and explicit Results for recoverable
+failures. Its pipeline API, nullary composition, effects, and capability exposure must be specified
+before implementation. The
+[complete generalized I/O design (#99)](https://github.com/kerabromsmu/caret-lang/issues/99),
+including persistent endpoints, incremental/network/asynchronous transfers, general codecs, and
+resumable failure handling, follows after v1; completing its full design does not block the subset.
+V1 sandboxes will use fixed environments, exported calls, termination/unloading, explicitly shared
+read/write containers, and immutable data snapshots.
 Semantic Code/serialization, Code-based sandboxes, environment swaps/reload, and restricted
 container views follow later. The complete rules/rulesets/objects/`ruleCycle` phase targets the
 next release, provisionally **1.1**, or **2.0** if approved changes break v1 compatibility.
@@ -67,7 +74,7 @@ Self-hosting, SIMD, formats, staging, the compiler backend, and remaining toolin
 Gated computations (#60) are to be specified soon in a later discussion, with v1 inclusion undecided.
 Language-wide tail calls (#57) remain an early v1 candidate awaiting a later design discussion;
 ordinary cycles do not depend on them. The [reviewed Todo assignments](PLAN.md#reviewed-todo-cards)
-record these decisions without changing GitHub cards.
+record release scope and readiness separately from implementation status.
 
 For a conceptual comparison with related language families, see
 [Caret Doesn’t Look Like One Language — and That’s the Point](docs/language-comparison.md). That

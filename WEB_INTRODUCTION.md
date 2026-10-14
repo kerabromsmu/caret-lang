@@ -28,20 +28,32 @@ design; this principle does not change the prototype's current behavior.
 
 The [v1 roadmap](PLAN.md#release-targets-and-implementation-order) includes everything already
 implemented plus template sugar (#61), multiline REPL submission (#81), ordinary cycles, modules,
-root/module identity and visible-binding metadata, shared structured results, and initial sandboxes.
+root/module identity and visible-binding metadata, shared structured results, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and initial sandboxes.
 These additions are still planned. Initial
 sandboxes will load module paths with fixed environments, expose explicit capabilities, and support
 termination/unloading. Passing a mutable container explicitly shares read/write access; passing
 its immutable contents supplies a snapshot. Nested sandboxes and reflection must preserve the
 same authority boundary.
 
+The planned I/O subset will read whole files as UTF-8 text or binary data, replace or append file
+content, read console lines, and write console text with or without a newline. Recoverable failures
+will return explicit structured Results; invalid programs, contract/authority violations, and
+implementation faults remain errors. The subset will use ordinary functions and composition,
+with effects describing behavior and capabilities controlling access. Its public API, nullary
+composition, EOF handling, and Result policy still need specification before implementation.
+
 The next release will add the complete rules, rulesets, objects, and `ruleCycle` feature set,
 provisionally as 1.1; approved incompatible changes would require 2.0. Semantic code reflection,
 serialization/quines, Code-based sandboxes, environment swapping/reload, read-only or virtual
 container views, the Caret-written self-interpreter, SIMD, formats, staging, the compiler backend,
-and remaining tooling belong to later releases. Existing Java embedding and its environment
-swapping remain available. Gated computations (#60) are to be specified soon in a later discussion,
-with v1 inclusion undecided. Language-wide tail calls (#57) are an early v1 candidate awaiting a
+and remaining tooling belong to later releases. The
+[complete generalized I/O design (#99)](https://github.com/kerabromsmu/caret-lang/issues/99) also follows
+after v1: persistent endpoints, incremental/network/asynchronous transfers, general codecs, and
+resumable failure handling remain later work. The v1 subset must fit that larger pipeline design;
+completing the entire design is not a prerequisite for the subset. Existing Java embedding and its
+environment swapping remain available. Gated computations (#60) are to be specified soon in a
+later discussion, with v1 inclusion undecided. Language-wide tail calls (#57) are an early v1 candidate awaiting a
 later design discussion; cycles can proceed independently.
 
 The planned template notation makes the specimen's boundary explicit and uses ordinary lexical

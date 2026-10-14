@@ -31,43 +31,51 @@ containers, scoped lookup, and Java embedding. All implemented behavior belongs 
 
 | Target | Required work | Work excluded from that target |
 |---|---|---|
-| **1.0** | Implemented baseline; #61 template sugar; Phase 13A/#81 multiline REPL; Phase 5 cycles; Phase 9A modules; Phase 9B execution environments and metadata; shared `Result T`; Phase 10A initial sandboxes | Self-interpreter, semantic Code, canonical serialization, environment swaps/reload, restricted container views, rules, SIMD, formats, staging, compiler backend, and remaining Phase 13B work; #60/#57 remain unassigned candidates |
+| **1.0** | Implemented baseline; #61 template sugar; Phase 13A/#81 multiline REPL; Phase 5 cycles; Phase 9A modules; Phase 9B execution environments and metadata; shared `Result T`; #109 file/console I/O subset; Phase 10A initial sandboxes | Complete generalized I/O (#99), self-interpreter, semantic Code, canonical serialization, environment swaps/reload, restricted container views, rules, SIMD, formats, staging, compiler backend, and remaining Phase 13B work; #60/#57 remain unassigned candidates |
 | **1.1 provisionally** | Complete Phase 8: contexts, rules, scheduling, chains, rulesets, objects, container dependencies, and `ruleCycle` | Existing advanced-rule deferrals remain deferred; use 2.0 instead only if approved design changes break v1 compatibility |
-| **Later releases** | Phase 9C semantic Code; Phase 9D canonical serialization/quines; Phase 10B swaps/reload; Phase 10C richer projections; standalone self-interpreter phase; Phases 6, 7, 11, 12, and Phase 13B | Exact version assignments await later planning; #60/#57 design and release placement remain open |
+| **Later releases** | Complete generalized I/O (#99); Phase 9C semantic Code; Phase 9D canonical serialization/quines; Phase 10B swaps/reload; Phase 10C richer projections; standalone self-interpreter phase; Phases 6, 7, 11, 12, and Phase 13B | Exact version assignments await later planning; #60/#57 design and release placement remain open |
 
-The core v1 implementation order remains **5 → 9A → 9B → 10A**. Template sugar (#61) and
-multiline REPL submission (#81/13A) can be implemented independently using the existing foundation;
-neither adds a prerequisite to this sequence. The shared
+The core v1 implementation order is **5 → 9A → 9B → file/console I/O (#109) → 10A**.
+Template sugar (#61) and multiline REPL submission (#81/13A) can be implemented independently using
+the existing foundation; neither adds a prerequisite to this sequence. The shared
 [`Result T` contract](spec/sections/06-07-templates-advanced.md#standard-error-template) is a
-Phase 9B prerequisite for sandboxes, independent of formats. Cycles need the existing callable,
+Phase 9B prerequisite for sandboxes and the I/O subset, independent of formats. #109 must settle its
+bounded callable API before implementation and coordinate sandbox integration with 10A; completing
+the full generalized I/O design in #99 is not a prerequisite. Cycles need the existing callable,
 contract/effect, Collection, and resolver foundations; they do not need a Caret-written interpreter.
 Modules and environments provide sandbox import visibility and generation-local state. SIMD,
-formats, rules, staging, and a compiler backend are not prerequisites for this v1 subset.
+formats, rules, staging, general resumable failure handlers, and a compiler backend are not
+prerequisites for this v1 subset.
 
 | Chunk | Main implementation work | Complexity |
 |---|---|---|
 | [5 — Cycles](roadmap/phase-05.md) | Four-argument callable, stable state contracts/shapes, previous/next lookup, atomic phase commits, effects, and nesting | Moderate |
 | [9A — Modules](roadmap/phase-09.md#phase-9a-modules-and-imports-v1) | Path/ModuleId resolution, catalog discovery, exports, initialization, cycle diagnostics, and per-generation evaluation cache | Moderate to high |
 | [9B — Environments and metadata](roadmap/phase-09.md#phase-9b-execution-environments-metadata-and-results-v1) | Execution context across closures/imports/REPL/tests, metadata-only roots/modules, and shared results | Moderate to high |
+| [V1 — File and console I/O](roadmap/v1-io.md) | Specify bounded composed pipelines; whole-file UTF-8/binary reads, replacement/append, console lines/text output, explicit Results, effects, and capability mediation | Design prerequisite; implementation estimate follows settled API |
 | [10A — Initial sandboxes](roadmap/phase-10.md#phase-10a-initial-sandboxes-v1) | Fixed environments, projected calls and shared containers, restricted imports/effects/reflection, nested authority, termination/unloading | High |
 
 ## Reviewed Todo cards
 
-The initial Todo review establishes the assignments below. It updates repository planning, not
-GitHub card bodies or column status. Additional v1 cards must have settled semantics, fit the core
-language, and avoid introducing a dependency on a postponed subsystem. Existing planned or deferred
-work is not promoted into v1 merely because it is described in a completed phase file.
+The assignments below record release allocation and readiness separately from project status.
+#109 and #99 link to each other. #109 targets v1 but remains Underspecified until its bounded
+semantics are settled. V1 implementation cards must have settled semantics, fit the core language,
+and avoid introducing a dependency on a postponed subsystem. Existing planned or deferred work
+is not promoted into v1 merely because it is described in a completed phase file.
 
 | Card | Assignment | Readiness and required follow-up |
 |---|---|---|
 | [#61 — Template sugar](https://github.com/kerabromsmu/caret-lang/issues/61) | **V1** | Implementable using existing templates. Planned `<[ … ]>` lowers to ordinary lexical `template` application, including shadowing; use established field/contract and nested-template rules. |
 | [#81 — Multiline REPL](https://github.com/kerabromsmu/caret-lang/issues/81) | **V1 / Phase 13A** | Implementable using the existing parser/layout and JLine foundation. Add shared completion/submission handling for both REPL paths; EOF executes complete pending source, including valid active mappings, and diagnoses incomplete input. |
+| [#109 — File and console I/O subset](https://github.com/kerabromsmu/caret-lang/issues/109) | **V1** | Feature / Underspecified. Specify a compatible slice of #99 before implementation: whole-file UTF-8/binary reads, replacement/append, console lines/text output, explicit recoverable Results, nullary composition, effects, and capability boundaries. Runtime work follows 9B; sandbox integration coordinates with 10A. |
+| [#99 — Complete generalized I/O](https://github.com/kerabromsmu/caret-lang/issues/99) | **Post-v1; exact release unassigned** | Specification / Underspecified. Retains the full pipeline/endpoint design and later persistent resources, incremental/network/asynchronous transfers, general codecs, and resumable failure handling. Compatibility reference for #109, not a requirement to finish the full design before v1. |
 | [#60 — Gated computations](https://github.com/kerabromsmu/caret-lang/issues/60) | **Specify soon in a later discussion; v1 inclusion undecided** | Specification-only card. Invocation-context resolution, authority, contracts/effects, producer holes, and staging integration need decisions before runtime implementation. Do not assign it to post-v1 merely because design is postponed. |
 | [#57 — Language-wide tail calls](https://github.com/kerabromsmu/caret-lang/issues/57) | **Early v1 candidate; design discussion postponed** | Settle the guarantee, tail positions, callable coverage, contract/effect checks, depth diagnostics, and host/boundary behavior before implementation. Substantial interpreter work; no compiler prerequisite. Ordinary cycles can use an internal loop independently. |
 
-V1 completion includes #61 and #81. It does not yet require #60 or #57; their design discussions
-must explicitly decide release placement before either becomes a release gate. Neither is being
-designed or implemented by this documentation update.
+V1 completion includes #61, #81, and the bounded #109 subset. #109's release allocation does not
+settle its public API or implement it; completing it does not complete #99. V1 does not yet require
+#60 or #57; their design discussions must explicitly decide release placement before either becomes
+a release gate. Neither is being designed or implemented by this documentation update.
 
 ## Release policy and completion
 
@@ -130,6 +138,7 @@ designed or implemented by this documentation update.
 - <a id="phase-12-compiler-backend-and-optimization"></a> [Phase 12 — Compiler backend and optimization](roadmap/phase-12.md#phase-12-compiler-backend-and-optimization)
 - <a id="phase-13-tooling-standard-library-and-release-hardening"></a> [Phase 13 — Tooling, standard library, and release hardening](roadmap/phase-13.md#phase-13-tooling-standard-library-and-release-hardening)
 - [Standalone phase — Caret-written self-interpreter (post-v1)](roadmap/self-interpreter.md)
+- [Separate v1 chunk — File and console I/O pipeline subset](roadmap/v1-io.md)
 
 Phases 9 and 10 contain separately scheduled chunks. After v1, prioritize Phase 8; its design
 milestone must settle the first-class C/T/E contracts and tracked container-read/purity interaction
@@ -165,6 +174,9 @@ each feature only when that feature is available.
 - V1 module tests cover exports/privacy, catalog collisions, path/ID identity, initialization,
   failed loads, import cycles, and environment-local caches. V1 cycle tests cover previous/next
   state, atomic commits, stable shape/contracts, purity, effects, and ordinary callable behavior.
+- V1 I/O tests cover text/binary round trips, empty files, replacement/append, console input/output,
+  EOF versus empty lines, explicit recoverable Results, continued execution, cleanup and partial
+  transfers, callable/effect behavior, and adversarial capability/reflection/sandbox boundaries.
 - Template-sugar tests compare ordinary application with sugar, including lexical shadowing,
   nested Collections/contracted templates, fixed captures, holes, layout, and located delimiter errors.
   Multiline REPL tests cover both input paths, immediate one-line execution, completion versus invalid
@@ -185,7 +197,9 @@ each feature only when that feature is available.
 Phase 4 is complete, including mutable containers, state effects, field reification,
 `with`/`outer`, Collection-value `eager`, contextual templates, numeric conversion, and packed
 layouts. The next dependency-ordered work is [Phase 5](roadmap/phase-05.md): ordinary four-argument
-`cycle`, including its state lookup and commit semantics. Continue with 9A, 9B, and 10A for v1.
+`cycle`, including its state lookup and commit semantics. Continue with 9A, 9B, the
+[file/console I/O subset](roadmap/v1-io.md), and 10A for v1. #109's subset API must be specified
+before its runtime work; its design discussion can happen earlier.
 #61 template sugar and #81 multiline REPL are independent ready v1 work. Keep #60 and #57 for
 their requested upcoming design discussions without selecting their unresolved semantics now.
 The [self-interpreter](roadmap/self-interpreter.md), explicitly deferred Collection APIs, callable
