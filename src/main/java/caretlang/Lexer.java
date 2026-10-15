@@ -94,6 +94,13 @@ final class Lexer {
                 tokens.add(token(Kind.IDENT, source.substring(start, i), positions, start, i));
                 continue;
             }
+            // The template's closing '>' ends its delimiter before a following operator.
+            // Keep ordinary indexing/comparisons such as values[0]>=1 unchanged.
+            if (c == '>' && endsTemplateSpecimen(tokens, baseOffset + i)) {
+                tokens.add(token(Kind.SYMBOL, ">", positions, i, i + 1));
+                i++;
+                continue;
+            }
             String two = i + 1 < source.length() ? source.substring(i, i + 2) : "";
             if (LanguageSyntax.isMultiCharacterSymbol(two)) {
                 tokens.add(token(Kind.SYMBOL, two, positions, i, i + 2));
@@ -110,6 +117,27 @@ final class Lexer {
         }
         tokens.add(token(Kind.EOF, "", positions, i, i));
         return tokens;
+    }
+
+    private static boolean endsTemplateSpecimen(List<Token> tokens, int offset) {
+        if (tokens.isEmpty()) return false;
+        Token last = tokens.getLast();
+        if (last.kind() != Kind.SYMBOL || !last.text().equals("]") || last.span().end().offset() != offset) {
+            return false;
+        }
+        int depth = 0;
+        for (int index = tokens.size() - 1; index >= 0; index--) {
+            Token token = tokens.get(index);
+            if (token.kind() != Kind.SYMBOL) continue;
+            if (token.text().equals("]")) depth++;
+            else if (token.text().equals("[") && --depth == 0) {
+                if (index == 0) return false;
+                Token prefix = tokens.get(index - 1);
+                return prefix.kind() == Kind.SYMBOL && prefix.text().equals("<")
+                        && prefix.span().end().offset() == token.span().start().offset();
+            }
+        }
+        return false;
     }
 
     /** Returns delimiter depth while applying the same string/comment boundaries as tokenization. */

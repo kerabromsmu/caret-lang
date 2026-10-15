@@ -27,7 +27,7 @@ design; this principle does not change the prototype's current behavior.
 ## Planned releases
 
 The [v1 roadmap](PLAN.md#release-targets-and-implementation-order) includes everything already
-implemented plus template sugar (#61), multiline REPL submission (#81), ordinary cycles, modules,
+implemented (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles, modules,
 root/module identity and visible-binding metadata, shared structured results, the bounded
 [file/console I/O subset (#109)](roadmap/v1-io.md), and initial sandboxes.
 These additions are still planned. Initial
@@ -69,17 +69,18 @@ environment swapping remain available. Gated computations (#60) are to be specif
 later discussion, with v1 inclusion undecided. Cycles can proceed independently of the v1 tail-call
 specification work. Release allocation does not implement the planned features or settle their designs.
 
-The planned template notation makes the specimen's boundary explicit and uses ordinary lexical
+The implemented template notation makes the specimen's boundary explicit and uses ordinary lexical
 lookup of `template`, including shadowing:
 
-<!-- caret-example: planned -->
 ```caret
 Person = <[^name = (String) _ ^phone = (String~) _]>
 ```
 
 It is sugar for `template [^name = (String) _ ^phone = (String~) _]`, with the same template and
-hole rules. The [template specification](spec/sections/06-06-templates-foundations.md#planned-template-sugar)
-defines nested Collections and contracted nested templates. The notation is not implemented yet.
+hole rules. The [template specification](spec/sections/06-06-templates-foundations.md#template-sugar)
+defines nested Collections and contracted nested templates. Ordinary nested `[...]` remains
+Collection structure; a reusable template constrains a field through `(NestedContract) _`.
+The runnable [template example](examples/features/templates.caret) includes the sugar and shadowing.
 
 The planned multiline REPL keeps complete one-line input immediate, accumulates incomplete source
 without executing it, and submits complete indentation bodies on a valid blank line or effective

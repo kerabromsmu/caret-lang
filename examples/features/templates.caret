@@ -27,3 +27,22 @@ print Contact ada
 print Contact [^name = "Ada"]
 print (identity [^name = "Bo"]).phone
 print (seqGet @Contact.elements 1).defaultsMissing
+
+// Template sugar keeps ordinary template and hole semantics.
+SugarPoint = <[(Number) _ (Number) _]>
+SugarDiagonal = <[_1 _1]>
+SugarContact = <[^name = (String) _ ^phone = (String~) _]>
+Address = <[^street = (String) _ ^city = (String) _]>
+Resident = <[^name = (String) _ ^address = (Address) _]>
+
+print SugarPoint [3 4]
+print SugarPoint [3 "four"]
+print SugarDiagonal [2 2]
+(SugarContact) bo = [^name = "Bo"]
+print bo.phone
+print Resident [^name = "Ada" ^address = [^street = "Main" ^city = "Oslo"]]
+
+localSugar =
+  template specimen = seqSize specimen
+  <[1 2]>
+print localSugar

@@ -13,13 +13,15 @@ reused for another behavior.
 ## Release allocation and partial requirements
 
 [`PLAN.md`](PLAN.md#release-targets-and-implementation-order) owns release allocation, independently
-of the statuses here. V1 includes all implemented rows plus #61 template sugar, #81/Phase 13A
+of the statuses here. V1 includes all implemented rows (including #61 template sugar) plus #81/Phase 13A
 multiline REPL submission, ordinary cycles, Phase 9A modules,
 Phase 9B environments/metadata and shared `Result T`, the bounded
 [file/console I/O subset (#109)](roadmap/v1-io.md), and Phase 10A initial sandboxes. #109 requires
 whole-file UTF-8 text/binary reads, replacement/append, console lines/text output, and explicit
 recoverable Results, but remains Underspecified until its public API and semantics are settled.
-This allocation changes no conformance IDs, statuses, or evidence. The complete generalized I/O
+Release allocation itself does not establish implementation evidence. `TEMPLATE-SUGAR-001` records
+the implemented #61 Phase 4 follow-up; the historical #79 audit still describes the original Phase 4
+foundation. The complete generalized I/O
 design (#99) targets post-v1; completing #109 does not complete it. The complete
 rules/rulesets/objects/`ruleCycle` phase targets the next release, provisionally 1.1. Advanced
 module/sandbox work and the remaining Phase 13B and other assigned phases target later releases.

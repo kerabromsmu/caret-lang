@@ -28,6 +28,7 @@ Phase numbers remain historical feature identifiers, not release numbers or exec
 Phases 0–4 provide the implemented compatibility baseline, including contracts and effects,
 lambdas, the Collection protocol, exact numeric values and conversion, packed layouts, mutable
 containers, scoped lookup, and Java embedding. All implemented behavior belongs to v1.
+Template sugar (#61) is an implemented Phase 4 follow-up.
 
 The [v1 effort estimates](roadmap/v1-estimates.md) record remaining tasks, dependencies, assumptions,
 and rough engineer-day ranges as of 2026-10-16. They provide planning guidance without changing scope.
@@ -39,8 +40,8 @@ and rough engineer-day ranges as of 2026-10-16. They provide planning guidance w
 | **Later releases** | Complete generalized I/O (#99); full randomness system (#98); rotations/width-dependent extensions; Phase 9C semantic Code; Phase 9D canonical serialization/quines; Phase 10B swaps/reload; Phase 10C richer projections; standalone self-interpreter phase; Phases 6, 7, 11, 12, and Phase 13B | Exact version assignments await later planning; #60 design and release placement remain open |
 
 The core v1 implementation order is **5 → 9A → 9B → file/console I/O (#109) → 10A**.
-Template sugar (#61) and multiline REPL submission (#81/13A) can be implemented independently using
-the existing foundation; neither adds a prerequisite to this sequence. The shared
+Template sugar (#61) is implemented; multiline REPL submission (#81/13A) can be implemented
+independently using the existing foundation. Neither adds a prerequisite to this sequence. The shared
 [`Result T` contract](spec/sections/06-07-templates-advanced.md#standard-error-template) is a
 Phase 9B prerequisite for sandboxes and the I/O subset, independent of formats. #109 must settle its
 bounded callable API before implementation and coordinate sandbox integration with 10A; completing
@@ -81,7 +82,7 @@ is not promoted into v1 merely because it is described in a completed phase file
 | [#5 — Visible identifiers](https://github.com/kerabromsmu/caret-lang/issues/5) | **V1 / 9A/9B, with 10A visibility tests** | Enumerate local/imported visible identifiers deterministically through metadata-only `@root.ids`, preserving `id`/`ids` naming, exports, privacy, and environment authority. The naming convention already exists for implemented reflection. Semantic Code is outside this v1 portion. |
 | [#53 — Basic integer shifts](https://github.com/kerabromsmu/caret-lang/issues/53) | **V1 design/specification work** | Record `shl`/`shr` goals and unresolved contracts, mathematical shift counts, negative right-shift behavior, and callable integration. Rotations and width-dependent operations remain later work; no candidate semantics are selected here. |
 | [#57 — Language-wide tail calls](https://github.com/kerabromsmu/caret-lang/issues/57) | **V1 specification work** | Settle guarantees, tail positions, callable coverage, contracts/effects, depth diagnostics, host/boundary behavior, and future backend parity before implementation. No compiler prerequisite; ordinary cycles remain independent. |
-| [#61 — Template sugar](https://github.com/kerabromsmu/caret-lang/issues/61) | **V1** | Implementable using existing templates. Planned `<[ … ]>` lowers to ordinary lexical `template` application, including shadowing; use established field/contract and nested-template rules. |
+| [#61 — Template sugar](https://github.com/kerabromsmu/caret-lang/issues/61) | **V1 / implemented Phase 4 follow-up** | `<[ … ]>` lowers to ordinary lexical `template` application, preserving shadowing, field/contract and nested-template rules. `TEMPLATE-SUGAR-001` records automated and runnable-example evidence. |
 | [#80 — Turing-completeness proof](https://github.com/kerabromsmu/caret-lang/issues/80) | **V1 proof/example deliverable** | Create one or more Caret programs supporting the proof requested by the card. The proof construction is not selected here; this does not establish a new runtime guarantee. |
 | [#81 — Multiline REPL](https://github.com/kerabromsmu/caret-lang/issues/81) | **V1 / Phase 13A** | Implementable using the existing parser/layout and JLine foundation. Add shared completion/submission handling for both REPL paths; EOF executes complete pending source, including valid active mappings, and diagnoses incomplete input. |
 | [#109 — File and console I/O subset](https://github.com/kerabromsmu/caret-lang/issues/109) | **V1** | Feature / Underspecified. Specify a compatible slice of #99 before implementation: whole-file UTF-8/binary reads, replacement/append, console lines/text output, explicit recoverable Results, nullary composition, effects, and capability boundaries. Runtime work follows 9B; sandbox integration coordinates with 10A. |
@@ -129,7 +130,7 @@ any design questions or implementing runtime behavior.
   arity, partial application, dispatch, effects, reflection, and staging use ordinary function rules.
   Specialized analysis and lowering recognize resolved language-owned callable identities, never
   lexical spellings; their semantic behavior introduces no feature-specific application or declaration
-  grammar. Planned `<[ … ]>` is surface sugar lowering to an ordinary `template` application with
+grammar. Implemented `<[ … ]>` is surface sugar lowering to an ordinary `template` application with
   lexical lookup, not spelling-triggered runtime behavior.
 - Pass an explicit execution environment through interpretation, imports, tests, REPL sessions, and
   compiled entry points. Reflection and authority are always relative to that environment.
@@ -219,7 +220,8 @@ layouts. The next dependency-ordered work is [Phase 5](roadmap/phase-05.md): ord
 `cycle`, including its state lookup and commit semantics. Continue with 9A, 9B, the
 [file/console I/O subset](roadmap/v1-io.md), and 10A for v1. #109's subset API must be specified
 before its runtime work; its design discussion can happen earlier.
-#61 template sugar and #81 multiline REPL are independent ready v1 work. Include #5 in 9A/9B/10A,
+#61 template sugar is complete as a Phase 4 follow-up; #81 multiline REPL remains independent ready
+v1 work. Include #5 in 9A/9B/10A,
 schedule #53/#57 specification work and #110's specification prerequisite without selecting their
 unresolved semantics here, and track #80 as v1 proof/example work. Keep #60's release placement open.
 The [self-interpreter](roadmap/self-interpreter.md), explicitly deferred Collection APIs, callable

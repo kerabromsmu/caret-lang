@@ -9,6 +9,60 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ParserTest {
     @Test
+    void lowersTemplateSugarToGroupedLexicalApplicationWithPhysicalSpans() {
+        Apply call = assertInstanceOf(Apply.class, expression("<[_]>"));
+        Name function = assertInstanceOf(Name.class, call.function());
+        assertEquals("template", function.name());
+        assertEquals(new SourcePosition(0, 1, 1), function.span().start());
+        assertEquals(new SourcePosition(2, 1, 3), function.span().end());
+        CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class, call.argument());
+        assertInstanceOf(Hole.class, literal.elements().getFirst().value());
+        assertEquals(new SourcePosition(1, 1, 2), literal.span().start());
+        assertEquals(new SourcePosition(4, 1, 5), literal.span().end());
+        assertEquals(new SourcePosition(5, 1, 6), call.span().end());
+
+        Apply invocation = assertInstanceOf(Apply.class, expression("<[_]> [1]"));
+        assertInstanceOf(Apply.class, invocation.function());
+        Apply passed = assertInstanceOf(Apply.class, expression("use <[_]>"));
+        assertInstanceOf(Apply.class, passed.argument());
+        Compose composed = assertInstanceOf(Compose.class, expression("<[]> >> use"));
+        assertInstanceOf(Apply.class, composed.left());
+    }
+
+    @Test
+    void distinguishesSugarFromComparisonsAndKeepsPositionalTemplateElementsSeparate() {
+        Binary comparison = assertInstanceOf(Binary.class, expression("0<[1][0]"));
+        assertEquals("<", comparison.operator());
+        assertInstanceOf(DynamicField.class, comparison.right());
+        assertEquals(">=", assertInstanceOf(Binary.class, expression("values[0]>=1")).operator());
+        CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class,
+                expression("[<[]> <[]>]"));
+        assertEquals(2, literal.elements().size());
+        assertTrue(literal.elements().stream().allMatch(e -> e.value() instanceof Apply));
+        assertEquals("==", assertInstanceOf(Binary.class, expression("<[]>==<[]>")).operator());
+    }
+
+    @Test
+    void diagnosesIncompleteAndMalformedTemplateDelimitersAtTheirPhysicalLocations() {
+        for (String source : List.of("<[]", "<[] >", "<[1]x")) {
+            LangException error = assertThrows(LangException.class, () -> expression(source));
+            assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+            assertEquals(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, error.diagnostic().code());
+            assertEquals("Expected ']>' after template specimen", error.diagnostic().message());
+            assertEquals(1, error.span().start().line());
+            assertEquals(source.equals("<[]") ? 4 : 5, error.span().start().column());
+        }
+        LangException open = assertThrows(LangException.class, () -> expression("<["));
+        assertEquals(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, open.diagnostic().code());
+        assertEquals(3, open.span().start().column());
+        LangException multiline = assertThrows(LangException.class,
+                () -> new Parser("T = <[\n  _\n]\n").parseProgram());
+        assertEquals(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, multiline.diagnostic().code());
+        assertEquals(3, multiline.span().start().line());
+        assertEquals(2, multiline.span().start().column());
+    }
+
+    @Test
     void parsesContainerLiteralsContractsAndPostfixReads() {
         ContainerLiteral inferred = assertInstanceOf(ContainerLiteral.class, expression("{ 1 }"));
         assertNull(inferred.contracts());

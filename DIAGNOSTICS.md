@@ -48,7 +48,7 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | PARSE-LAMBDA-BODY | public | PARSE_INVALID_SYNTAX | `ParserTest#rejectsMissingLambdaBodiesWithExactDiagnostics`; `examples/errors/missing_lambda_body.caret` |
 | PARSE-RESERVED-BINDING | public | PARSE_RESERVED_BINDING | `examples/errors/reserved_binding.caret` |
 | PARSE-INVALID-CONTRACT | public | PARSE_INVALID_CONTRACT | `examples/errors/invalid_contract.caret` |
-| PARSE-UNCLOSED-DELIMITER | public | PARSE_UNCLOSED_DELIMITER | `examples/errors/unclosed_delimiter.caret` |
+| PARSE-UNCLOSED-DELIMITER | public | PARSE_UNCLOSED_DELIMITER | `examples/errors/unclosed_delimiter.caret`; `examples/errors/template_sugar_unclosed.caret`; `ParserTest#diagnosesIncompleteAndMalformedTemplateDelimitersAtTheirPhysicalLocations` |
 | PARSE-INVALID-HOLE | public | PARSE_INVALID_HOLE | `examples/errors/invalid_numbered_hole.caret` |
 | PARSE-INVALID-NUMBER | internal | PARSE_INVALID_NUMBER | `ParserTest#rejectsNonFiniteNumberLiteralsAsLocatedParserDiagnostics` |
 | PARSE-NONFINITE-NUMBER | public | PARSE_INVALID_NUMBER | `examples/errors/non_finite_literal.caret` |

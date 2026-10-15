@@ -31,6 +31,8 @@ The current prototype supports:
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
+- structural templates with ordinary `template` construction or `<[ … ]>` sugar, preserving
+  lexical shadowing and Collection specimen/hole semantics;
 - proven-pure unary Boolean named functions and lambdas, including captures and aliases, as
   first-class refinement requirements in derived contracts and direct clauses; and
 - first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
@@ -55,7 +57,7 @@ their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS
 every current diagnostic message variant and its exact fixture or focused test evidence.
 
 The [release roadmap](PLAN.md#release-targets-and-implementation-order) defines **1.0** as the
-implemented baseline plus template sugar (#61), multiline REPL submission (#81), ordinary cycles,
+implemented baseline (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles,
 modules, metadata-only root/module reflection, the shared `Result T` contract, the bounded
 [file/console I/O subset (#109)](roadmap/v1-io.md), and initial path-based sandboxes. Those additions
 are planned, not implemented by this roadmap change. The I/O subset covers whole-file UTF-8
@@ -106,6 +108,10 @@ rule, omitting a field whose template hole directly uses `T~` or `T?~` materiali
 value `~`; `T?~` also permits an explicitly supplied null. Aliases of those contracts accept an
 explicit `~` but do not enable omission. Existing Collections remain exact-shape values: template
 membership and explicit conversion do not insert fields.
+
+`Person = <[^name = (String) _]>` is sugar for ordinary `template [^name = (String) _]`
+application. Delimiters make the specimen boundary visible while preserving lexical lookup of
+`template`, including shadowing. See [the template example](examples/features/templates.caret).
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
