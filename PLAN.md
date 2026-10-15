@@ -29,6 +29,9 @@ Phases 0–4 provide the implemented compatibility baseline, including contracts
 lambdas, the Collection protocol, exact numeric values and conversion, packed layouts, mutable
 containers, scoped lookup, and Java embedding. All implemented behavior belongs to v1.
 
+The [v1 effort estimates](roadmap/v1-estimates.md) record remaining tasks, dependencies, assumptions,
+and rough engineer-day ranges as of 2026-10-16. They provide planning guidance without changing scope.
+
 | Target | Required work | Work excluded from that target |
 |---|---|---|
 | **1.0** | Implemented baseline; #53 basic integer-shift design; #57 language-wide tail-call specification; #61 template sugar; Phase 13A/#81 multiline REPL; Phase 5 cycles; Phase 9A modules; Phase 9B execution environments and metadata, including #5 visible identifiers; shared `Result T`; #109 file/console I/O subset; #110 basic seeded generation; Phase 10A initial sandboxes; #80 proof/example work | Complete generalized I/O (#99), full randomness system (#98), rotations/width-dependent extensions, self-interpreter, semantic Code, canonical serialization, environment swaps/reload, restricted container views, rules, SIMD, formats, staging, compiler backend, and remaining Phase 13B work; #60 remains undecided |
