@@ -4,7 +4,8 @@
 
 ## Phase 13 — Tooling, standard library, and release hardening
 
-Phase 13A/#81 multiline submission targets v1; the remaining Phase 13B work is post-v1.
+Phase 13A/#81 multiline submission and the separately tracked #80 proof/example work target v1;
+the remaining Phase 13B work is post-v1.
 Existing launchers, releases, inspection, testing,
 embedding, and REPL behavior remain part of the compatibility baseline. V1 still requires complete
 tests, runnable feature examples, and accurate documentation for its selected feature set.
@@ -15,6 +16,20 @@ self-interpreter, or generated documentation site a v1 release prerequisite.
 The separately scheduled [file/console I/O subset (#109)](v1-io.md) also targets v1 after Phase 9B,
 with sandbox integration coordinated with Phase 10A. It does not wait for Phase 13B or completion
 of the post-v1 generalized I/O design (#99); its bounded API must be specified before implementation.
+
+Other reviewed v1 work includes [basic seeded generation (#110)](../spec/05-effects-and-callable-signatures.md#planned-v1-seeded-random-generation),
+[integer-shift design (#53)](../spec/02-values-bindings-and-evaluation.md#planned-v1-integer-shifts),
+and [tail-call specification work (#57)](../spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls).
+These do not wait for the broad 13B standard-library milestone. Keep their card-level open questions
+unresolved until their design discussions; #110 does not complete the broader randomness system #98.
+
+<a id="v1-proof-and-example-work"></a>
+### V1 proof and example work (#80)
+
+[Card #80](https://github.com/kerabromsmu/caret-lang/issues/80) calls for one or more Caret programs
+that can be used as a proof of Turing completeness. Track this as v1 proof/example work rather than
+a new runtime facility or the standalone self-interpreter milestone. The card does not yet select
+the proof construction; this allocation supplies no new language guarantee or implementation evidence.
 
 <a id="phase-13a-multiline-repl-submission-v1"></a>
 ### Phase 13A — Multiline REPL submission (v1, #81)

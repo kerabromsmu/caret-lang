@@ -11,9 +11,13 @@ interface. Current implemented tooling remains in the v1 baseline. Backend parit
 documentation-site checks become gates when those later facilities exist, not prerequisites for v1.
 The exception is #81/Phase 13A multiline REPL submission, which targets v1 independently of broader
 tooling. Its planned rules execute complete pending source at EOF, including valid active mappings.
-#57 general tail calls remain an early v1 candidate awaiting design, not an implicit prerequisite
-or automatically post-v1 part of `OPT-001`. #60 computations need a later specification discussion,
-with release placement undecided; the deferred failure-handler machinery is not being designed here.
+#57 general tail calls target [v1 specification work](../spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls),
+with guarantees and coverage unresolved; they are not automatically post-v1 work merely because
+`OPT-001` includes later optimization. #80 is [v1 proof/example work](../roadmap/phase-13.md#v1-proof-and-example-work),
+and #110's bounded seeded-generation feature is separate from the broader later #98 system.
+#60 computations need a later specification discussion with release placement undecided; the
+deferred failure-handler machinery is not being designed here. None of these allocations changes
+existing requirement IDs, statuses, or evidence.
 
 | ID | Requirement | Status | Automated test evidence | Runnable example | Dependency or note |
 |---|---|---|---|---|---|

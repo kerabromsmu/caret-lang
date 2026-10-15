@@ -302,6 +302,31 @@ call-depth checks and argument locations. The implemented callable-signature mod
 compatible parameter and result contracts and unions invocation-effect bounds; proven
 incompatibilities receive a located diagnostic.
 
+<a id="planned-v1-tail-calls"></a>
+## Language-wide tail calls (v1 specification work, #57)
+
+[Card #57](https://github.com/kerabromsmu/caret-lang/issues/57) targets a language-wide tail-call
+specification for v1 across the interpreter and future compiler. Direct and mutual recursion
+already work, but nested invocation has a depth limit of 256 and deep tail recursion currently
+fails with a located `CALL_DEPTH_EXCEEDED` diagnostic. The card does not yet choose guaranteed
+proper tail calls versus an optional optimization or authorize implementation before that choice.
+
+The remaining design must settle:
+
+- Tail positions and exclusions, including selected conditional branches, exported-block results,
+  `$`, partial application, composition, overload dispatch, and nullary invocation.
+- Direct versus mutual recursion and calls through aliases, closures, partials, and dynamically
+  selected callables; parity across CLI, REPL, sandboxes, embedding, and future compiled execution.
+- Preservation of argument evaluation order, effects, contracts, diagnostics and spans, reflection,
+  sandbox authority, and host callback boundaries; non-tail depth checks and optimized-call
+  diagnostics; and whether `cycle` shares the mechanism or remains independently lowered.
+
+No guarantee, coverage rule, or runtime change is selected here. The future acceptance work covers
+large direct/mutual tail recursion, non-tail recursion, conditional paths, aliases, closures,
+partials, effects, failures, sandbox execution, and Java invocation, with a runnable example and
+conformance evidence when implemented. A compiler backend is not a prerequisite to specifying this
+feature, and ordinary cycles remain independent.
+
 <a id="lambda-functions"></a>
 ## Lambda Functions
 

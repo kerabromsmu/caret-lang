@@ -72,9 +72,17 @@ container views follow later. The complete rules/rulesets/objects/`ruleCycle` ph
 next release, provisionally **1.1**, or **2.0** if approved changes break v1 compatibility.
 Self-hosting, SIMD, formats, staging, the compiler backend, and remaining tooling are later work.
 Gated computations (#60) are to be specified soon in a later discussion, with v1 inclusion undecided.
-Language-wide tail calls (#57) remain an early v1 candidate awaiting a later design discussion;
-ordinary cycles do not depend on them. The [reviewed Todo assignments](PLAN.md#reviewed-todo-cards)
-record release scope and readiness separately from implementation status.
+
+The [eight reviewed v1 cards](LANGUAGE.md#v1-feature-work) also explicitly include visible root
+identifiers (#5) within module/environment metadata, basic integer-shift design (#53), language-wide
+tail-call specification work (#57), Turing-completeness proof/example work (#80), and basic seeded
+pseudorandom generation (#110). The randomness subset initializes from an explicit seed and produces
+successive numbers using one documented default algorithm, with the same seed/algorithm reproducing
+the sequence. Its API, algorithm, contracts, generator state and effects remain unresolved, as do
+the shift and tail-call design choices. The broader randomness system (#98) remains later work.
+Ordinary cycles do not depend on general tail calls. The
+[reviewed card assignments](PLAN.md#reviewed-todo-cards) keep release allocation, design readiness,
+and implementation status separate; this documentation adds no runtime behavior.
 
 For a conceptual comparison with related language families, see
 [Caret Doesn’t Look Like One Language — and That’s the Point](docs/language-comparison.md). That

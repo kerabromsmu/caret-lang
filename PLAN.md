@@ -31,9 +31,9 @@ containers, scoped lookup, and Java embedding. All implemented behavior belongs 
 
 | Target | Required work | Work excluded from that target |
 |---|---|---|
-| **1.0** | Implemented baseline; #61 template sugar; Phase 13A/#81 multiline REPL; Phase 5 cycles; Phase 9A modules; Phase 9B execution environments and metadata; shared `Result T`; #109 file/console I/O subset; Phase 10A initial sandboxes | Complete generalized I/O (#99), self-interpreter, semantic Code, canonical serialization, environment swaps/reload, restricted container views, rules, SIMD, formats, staging, compiler backend, and remaining Phase 13B work; #60/#57 remain unassigned candidates |
+| **1.0** | Implemented baseline; #53 basic integer-shift design; #57 language-wide tail-call specification; #61 template sugar; Phase 13A/#81 multiline REPL; Phase 5 cycles; Phase 9A modules; Phase 9B execution environments and metadata, including #5 visible identifiers; shared `Result T`; #109 file/console I/O subset; #110 basic seeded generation; Phase 10A initial sandboxes; #80 proof/example work | Complete generalized I/O (#99), full randomness system (#98), rotations/width-dependent extensions, self-interpreter, semantic Code, canonical serialization, environment swaps/reload, restricted container views, rules, SIMD, formats, staging, compiler backend, and remaining Phase 13B work; #60 remains undecided |
 | **1.1 provisionally** | Complete Phase 8: contexts, rules, scheduling, chains, rulesets, objects, container dependencies, and `ruleCycle` | Existing advanced-rule deferrals remain deferred; use 2.0 instead only if approved design changes break v1 compatibility |
-| **Later releases** | Complete generalized I/O (#99); Phase 9C semantic Code; Phase 9D canonical serialization/quines; Phase 10B swaps/reload; Phase 10C richer projections; standalone self-interpreter phase; Phases 6, 7, 11, 12, and Phase 13B | Exact version assignments await later planning; #60/#57 design and release placement remain open |
+| **Later releases** | Complete generalized I/O (#99); full randomness system (#98); rotations/width-dependent extensions; Phase 9C semantic Code; Phase 9D canonical serialization/quines; Phase 10B swaps/reload; Phase 10C richer projections; standalone self-interpreter phase; Phases 6, 7, 11, 12, and Phase 13B | Exact version assignments await later planning; #60 design and release placement remain open |
 
 The core v1 implementation order is **5 → 9A → 9B → file/console I/O (#109) → 10A**.
 Template sugar (#61) and multiline REPL submission (#81/13A) can be implemented independently using
@@ -47,6 +47,14 @@ Modules and environments provide sandbox import visibility and generation-local 
 formats, rules, staging, general resumable failure handlers, and a compiler backend are not
 prerequisites for this v1 subset.
 
+The eight reviewed `v1` cards are #5, #53, #57, #61, #80, #81, #109, and #110.
+Release allocation does not settle their open designs or change their issue types: #53 and #57
+retain specification/design deliverables, and #80 is proof/example work. #5's visible-identifier
+portion belongs to 9A/9B with visibility enforcement in 10A; semantic Code remains in 9C.
+#110 reuses the numeric/callable/contract/effect foundation and coordinates environment/sandbox
+behavior with 9B/10A where applicable. Its API, default algorithm, state, and effects must be settled
+before implementation. These additions do not impose a new ordering on the core phase sequence.
+
 | Chunk | Main implementation work | Complexity |
 |---|---|---|
 | [5 — Cycles](roadmap/phase-05.md) | Four-argument callable, stable state contracts/shapes, previous/next lookup, atomic phase commits, effects, and nesting | Moderate |
@@ -55,27 +63,35 @@ prerequisites for this v1 subset.
 | [V1 — File and console I/O](roadmap/v1-io.md) | Specify bounded composed pipelines; whole-file UTF-8/binary reads, replacement/append, console lines/text output, explicit Results, effects, and capability mediation | Design prerequisite; implementation estimate follows settled API |
 | [10A — Initial sandboxes](roadmap/phase-10.md#phase-10a-initial-sandboxes-v1) | Fixed environments, projected calls and shared containers, restricted imports/effects/reflection, nested authority, termination/unloading | High |
 
-## Reviewed Todo cards
+<a id="reviewed-todo-cards"></a>
+## Reviewed cards and v1 scope
 
-The assignments below record release allocation and readiness separately from project status.
-#109 and #99 link to each other. #109 targets v1 but remains Underspecified until its bounded
-semantics are settled. V1 implementation cards must have settled semantics, fit the core language,
-and avoid introducing a dependency on a postponed subsystem. Existing planned or deferred work
+The assignments below cover reviewed cards from Todo, Underspecified, and Parked, and record
+release allocation and readiness separately from project status. #109/#99 and #110/#98 distinguish
+bounded v1 features from their broader later designs. V1 implementation cards must have settled
+semantics, fit the core language, and avoid introducing a dependency on a postponed subsystem.
+Existing planned or deferred work
 is not promoted into v1 merely because it is described in a completed phase file.
 
 | Card | Assignment | Readiness and required follow-up |
 |---|---|---|
+| [#5 — Visible identifiers](https://github.com/kerabromsmu/caret-lang/issues/5) | **V1 / 9A/9B, with 10A visibility tests** | Enumerate local/imported visible identifiers deterministically through metadata-only `@root.ids`, preserving `id`/`ids` naming, exports, privacy, and environment authority. The naming convention already exists for implemented reflection. Semantic Code is outside this v1 portion. |
+| [#53 — Basic integer shifts](https://github.com/kerabromsmu/caret-lang/issues/53) | **V1 design/specification work** | Record `shl`/`shr` goals and unresolved contracts, mathematical shift counts, negative right-shift behavior, and callable integration. Rotations and width-dependent operations remain later work; no candidate semantics are selected here. |
+| [#57 — Language-wide tail calls](https://github.com/kerabromsmu/caret-lang/issues/57) | **V1 specification work** | Settle guarantees, tail positions, callable coverage, contracts/effects, depth diagnostics, host/boundary behavior, and future backend parity before implementation. No compiler prerequisite; ordinary cycles remain independent. |
 | [#61 — Template sugar](https://github.com/kerabromsmu/caret-lang/issues/61) | **V1** | Implementable using existing templates. Planned `<[ … ]>` lowers to ordinary lexical `template` application, including shadowing; use established field/contract and nested-template rules. |
+| [#80 — Turing-completeness proof](https://github.com/kerabromsmu/caret-lang/issues/80) | **V1 proof/example deliverable** | Create one or more Caret programs supporting the proof requested by the card. The proof construction is not selected here; this does not establish a new runtime guarantee. |
 | [#81 — Multiline REPL](https://github.com/kerabromsmu/caret-lang/issues/81) | **V1 / Phase 13A** | Implementable using the existing parser/layout and JLine foundation. Add shared completion/submission handling for both REPL paths; EOF executes complete pending source, including valid active mappings, and diagnoses incomplete input. |
 | [#109 — File and console I/O subset](https://github.com/kerabromsmu/caret-lang/issues/109) | **V1** | Feature / Underspecified. Specify a compatible slice of #99 before implementation: whole-file UTF-8/binary reads, replacement/append, console lines/text output, explicit recoverable Results, nullary composition, effects, and capability boundaries. Runtime work follows 9B; sandbox integration coordinates with 10A. |
+| [#110 — Basic seeded generation](https://github.com/kerabromsmu/caret-lang/issues/110) | **V1** | Feature / Underspecified. Explicit seed initialization and successive pseudorandom numbers using one documented default algorithm, with repeatable sequences for the same seed/algorithm. Settle API, seed/output contracts, algorithm/versioning, state/aliasing, effects, and failures before implementation; preserve compatibility with #98. |
 | [#99 — Complete generalized I/O](https://github.com/kerabromsmu/caret-lang/issues/99) | **Post-v1; exact release unassigned** | Specification / Underspecified. Retains the full pipeline/endpoint design and later persistent resources, incremental/network/asynchronous transfers, general codecs, and resumable failure handling. Compatibility reference for #109, not a requirement to finish the full design before v1. |
+| [#98 — Full randomness system](https://github.com/kerabromsmu/caret-lang/issues/98) | **Post-v1 beyond #110** | Algorithm selection/registration, cryptographic/external randomness, special distributions, fairness policies, Collection selection, and dedicated sequence-generation helpers remain outside the bounded v1 subset. |
 | [#60 — Gated computations](https://github.com/kerabromsmu/caret-lang/issues/60) | **Specify soon in a later discussion; v1 inclusion undecided** | Specification-only card. Invocation-context resolution, authority, contracts/effects, producer holes, and staging integration need decisions before runtime implementation. Do not assign it to post-v1 merely because design is postponed. |
-| [#57 — Language-wide tail calls](https://github.com/kerabromsmu/caret-lang/issues/57) | **Early v1 candidate; design discussion postponed** | Settle the guarantee, tail positions, callable coverage, contract/effect checks, depth diagnostics, and host/boundary behavior before implementation. Substantial interpreter work; no compiler prerequisite. Ordinary cycles can use an internal loop independently. |
 
-V1 completion includes #61, #81, and the bounded #109 subset. #109's release allocation does not
-settle its public API or implement it; completing it does not complete #99. V1 does not yet require
-#60 or #57; their design discussions must explicitly decide release placement before either becomes
-a release gate. Neither is being designed or implemented by this documentation update.
+V1 includes the eight labeled cards at the scopes recorded above, alongside its existing core
+phases. Design/specification cards require their stated design deliverables; labeling them does not
+select a runtime guarantee. #109 and #110 require settled APIs before implementation and do not
+complete #99 or #98. #60 is not a v1 completion gate. This update records scope without resolving
+any design questions or implementing runtime behavior.
 
 ## Release policy and completion
 
@@ -200,8 +216,9 @@ layouts. The next dependency-ordered work is [Phase 5](roadmap/phase-05.md): ord
 `cycle`, including its state lookup and commit semantics. Continue with 9A, 9B, the
 [file/console I/O subset](roadmap/v1-io.md), and 10A for v1. #109's subset API must be specified
 before its runtime work; its design discussion can happen earlier.
-#61 template sugar and #81 multiline REPL are independent ready v1 work. Keep #60 and #57 for
-their requested upcoming design discussions without selecting their unresolved semantics now.
+#61 template sugar and #81 multiline REPL are independent ready v1 work. Include #5 in 9A/9B/10A,
+schedule #53/#57 specification work and #110's specification prerequisite without selecting their
+unresolved semantics here, and track #80 as v1 proof/example work. Keep #60's release placement open.
 The [self-interpreter](roadmap/self-interpreter.md), explicitly deferred Collection APIs, callable
 `eager`, and advanced module/sandbox/compiler work remain outside this target unless a subsequent
 card review explicitly revises it.

@@ -23,8 +23,13 @@ This allocation changes no conformance IDs, statuses, or evidence. The complete 
 design (#99) targets post-v1; completing #109 does not complete it. The complete
 rules/rulesets/objects/`ruleCycle` phase targets the next release, provisionally 1.1. Advanced
 module/sandbox work and the remaining Phase 13B and other assigned phases target later releases.
-#60 gated computations are to be specified soon in a later discussion, with v1 inclusion undecided;
-#57 tail calls remain an early v1 candidate awaiting design. Neither is yet a v1 completion gate.
+The [eight labeled cards](LANGUAGE.md#v1-feature-work) explicitly include #5's visible-identifier
+portion within 9A/9B/10A, #53 integer-shift design, #57 language-wide tail-call specification work,
+#80 proof/example work, and #110 basic seeded generation in addition to #61/#81/#109. #53/#57 retain
+their design/specification deliverables, #80 adds no runtime guarantee, and #110's API, algorithm,
+state, contracts, and effects remain unresolved. Completing #110 does not complete #98; rotations
+and width-dependent extensions remain outside #53's v1 portion. #60 gated computations are to be
+specified soon in a later discussion, with v1 inclusion undecided; #60 is not a v1 completion gate.
 
 Existing IDs, statuses, and evidence remain intact. A row combining v1 and later behavior must
 remain planned with partial evidence until the whole requirement is implemented. In particular,

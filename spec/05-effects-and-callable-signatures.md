@@ -3,6 +3,56 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+<a id="planned-v1-file-console-io"></a>
+## File and console I/O (planned v1 subset, #109)
+
+[Card #109](https://github.com/kerabromsmu/caret-lang/issues/109) and its
+[roadmap chunk](../roadmap/v1-io.md) allocate a bounded synchronous subset of the generalized I/O
+design in [#99](https://github.com/kerabromsmu/caret-lang/issues/99) to v1. The subset covers
+whole-file UTF-8 text/binary reads, whole-content replacement and append, console line input, and
+text output with or without a newline. Recoverable unsuccessful operations return explicit
+`Result T` values using `ErrorTemplate`; invalid programs, contract/authority violations, and
+implementation faults retain aborting diagnostics. File resources are acquired and released
+within each operation, and binary data uses existing Byte/UInt8 Collections.
+
+The feature uses ordinary functions and composition, environment-supplied capabilities, and
+effects that describe behavior without granting authority. Its public pipeline API, transfer and
+representation stages, default configuration, contracts, and nullary input construction/storage/
+passing/invocation/composition remain to be specified. EOF and newline semantics, UTF-8 failures,
+byte validation, paths and file creation, replacement/append and partial-write behavior, cleanup,
+output success values, explicit Result composition, effect identities, sanitized failure details,
+and REPL console sharing also remain open. Results never flatten, unwrap, or propagate implicitly.
+No new API or policy is selected here.
+
+Runtime work follows Phase 9B environments/shared Results and coordinates capability mediation
+with 10A. Full formats, persistent endpoints, incremental/network/asynchronous transfers, and
+general resumable failure handlers remain outside the subset. Completing #109 does not complete
+#99 or require its entire design to be settled first.
+
+<a id="planned-v1-seeded-random-generation"></a>
+## Seeded pseudorandom generation (planned v1 subset, #110)
+
+[Card #110](https://github.com/kerabromsmu/caret-lang/issues/110) allocates a bounded subset of the
+[randomness system (#98)](https://github.com/kerabromsmu/caret-lang/issues/98) to v1: initialize a
+generator from an explicit seed and generate successive pseudorandom numbers using one documented
+default algorithm, reproducing the same sequence for the same seed and algorithm. Use ordinary
+Caret values, functions, contracts, and established evaluation rules, preserving compatibility
+with the broader design without assuming new syntax.
+
+The public API, seed/output contracts and ranges, default algorithm, reproducibility/versioning,
+generator state and identity, aliasing/advancement, effects, and located failures remain unresolved.
+Neither mutable nor immutable generator-state semantics is selected here. Reuse the existing
+numeric/callable/contract/effect foundation, plus Containers if the later state design needs them;
+coordinate environment/sandbox behavior with 9B/10A where applicable. Effects and reflection grant
+no authority or access to host implementation objects.
+
+Algorithm selection/registration, cryptographic/external or implicit/time-based randomness,
+special distributions, fairness policies, Collection selection, and dedicated sequence-generation
+helpers are outside this subset. It does not require full I/O, custom providers, concurrency,
+rules, SIMD, staging, or a compiler. Deterministic reference-sequence, validation, state/aliasing,
+contract/effect, diagnostic, and boundary tests and a runnable example belong to future
+implementation; completing #110 does not complete #98.
+
 <a id="purity-and-effects"></a>
 ## Deferred failure handling and computations
 

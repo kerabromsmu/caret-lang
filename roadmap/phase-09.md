@@ -31,6 +31,10 @@ runtime is required for 9A/9B.
 <a id="phase-9b-execution-environments-metadata-and-results-v1"></a>
 ### Phase 9B — Execution environments, metadata, and results (v1)
 
+- Include the [v1 visible-identifier portion of #5](../spec/12-modules-reflection-and-code.md#planned-v1-visible-identifiers):
+  deterministic local/imported visible identifiers through metadata-only `@root.ids`, preserving
+  `id`/`ids` naming, exports, privacy, and environment authority. Coordinate sandbox checks with 10A;
+  semantic Code remains 9C work rather than a prerequisite for identifier metadata.
 - Give file execution, imports, tests, and REPL sessions an explicit execution-environment object
   containing the visible root, module catalog/cache, libraries, language capabilities, and runtime
   capabilities. Preserve context across closures and imported functions. Do not derive Caret

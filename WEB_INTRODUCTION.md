@@ -36,6 +36,19 @@ termination/unloading. Passing a mutable container explicitly shares read/write 
 its immutable contents supplies a snapshot. Nested sandboxes and reflection must preserve the
 same authority boundary.
 
+The [reviewed v1 scope](LANGUAGE.md#v1-feature-work) also includes visible root identifiers (#5),
+basic integer-shift design (#53), language-wide tail-call specification work (#57), a
+Turing-completeness proof using Caret programs (#80), and basic seeded pseudorandom generation (#110).
+The shift contracts and behavior and the tail-call guarantees and coverage remain open questions.
+The proof/example card does not itself establish a new runtime guarantee.
+
+The planned randomness subset will initialize from an explicit seed and produce successive
+pseudorandom numbers using one documented default algorithm. The same seed and algorithm reproduce
+the sequence. Its API, seed/output contracts, algorithm/versioning, generator state and effects still
+need specification. Algorithm selection/custom generators, cryptographic/external randomness,
+special distributions and fairness policies, Collection selection, and dedicated sequence helpers
+remain part of the later #98 design. No new syntax or generator-state policy is selected here.
+
 The planned I/O subset will read whole files as UTF-8 text or binary data, replace or append file
 content, read console lines, and write console text with or without a newline. Recoverable failures
 will return explicit structured Results; invalid programs, contract/authority violations, and
@@ -53,8 +66,8 @@ after v1: persistent endpoints, incremental/network/asynchronous transfers, gene
 resumable failure handling remain later work. The v1 subset must fit that larger pipeline design;
 completing the entire design is not a prerequisite for the subset. Existing Java embedding and its
 environment swapping remain available. Gated computations (#60) are to be specified soon in a
-later discussion, with v1 inclusion undecided. Language-wide tail calls (#57) are an early v1 candidate awaiting a
-later design discussion; cycles can proceed independently.
+later discussion, with v1 inclusion undecided. Cycles can proceed independently of the v1 tail-call
+specification work. Release allocation does not implement the planned features or settle their designs.
 
 The planned template notation makes the specimen's boundary explicit and uses ordinary lexical
 lookup of `template`, including shadowing:

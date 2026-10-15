@@ -138,6 +138,23 @@ conversions. See [diagnostic delivery](01-source-layout-and-diagnostics.md#phase
 Future rational `Fractional`, `Complex`, wider named fixed-width formats, and bit fields are not
 part of this implementation boundary.
 
+<a id="planned-v1-integer-shifts"></a>
+### Basic integer shifts (v1 design work, #53)
+
+[Card #53](https://github.com/kerabromsmu/caret-lang/issues/53) targets basic `shl`/`shr` design for
+v1. It does not yet specify their contracts or implement the functions. Open questions include
+whether the contracts are `Integer Natural -> Integer`, whether left shift is exact multiplication
+by a power of two without wrapping, and whether right shift of a negative integer uses arithmetic
+sign extension or truncation toward zero. Mathematical shift distances must be reconciled with
+host limits rather than silently adopting host masking/modulo rules.
+
+The design must also settle ordinary pure binary-function behavior, named-infix application and
+partials, the relationship to negative arbitrary-precision bitwise operations, and the boundary
+between arithmetic shifts and width-dependent logical shifts. None of these candidate semantics
+is selected here. Rotations (`rol`/`ror`) and width-dependent extensions remain outside this v1
+portion. Their later design must settle explicit versus intrinsic width; overlapping representability
+contracts such as `UInt8` and `UInt16` do not determine an intrinsic rotation width.
+
 ### Immutable semantics and storage ownership
 
 Caret values are observably immutable. An implementation may reuse collection storage only while
@@ -325,6 +342,10 @@ subtraction begins with a named operand: `(-) left right`.
 Function invocation has an interpreter-owned maximum depth. Both ordinary application and the
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
+
+The [v1 tail-call specification work](03-functions-operators-and-lambdas.md#planned-v1-tail-calls)
+retains this current depth behavior until its guarantee and diagnostic decisions are settled and
+implemented.
 
 The initial operator matrix and the
 [Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-implemented) are implemented,
