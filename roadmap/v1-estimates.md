@@ -4,11 +4,17 @@
 
 Estimate date: **2026-10-16**.
 
+This is the original planning snapshot, prepared before template sugar (#61) was implemented.
+That feature has since completed and is no longer remaining work; its **2–4 day** estimate and the
+original totals are retained here as historical estimates. See the
+[current roadmap](../PLAN.md#recommended-next-implementation-step) for implementation status.
+
 ## Basis and assumptions
 
-The remaining v1 work is estimated at roughly **90–175 engineer-days**, or **18–35 full-time
-working weeks**. These are planning estimates for one experienced developer familiar with the
-Java interpreter, not delivery commitments. Time waiting for design decisions is excluded.
+At the time of this snapshot, the remaining v1 work was estimated at roughly **90–175 engineer-days**,
+or **18–35 full-time working weeks**. These are planning estimates for one experienced developer
+familiar with the Java interpreter, not delivery commitments. Time waiting for design decisions
+is excluded.
 
 Implementation estimates include focused tests, representative runnable examples, diagnostics,
 and canonical/public documentation. The existing Phases 0–4 implementation is the compatibility
@@ -29,7 +35,7 @@ roadmap and owning specifications remain authoritative for release allocation an
 
 | Task | Main work and dependencies | Effort |
 |---|---|---:|
-| **Template sugar — [#61](https://github.com/kerabromsmu/caret-lang/issues/61)** | Lexer/parser support preserving ordinary template application, shadowing, holes and source locations. Ready independently. | **2–4 days** |
+| **Template sugar — [#61](https://github.com/kerabromsmu/caret-lang/issues/61)** | Lexer/parser support preserving ordinary template application, shadowing, holes and source locations. Independent of the main sequence; completed since this snapshot. | **2–4 days** |
 | **Multiline REPL — [#81](https://github.com/kerabromsmu/caret-lang/issues/81) / 13A** | Grammar-owned completion detection, shared submission handling, layout mappings, EOF, cancellation and history. Ready independently. | **5–10 days** |
 | **Ordinary cycles — Phase 5** | Four-argument callable, `identity`, previous/next lookup, stable state contracts, atomic phase commits, effects and nesting. | **8–15 days** |
 | **Modules — Phase 9A** | Module declarations, catalogs, path/ID imports, exports/privacy, initialization, caching and cycle diagnostics. | **10–20 days** |

@@ -493,4 +493,6 @@ grouped expressions, Collections, continuation application, closure of nested de
 incomplete suffixes, comment/string boundaries, blank/dedent submission, nested layout restoration,
 complete/incomplete EOF, cancellation, `exit`, paste/history recall, located errors, and recovery
 without losing prior bindings. Completion probes must be demonstrably free of runtime effects.
-Future template-sugar delimiters follow their normal grammar when that feature is implemented.
+The implemented [template-sugar delimiters](sections/06-06-templates-foundations.md#template-sugar)
+follow their normal grammar within a pending submission; multiline REPL submission itself remains
+planned.

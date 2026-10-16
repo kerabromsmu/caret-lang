@@ -71,9 +71,13 @@ Missing and present-null must remain distinguishable.
 ### Named collection access
 
 ```caret
-person.name     // statically guaranteed access
-person.phone~   // optional access; returns ~ when absent
+person.name     // String-key lookup; returns ~ when absent
+person.phone~   // equivalent optional spelling; returns ~ when absent
 ```
+
+Dot, bracket, and `getElement` access share the same lookup semantics. Valid absent keys return
+`~`; invalid keys violate the access contract. See the
+[canonical lookup rules](../../spec/sections/06-01-collection-protocol.md#lookup-and-keys).
 
 ### Partial application
 

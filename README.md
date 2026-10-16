@@ -18,7 +18,8 @@ The current prototype supports:
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
-- exported immutable Dictionaries, required/optional field access, and dynamic lookup;
+- exported immutable Dictionaries and unified dot, bracket, and `getElement` lookup, returning
+  missing for valid absent keys with equivalent optional spellings;
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
@@ -93,11 +94,12 @@ article covers both implemented foundations and explicitly labeled planned featu
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
 Contracts form derivation graphs and act as predicates, while the prototype now provides initial
 contract-based multiple dispatch for ordinary functions. Collections use one universal `[...]`
-literal. The prototype implements positional and String-keyed Dictionary forms, and exported blocks are
-shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-resolution
+literal. The prototype implements keyless and general keyed Collections, including first-class
+Fields and contract-selected Dictionaries with homogeneous sortable keys. Exported blocks are
+shorthand for String-keyed Dictionaries. Lexical scopes remain non-value name-resolution
 environments. Contextual contracts select Sequence, Set, Dictionary, and Packed representations
-where their requirements are unambiguous; further representations and first-class dynamic fields
-remain planned. A non-empty Collection is entirely positional or
+where their requirements are unambiguous; further representations remain planned.
+A non-empty Collection is entirely positional or
 entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes is an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
 or a concrete fixed collection, to the implemented `template` function creates an exact structural
@@ -169,8 +171,9 @@ feature documents as a searchable MkDocs Material learning site with a left-hand
 That release-hardening work will produce a runnable, implemented-only
 “Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
 
-See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret) for a runnable
-program demonstrating every feature currently supported by the prototype.
+See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret)
+for a runnable overview of the prototype's foundations, and the
+[focused feature examples](examples/features/) for demonstrations of additional implemented features.
 [`examples/features/contracts.caret`](examples/features/contracts.caret) demonstrates built-in and user-defined
 contracts and derivation.
 

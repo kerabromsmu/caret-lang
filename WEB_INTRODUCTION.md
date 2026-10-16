@@ -468,10 +468,13 @@ The current interpreter supports exact integers, finite floating-point numbers, 
 provides persistent sequences and canonically ordered Dictionaries. Collection updates
 produce new values rather than mutating existing ones, and equality is structural for ordinary data.
 The bare `[]` value is a shape-neutral empty Collection accepted by compatible sequence and
-dictionary contracts. Named Collection fields traverse and reflect in locale-independent,
-case-sensitive Unicode code-point order, while their expressions evaluate in source order. Static
-`^name` fields, ordinary `field "name" value` results, and `dictPut` updates share one String-keyed
-Dictionary representation and one member protocol.
+dictionary contracts. Dictionaries traverse and reflect in sorted key order; String keys use
+locale-independent, case-sensitive Unicode code-point order. Field expressions evaluate in source
+order. Static `^name` fields, ordinary `field "name" value` results, and `dictPut` updates share one String-keyed
+Dictionary representation and one member protocol. Contract-selected Dictionaries also support
+other homogeneous sortable keys, while general keyed Collections allow equality-comparable keys
+and retain production order. The legacy `dictPut`, `dictGet`, `dictHas`, and `dictKeys` helpers
+remain specific to String-keyed Dictionaries; the common protocol covers the broader model.
 
 `toString` is an extensible ordinary overload set. Its standard fallback renders top-level Strings
 as raw text, flat positional collections as `[ 1 2 ]`, and named or structurally nested collections
