@@ -142,6 +142,17 @@ final class MainTest {
     }
 
     @Test
+    void testModeReportsUnreadableFilesThroughItsOwnHostDiagnostic() {
+        Path missing = temporaryDirectory.resolve("missing-tests.caret");
+        Invocation invocation = run("test", missing.toString());
+
+        assertEquals(1, invocation.exitCode());
+        assertEquals("", invocation.output());
+        assertEquals("Error: Cannot read Caret test file " + missing + ": " + missing + "\n",
+                invocation.error());
+    }
+
+    @Test
     void hostCatalogMessagesHaveExactOutput() {
         assertEquals("Usage: caret test <file>\n", run("test").error());
         assertEquals("Usage: caret inspect <file>\n", run("inspect").error());

@@ -28,3 +28,13 @@ print (seqGet @pipeline.signature.result.guarantees 0).id
 savedMetadata = @add
 print savedMetadata == @add
 print savedMetadata: 3 4
+
+// Reflection has a fixed public shape and does not reveal retained private values.
+makeClosure privateValue =
+  closed ignored = privateValue
+  closed
+closed = makeClosure "private capture"
+print keys @closed
+print keys @closed.signature
+print @closed.captures~
+print @addOne.boundValues~

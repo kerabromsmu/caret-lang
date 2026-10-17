@@ -340,8 +340,12 @@ final class ConversionInterpreterTest {
                 seqAdd source 128
                 """));
         assertEquals(Diagnostic.Codes.CONTRACT_VIOLATION, invalid.diagnostic().code());
+        assertSame(DiagnosticCatalog.PACKED_APPEND_VIOLATION, invalid.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, invalid.diagnostic().phase());
         assertEquals(3, invalid.span().start().line());
+        assertEquals(15, invalid.span().start().column());
         assertEquals("Packed append rejects value for Int8", invalid.diagnostic().message());
+        assertEquals("Line 3, column 15: Packed append rejects value for Int8", invalid.getMessage());
     }
 
     @Test

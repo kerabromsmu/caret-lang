@@ -52,6 +52,10 @@ their golden output and error fixtures. Public element-operation APIs, custom pr
 computations, resumable handlers, callable `eager`, and later compiler/sandbox features remain
 deferred or planned in their own rows.
 
+`EFFECT-CALL-001` remains planned: runtime rejection of unavailable callable effect bounds is
+implemented, but the specified analysis-phase `UNKNOWN_CALL_EFFECTS` rejection has no semantic
+emitter. Catalog representation tests do not establish that missing enforcement path.
+
 
 ## Requirement groups
 

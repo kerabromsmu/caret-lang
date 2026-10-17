@@ -11,3 +11,7 @@ String
 String
 true
 7
+[ "id" "kind" "remaining" "signature" "variants" ]
+[ "effects" "kind" "parameters" "result" "variables" ]
+~
+~

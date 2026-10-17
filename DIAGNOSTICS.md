@@ -14,6 +14,17 @@ path. Its evidence checks catalog representation only; actual unknown-bound invo
 callable-value constraint failures use the runtime variant. This is a remaining reachability gap,
 not evidence of an implemented semantic rejection path.
 
+Internal malformed-number tokens and duplicate environment bindings have direct emitter tests;
+the lexer and resolver normally prevent those paths from ordinary source. Environment-only
+diagnostics have no source span until an evaluator supplies one. Selected lazy forward reads
+exercise the located runtime premature-read path separately from resolver-time rejection.
+
+`everyInternalCatalogVariantIsIndividuallyIdentifiable` checks catalog identification only. For
+the internal variants whose rows cite only that test, it does not establish execution-path
+coverage; those remain explicit emission-coverage limitations rather than ordinary-source fixtures.
+`HOST-REPL-TERMINAL-REQUIRED` likewise has exact catalog-format evidence, but no deterministic
+test of the terminal-construction failure path.
+
 Phase 4 numeric warnings, conversion errors, and contiguous packed-storage diagnostics are specified in
 [the diagnostic owner](spec/01-source-layout-and-diagnostics.md#phase-4-numeric-template-conversion-and-packed-diagnostics-implemented)
 and [acceptance matrix](spec/sections/06-02-packed-layouts.md#packed-and-prerequisite-acceptance-matrix).
@@ -50,7 +61,7 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | PARSE-INVALID-CONTRACT | public | PARSE_INVALID_CONTRACT | `examples/errors/invalid_contract.caret` |
 | PARSE-UNCLOSED-DELIMITER | public | PARSE_UNCLOSED_DELIMITER | `examples/errors/unclosed_delimiter.caret`; `examples/errors/template_sugar_unclosed.caret`; `ParserTest#diagnosesIncompleteAndMalformedTemplateDelimitersAtTheirPhysicalLocations` |
 | PARSE-INVALID-HOLE | public | PARSE_INVALID_HOLE | `examples/errors/invalid_numbered_hole.caret` |
-| PARSE-INVALID-NUMBER | internal | PARSE_INVALID_NUMBER | `ParserTest#rejectsNonFiniteNumberLiteralsAsLocatedParserDiagnostics` |
+| PARSE-INVALID-NUMBER | internal | PARSE_INVALID_NUMBER | `DiagnosticCoverageTest#malformedNumericTokensExerciseTheInternalParserDiagnostic` |
 | PARSE-NONFINITE-NUMBER | public | PARSE_INVALID_NUMBER | `examples/errors/non_finite_literal.caret` |
 | PARSE-EXPECTED-EXPRESSION | public | PARSE_INVALID_EXPRESSION | `examples/errors/invalid_expression.caret` |
 | SEMANTIC-DUPLICATE-PARAMETER | public | DUPLICATE_PARAMETER | `examples/errors/duplicate_parameter.caret` |
@@ -59,8 +70,8 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | SEMANTIC-UNKNOWN-CONTRACT | public | UNKNOWN_CONTRACT | `examples/errors/unknown_contract.caret` |
 | SEMANTIC-NOT-A-CONTRACT | public | NOT_A_CONTRACT | `examples/errors/not_a_contract.caret` |
 | RUNTIME-NOT-A-CONTRACT | public | NOT_A_CONTRACT | `examples/errors/dynamic_not_a_contract.caret` |
-| RUNTIME-DUPLICATE-DEFINITION | internal | DUPLICATE_DEFINITION | `CoreCallableInterpreterTest#rejectsDuplicateDefinitionsAndParameters` |
-| RUNTIME-PREMATURE-READ | internal | READ_BEFORE_INITIALIZATION | `CoreCallableInterpreterTest#reportsReadsBeforeSequentialDeclarations` |
+| RUNTIME-DUPLICATE-DEFINITION | internal | DUPLICATE_DEFINITION | `DiagnosticCoverageTest#duplicateEnvironmentBindingsExerciseTheRuntimeDiagnostic` |
+| RUNTIME-PREMATURE-READ | internal | READ_BEFORE_INITIALIZATION | `CoreCallableInterpreterTest#lazyBranchesDeferForwardInitializationChecksUntilSelected` |
 | RUNTIME-UNKNOWN-NAME | public | UNKNOWN_NAME | `examples/errors/unknown_name.caret` |
 | RUNTIME-NOT-CALLABLE | public | NOT_CALLABLE | `examples/errors/not_callable.caret` |
 | RUNTIME-NOT-DEREFERENCEABLE | public | NOT_DEREFERENCEABLE | `CoreCallableInterpreterTest#dereferencesReflectionDictionariesForFunctionsValuesAndMembers` |
@@ -139,7 +150,7 @@ successful direct `T~`/`T?~` default insertion is silent. See
 | HOST-TEST-USAGE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-INSPECT-USAGE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-SOURCE-READ-FAILURE | host | — | `MainTest#fileSystemFailuresAreReportedWithoutAStackTrace` |
-| HOST-TEST-READ-FAILURE | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
+| HOST-TEST-READ-FAILURE | host | — | `MainTest#testModeReportsUnreadableFilesThroughItsOwnHostDiagnostic`; `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-INSPECT-READ-FAILURE | host | — | `MainTest#inspectReportsUnreadableFilesWithoutAStackTrace` |
 | HOST-REPL-TERMINAL-REQUIRED | host | — | `MainTest#hostCatalogMessagesHaveExactOutput` |
 | HOST-REPL-HISTORY-READ | host | — | `JLineReplTest#unreadableHistoryFallsBackToMemoryWithAClearWarning` |
