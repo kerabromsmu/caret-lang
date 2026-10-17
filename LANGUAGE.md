@@ -80,19 +80,22 @@ declarations remains syntax where its owning specification says so.
 
 The [release roadmap](PLAN.md#release-targets-and-implementation-order) owns sequencing and release
 completion. Alongside the implemented baseline and the planned cycle/module/environment/sandbox
-phases, v1 includes the eight labeled cards below at their recorded scope. Allocation is separate
+phases, v1 includes the eleven labeled cards below at their recorded scope. Allocation is separate
 from design readiness and implementation status; open questions remain open.
 
 | Card | V1 scope and owning documentation |
 |---|---|
 | [#5 — Visible identifiers](https://github.com/kerabromsmu/caret-lang/issues/5) | [Environment-relative root identifier metadata](spec/12-modules-reflection-and-code.md#planned-v1-visible-identifiers), including visible imported bindings; semantic Code remains later work. |
-| [#53 — Integer shifts](https://github.com/kerabromsmu/caret-lang/issues/53) | [Basic `shl`/`shr` design](spec/02-values-bindings-and-evaluation.md#planned-v1-integer-shifts); contracts and shift semantics remain unresolved, with rotations/width-dependent extensions outside this v1 portion. |
-| [#57 — Tail calls](https://github.com/kerabromsmu/caret-lang/issues/57) | [Language-wide tail-call specification work](spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls); guarantees, tail positions, coverage, and diagnostics remain to be designed. |
+| [#53 — Integer shifts](https://github.com/kerabromsmu/caret-lang/issues/53) | [Basic `shl`/`shr` specification and implementation](spec/02-values-bindings-and-evaluation.md#planned-v1-integer-shifts); contracts and shift semantics remain unresolved, with rotations/width-dependent extensions outside this v1 portion. |
+| [#57 — Direct self-tail recursion](https://github.com/kerabromsmu/caret-lang/issues/57) | [Reduced v1 specification and implementation](spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls); precise coverage and diagnostics remain to be specified. Full language-wide tail calls [#113](https://github.com/kerabromsmu/caret-lang/issues/113) are post-v1. |
 | [#61 — Template sugar](https://github.com/kerabromsmu/caret-lang/issues/61) | [Implemented `<[ … ]>` notation](spec/sections/06-06-templates-foundations.md#template-sugar), preserving ordinary lexical application semantics as a Phase 4 follow-up. |
 | [#80 — Turing-completeness proof](https://github.com/kerabromsmu/caret-lang/issues/80) | [Proof/example work](roadmap/phase-13.md#v1-proof-and-example-work): one or more Caret programs supporting the requested proof; no proof construction or new runtime guarantee is specified here. |
 | [#81 — Multiline REPL](https://github.com/kerabromsmu/caret-lang/issues/81) | [Planned submission rules](spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions) shared by interactive and plain input. |
 | [#109 — File/console I/O](https://github.com/kerabromsmu/caret-lang/issues/109) | [Bounded synchronous I/O subset](spec/05-effects-and-callable-signatures.md#planned-v1-file-console-io) of #99; public API and remaining semantics must be specified before implementation. |
 | [#110 — Seeded generation](https://github.com/kerabromsmu/caret-lang/issues/110) | [Basic seeded pseudorandom generation](spec/05-effects-and-callable-signatures.md#planned-v1-seeded-random-generation), compatible with #98; API, algorithm, state, effects, and contracts remain unresolved. |
+| [#114 — Path modules](https://github.com/kerabromsmu/caret-lang/issues/114) | [Path-based module subset](roadmap/phase-09.md#phase-9a-modules-and-imports-v1); module IDs/catalog discovery (#115) follow after v1. |
+| [#116 — Execution environments](https://github.com/kerabromsmu/caret-lang/issues/116) | [Full context foundation](roadmap/phase-09.md#phase-9b-execution-environments-metadata-and-results-v1), delivered in ownership, propagation and entry-point milestones. |
+| [#117 — Restricted sandboxes](https://github.com/kerabromsmu/caret-lang/issues/117) | [Fixed environments and restricted boundary](roadmap/phase-10.md#phase-10a-initial-sandboxes-v1); shared containers and nested creation (#118) follow after v1. |
 
 These entries record the cards' current detail without adding syntax, APIs, or semantic decisions.
 The full I/O and randomness designs (#99/#98) remain later work, and #60 gated computations retain

@@ -139,10 +139,11 @@ Future rational `Fractional`, `Complex`, wider named fixed-width formats, and bi
 part of this implementation boundary.
 
 <a id="planned-v1-integer-shifts"></a>
-### Basic integer shifts (v1 design work, #53)
+### Basic integer shifts (planned v1 specification and implementation, #53)
 
-[Card #53](https://github.com/kerabromsmu/caret-lang/issues/53) targets basic `shl`/`shr` design for
-v1. It does not yet specify their contracts or implement the functions. Open questions include
+[Card #53](https://github.com/kerabromsmu/caret-lang/issues/53) targets basic `shl`/`shr` specification and
+implementation for v1. The contracts must be settled before implementation; the functions remain
+unimplemented. Open questions include
 whether the contracts are `Integer Natural -> Integer`, whether left shift is exact multiplication
 by a power of two without wrapping, and whether right shift of a negative integer uses arithmetic
 sign extension or truncation toward zero. Mathematical shift distances must be reconciled with
@@ -343,7 +344,7 @@ Function invocation has an interpreter-owned maximum depth. Both ordinary applic
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
 
-The [v1 tail-call specification work](03-functions-operators-and-lambdas.md#planned-v1-tail-calls)
+The [planned v1 direct self-tail recursion](03-functions-operators-and-lambdas.md#planned-v1-tail-calls)
 retains this current depth behavior until its guarantee and diagnostic decisions are settled and
 implemented.
 

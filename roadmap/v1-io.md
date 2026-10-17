@@ -11,7 +11,8 @@ This roadmap chunk introduces no new syntax, callable names, contracts, or imple
 
 Schedule runtime work after Phase 9B execution environments and the shared
 [`Result T`](../spec/sections/06-07-templates-advanced.md#standard-error-template), following the
-Phase 9A module foundation. Coordinate capability mediation and adversarial sandbox tests with
+Phase 9A path-module foundation (#114) and execution environments (#116). Module IDs/catalogs
+(#115) are not a v1 prerequisite. Coordinate capability mediation and adversarial sandbox tests with
 [Phase 10A](phase-10.md#phase-10a-initial-sandboxes-v1); v1 completion includes that integration.
 The subset does not require completion of #99, full formats/codecs, gated computations, general
 resumable failure handlers, concurrency, or a compiler backend. Its design discussion can happen
@@ -61,7 +62,8 @@ Settle the following in the owning `spec/` documents before moving #109 to Todo 
 - Exercise aliases, shadowing, partial application, nullary inputs, effects, reflection, and
   invocation timing. Pipeline construction and inspection must not accidentally perform I/O.
 - Document the threat model and test capability absence, restricted path/traversal/symlink access,
-  reflective recovery of hidden authority, retained references, and nested sandbox limits.
+  reflective recovery of hidden authority, retained references, and explicit rejection of nested sandbox creation. Nested authority
+  integration follows #118; shared containers are also outside the v1 boundary.
   Reflection and diagnostics must expose no Java resource objects or secrets.
 - Add runnable `.caret` integration examples using temporary files and controlled console input/output.
   Update canonical specifications, conformance evidence, diagnostics, README, and WEB_INTRODUCTION;

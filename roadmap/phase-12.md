@@ -25,10 +25,11 @@ differential parity become completion gates here, not prerequisites for v1 or or
 
 ### Optimization
 
-The [language-wide tail-call specification card #57](../spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls)
-targets v1 design work. This later optimization phase must follow that eventual decision; it does
+The [direct self-tail recursion card #57](../spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls)
+targets reduced v1 specification and implementation. Full language-wide tail calls (#113) are
+post-v1. This later optimization phase must follow the eventual specifications; it does
 not determine the guarantee, supported tail positions, or diagnostic behavior. A compiler backend
-is not a prerequisite for the earlier specification work or ordinary cycles.
+is not a prerequisite for the earlier interpreter work or ordinary cycles.
 
 - Add constant folding only for proven-pure operations; then dead-code elimination, call
   specialization/inlining, closure/partial specialization, persistent-update elision, tail-call and

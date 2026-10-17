@@ -10,17 +10,21 @@ API, including environment swapping, intact; its behavior is not reduced to the 
 
 Coordinate Phase 10A with the separately scheduled [v1 file/console I/O subset (#109)](v1-io.md).
 Once its API is settled, v1 acceptance includes explicit I/O capability mediation, environment-relative
-effects, and adversarial path/reflection/retained-reference/nested-authority tests. This integration
-does not require completing generalized I/O (#99) or introducing persistent endpoints.
+effects, adversarial path/reflection/retained-reference tests and rejection of nested-sandbox
+creation. This integration does not require completing generalized I/O (#99) or introducing persistent endpoints.
 
 <a id="phase-10a-initial-sandboxes-v1"></a>
-### Phase 10A — Initial sandboxes (v1)
+### Phase 10A — Restricted initial sandboxes (v1)
+
+Tracked by [#117](https://github.com/kerabromsmu/caret-lang/issues/117), estimated at **12–22
+engineer-days**. Remain Underspecified until supported boundary values, callable interfaces and
+located failures are settled; no implementation or new interface is selected by this scope change.
 
 - Implement ordinary `sandbox source environment` for module paths, returning `Result Sandbox`
   with a stable handle and a fixed immutable environment snapshot. Normal import remains distinct;
   evaluated module caches, initialization, and runtime state remain private to each generation.
-- Expose only supplied bindings, capabilities, and allowed module sources/catalog entries. Check
-  path imports against the same authority boundary as ModuleId imports; sandbox discovery must not
+- Expose only supplied bindings, capabilities, and allowed module sources. Check
+  every path import against explicit source authorization; sandbox loading must not
   scan the host project or recover unexposed sources through traversal or canonical-path aliases.
 - Mediate exported calls and retained callable references. Apply the shared `Result`/`ErrorTemplate`
   envelope to construction, exported calls, and lifecycle operations without flattening results.
@@ -28,25 +32,38 @@ does not require completing generalized I/O (#99) or introducing persistent endp
 - Implement effectful `terminate` and `unload`. Discard runtime state and invalidate references from
   that generation, including references nested in immutable Collections. Copied immutable values
   remain values; the stable handle retains source/configuration and lifecycle metadata.
-- Accept explicitly supplied shared read/write containers through boundary mediation. Preserve
-  identity, content contracts, and `StateRead`/`StateWrite` checking without exposing extra authority
-  through reflection or field reification. Callers may pass immutable contents as ordinary snapshots;
-  reading a container for that snapshot is an explicit state read, not a new projection syntax.
+- Support immutable data and mediated callable crossings. Reject shared mutable containers and
+  unsupported boundary values explicitly, including indirect crossings through Collections.
+  Callers may pass immutable contents as ordinary snapshots; producing a snapshot retains its normal
+  explicit state-read effect. Container sharing is deferred to #118, not silently converted to copying.
 - Keep direct capabilities and caller-supplied filtered/virtual callable implementations possible
   through the ordinary environment. Defer dedicated richer projection mechanisms to 10C. Effect
   declarations describe behavior and never grant authority.
 - Make effect-catalog visibility environment-relative and independent from callable/capability
-  projection. Nested sandboxes cannot introduce effect identities or implementations hidden by
-  their parent without explicit outer-host injection.
+  projection. Restricted code cannot recover hidden effect identities or implementations.
 - Project references crossing the boundary through a reflective membrane that cannot expose host
   roots, private captures, native implementation state, hidden code, or other capabilities.
-- Support nested sandboxes with child authority bounded by parent authority unless the outer host
-  explicitly injects an additional capability.
+- Reject nested sandbox creation, including aliases, partials and supplied callable paths that
+  attempt to bypass that restriction. Nested support and its authority tests are deferred to #118.
 - Reject unsupported boundary values explicitly rather than exposing implementation objects.
   Semantic Code input, `.code`, swaps, reload, and read-only/virtual container views are later work.
 - Document the threat model and add adversarial interpreter tests for lookup, reflective traversal,
-  imports, effect visibility, nested environments, container aliasing/contracts, retained references,
+  imports, effect visibility, rejection of shared containers/nested creation, retained references,
   and termination/unloading. Add code-visibility and compiler-parity tests when those features exist.
+
+<a id="shared-containers-and-nesting-post-v1"></a>
+### Complete boundary support: shared containers and nesting (post-v1)
+
+Tracked by [#118](https://github.com/kerabromsmu/caret-lang/issues/118), following #117; exact release
+unassigned. Re-estimate incremental work after the restricted boundary. This card does not duplicate
+10B/10C, semantic Code or compiler work.
+
+- Add explicitly supplied shared read/write containers with preserved identity, aliasing, content
+  contracts and StateRead/StateWrite checking; reflection and field reification must not widen authority.
+- Support nested sandboxes with child authority bounded by the parent, including visible imports,
+  effects and capabilities. Additional authority requires explicit outer-host injection.
+- Extend lifecycle/reference invalidation, threat model and adversarial tests to container sharing
+  and nested environments. Settle expanded boundary interfaces before implementation.
 
 <a id="phase-10b-environment-swaps-and-reload-post-v1"></a>
 ### Phase 10B — Environment swaps and reload (post-v1)

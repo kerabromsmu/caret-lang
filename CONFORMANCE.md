@@ -14,9 +14,9 @@ reused for another behavior.
 
 [`PLAN.md`](PLAN.md#release-targets-and-implementation-order) owns release allocation, independently
 of the statuses here. V1 includes all implemented rows (including #61 template sugar) plus #81/Phase 13A
-multiline REPL submission, ordinary cycles, Phase 9A modules,
-Phase 9B environments/metadata and shared `Result T`, the bounded
-[file/console I/O subset (#109)](roadmap/v1-io.md), and Phase 10A initial sandboxes. #109 requires
+multiline REPL submission, ordinary cycles, Phase 9A path modules (#114),
+Phase 9B environments (#116)/metadata and shared `Result T`, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and Phase 10A restricted sandboxes (#117). #109 requires
 whole-file UTF-8 text/binary reads, replacement/append, console lines/text output, and explicit
 recoverable Results, but remains Underspecified until its public API and semantics are settled.
 Release allocation itself does not establish implementation evidence. `TEMPLATE-SUGAR-001` records
@@ -25,17 +25,22 @@ foundation. The complete generalized I/O
 design (#99) targets post-v1; completing #109 does not complete it. The complete
 rules/rulesets/objects/`ruleCycle` phase targets the next release, provisionally 1.1. Advanced
 module/sandbox work and the remaining Phase 13B and other assigned phases target later releases.
-The [eight labeled cards](LANGUAGE.md#v1-feature-work) explicitly include #5's visible-identifier
-portion within 9A/9B/10A, #53 integer-shift design, #57 language-wide tail-call specification work,
-#80 proof/example work, and #110 basic seeded generation in addition to #61/#81/#109. #53/#57 retain
-their design/specification deliverables, #80 adds no runtime guarantee, and #110's API, algorithm,
+The [eleven labeled cards](LANGUAGE.md#v1-feature-work) explicitly include #5's visible-identifier
+portion within 9A/9B/10A, #53 basic-shift specification/implementation, #57 direct self-tail recursion,
+#80 proof/example work, #110 basic seeded generation, and #114/#116/#117 in addition to #61/#81/#109.
+#53/#57 include implementation after their specification prerequisites; #80 adds no runtime guarantee, and #110's API, algorithm,
 state, contracts, and effects remain unresolved. Completing #110 does not complete #98; rotations
 and width-dependent extensions remain outside #53's v1 portion. #60 gated computations are to be
 specified soon in a later discussion, with v1 inclusion undecided; #60 is not a v1 completion gate.
 
+Module IDs/catalog discovery (#115) and shared-container/nested sandbox support (#118) are
+post-v1; v1 still requires source authorization, reflection filtering, retained-reference
+invalidation and explicit rejection of unsupported crossings/creation.
+
 Existing IDs, statuses, and evidence remain intact. A row combining v1 and later behavior must
 remain planned with partial evidence until the whole requirement is implemented. In particular,
-metadata plus `.code`, path plus Code sandbox construction, termination/unloading plus reload,
+path plus ModuleId imports, metadata plus `.code`, path plus Code sandbox construction,
+restricted plus shared-container/nested sandbox boundaries, termination/unloading plus reload,
 all container projection modes, and effect propagation through future facilities cannot be marked
 fully implemented by completing only their v1 portion. Chunk completion audits must identify their
 covered behavior explicitly and may add focused requirements without reusing an existing ID.
