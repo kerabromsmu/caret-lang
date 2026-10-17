@@ -119,6 +119,7 @@ Read the complete workflow file when its case-insensitive shorthand is requested
 * `card details`: [docs/agent/workflows/card-details.md](docs/agent/workflows/card-details.md)
 * `spec sync`: [docs/agent/workflows/spec-sync.md](docs/agent/workflows/spec-sync.md)
 * `test coverage`: [docs/agent/workflows/test-coverage.md](docs/agent/workflows/test-coverage.md)
+* `fuzz testing`: [docs/agent/workflows/fuzz-testing.md](docs/agent/workflows/fuzz-testing.md)
 * `new PR`: [docs/agent/workflows/new-pr.md](docs/agent/workflows/new-pr.md)
 
 After every repeatable workflow, report tests run, GitHub state changes, remaining limitations, and
