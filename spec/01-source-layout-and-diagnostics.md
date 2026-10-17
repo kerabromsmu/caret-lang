@@ -15,14 +15,14 @@ strings rather than a separate name-literal syntax.
 Lexical, parse, and runtime errors include the one-based line and column of the smallest relevant
 source expression. Columns count raw source characters. A tab therefore advances the displayed
 column by one, although a leading tab still contributes two spaces to indentation depth.
-The planned layout-baseline modifiers do not change these coordinates: diagnostics continue to use
+The implemented layout-baseline modifiers do not change these coordinates: diagnostics continue to use
 physical source lines and columns even when effective logical indentation differs.
 Built-in argument validation retains individual argument spans, so an invalid operand points to
 that operand rather than the complete call.
 
 Internally, diagnostics retain their phase, a stable diagnostic code, message, primary source span,
-and related source spans. Planned causes and subsystem-specific detail payloads belong to the
-[`ErrorTemplate`](06-collections-fields-and-templates.md#standard-error-template) model. A diagnostic that
+related source spans, an optional language diagnostic cause, and Collection-valued subsystem details. These use the
+[`ErrorTemplate`](sections/06-07-templates-advanced.md#standard-error-template) model. A diagnostic that
 aborts lexing, parsing, analysis, or evaluation is not thereby an ordinary catchable Caret value.
 The CLI renders the primary location in the compact form below and follows it
 with located `Note:` lines when a diagnostic has related locations, such as the first declaration
@@ -31,6 +31,56 @@ for a duplicate definition.
 ```text
 Error: Line 1, column 7: Unknown name: absent
 ```
+
+The execution parser is fail-fast: the REPL, file runner, and test runner stop at the first lexical
+or parse failure. Compiler-oriented analysis may instead request parser recovery. Recovery reports
+parser diagnostics in source order, omits the malformed declaration, and resumes at the next
+sibling declaration boundary. A failure inside an indentation-defined body discards only the
+unreliable declaration and its more-indented continuation or nested region, allowing later siblings
+and enclosing declarations to remain available. One malformed construct must not generate cascaded
+parser diagnostics. Lexical failures remain fail-fast until lexical recovery is specified.
+
+Every parsed AST node retains its complete physical source span. Logical indentation mapping,
+multiline grouping, implicit nodes, desugaring, and AST rebuilding must not replace those coordinates
+with logical positions or truncate an enclosing node to one of its children.
+
+<a id="phase-4-numeric-template-conversion-and-packed-diagnostics-implemented"></a>
+### Phase 4 numeric, template, conversion, and packed diagnostics (implemented)
+
+The approved [numeric precision policy](02-values-bindings-and-evaluation.md#precision-requirements-and-warnings-implemented)
+adds nonfatal warnings for lossy implicit conversions in broad result contexts. A warning includes
+the same stable code, phase, physical source location, and relevant contract location information
+as other diagnostics, but it does not abort evaluation or turn an otherwise successful operation
+into a failure. Compiler/interpreter analysis reports provable loss; dynamic loss is reported when
+it occurs. Avoid reporting the same established loss twice during analysis and execution.
+
+CLI/REPL/test runners deliver warnings through their diagnostic channel, separately from program
+output. Embedded loading, execution, and invocation expose warnings separately from failure
+diagnostics. Do not alter the seven-field `ErrorTemplate` payload to add warning metadata or treat
+warnings as catchable runtime values. Diagnostic delivery grants no output or host capability.
+
+Explicit strict numeric result requirements make implicit precision loss an error. Unsupported
+conversion, failed final contract checks, invalid packed layouts, and out-of-range values also
+remain errors. Attribute failures to the offending operand/conversion/layout requirement and
+retain related declaration locations. Static rejection is permitted when proven; dynamic values
+retain equivalent runtime checks and one-based physical locations. Existing zero-division and
+non-finite-result errors remain applicable. Implementation must inventory concrete codes and
+message variants with exact positive/negative evidence. Implemented conversion failures use
+`UNSUPPORTED_CONVERSION` for an unavailable built-in conversion, `INVALID_PACKED_LAYOUT` for an
+ineligible packed element contract, `EXPECTED_SEQUENCE` for keyed-to-positional conversion
+without projection, and `CONTRACT_VIOLATION` for a result outside the requested domain or exact
+template shape.
+Packed append rejects an incompatible value with `CONTRACT_VIOLATION` at the appended argument.
+Construction and conversion reject ineligible fixed layouts with `INVALID_PACKED_LAYOUT`, and
+payload values that fail the selected element contract or physical format with
+`CONTRACT_VIOLATION`. These errors retain physical source locations and do not expose host
+exceptions or partially constructed packed values.
+
+Phase 4 expected-template literal completion reuses `CONTRACT_VIOLATION` when a named literal omits
+a required or nondefaultable field. Attribute the failure to the complete literal because an
+omitted field has no source token, and retain the template field declaration as related context.
+Static and runtime discovery must preserve equivalent code and physical locations. Successful
+insertion of `~` for a direct `T~` or `T?~` field emits no warning or diagnostic.
 
 <a id="test-files"></a>
 ## Test files
@@ -101,14 +151,14 @@ continues the immediately preceding argument; dedenting to a logical indentation
 established enclosing level is a located layout error. A continuation line is an expression and
 cannot contain a definition.
 
-More-indented application is implemented by the current parser. Once lambdas are implemented, an
-indented trailing lambda will be the final call argument; its body will be delimited by its own
+More-indented application and trailing-lambda parsing are implemented by the current parser. An
+indented trailing lambda is the final call argument; its body is delimited by its own
 effective logical indentation in the ordinary way.
 
 <a id="planned-layout-baseline-modifiers"></a>
-## Planned layout baseline modifiers
+## Layout baseline modifiers
 
-Caret normally derives logical block structure from physical indentation. The planned layout tokens
+Caret normally derives logical block structure from physical indentation. The layout tokens
 `\\` and `\*` allow a region to occupy fewer physical source columns without changing its logical
 nesting. They are layout syntax only: neither token is an expression, operator, function, value,
 scope, binding, effect, or runtime operation.
@@ -384,4 +434,65 @@ until explicitly restored or EOF; ordinary physical dedentation cannot end it be
 indentation is what the modifier changes. After effective logical indentation is calculated, all
 normal Caret parsing and semantic rules apply unchanged.
 
+<a id="planned-multiline-repl-submissions"></a>
+## Multiline REPL submissions (planned for v1, #81)
 
+The current interactive and plain-input REPLs execute one line at a time. The planned multiline
+submission layer uses the existing grammar and effective logical layout without changing source-file
+semantics. The same submission rules apply to both input paths:
+
+1. A complete one-line expression or binding executes immediately, once. Do not delay it merely
+   because a later indented line could hypothetically extend it.
+2. Incomplete but continuable source, such as an empty function-body header or an open delimiter,
+   opens a pending submission. Accumulate the original source without executing any prefix.
+   Invalid source produces a located diagnostic rather than automatically requesting more input.
+3. A grouped expression or Collection completes when its enclosing delimiters close and the full
+   accumulated expression is syntactically complete. A nested closing delimiter or a same-line
+   suffix requiring continuation does not submit an incomplete enclosing expression. Delimiters
+   inside strings/comments do not participate in grouping.
+4. An ordinary indentation-bodied function remains open while body lines arrive, even if its
+   current prefix could parse as a complete function. A blank line submits a complete definition.
+   A following unindented line closes a complete definition and is retained as the first line of
+   the next submission, which may itself be multiline. An incomplete or invalid definition is
+   diagnosed rather than executing a malformed prefix.
+5. Boundaries use effective logical indentation. With an active `\\` mapping, a physically
+   column-zero body line remains in its logical body. During interactive collection of that body,
+   wait for `\*` restoration; restoring one nested mapping must not prematurely close an outer
+   pending construct. Existing mapping stacks and marker rules remain authoritative.
+6. EOF ends the pending source unit. Execute it once if it is syntactically complete, including
+   when an active indentation mapping is valid under file EOF semantics. Otherwise report its
+   incomplete or invalid source through located diagnostics without executing a truncated prefix.
+   EOF does not require an otherwise redundant restoration marker or terminating blank line.
+7. Ctrl-C cancels the whole pending submission and returns to a fresh prompt. It executes none of
+   that pending input and preserves earlier session bindings. A standalone one-line `exit` retains
+   its existing command behavior; text inside a pending definition or string is ordinary source.
+
+Provide continuation prompts and store each accepted multiline submission as one recallable
+history entry, preserving newlines and the existing limits and duplicate/blank/exit filtering.
+Completion probing uses lexer/layout/parser-owned information to distinguish complete, incomplete,
+and invalid input; it must not execute code, perform effects, mutate session bindings, inspect
+English diagnostic messages, or maintain a separate incompatible REPL grammar.
+
+All diagnostics use the complete submission's physical line/column positions. Execution retains
+the existing binding-commit and failure rules: this feature does not promise rollback of external
+effects or introduce transactional execution. Pending-input cancellation is distinct from stopping
+code that has already been submitted.
+
+This planned transcript defines a function, submits it with a blank line, and then invokes it:
+
+```text
+> add a b =
+...   a + b
+...
+> print add 2 3
+5
+```
+
+Acceptance requires both interactive and plain-input tests for functions, nested bodies, lambdas,
+grouped expressions, Collections, continuation application, closure of nested delimiters, trailing
+incomplete suffixes, comment/string boundaries, blank/dedent submission, nested layout restoration,
+complete/incomplete EOF, cancellation, `exit`, paste/history recall, located errors, and recovery
+without losing prior bindings. Completion probes must be demonstrably free of runtime effects.
+The implemented [template-sugar delimiters](sections/06-06-templates-foundations.md#template-sugar)
+follow their normal grammar within a pending submission; multiline REPL submission itself remains
+planned.

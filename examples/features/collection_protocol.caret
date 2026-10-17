@@ -1,0 +1,22 @@
+items = [10 ~ 30]
+person = [^name = "Ada" ^age = 42]
+empty = []
+
+print keys items
+print values person
+print fields person
+print size person
+
+print isSequential items
+print isOrdered person
+print isUnique person
+print isFinite empty
+print isKeyed empty
+print hasValues empty
+
+print (@items).sequential
+print (@person).keyed
+print (@empty).size
+
+print Natural 0
+print Natural (-1)

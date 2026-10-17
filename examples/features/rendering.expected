@@ -1,0 +1,7 @@
+plain
+number:7
+[ number:1 number:2 ]
+[
+  "name" = "Caret"
+  "values" = [ 1 2 ]
+]

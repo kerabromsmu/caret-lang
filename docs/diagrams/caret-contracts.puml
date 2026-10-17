@@ -1,0 +1,72 @@
+@startuml Caret contracts
+title Caret prototype — contracts, signatures, and inference
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide empty members
+
+package "Runtime contracts" {
+  interface ContractDescriptor
+  enum BuiltinContract
+  class UserContract
+  class ParameterizedContract
+  class ModifiedContract
+  class ArrowContractDescriptor
+  class TemplateContract
+  class ContractVariableDescriptor <<record>>
+  class CollectionConstructorDescriptor
+}
+
+ContractDescriptor <|.. BuiltinContract
+ContractDescriptor <|.. UserContract
+ContractDescriptor <|.. ParameterizedContract
+ContractDescriptor <|.. ModifiedContract
+ContractDescriptor <|.. ArrowContractDescriptor
+ContractDescriptor <|.. TemplateContract
+ContractDescriptor <|.. ContractVariableDescriptor
+ParameterizedContract *-- ContractDescriptor : base/arguments
+ModifiedContract *-- ContractDescriptor : base
+ArrowContractDescriptor *-- ContractDescriptor : parameters/result
+TemplateContract *-- CollectionConstructorDescriptor
+
+package "Callable metadata" {
+  class CallableSignature <<record>>
+  interface ContractTerm <<sealed>>
+  class NamedRef <<record>>
+  class VariableRef <<record>>
+  class AppliedRef <<record>>
+  class ModifiedRef <<record>>
+  class ArrowRef <<record>>
+  class EffectRef <<record>>
+}
+
+ContractTerm <|-- NamedRef
+ContractTerm <|-- VariableRef
+ContractTerm <|-- AppliedRef
+ContractTerm <|-- ModifiedRef
+ContractTerm <|-- ArrowRef
+CallableSignature *-- "0..*" ContractTerm
+CallableSignature *-- "0..*" EffectRef
+AppliedRef *-- ContractTerm
+ModifiedRef *-- ContractTerm
+ArrowRef *-- ContractTerm
+
+package "Semantic analysis" {
+  class ContractInference
+  class ContractRelations
+  class Resolver
+  class Resolution
+  class EffectCatalog
+  class EffectDescriptor <<record>>
+}
+
+Resolver --> Resolution : produces
+Resolver o-- EffectCatalog
+ContractInference --> Resolution
+ContractInference ..> CallableSignature : produces
+ContractInference ..> ContractDescriptor
+ContractRelations ..> ContractDescriptor
+EffectCatalog *-- "0..*" EffectDescriptor
+CallableSignature ..> EffectDescriptor
+@enduml

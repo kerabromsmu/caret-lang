@@ -3,7 +3,170 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+<a id="planned-v1-file-console-io"></a>
+## File and console I/O (planned v1 subset, #109)
+
+[Card #109](https://github.com/kerabromsmu/caret-lang/issues/109) and its
+[roadmap chunk](../roadmap/v1-io.md) allocate a bounded synchronous subset of the generalized I/O
+design in [#99](https://github.com/kerabromsmu/caret-lang/issues/99) to v1. The subset covers
+whole-file UTF-8 text/binary reads, whole-content replacement and append, console line input, and
+text output with or without a newline. Recoverable unsuccessful operations return explicit
+`Result T` values using `ErrorTemplate`; invalid programs, contract/authority violations, and
+implementation faults retain aborting diagnostics. File resources are acquired and released
+within each operation, and binary data uses existing Byte/UInt8 Collections.
+
+The feature uses ordinary functions and composition, environment-supplied capabilities, and
+effects that describe behavior without granting authority. Its public pipeline API, transfer and
+representation stages, default configuration, contracts, and nullary input construction/storage/
+passing/invocation/composition remain to be specified. EOF and newline semantics, UTF-8 failures,
+byte validation, paths and file creation, replacement/append and partial-write behavior, cleanup,
+output success values, explicit Result composition, effect identities, sanitized failure details,
+and REPL console sharing also remain open. Results never flatten, unwrap, or propagate implicitly.
+No new API or policy is selected here.
+
+Runtime work follows Phase 9B environments/shared Results and coordinates capability mediation
+with 10A. Full formats, persistent endpoints, incremental/network/asynchronous transfers, and
+general resumable failure handlers remain outside the subset. Completing #109 does not complete
+#99 or require its entire design to be settled first.
+
+<a id="planned-v1-seeded-random-generation"></a>
+## Seeded pseudorandom generation (planned v1 subset, #110)
+
+[Card #110](https://github.com/kerabromsmu/caret-lang/issues/110) allocates a bounded subset of the
+[randomness system (#98)](https://github.com/kerabromsmu/caret-lang/issues/98) to v1: initialize a
+generator from an explicit seed and generate successive pseudorandom numbers using one documented
+default algorithm, reproducing the same sequence for the same seed and algorithm. Use ordinary
+Caret values, functions, contracts, and established evaluation rules, preserving compatibility
+with the broader design without assuming new syntax.
+
+The public API, seed/output contracts and ranges, default algorithm, reproducibility/versioning,
+generator state and identity, aliasing/advancement, effects, and located failures remain unresolved.
+Neither mutable nor immutable generator-state semantics is selected here. Reuse the existing
+numeric/callable/contract/effect foundation, plus Containers if the later state design needs them;
+coordinate environment/sandbox behavior with 9B/10A where applicable. Effects and reflection grant
+no authority or access to host implementation objects.
+
+Algorithm selection/registration, cryptographic/external or implicit/time-based randomness,
+special distributions, fairness policies, Collection selection, and dedicated sequence-generation
+helpers are outside this subset. It does not require full I/O, custom providers, concurrency,
+rules, SIMD, staging, or a compiler. Deterministic reference-sequence, validation, state/aliasing,
+contract/effect, diagnostic, and boundary tests and a runnable example belong to future
+implementation; completing #110 does not complete #98.
+
 <a id="purity-and-effects"></a>
+## Deferred failure handling and computations
+
+This section records settled design direction beyond Phase 4. It does not implement a new
+exception system or modify current diagnostics, ordinary missing results, or structured Result
+operations. Computation syntax, exact record schemas, public effect namespaces, and concurrency
+machinery remain deferred. The examples below are conceptual/planned.
+
+### Effectful lazy access
+
+Collection providers and deferred transformations may perform effects. Their function contracts
+describe those effects; demanding operations propagate them under the ordinary rules. Pure cases
+may use semantics-preserving optimizations. Effects never grant authority. The initial design does
+not restrict lazy production to pure functions and adds no implicit uniqueness/failure cache.
+
+### Handler installation and selection
+
+The proposed ordinary wrapper forms are:
+
+```caret
+handleFailures computation handler io
+handleFailures computation handler [io network]
+```
+
+The final argument selects one effect identity or any identity in a set. Each recoverable failure
+identifies the specific effect of the failed operation, not every effect allowed by the enclosing
+function. Stable error codes and structured details describe the particular failure for inspection;
+they are not the primary installation selector. The example identities are conceptual, not new
+implemented builtins.
+
+The wrapper executes its supplied computation and returns that computation's result. Its handler
+has two parameters: the reflection reference to this wrapper's computation, and a failure record.
+The reference is not silently narrowed to the failed inner operation. It grants no extra authority
+and permits visible execution-status inspection through ordinary lazy reflection.
+
+The nearest enclosing applicable installation gets the failure. The handler chooses whether to
+resolve it, explicitly delegate to the previous applicable handler (ultimately the default), or
+stop its own wrapped computation. On delegation, the failure record and history remain unchanged;
+the previous handler receives its own wrapper's computation reference.
+
+A handler installation covers the wrapped computation, not that handler's own execution.
+Handlers may perform other effects using ordinary contracts/authority. Failures in that work are
+separate failures governed by surrounding applicable/default handlers and any installations made
+inside the handler. A handler may wrap its own computation in `handleFailures`.
+This is not an automatic recursive invocation of the same installation for its own failures.
+
+### Resolution values and retries
+
+A handler returns `FailureResolution~`:
+
+| Resolution | Meaning |
+|---|---|
+| `~` | Supply missing as the failed operation's result, if its contract permits it. |
+| `resume value` | Construct a FailureResolution supplying a contract-compatible replacement result and continue. |
+| `retry` | Retry the failed operation; another failure invokes its handler again. |
+| `defaultHandler` | Delegate to the previous applicable handler, ultimately the default. |
+| `stop` | Stop this installation's wrapped computation and make its wrapper return `~`. |
+
+Ordinary non-missing replacement values are not returned bare; `resume` constructs their
+resolution. Retry preserves completed earlier steps and uses arguments already computed for the
+failed invocation. It retries the operation, not an isolated sub-effect; earlier effects from an
+attempt are not rolled back and may repeat. No automatic retry limit is selected: a custom handler
+can inspect history and choose policy.
+
+A lazy field receives no value while resolution/retry is pending. It settles only when a result
+is supplied, including `~`; an established field is not subsequently retried. Neither `eager`
+nor `eagerWithRetry` owns retries. The proposed `eagerWithRetry` and shared failed-call caches
+were abandoned in favor of general handler policy.
+
+### Failure records and default behavior
+
+Each failed attempt appends a structured record, even if identical to the last failure.
+History belongs to that particular operation invocation and its retries, not all calls with equal
+arguments. Each handler invocation gets an immutable history snapshot through the latest failure,
+in attempt order. Records include effect identity, diagnostic code, source location, and structured
+details; the exact schema and storage/query API remain unresolved. Preserve sandbox sanitization
+and do not expose secrets or host objects.
+
+Recording a failure is distinct from printing or reporting it. A later diagnostic consumer can
+inspect records; output/logging has its ordinary effects. How observable record access is
+represented in the effect model is deferred rather than declared invisibly pure.
+
+A default handler covers recoverable effect failures: record the failure and supply `~` as close
+to the failed operation as possible when the result contract permits missing. Otherwise terminate
+with a located diagnostic. Contract violations, invalid programs, and authority violations retain
+their existing nonrecoverable behavior; they do not silently become missing. Operations designed
+to return ordinary `~` or Result values keep those semantics.
+
+An explicit `stop` returns missing from its owning wrapper, whose result contract must therefore
+permit missing when stop is possible. It retains the failure record. There is no implicit rollback.
+
+### Concurrent handling and stop
+
+Independent failures may have concurrent handlers. One failed invocation has one active
+resolution process and remains suspended until resolution. General concurrency/synchronization
+implementation is deferred.
+
+Stop returns `~` immediately from the owning wrapped computation. Already-started child
+computations finish as complete developer-defined units, including their internal multi-step
+sequences; do not cut them off at arbitrary calls or effects. Their results are discarded.
+Already-running handlers for the stopped computation finish but their resolutions are ignored.
+They cannot resume/retry that stopped computation. Effects may occur after the wrapper returns.
+
+Continuing child computations retain normal failure handling so they can complete coherently;
+their failures are not globally suppressed merely because an enclosing result is discarded.
+Handlers inspect their wrapped computation reference, not a new parent-chain API.
+Status observations obey the same lazy lexical rule as any other value: a first observation fixes
+that value for the context, so subsequent reads by that invocation need not reveal a later stop.
+A new access in a fresh context may observe stopped state. This does not require a live mutable
+status value to overwrite an earlier observation.
+
+Unrelated work is unaffected. This design neither supplies OS/process isolation nor chooses
+deadlines, resource quotas, hard cancellation, or cleanup synchronization.
+
 ## Purity and effects
 
 Every function has an inferred effect set.
@@ -149,8 +312,8 @@ identities form a flat set: one effect does not imply another, and repeated name
 same identity normalize to one set member. `pure` is reserved declaration syntax for the empty
 allowed set, not an effect descriptor.
 
-The initial portable standard effect is `Output`, used by `print`. `StateRead` and `StateWrite` are
-reserved portable identities for the [container model](07-state-containers-and-scoped-lookup.md#mutability-containers).
+The portable standard effects are `Output`, used by `print`, and `StateRead`/`StateWrite`, used by
+explicit [container reads and writes](sections/07-01-containers-core.md#mutability-containers).
 Other domains are supplied by
 the active execution environment through an explicit effect catalog. For example, an environment
 may expose `fs` and `net` for filesystem and network integrations, and the prototype test
@@ -242,6 +405,11 @@ it must not encode a silent contract-first or effect-first precedence. Callable 
 metadata is independent: an assignment such as `(pure Int) callback = value` constrains `callback`
 itself to satisfy `Int`, not the result of calling it.
 
+Implementation status: the prototype classifies every declaration clause once into this analyzed
+form. Contract inference, overload dispatch, runtime boundary validation, effect constraints, and
+callable-signature metadata consume that shared result; raw effect terms never appear as reflected
+parameter or result requirements.
+
 <a id="callable-signature-metadata"></a>
 ## Callable signature metadata
 
@@ -271,14 +439,25 @@ group is analyzed. Each external use instantiates them freshly, while ordinary a
 scheme and all parameter/result relationships. Once a callable use is partially applied, that
 instance retains its substitutions and is not generalized again.
 
+Implementation status: the prototype separately records effective, declared, and inferred
+parameter and result components. It rejects proven declaration/inference conflicts, generalizes
+undeclared parameter/result flow after monomorphic recursive-group analysis, instantiates external
+uses independently, and retains substitutions through aliases and partial callables. The internal
+external-module observation context verifies stable-interface projection until modules are
+implemented.
+
 <a id="arrow-signature-contracts"></a>
 ### Arrow-signature contracts
 
 Implementation status: the prototype implements right-associative, exact-arity arrow contracts,
 inline or named clause use, structural predicate checking, contravariant parameters,
-covariant results, explicit visible effect allowances, and standalone contiguous numbered variables.
-Variables shared across an enclosing declaration header, complete substitution through derived
-callables, and the full conservative overlap proof for overloads remain planned.
+covariant results, explicit visible effect allowances, and contiguous numbered variables shared
+across complete declaration headers. Prefix and hole partials retain substitutions in their derived
+signatures. Derived signatures project repeated and reordered holes, composition specializes
+compatible parameter/result variables and unions invocation effects, and overload partials retain
+projected survivor signatures with conservative summaries. Overload satisfaction requires one
+whole-domain covering variant and compatible results and effects from every potentially selectable
+overlapping variant; unknown overlap is treated as possible and partial domains are not combined.
 
 A callable signature is an ordinary first-class structural contract written with a bracketed
 parameter-requirement list and a right-associative arrow:
@@ -337,11 +516,20 @@ For example:
   ...
 ```
 
-generalizes one input-element contract and one output-element contract, then instantiates both
+The prototype implements the runtime `map transform values` callable for Sequences. Before its
+transform is supplied, its invocation-effect bound is deliberately unavailable. Supplying the
+transform produces a partial callable whose bound is that transform's descriptor-identity effect
+set. Completing `map` therefore uses the ordinary guarded callable path without claiming purity or
+a fixed effect set, and preserves element order.
+
+This declaration generalizes one input-element contract and one output-element contract, then instantiates both
 freshly at every use of `map`. Variables may appear as ordinary constructor arguments and within
 conjunctions such as `(_1 Number)`. All indices from `_1` through the highest used index must occur;
 their first occurrence order need not match numeric order. An unnumbered `_` is invalid in contract-
 variable context, and ordinary expression holes retain their existing partial-application meaning.
+Each variable must occur at least twice, because a single occurrence expresses no relationship.
+Incompatible concrete bounds on repeated occurrences produce `INCOMPATIBLE_CONTRACTS` at the later
+bound with the earlier bound attached as related source information.
 
 A standalone generic arrow contract quantifies its own variables. A candidate then satisfies it
 only when the candidate scheme is at least as general; a monomorphic `Int -> Int` callable does not
@@ -385,18 +573,18 @@ being equal, while aliases preserve identity.
 <a id="callable-reflection-schema"></a>
 ### Callable reflection schema
 
-Reflecting a callable produces an immutable, non-callable `Function` reference with a fixed public
-shape:
+Reflecting a callable produces an immutable, non-callable metadata Dictionary with a fixed public
+shape and an opaque dereference target:
 
 ```text
 kind        "Function"
-name        String or ~
+id          String or ~
 remaining   Number
 signature   Signature
 variants    Sequence Signature
 ```
 
-`name` is the original declaration name when that name is visible in the current environment;
+`id` is the original declaration identifier when that identifier is visible in the current environment;
 otherwise it is `~`. An alias does not rename the target in reflection. A direct prefix partial of
 a named function or overload retains that visible declaration name, while a hole-expression
 partial, composition, lambda, or other anonymous derived callable reports `~`. `remaining` is the
@@ -415,7 +603,7 @@ variables   Sequence SignatureVariable
 ```
 
 `parameters` contains only parameters still accepted by this callable, in application order. Each
-`Parameter` has `kind = "Parameter"`, a zero-based `position` in that current list, `name` or `~`,
+`Parameter` has `kind = "Parameter"`, a zero-based `position` in that current list, `id` or `~`,
 effective `requirements`, explicit `declared` requirements or `~`, and visible `inferred`
 requirements or `~`. A derived hole parameter has no declaration of its own, so `declared` is `~`
 even when its effective requirements were synthesized from declared target positions.
@@ -430,8 +618,8 @@ requirements or effects as appropriate; in particular, `upperBound = []` means p
 
 Requirement sequences contain immutable, non-callable `ContractRef` metadata rather than the live
 callable contract binding. Effect sequences likewise contain non-callable `Effect` descriptors.
-Both preserve their underlying language-owned descriptor identity and expose `name` only when that
-name is visible; a hidden name is `~`. Reflection therefore describes a hidden identity when it is
+Both preserve their underlying language-owned descriptor identity and expose `id` only when that
+identifier is visible; a hidden identifier is `~`. Reflection therefore describes a hidden identity when it is
 part of a visible signature without granting access to its private binding, predicate invocation,
 catalog entry, implementation, or authority.
 
@@ -448,25 +636,42 @@ declaration is the public interface. When an inferred component is itself the un
 interface, that component remains visible. The effective requirement, guarantee, and upper-bound
 fields always contain exactly the facts on which code in the current environment may rely.
 
+Callable metadata Collections are projected lazily when their fields are observed. Projection uses
+the intersection of the visibility captured when reflection occurred and the current observer's
+environment, so moving metadata can preserve or reduce visibility but can never amplify it. This
+rule applies recursively to nested signature and descriptor Collections, enumeration, rendering,
+equality, and dereference. The observation context and projection mechanism are interpreter/compiler
+state and are not Caret values or reflective fields.
+
 An overload's top-level `signature` is its conservative summary. Its parameter requirements are
 `~` while several alternative domains survive; applicability consumers inspect `variants` rather
 than treating those alternatives as a conjunction. Common result guarantees and the unioned effect
 bound remain available. When narrowing leaves one variant, the summary is that specialized exact
 signature, while `variants` continues to identify the surviving overload variant.
 
-Function references compare by target callable identity as already specified. Signature,
-parameter, result, effect-summary, and variable metadata compare structurally after canonical
+Function metadata references compare by their underlying callable target, so aliases of one target
+remain equal while distinct callables do not collapse after names are hidden. Signature, parameter,
+result, effect-summary, and variable metadata compare structurally after canonical
 variable numbering. `ContractRef` and `Effect` values compare by their underlying descriptor
-identity. Reflecting the same reference again returns the same view; a newly narrowed partial is a
-new callable identity with a new immutable view.
+identity. Dereferencing returns the original callable; reflecting the metadata itself describes
+that Dictionary. A newly narrowed partial has a new callable identity and immutable metadata view.
 
 Callable reflection never exposes capture names or values, bound partial values, implementation
 kind, source spans, native origin, Java objects, or capability handles. Authorized semantic-code
 reflection is the separate mechanism for inspecting code and still obeys module, sandbox, and
 authority visibility.
 
+Implementation status: lazy non-amplifying projection, descriptor identity, aliases, derived
+callables, overload survivors, and opaque authorized dereference are implemented through an
+internal observation-context seam. The later module and sandbox runtimes will supply their concrete
+contexts to this seam; no module or sandbox handle is exposed to Caret.
+
 <a id="partial-and-composed-signatures"></a>
 ### Partial and composed signatures
+
+Implementation status: implemented for named functions, built-ins, prefix and hole partials,
+compositions, and narrowed closed overload sets. Proven bridge conflicts use the semantic
+`INCOMPATIBLE_CONTRACTS` diagnostic; relationships that cannot be proved remain runtime-checked.
 
 Supplying an ordinary prefix argument validates that parameter, specializes the current signature
 variables, removes the filled parameter, and preserves the specialized result and invocation-effect
@@ -526,6 +731,20 @@ An omitted declaration and explicit `pure` both provide the empty allowed set. T
 computed independently and never enlarged merely because a broader allowance was written. Catalog
 aliases are compared by descriptor identity during this subset check.
 
+The prototype propagates current-phase effects through resolver-identified aliases, constrained
+higher-order parameters, nested named and lambda closures, composition, prefix and hole partials, overload
+narrowing, and recursive fixed points. Eager fixed operands contribute to callable construction;
+the target callable's bound describes later invocation. An unresolved dynamic call keeps the bound
+unavailable, and allowance failures are diagnosed before top-level program effects execute.
+Higher-order standard callables retain their callback position and callback-derived invocation bound
+through ordinary aliases and partials; analysis does not depend on the source spelling of `map`,
+`filter`, `fold`, `any`, or `all`.
+
+Refinement eligibility uses this same effect proof for named functions and lambdas. A unary callable
+with a guaranteed non-null/non-missing Boolean result is eligible only when its inferred invocation
+bound is known and empty. Eligibility checking does not invoke the callable, and retained aliases
+preserve the proven metadata across execution submissions.
+
 IDE tooling should expose inferred effects directly at function declarations.
 
 For example, the source:
@@ -551,6 +770,11 @@ For a pure function, tooling may display:
 
 Such annotations are IDE presentation only and are not part of Caret source syntax.
 
-The compiler should also provide a way to inspect fully inferred contracts and effects in plain-text environments.
+The prototype provides `caret inspect FILE` for plain-text environments. It analyzes without
+executing top-level program code and prints named callable declarations in deterministic semantic
+source order. Each entry distinguishes effective, declared, and inferred parameter/result facts;
+the effective, declared, and inferred effect sets; generalized variables; and unavailable facts as
+`~`. Names are language-owned and environment-relative. A diagnostic suppresses the complete report,
+uses the ordinary stderr rendering, and returns a nonzero process status.
 
 ---

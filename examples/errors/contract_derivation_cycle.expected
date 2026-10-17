@@ -1,0 +1,4 @@
+Error: Line 3, column 1: Contract derivation cycle: Third
+  Note: Line 3, column 1: Contract in derivation cycle: Third
+  Note: Line 1, column 1: Contract in derivation cycle: First
+  Note: Line 2, column 1: Contract in derivation cycle: Second

@@ -1,0 +1,2 @@
+condition = [^value = 1]["value"]~
+print condition & true ! false

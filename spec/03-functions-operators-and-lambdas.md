@@ -16,9 +16,16 @@ makePerson name age =
   ^age = age
 ```
 
-The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the planned lexical forms
-`with`, `outer`, `root`, and `module`, `_`, and numbered holes such as `_1` are reserved and cannot
-be used as binding or parameter names.
+The constant/operator spellings `true`, `false`, `and`, `or`, `not`, the implemented `with` and
+`outer` forms, the planned `root` and `module` forms, `_`, and numbered holes such as `_1` are
+reserved and cannot be used as binding or parameter names.
+
+Nested functions capture referenced enclosing bindings by resolver-owned symbol identity. The
+analyzed function representation records each distinct upvalue once, in first semantic source-use
+order, together with its source lexical depth, slot, declaration span, and first-use span. Runtime
+closures consume the same metadata and retain binding references, which preserves forward
+initialization and recursion without making a lexical scope a first-class value. Capture metadata is
+an internal lowering fact and is not exposed by ordinary callable reflection.
 
 <a id="function-application"></a>
 ## Function application
@@ -83,9 +90,9 @@ value = record[
 ]~
 ```
 
-More-indented ungrouped multiline arguments are implemented. Trailing callable blocks remain
-planned until lambda syntax is implemented; their layout rule is specified in the implementation
-roadmap below.
+More-indented ungrouped multiline arguments are implemented. An indented trailing lambda is the
+final call argument and owns its deeper body; the ordinary lambda rules below determine its
+parameters, capture, contracts, and result.
 
 `print` also has a statement form. The complete remainder of its logical line is parsed as one
 expression, so common output does not require grouping:
@@ -113,7 +120,9 @@ inside 7
 Every `_` introduces a future argument, ordered left to right.
 
 Non-hole parts of a partial expression are evaluated and captured when the partial function is
-created.
+created. Unlike lexical closure upvalues, these fixed operands are captured as the evaluated values;
+later mutation facilities cannot cause the fixed expression to be evaluated again or substitute a
+different value.
 
 Numbered holes reorder and reuse future arguments:
 
@@ -152,20 +161,24 @@ From lower to higher precedence:
 7. comparison `< <= > >=`
 8. named binary infix functions
 9. addition `+ -`
-10. multiplication `* / %`
-11. unary `- not @`
+10. multiplication `* / % div`
+11. unary `- not` (Phase 4 conversion also covers the following application)
 12. function application
-13. field and dynamic lookup
+13. reflection primary `@`
+14. field lookup and adjacent dereference `:`
 
-Lambda construction will also bind more tightly than `$` once lambdas are implemented.
+Lambda construction binds more tightly than `$`. The parser accepts an ungrouped lambda as the
+complete right operand of `$`, including a contracted or multi-parameter header followed by an
+indented body. Chained `$` remains right-associative, and a nested lambda owns the remainder of its
+expression or its deeper indentation block. Evaluation lowers through ordinary callable application.
 
 The planned compile-time marker `#` is not part of this precedence ladder. In expression position it
 opens a compile-time region covering the remainder of the current syntactic expression boundary.
-The planned layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, and `#`,
+The implemented layout markers `\\` and `\*` are also absent from the ladder: unlike `$`, `@`, `:`, and `#`,
 they are consumed by layout handling before expression parsing and have no expression precedence.
-The roles remain separate: `$` groups syntax-level application, `@` reifies a binding or program
-entity, `#` changes execution stage, and `\\`/`\*` change only the mapping from physical to logical
-indentation.
+The roles remain separate: `$` groups syntax-level application, `@` reifies one identifier, literal,
+or parenthesized expression, adjacent postfix `:` restores its opaque target, `#` changes execution
+stage, and `\\`/`\*` change only the mapping from physical to logical indentation.
 
 <a id="unified-binary-functions-and-operators"></a>
 ## Unified binary functions and operators
@@ -216,6 +229,54 @@ That spelling is only a design direction and is not valid Caret syntax.
 Analyzed named infix calls invoke the same callable values as prefix application. A non-callable
 infix target or a callable whose remaining arity is not two produces a located runtime diagnostic.
 
+## Phase 4 conversion syntax and div (implemented)
+
+`div` and parenthesized contract conversion are implemented.
+
+`div` is a built-in operator with the same precedence and left associativity as `*`, `/`, and `%`.
+It is not an ordinary named-infix spelling and is reserved against user declaration/shadowing.
+Like the existing binary operators, its value supports prefix calls, aliases, reflection, and
+ordinary partial application. An alias has ordinary named-function syntax, not the reserved
+spelling's special precedence. The operator's pure contract is `[Integer Integer] -> Integer`.
+[Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+defines truncation toward zero, exactness, remainder, and zero-divisor behavior.
+
+```caret
+10 div 3 + 2           // (10 div 3) + 2 == 5
+div 7 3                // 2
+(-7) div 3             // -2
+quotient = div
+quotient 10 3           // 3
+10 quotient 3 + 2       // 10 quotient (3 + 2) == 2
+halves = div _ 2
+```
+
+A parenthesized contract before a supplied value requests conversion:
+`(Contract) expression`. Resolve the head by its language-owned contract identity, including
+aliases and computed contract values, never by capitalization or a list of privileged names.
+A bare parenthesized contract with no operand remains the contract value. Non-contract callable
+heads retain ordinary grouped application. Retain sufficient syntactic structure for semantic
+resolution and, where required, runtime discrimination; evaluate the head once, before its
+operand, and preserve ordinary evaluation order for non-contract calls.
+
+Conversion covers the following application but stops before infix operators. Thus
+`(Int8) calculate x + y` means `((Int8) (calculate x)) + y`; converting the sum requires
+`(Int8) (calculate x + y)`. It is not a remainder marker like `#`. Existing Collection element
+boundaries still apply; group complex conversion operands or an entire converted element where
+the single-line literal grammar requires it. Multiline elements retain their line-expression
+boundaries. These interactions require parser and execution evidence, including `$`, lambdas,
+postfix access, nested grouping, and an ordinary callable shadowing a contract name.
+
+This is an intentional exception to transparent grouping for contract heads: `Float x` tests
+membership, whereas `(Float) x` converts. `(Contract) _` and `(Contract) _1` are separate, existing
+checked-hole forms, not partially applied conversions. Their constructor parameter requirements,
+numbering, repeated-hole equality, and template reification remain intact. Use an ordinary
+function or lambda to convert a subsequently supplied value.
+
+Declaration, parameter, and result clauses stay strict checks; contextual literal creation is
+specified separately. Conversion behavior and its exclusions belong to
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-explicit-contract-conversion-implemented).
+
 <a id="function-composition"></a>
 ## Function composition
 
@@ -237,11 +298,43 @@ operand, or a non-unary right operand produce located runtime diagnostics. Nulla
 deferred until Caret has a separate first-class callable-value design; `@function` remains a
 non-callable reflective reference. The completed left result is passed as one value even when that
 value is itself callable. Composition uses the ordinary invocation path and therefore preserves
-call-depth checks and argument locations. Contract and effect propagation will be added with the
-planned contract/effect system.
+call-depth checks and argument locations. The implemented callable-signature model propagates
+compatible parameter and result contracts and unions invocation-effect bounds; proven
+incompatibilities receive a located diagnostic.
+
+<a id="planned-v1-tail-calls"></a>
+## Language-wide tail calls (v1 specification work, #57)
+
+[Card #57](https://github.com/kerabromsmu/caret-lang/issues/57) targets a language-wide tail-call
+specification for v1 across the interpreter and future compiler. Direct and mutual recursion
+already work, but nested invocation has a depth limit of 256 and deep tail recursion currently
+fails with a located `CALL_DEPTH_EXCEEDED` diagnostic. The card does not yet choose guaranteed
+proper tail calls versus an optional optimization or authorize implementation before that choice.
+
+The remaining design must settle:
+
+- Tail positions and exclusions, including selected conditional branches, exported-block results,
+  `$`, partial application, composition, overload dispatch, and nullary invocation.
+- Direct versus mutual recursion and calls through aliases, closures, partials, and dynamically
+  selected callables; parity across CLI, REPL, sandboxes, embedding, and future compiled execution.
+- Preservation of argument evaluation order, effects, contracts, diagnostics and spans, reflection,
+  sandbox authority, and host callback boundaries; non-tail depth checks and optimized-call
+  diagnostics; and whether `cycle` shares the mechanism or remains independently lowered.
+
+No guarantee, coverage rule, or runtime change is selected here. The future acceptance work covers
+large direct/mutual tail recursion, non-tail recursion, conditional paths, aliases, closures,
+partials, effects, failures, sandbox execution, and Java invocation, with a runnable example and
+conformance evidence when implemented. A compiler backend is not a prerequisite to specifying this
+feature, and ordinary cycles remain independent.
 
 <a id="lambda-functions"></a>
 ## Lambda Functions
+
+The prototype implements the syntax, layout, precedence, source spans, closure construction,
+lexical capture, ordinary invocation, parameter-contract boundaries, nullary invocation, storage,
+return, prefix and arbitrary-hole partial application, and environment-filtered callable reflection
+described in this section. Lambda bodies use the named-function analyzer for parameter/result facts,
+generalized relationships, purity, observable effects, higher-order calls, composition, and partials.
 
 <a id="overview"></a>
 ### Overview
@@ -301,7 +394,7 @@ x ->
 ```
 
 The result of the final expression is the result of the lambda, following the same rules as an
-ordinary function body. Planned layout modifiers may shift the block physically, but do not change
+ordinary function body. Implemented layout modifiers may shift the block physically, but do not change
 its extent, captures, parameters, or result.
 
 Example:
@@ -791,7 +884,7 @@ Lambdas may be used directly with collection functions.
 Examples:
 
 ```caret
-numbers map (x -> x * 2)
+map (x -> x * 2) numbers
 ```
 
 ```caret
@@ -799,10 +892,21 @@ numbers filter (x -> x > 0)
 ```
 
 ```caret
-people map (person -> person.name)
+map (person -> person.name) people
 ```
 
 Because a pure unary Boolean function is a valid Caret contract, a suitable lambda may also represent a runtime predicate.
+
+This callable-parity rule is implemented. The interpreter uses the lambda's ordinary inferred
+parameter, result, and effect signature: eligibility requires exactly one parameter, a guaranteed
+non-null/non-missing Boolean result, and a proven empty effect bound. Direct lambdas, assigned
+lambdas, lexical captures, and ordinary aliases retain that proof without invoking the predicate or
+exposing captures.
+
+The implemented Sequence operations use `map transform values`, `filter values predicate`,
+`fold values initial combine`, `any values predicate`, and `all values predicate`. Fold supplies the
+accumulator before the element. Predicate null and missing results count as false, while other
+non-Boolean results are invalid; `any` and `all` short-circuit.
 
 For example:
 

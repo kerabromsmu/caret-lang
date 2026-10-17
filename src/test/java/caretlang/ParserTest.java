@@ -9,6 +9,198 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class ParserTest {
     @Test
+    void lowersTemplateSugarToGroupedLexicalApplicationWithPhysicalSpans() {
+        Apply call = assertInstanceOf(Apply.class, expression("<[_]>"));
+        Name function = assertInstanceOf(Name.class, call.function());
+        assertEquals("template", function.name());
+        assertEquals(new SourcePosition(0, 1, 1), function.span().start());
+        assertEquals(new SourcePosition(2, 1, 3), function.span().end());
+        CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class, call.argument());
+        assertInstanceOf(Hole.class, literal.elements().getFirst().value());
+        assertEquals(new SourcePosition(1, 1, 2), literal.span().start());
+        assertEquals(new SourcePosition(4, 1, 5), literal.span().end());
+        assertEquals(new SourcePosition(5, 1, 6), call.span().end());
+
+        Apply invocation = assertInstanceOf(Apply.class, expression("<[_]> [1]"));
+        assertInstanceOf(Apply.class, invocation.function());
+        Apply passed = assertInstanceOf(Apply.class, expression("use <[_]>"));
+        assertInstanceOf(Apply.class, passed.argument());
+        Compose composed = assertInstanceOf(Compose.class, expression("<[]> >> use"));
+        assertInstanceOf(Apply.class, composed.left());
+    }
+
+    @Test
+    void distinguishesSugarFromComparisonsAndKeepsPositionalTemplateElementsSeparate() {
+        Binary comparison = assertInstanceOf(Binary.class, expression("0<[1][0]"));
+        assertEquals("<", comparison.operator());
+        assertInstanceOf(DynamicField.class, comparison.right());
+        assertEquals(">=", assertInstanceOf(Binary.class, expression("values[0]>=1")).operator());
+        CollectionLiteral literal = assertInstanceOf(CollectionLiteral.class,
+                expression("[<[]> <[]>]"));
+        assertEquals(2, literal.elements().size());
+        assertTrue(literal.elements().stream().allMatch(e -> e.value() instanceof Apply));
+        assertEquals("==", assertInstanceOf(Binary.class, expression("<[]>==<[]>")).operator());
+    }
+
+    @Test
+    void diagnosesIncompleteAndMalformedTemplateDelimitersAtTheirPhysicalLocations() {
+        for (String source : List.of("<[]", "<[] >", "<[1]x")) {
+            LangException error = assertThrows(LangException.class, () -> expression(source));
+            assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+            assertEquals(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, error.diagnostic().code());
+            assertEquals("Expected ']>' after template specimen", error.diagnostic().message());
+            assertEquals(1, error.span().start().line());
+            assertEquals(source.equals("<[]") ? 4 : 5, error.span().start().column());
+        }
+        LangException open = assertThrows(LangException.class, () -> expression("<["));
+        assertEquals(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, open.diagnostic().code());
+        assertEquals(3, open.span().start().column());
+        LangException multiline = assertThrows(LangException.class,
+                () -> new Parser("T = <[\n  _\n]\n").parseProgram());
+        assertEquals(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER, multiline.diagnostic().code());
+        assertEquals(3, multiline.span().start().line());
+        assertEquals(2, multiline.span().start().column());
+    }
+
+    @Test
+    void parsesContainerLiteralsContractsAndPostfixReads() {
+        ContainerLiteral inferred = assertInstanceOf(ContainerLiteral.class, expression("{ 1 }"));
+        assertNull(inferred.contracts());
+        assertInstanceOf(Literal.class, inferred.value());
+
+        ContainerLiteral explicit = assertInstanceOf(ContainerLiteral.class,
+                expression("{ (Number Natural) 1 }"));
+        assertEquals(List.of("Number", "Natural"), explicit.contracts().names().stream()
+                .map(ContractName::name).toList());
+        assertEquals(1, explicit.span().start().column());
+        assertEquals(23, explicit.span().end().column());
+
+        ContainerRead read = assertInstanceOf(ContainerRead.class, expression("player.health{}"));
+        assertInstanceOf(Field.class, read.target());
+        assertEquals(16, read.span().end().column());
+
+        ContainerLiteral groupedValue = assertInstanceOf(ContainerLiteral.class,
+                expression("{ (1 + 2) }"));
+        assertNull(groupedValue.contracts());
+        assertInstanceOf(Group.class, groupedValue.value());
+    }
+
+    @Test
+    void parsesLambdaFormsAndPreservesTheirExtent() {
+        Lambda unary = assertInstanceOf(Lambda.class, expression("x -> x + 1"));
+        assertEquals(List.of("x"), unary.params().stream().map(Parameter::name).toList());
+        assertInstanceOf(Binary.class, assertInstanceOf(ExprStmt.class, unary.body().getFirst()).expression());
+
+        Lambda multiple = assertInstanceOf(Lambda.class, expression("x y -> x + y"));
+        assertEquals(List.of("x", "y"), multiple.params().stream().map(Parameter::name).toList());
+
+        Lambda contracted = assertInstanceOf(Lambda.class,
+                expression("(Int) x (String optional) y -> x"));
+        assertEquals(List.of("Int"), contracted.params().getFirst().contracts().names().stream()
+                .map(ContractName::name).toList());
+        assertEquals(List.of("String", "optional"), contracted.params().get(1).contracts().names().stream()
+                .map(ContractName::name).toList());
+
+        Lambda nullary = assertInstanceOf(Lambda.class, expression("-> 42"));
+        assertTrue(nullary.params().isEmpty());
+        Lambda nested = assertInstanceOf(Lambda.class,
+                assertInstanceOf(ExprStmt.class, assertInstanceOf(Lambda.class,
+                        expression("x -> y -> x + y")).body().getFirst()).expression());
+        assertEquals("y", nested.params().getFirst().name());
+
+        Apply dollar = assertInstanceOf(Apply.class, expression("use $ x -> x + 1"));
+        assertInstanceOf(Lambda.class, dollar.argument());
+        assertInstanceOf(Conditional.class, lambdaBody(expression("x -> true & x ! 0")));
+        assertInstanceOf(Compose.class, lambdaBody(expression("x -> f x >> g")));
+        assertInstanceOf(AmbiguousCall.class, lambdaBody(expression("x -> x combine 1")));
+        assertInstanceOf(Hole.class,
+                assertInstanceOf(Binary.class, lambdaBody(expression("x -> x + _"))).right());
+
+        Apply immediate = assertInstanceOf(Apply.class, expression("(x -> x * 2) 10"));
+        assertInstanceOf(Lambda.class, assertInstanceOf(Group.class, immediate.function()).expression());
+        assertInstanceOf(ArrowContract.class, expression("[Int] -> Int"));
+    }
+
+    private Expr lambdaBody(Expr expression) {
+        Lambda lambda = assertInstanceOf(Lambda.class, expression);
+        return assertInstanceOf(ExprStmt.class, lambda.body().getFirst()).expression();
+    }
+
+    @Test
+    void parsesIndentedAndTrailingLambdaBodies() {
+        Assign assignment = assertInstanceOf(Assign.class, new Parser("""
+                transform = x ->
+                  doubled = x * 2
+                  doubled + 1
+                """).parseProgram().getFirst());
+        Lambda lambda = assertInstanceOf(Lambda.class, assignment.value());
+        assertEquals(2, lambda.body().size());
+        assertEquals(1, lambda.span().start().line());
+        assertEquals(3, lambda.span().end().line());
+
+        ExprStmt call = assertInstanceOf(ExprStmt.class, new Parser("""
+                map values
+                  x -> x * 2
+                """).parseProgram().getFirst());
+        Apply applied = assertInstanceOf(Apply.class, call.expression());
+        assertInstanceOf(Lambda.class, applied.argument());
+
+        Assign lowApplication = assertInstanceOf(Assign.class, new Parser("""
+                functions = seqAdd [] $ (Number) value ->
+                  value * 2
+                """).parseProgram().getFirst());
+        Apply lowCall = assertInstanceOf(Apply.class, lowApplication.value());
+        Lambda lowLambda = assertInstanceOf(Lambda.class, lowCall.argument());
+        assertNotNull(lowLambda.params().getFirst().contracts());
+
+        Assign chained = assertInstanceOf(Assign.class, new Parser("""
+                result = identity $ seqAdd [] $ left right ->
+                  left + right
+                """).parseProgram().getFirst());
+        Apply outer = assertInstanceOf(Apply.class, chained.value());
+        Apply inner = assertInstanceOf(Apply.class, outer.argument());
+        assertInstanceOf(Lambda.class, inner.argument());
+
+        Assign nestedLambda = assertInstanceOf(Assign.class, new Parser("""
+                nested = first -> second ->
+                  first + second
+                """).parseProgram().getFirst());
+        Lambda first = assertInstanceOf(Lambda.class, nestedLambda.value());
+        assertInstanceOf(Lambda.class,
+                assertInstanceOf(ExprStmt.class, first.body().getFirst()).expression());
+    }
+
+    @Test
+    void rejectsInvalidLambdaHeadersWithExactDiagnostics() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = 1 x ->\n  x\n").parseProgram());
+        assertSame(DiagnosticCatalog.PARSE_LAMBDA_HEADER, error.catalogEntry());
+        assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_SYNTAX, error.diagnostic().code());
+        assertEquals("Line 1, column 9: Lambda parameters must be binding names", error.getMessage());
+    }
+
+    @Test
+    void rejectsMissingLambdaBodiesWithExactDiagnostics() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = x ->").parseProgram());
+        assertSame(DiagnosticCatalog.PARSE_LAMBDA_BODY, error.catalogEntry());
+        assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_SYNTAX, error.diagnostic().code());
+        assertEquals("Line 1, column 11: Lambda body must follow '->' or be indented", error.getMessage());
+    }
+
+    @Test
+    void rejectsExpressionHolesInLambdaParameterContracts() {
+        LangException error = assertThrows(LangException.class,
+                () -> new Parser("value = (_) x ->\n  x\n").parseProgram());
+        assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.PARSE_INVALID_CONTRACT, error.diagnostic().code());
+        assertEquals("Line 1, column 9: Lambda parameter contracts cannot contain expression holes",
+                error.getMessage());
+    }
+
+    @Test
     void parsesRightAssociativeExactArityArrowContracts() {
         ArrowContract unary = assertInstanceOf(ArrowContract.class, expression("[Number] -> String"));
         assertEquals(1, unary.parameters().size());
@@ -20,6 +212,10 @@ final class ParserTest {
         ArrowContract nested = assertInstanceOf(ArrowContract.class,
                 expression("[Number] -> [String] -> Boolean"));
         assertInstanceOf(ArrowContract.class, nested.result());
+
+        ArrowContract unresolvedResult = assertInstanceOf(ArrowContract.class,
+                expression("[] -> Seq Number"));
+        assertEquals(2, assertInstanceOf(ContractTerms.class, unresolvedResult.result()).terms().size());
 
         ArrowContract conjunction = assertInstanceOf(ArrowContract.class,
                 expression("[(Number Any) String] -> Boolean"));
@@ -102,20 +298,24 @@ final class ParserTest {
     }
 
     @Test
-    void parsesParameterizedSequenceContractsWithoutChangingConjunctions() {
+    void parsesContractTermsWithoutKnowingConstructorNamesOrChangingConjunctions() {
         List<Stmt> program = new Parser("""
                 (Sequence Number positive) values = []
                 (Sequence (Sequence String)) nested = []
                 """).parseProgram();
         ContractClause first = ((Assign) program.getFirst()).contracts();
-        assertEquals(2, first.names().size());
+        assertEquals(3, first.names().size());
         ContractName sequence = first.names().getFirst();
         assertEquals("Sequence", sequence.name());
-        assertEquals(List.of("Number"), sequence.arguments().stream().map(ContractName::name).toList());
-        assertEquals("positive", first.names().get(1).name());
+        assertTrue(sequence.arguments().isEmpty());
+        assertEquals("Number", first.names().get(1).name());
+        assertEquals("positive", first.names().get(2).name());
         ContractName nested = ((Assign) program.get(1)).contracts().names().getFirst();
-        assertEquals("Sequence", nested.arguments().getFirst().name());
-        assertEquals("String", nested.arguments().getFirst().arguments().getFirst().name());
+        assertEquals("Sequence", nested.name());
+        ContractName group = ((Assign) program.get(1)).contracts().names().get(1);
+        assertEquals("<group>", group.name());
+        assertEquals(List.of("Sequence", "String"),
+                group.arguments().stream().map(ContractName::name).toList());
     }
 
     @Test
@@ -399,7 +599,7 @@ final class ParserTest {
 
         LangException reflection = assertThrows(LangException.class,
                 () -> new Parser("print @").parseProgram());
-        assertTrue(reflection.getMessage().contains("Expected expression"));
+        assertTrue(reflection.getMessage().contains("Expected an identifier, literal"));
 
         LangException export = assertThrows(LangException.class,
                 () -> new Parser("^ = 1").parseProgram());
@@ -407,10 +607,33 @@ final class ParserTest {
     }
 
     @Test
+    void reflectionConsumesOnePrimaryAndDereferenceIsAdjacentPostfix() {
+        Field metadataField = assertInstanceOf(Field.class, expression("@function.kind"));
+        assertInstanceOf(Reflect.class, metadataField.target());
+
+        Apply application = assertInstanceOf(Apply.class, expression("@function value"));
+        assertInstanceOf(Reflect.class, application.function());
+
+        Reflect grouped = assertInstanceOf(Reflect.class, expression("@(function value)"));
+        assertInstanceOf(Group.class, grouped.target());
+
+        Reflect member = assertInstanceOf(Reflect.class, expression("object.@field"));
+        assertInstanceOf(Field.class, member.target());
+
+        Dereference dereference = assertInstanceOf(Dereference.class, expression("@function:"));
+        assertInstanceOf(Reflect.class, dereference.target());
+
+        assertInstanceOf(Reflect.class, expression("@[1 2]"));
+        assertThrows(LangException.class, () -> expression("value :"));
+        assertThrows(LangException.class, () -> expression("@-1"));
+    }
+
+    @Test
     void rejectsNonFiniteNumberLiteralsAsLocatedParserDiagnostics() {
         String huge = "9".repeat(400);
+        assertDoesNotThrow(() -> new Parser("value = " + huge).parseProgram());
         LangException error = assertThrows(LangException.class,
-                () -> new Parser("value = " + huge).parseProgram());
+                () -> new Parser("value = " + huge + ".0").parseProgram());
         assertEquals(Diagnostic.Phase.PARSER, error.diagnostic().phase());
         assertEquals(9, error.span().start().column());
         assertTrue(error.getMessage().contains("outside the finite range"));
@@ -564,6 +787,81 @@ final class ParserTest {
             assertEquals(Diagnostic.Codes.PARSE_RESERVED_BINDING, error.diagnostic().code());
             assertEquals(1, error.span().start().column());
         }
+    }
+
+    @Test
+    void recoveringParserCollectsIndependentFailuresAndRetainsLaterDeclarations() {
+        Parser.ParseResult result = new Parser("""
+                first = (1 + )
+                kept = 2
+                second = scope.
+                later = 3
+                """).parseProgramRecovering();
+
+        assertEquals(List.of(1, 3), result.diagnostics().stream()
+                .map(diagnostic -> diagnostic.primarySpan().start().line()).toList());
+        assertEquals(List.of("kept", "later"), result.statements().stream()
+                .map(statement -> ((Assign) statement).name()).toList());
+    }
+
+    @Test
+    void recoveringParserResumesInsideFunctionBodiesWithoutCascades() {
+        Parser.ParseResult result = new Parser("""
+                make =
+                  first = 1
+                  broken = add
+                    value = 2
+                  last = 3
+                after = 4
+                """).parseProgramRecovering();
+
+        assertEquals(1, result.diagnostics().size());
+        assertEquals(4, result.diagnostics().getFirst().primarySpan().start().line());
+        FunctionDef function = assertInstanceOf(FunctionDef.class, result.statements().getFirst());
+        assertEquals(List.of("first", "last"), function.body().stream()
+                .map(statement -> ((Assign) statement).name()).toList());
+        assertEquals(5, function.span().end().line());
+        assertEquals("after", assertInstanceOf(Assign.class, result.statements().get(1)).name());
+    }
+
+    @Test
+    void recoveringParserKeepsPhysicalLocationsUnderLogicalLayoutMapping() {
+        Parser.ParseResult result = new Parser("""
+                make = \\\\
+                        broken = (1 + )
+                        valid = 2
+                """).parseProgramRecovering();
+
+        assertEquals(1, result.diagnostics().size());
+        SourcePosition location = result.diagnostics().getFirst().primarySpan().start();
+        assertEquals(2, location.line());
+        assertEquals(23, location.column());
+        FunctionDef function = assertInstanceOf(FunctionDef.class, result.statements().getFirst());
+        assertEquals("valid", assertInstanceOf(Assign.class, function.body().getFirst()).name());
+    }
+
+    @Test
+    void expressionRewritingPreservesEveryPhysicalSpan() {
+        Expr original = expression("@(source[dynamic]) value + (other 2)");
+        java.util.ArrayList<SourceSpan> before = new java.util.ArrayList<>();
+        AstTraversal.walkPreOrder(original, node -> before.add(node.span()));
+
+        Expr rewritten = AstRewriter.rewrite(original, ignored -> java.util.Optional.empty());
+        java.util.ArrayList<SourceSpan> after = new java.util.ArrayList<>();
+        AstTraversal.walkPreOrder(rewritten, node -> after.add(node.span()));
+
+        assertEquals(before, after);
+    }
+
+    @Test
+    void reflectionCanBeAnUngroupedApplicationArgument() {
+        Apply outer = assertInstanceOf(Apply.class, expression("seqGet @function.signature.parameters 0"));
+        assertInstanceOf(Literal.class, outer.argument());
+        Apply first = assertInstanceOf(Apply.class, outer.function());
+        Field parameters = assertInstanceOf(Field.class, first.argument());
+        assertEquals("parameters", parameters.field());
+        Field signature = assertInstanceOf(Field.class, parameters.target());
+        assertInstanceOf(Reflect.class, signature.target());
     }
 
     private Expr expression(String source) {

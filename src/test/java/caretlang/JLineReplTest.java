@@ -38,6 +38,26 @@ final class JLineReplTest {
         assertTrue(errorBytes.toString(StandardCharsets.UTF_8).contains("Unknown name: missing"));
         assertFalse(errorBytes.toString(StandardCharsets.UTF_8).contains("Duplicate definition: x"));
     }
+
+    @Test
+    void lambdaRefinementEligibilityPersistsAcrossReplSubmissions() {
+        ByteArrayOutputStream outputBytes = new ByteArrayOutputStream();
+        ByteArrayOutputStream errorBytes = new ByteArrayOutputStream();
+        PrintStream output = new PrintStream(outputBytes, true, StandardCharsets.UTF_8);
+        PrintStream error = new PrintStream(errorBytes, true, StandardCharsets.UTF_8);
+        Iterator<String> lines = List.of(
+                "positive = value -> value > 0",
+                "alias = positive",
+                "(alias) count = 2",
+                "print count",
+                "exit").iterator();
+
+        JLineRepl.runLoop(() -> lines.hasNext() ? lines.next() : null,
+                new Interpreter(output), output, error);
+
+        assertEquals("2\n", outputBytes.toString(StandardCharsets.UTF_8));
+        assertEquals("", errorBytes.toString(StandardCharsets.UTF_8));
+    }
     @TempDir Path temporaryDirectory;
 
     @Test
@@ -92,6 +112,26 @@ final class JLineReplTest {
             assertTrue(fixture.errorText().contains("Warning: Cannot read REPL history at "
                     + directoryInsteadOfFile));
             assertTrue(fixture.errorText().contains("using in-memory history"));
+        }
+    }
+
+    @Test
+    void unwritableHistoryReportsOneCataloguedWarning() throws Exception {
+        Path historyFile = temporaryDirectory.resolve("write-history");
+        try (Fixture fixture = fixture(historyFile)) {
+            fixture.history().add(Instant.now(), "print 1");
+            Files.createDirectory(historyFile);
+
+            JLineRepl.saveHistory(fixture.reader(), fixture.history(), historyFile, fixture.error());
+
+            String warning = fixture.errorText();
+            String lineSeparator = System.lineSeparator();
+            String prefix = HostMessageCatalog.REPL_HISTORY_WRITE.format(historyFile, "");
+            assertEquals(1, warning.lines().count());
+            assertTrue(warning.startsWith(prefix));
+            assertTrue(warning.endsWith(lineSeparator));
+            String platformCause = warning.substring(prefix.length(), warning.length() - lineSeparator.length());
+            assertFalse(platformCause.isBlank());
         }
     }
 

@@ -1,0 +1,13 @@
+values = [1 2 3 4]
+
+print map (value -> value * 2) values
+print filter values (value -> value % 2 == 0)
+print fold values 0 (accumulator value -> accumulator + value)
+print any values (value -> value == 3)
+print all values (value -> value > 0)
+
+nullable = [true ? ~ false]
+print filter nullable (value -> value)
+print fold [] 10 (accumulator value -> accumulator + value)
+print any [] (value -> true)
+print all [] (value -> false)

@@ -16,8 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 final class SpecificationCorpusTest {
-    private static final Pattern LINK = Pattern.compile("(?<!!)\\[[^]]*]\\(([^ )]+)(?: \\\"[^\\\"]*\\\")?\\)");
-    private static final Pattern ANCHOR = Pattern.compile("<a id=\\\"([^\\\"]+)\\\"></a>");
+    private static final Pattern LINK = Pattern.compile("(?<!!)\\[[^]]*]\\(([^ )]+)(?: \"[^\"]*\")?\\)");
+    private static final Pattern ANCHOR = Pattern.compile("<a id=\"([^\"]+)\"></a>");
 
     @Test
     void canonicalSpecificationCorpusHasCompleteNavigationAndValidMarkdownLinks() throws IOException {
@@ -38,6 +38,29 @@ final class SpecificationCorpusTest {
             documents.add(document);
         }
 
+        for (String directory : List.of("spec", "conformance", "roadmap", "docs/agent")) {
+            try (var paths = Files.walk(Path.of(directory))) {
+                for (Path document : paths.filter(path -> path.toString().endsWith(".md")).toList()) {
+                    if (!documents.contains(document)) documents.add(document);
+                }
+            }
+        }
+        for (Path section : documents.stream().filter(path -> path.startsWith("spec/sections")).toList()) {
+            String chapter = "spec/" + section.getFileName().toString().substring(0, 2) + "-";
+            Path owner = documents.stream().filter(path -> path.toString().startsWith(chapter)).findFirst().orElseThrow();
+            assertTrue(Files.readString(owner).contains("sections/" + section.getFileName()),
+                    "Canonical section is missing from chapter navigation: " + section);
+        }
+        String roadmap = Files.readString(Path.of("PLAN.md"));
+        for (Path phase : documents.stream().filter(path -> path.startsWith("roadmap")).toList()) {
+            assertTrue(roadmap.contains("roadmap/" + phase.getFileName()),
+                    "Roadmap phase is missing from the index: " + phase);
+        }
+        documents.add(Path.of("CONFORMANCE.md"));
+        documents.add(Path.of("PLAN.md"));
+        documents.add(Path.of("AGENTS.md"));
+        documents.add(Path.of("docs/REPO_MAP.md"));
+
         for (Path document : documents) validateDocument(document);
     }
 
@@ -45,7 +68,7 @@ final class SpecificationCorpusTest {
         String markdown = Files.readString(document);
         assertEquals(0, markdown.lines().filter(line -> line.startsWith("```")).count() % 2,
                 "Unbalanced fenced block in " + document);
-        assertEquals(1, headingsOutsideFences(markdown, "# "), "Expected exactly one H1 in " + document);
+        assertEquals(1, headingsOutsideFences(markdown), "Expected exactly one H1 in " + document);
 
         Set<String> anchors = new HashSet<>();
         Matcher declared = ANCHOR.matcher(markdown);
@@ -69,12 +92,12 @@ final class SpecificationCorpusTest {
         }
     }
 
-    private static long headingsOutsideFences(String markdown, String prefix) {
+    private static long headingsOutsideFences(String markdown) {
         boolean fenced = false;
         long count = 0;
         for (String line : markdown.split("\\R", -1)) {
             if (line.startsWith("```")) fenced = !fenced;
-            else if (!fenced && line.startsWith(prefix) && !line.startsWith(prefix + "#")) count++;
+            else if (!fenced && line.startsWith("# ")) count++;
         }
         return count;
     }

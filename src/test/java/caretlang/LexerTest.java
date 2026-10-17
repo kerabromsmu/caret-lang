@@ -8,6 +8,28 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class LexerTest {
     @Test
+    void keepsTemplateDelimitersSeparateFromAdjacentOperatorsAndIndexComparisons() {
+        assertEquals(List.of("<", "[", "]", ">", ">>", "f", ""),
+                Lexer.lex("<[]>>>f").stream().map(Lexer.Token::text).toList());
+        assertEquals(List.of("<", "[", "]", ">", "==", "<", "[", "]", ">", ""),
+                Lexer.lex("<[]>==<[]>").stream().map(Lexer.Token::text).toList());
+        assertEquals(List.of("values", "[", "0", "]", ">=", "1", ""),
+                Lexer.lex("values[0]>=1").stream().map(Lexer.Token::text).toList());
+        assertEquals(List.of("0", "<", "[", "1", "]", "[", "0", "]", ""),
+                Lexer.lex("0<[1][0]").stream().map(Lexer.Token::text).toList());
+    }
+
+    @Test
+    void preservesTemplateDelimiterLocationsAndIgnoresQuotedBrackets() {
+        List<Lexer.Token> tokens = Lexer.lex("<[\"[\"]>==x", 20, 3, 5);
+        assertEquals(List.of("<", "[", "[", "]", ">", "==", "x", ""),
+                tokens.stream().map(Lexer.Token::text).toList());
+        assertEquals(Lexer.Kind.STRING, tokens.get(2).kind());
+        assertEquals(new SourcePosition(26, 3, 11), tokens.get(4).span().start());
+        assertEquals(new SourcePosition(27, 3, 12), tokens.get(4).span().end());
+    }
+
+    @Test
     void recognizesCompositionAsOneSymbol() {
         List<Lexer.Token> tokens = Lexer.lex("left >> right");
         assertEquals(List.of("left", ">>", "right", ""),
@@ -98,5 +120,23 @@ final class LexerTest {
                 """);
         assertEquals(List.of(0, 2, 2, 0), lines.stream().map(Lexer.LogicalLine::indent).toList());
         assertEquals(List.of(1, 2, 5, 6), lines.stream().map(Lexer.LogicalLine::number).toList());
+    }
+
+    @Test
+    void logicalLayoutMappingsEstablishRestoreAndStackBaselines() {
+        List<Lexer.LogicalLine> lines = Lexer.logicalLines("outer = \\\\\nfirst\ninner = \\\\\n  nested\n\\*\nsecond\n\\*\nfinal\n");
+        assertEquals(List.of(0, 1, 1, 2, 1, 0), lines.stream().map(Lexer.LogicalLine::indent).toList());
+        assertEquals(List.of("outer =", "first", "inner =", "nested", "second", "final"),
+                lines.stream().map(Lexer.LogicalLine::text).toList());
+    }
+
+    @Test
+    void layoutMarkersIgnoreCommentsAndStringsAndRejectInvalidPlacement() {
+        List<Lexer.LogicalLine> lines = Lexer.logicalLines("text = \"\\\\\"\nvalue = 1 // \\\\\n\\*\n");
+        assertEquals(List.of(0, 0), lines.stream().map(Lexer.LogicalLine::indent).toList());
+
+        LangException error = assertThrows(LangException.class, () -> Lexer.logicalLines("call \\\\"));
+        assertEquals(Diagnostic.Codes.LEX_INVALID_LAYOUT_MARKER, error.diagnostic().code());
+        assertEquals(new SourcePosition(5, 1, 6), error.span().start());
     }
 }

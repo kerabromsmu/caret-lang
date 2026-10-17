@@ -1,5 +1,0 @@
-make =
-  ^present = true
-
-value = make
-print value.absent

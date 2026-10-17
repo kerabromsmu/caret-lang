@@ -1,33 +1,53 @@
 # Caret language prototype
 
 Caret is an experimental concise programming language implemented as a Java 21 tree-walking
-interpreter. The current prototype supports:
+interpreter. Java applications can embed one Caret script in an isolated
+`caretlang.embedding.CaretSandbox`: the host supplies an explicit environment and output,
+loads source separately from execution, and invokes returned or registered Caret functions.
+See [Embed Caret in Java](EMBEDDING.md), `caretlang.examples.EmbeddingExample`, and
+`examples/embedding.caret`.
+
+The current prototype supports:
 
 - finite numbers, strings, Booleans, null (`?`), and missing (`~`);
-- indentation-delimited functions, lexical closures, direct and mutual recursion;
+- indentation-delimited functions, lexical closures with resolver-owned upvalue metadata, and
+  direct and mutual recursion;
+- unary, multi-parameter, contracted, nullary, expression-bodied, and indentation-bodied lambdas
+  using the same callable and lexical-capture runtime path;
 - whitespace application (`add 2 3`) with application binding more tightly than infix operators;
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
-- exported immutable Dictionaries, required/optional field access, and dynamic lookup;
+- exported immutable Dictionaries and unified dot, bracket, and `getElement` lookup, returning
+  missing for valid absent keys with equivalent optional spellings;
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
-- persistent sequences and canonically ordered Dictionaries with structural equality; and
+- persistent sequences and canonically ordered Dictionaries with structural equality;
+- ordinary Collection `keys`, `values`, `fields`, `size`, Boolean-or-missing guarantee queries,
+  matching reflection fields, and the non-negative integer `Natural` contract;
+- lazy Collection `map` and `filter`, plus strict left `fold`, `any`, and `all`, through named,
+  partial, composed, and lambda callables over keyless values or keyed Field tuples;
+- polymorphic `toString` conversion and deterministic Caret-style collection pretty-printing;
+- stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
-- proven-pure unary Boolean functions as first-class refinement requirements in derived contracts
-  and direct clauses; and
+- structural templates with ordinary `template` construction or `<[ … ]>` sugar, preserving
+  lexical shadowing and Collection specimen/hole semantics;
+- proven-pure unary Boolean named functions and lambdas, including captures and aliases, as
+  first-class refinement requirements in derived contracts and direct clauses; and
 - first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
   distinction between null and missing; and
-- initial parameterized contracts through `Sequence T`, including direct and aliased clauses,
+- callable parameterized contracts through `Sequence T`, `Field K V`, and `Dictionary K V`, including direct and aliased clauses,
   nesting, modifiers, predicates, and reflection; and
 - closed same-name function overload sets with contract-based most-specific dispatch, generic
   fallbacks, prefix/infix calls, and persistent hole partials.
 - first-class pure callable arrow contracts such as `[Number] -> Number`, including exact arity,
-  structural predicate checks, inline higher-order clauses, and standalone numbered variables.
+  structural predicate checks, inline higher-order clauses, and declaration-wide numbered variables.
 - environment-relative effect identities and mixed declaration clauses, including explicit function
-  allowances, callable-value constraints, and effectful arrow contracts.
+  allowances, callable-value constraints, and effectful arrow contracts;
+- stable-identity mutable containers with fixed content contracts, explicit reads and writes,
+  identity equality, and `StateRead`/`StateWrite` effect inference.
 
 This is deliberately a language experiment, not a production compiler. The
 [language specification index](LANGUAGE.md) and its linked canonical feature documents describe
@@ -37,6 +57,36 @@ implementation roadmap, and [CONFORMANCE.md](CONFORMANCE.md) maps specification 
 their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS.md) inventories
 every current diagnostic message variant and its exact fixture or focused test evidence.
 
+The [release roadmap](PLAN.md#release-targets-and-implementation-order) defines **1.0** as the
+implemented baseline (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles,
+modules, metadata-only root/module reflection, the shared `Result T` contract, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and initial path-based sandboxes. Those additions
+are planned, not implemented by this roadmap change. The I/O subset covers whole-file UTF-8
+text/binary reads, replacement and append, console line input and text output, and explicit Results for recoverable
+failures. Its pipeline API, nullary composition, effects, and capability exposure must be specified
+before implementation. The
+[complete generalized I/O design (#99)](https://github.com/kerabromsmu/caret-lang/issues/99),
+including persistent endpoints, incremental/network/asynchronous transfers, general codecs, and
+resumable failure handling, follows after v1; completing its full design does not block the subset.
+V1 sandboxes will use fixed environments, exported calls, termination/unloading, explicitly shared
+read/write containers, and immutable data snapshots.
+Semantic Code/serialization, Code-based sandboxes, environment swaps/reload, and restricted
+container views follow later. The complete rules/rulesets/objects/`ruleCycle` phase targets the
+next release, provisionally **1.1**, or **2.0** if approved changes break v1 compatibility.
+Self-hosting, SIMD, formats, staging, the compiler backend, and remaining tooling are later work.
+Gated computations (#60) are to be specified soon in a later discussion, with v1 inclusion undecided.
+
+The [eight reviewed v1 cards](LANGUAGE.md#v1-feature-work) also explicitly include visible root
+identifiers (#5) within module/environment metadata, basic integer-shift design (#53), language-wide
+tail-call specification work (#57), Turing-completeness proof/example work (#80), and basic seeded
+pseudorandom generation (#110). The randomness subset initializes from an explicit seed and produces
+successive numbers using one documented default algorithm, with the same seed/algorithm reproducing
+the sequence. Its API, algorithm, contracts, generator state and effects remain unresolved, as do
+the shift and tail-call design choices. The broader randomness system (#98) remains later work.
+Ordinary cycles do not depend on general tail calls. The
+[reviewed card assignments](PLAN.md#reviewed-todo-cards) keep release allocation, design readiness,
+and implementation status separate; this documentation adds no runtime behavior.
+
 For a conceptual comparison with related language families, see
 [Caret Doesn’t Look Like One Language — and That’s the Point](docs/language-comparison.md). That
 article covers both implemented foundations and explicitly labeled planned features.
@@ -44,40 +94,55 @@ article covers both implemented foundations and explicitly labeled planned featu
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
 Contracts form derivation graphs and act as predicates, while the prototype now provides initial
 contract-based multiple dispatch for ordinary functions. Collections use one universal `[...]`
-literal. The prototype implements positional and String-keyed Dictionary forms, and exported blocks are
-shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-resolution
-environments. The planned contextual contract model will determine whether a positional value is a
-list, set, dictionary, packed buffer, or another representation; first-class dynamic fields also
-remain planned. A non-empty Collection is entirely positional or
-entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes will be an
+literal. The prototype implements keyless and general keyed Collections, including first-class
+Fields and contract-selected Dictionaries with homogeneous sortable keys. Exported blocks are
+shorthand for String-keyed Dictionaries. Lexical scopes remain non-value name-resolution
+environments. Contextual contracts select Sequence, Set, Dictionary, and Packed representations
+where their requirements are unambiguous; further representations remain planned.
+A non-empty Collection is entirely positional or
+entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes is an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
-or a concrete fixed collection, to the planned `template` function creates an exact structural
-contract. The same mechanism defines a standard structured error payload, while a generic
-three-field `Result` contract supplies the planned public success/failure envelope.
+or a concrete fixed collection, to the implemented `template` function creates an exact structural
+contract. The implemented `ErrorTemplate` defines the standard structured error payload, while a
+generic three-field `Result` contract remains the planned public success/failure envelope.
+Every value satisfying a template contains every declared field. In the implemented contextual-literal
+rule, omitting a field whose template hole directly uses `T~` or `T?~` materializes that field with
+value `~`; `T?~` also permits an explicitly supplied null. Aliases of those contracts accept an
+explicit `~` but do not enable omission. Existing Collections remain exact-shape values: template
+membership and explicit conversion do not insert fields.
+
+`Person = <[^name = (String) _]>` is sugar for ordinary `template [^name = (String) _]`
+application. Delimiters make the specimen boundary visible while preserving lexical lookup of
+`template`, including shadowing. See [the template example](examples/features/templates.caret).
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
 application, partial application, aliasing, dispatch, effects, reflection, and compile-time
-execution rules, even though they may consume or produce specialized semantic values. These
-planned facilities are not thereby implemented by the current prototype.
+execution rules, even though they may consume or produce specialized semantic values. The
+prototype implements `contract` and `template`; the other listed facilities remain planned.
 
-Explicit mutability is planned through stable-identity containers rather than mutable bindings or
-deeply mutable objects. `{ (Int) 100 }` constructs a container, `container{}` reads its current
-content, and `put container value` performs a contract-checked replacement. Containers can be
-shared through otherwise immutable fields and collections; reads and writes participate in the
-planned effect system. This syntax is specified but not implemented by the current prototype.
+Explicit mutability uses stable-identity containers rather than mutable bindings or deeply mutable
+objects. `{ (Number) 100 }` constructs a container, `container{}` reads its current content, and
+`put container value` performs a contract-checked replacement. Containers can be shared through
+otherwise immutable fields and collections; reads and writes participate in effect inference.
+`object.@field` reifies a named Collection field binding without reading a container's content.
+The resulting metadata records its key, declared contracts, immutable binding status, and visible
+owner references; `@container.contentContracts` describes a container without reading it. See
+[the runnable field-reification example](examples/features/field_reification.caret).
 
 Right-associative `$` supplies application below composition, conditionals, and ordinary expressions
-(`print $ calculate value`). Planned `with value` expressions will make a value's public named
+(`print $ calculate value`). Implemented `with value` expressions make a value's public named
 members available for lexical lookup without copying them, while resolver-only paths such as
 `outer.name` recover shadowed enclosing names without exposing lexical environments as values.
-`with` and `outer` are specified but not implemented by the current prototype.
+`with` and `outer` preserve local declaration precedence and bind only enumerated public keys;
+see [the runnable example](examples/features/with_outer.caret).
 
-Planned layout markers `\\` and `\*` remap physical indentation to effective logical indentation
+Layout markers `\\` and `\*` remap physical indentation to effective logical indentation
 before ordinary layout parsing. `\\` establishes an adjusted baseline for a following
 indentation-defined region and `\*` restores the previous mapping; neither marker is an expression,
 scope, or control-flow operation. The mappings stack, an unmatched restoration is a no-op, and an
-active mapping may remain through end of file. These markers are specified but not implemented.
+active mapping may remain through end of file. The prototype implements these mappings for its
+currently supported indentation-opening headers.
 
 The specification also plans environment-relative reflection through `@root`. A program will be
 able to inspect a visibility-filtered, structured representation of its code and serialize that code
@@ -101,20 +166,79 @@ stages the remainder of its current expression boundary rather than participatin
 operator precedence. The standard compiler environment remains unresolved, and no staging support
 is implemented yet.
 
-After the language and conformance roadmap is complete, the project plans to publish the canonical
+In a later documentation release, the project plans to publish the canonical
 feature documents as a searchable MkDocs Material learning site with a left-hand table of contents.
-The same release-hardening work will produce a runnable, implemented-only
+That release-hardening work will produce a runnable, implemented-only
 “Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
 
-See [`examples/implemented_features.caret`](examples/implemented_features.caret) for a runnable
-program demonstrating every feature currently supported by the prototype.
-[`examples/contracts.caret`](examples/contracts.caret) demonstrates built-in and user-defined
+See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret)
+for a runnable overview of the prototype's foundations, and the
+[focused feature examples](examples/features/) for demonstrations of additional implemented features.
+[`examples/features/contracts.caret`](examples/features/contracts.caret) demonstrates built-in and user-defined
 contracts and derivation.
+
+Focused positive demonstrations live in [`examples/features/`](examples/features/). Every `.caret`
+program there has checked golden output and is exercised by `test.sh`. The general smoke demo and
+Caret-native test programs remain directly under `examples/`; located failure fixtures remain under
+`examples/errors/`.
+
+## Download a release
+
+Every successful merge to `main` publishes an immutable versioned release on the
+[GitHub Releases page](https://github.com/kerabromsmu/caret-lang/releases). The rolling
+[`main-snapshot`](https://github.com/kerabromsmu/caret-lang/releases/tag/main-snapshot) prerelease
+points to the newest successfully tested version. Java 21 is the only runtime prerequisite; a
+downloaded release does not require Gradle or a repository checkout.
+
+Download either `caret-<version>.zip` or `caret-<version>.tar` and extract it. On Linux and macOS,
+make the launcher executable if the archive tool did not preserve its mode:
+
+```bash
+chmod +x caret-<version>/bin/caret
+```
+
+Run a program, start the REPL, or run a Caret-native test file:
+
+```bash
+caret-<version>/bin/caret program.caret
+caret-<version>/bin/caret
+caret-<version>/bin/caret test tests.caret
+```
+
+On Windows, use `caret-<version>\bin\caret.bat` with the same arguments. Each archive also contains
+this README, the [Java embedding guide](EMBEDDING.md), `LICENSE`, `NOTICE`, and the runnable
+`examples/` tree. Java hosts can instead download `caret-java-sdk-<version>.zip`; it contains the
+named embedding module, generated API documentation, and a standalone example.
+
+### Release versions
+
+The tracked [`VERSION`](VERSION) file is the source of the release version in
+`MAJOR.MINOR.UPDATE` form. The completed `0.1.x`, `0.2.x`, `0.3.x`, and `0.4.x` lines represent
+Phases 1 through 4 respectively in [`PLAN.md`](PLAN.md).
+
+Phase IDs are historical identifiers. Future release numbers need not match them; the roadmap now
+defines release targets and separately completable phase chunks.
+
+- Increment `UPDATE` by exactly one for a release that does not complete an agreed roadmap milestone.
+- Increment `MINOR` by exactly one and reset `UPDATE` to zero when an explicitly defined phase,
+  phase chunk, or release milestone is completed and its evidence agrees with the GitHub project.
+- Increment `MAJOR` by exactly one and reset both lower components only when the project owner
+  explicitly authorizes a major release.
+
+The v1 target and provisional rules-release assignment do not themselves change `VERSION` or
+authorize publishing a major release. After v1, use a major transition for approved incompatible
+changes rather than merely for a large feature addition.
+
+Ordinary feature commits do not update `VERSION`. Select and increment it only while preparing a
+pull request whose target is `main`; pull-request and release automation reject unchanged,
+malformed, decreasing, skipped, or mixed-component transitions for that handoff. Immutable releases use the tag
+`v<version>`; `main-snapshot` is only a moving download alias and does not create another version
+number.
 
 ## Requirements
 
 - Java 21
-- A POSIX-compatible shell for the provided launchers
+- A POSIX-compatible shell for the source-checkout launchers (`run.sh`, `repl.sh`, and `test.sh`)
 
 The Gradle wrapper downloads the required Gradle distribution and dependencies on first use.
 
@@ -123,7 +247,7 @@ The Gradle wrapper downloads the required Gradle distribution and dependencies o
 The project launcher builds the distribution and runs a Caret source file:
 
 ```bash
-./run.sh examples/implemented_features.caret
+./run.sh examples/features/implemented_features.caret
 ```
 
 With no arguments, it runs `examples/demo.caret`:
@@ -141,6 +265,15 @@ With Gradle:
 Language errors are written to standard error and return a nonzero process status.
 Missing or unreadable source files are reported as ordinary CLI errors without Java stack traces.
 
+Inspect inferred callable contracts and effects without executing the program:
+
+```bash
+build/install/caret/bin/caret inspect examples/features/inference.caret
+```
+
+The report uses deterministic source order and distinguishes declared, inferred, effective, empty,
+and unavailable (`~`) facts. A diagnostic produces no partial report and returns a nonzero status.
+
 ## REPL
 
 Start the REPL:
@@ -157,6 +290,15 @@ and `exit` are not saved, and history is limited to 1,000 entries.
 Enter one-line expressions or assignments and type `exit` (or press Ctrl-D) to leave. Ctrl-C cancels
 the current input and opens a fresh prompt. Bindings remain available for the rest of the session.
 The REPL does not yet accept multiline function definitions or other multiline input.
+
+Multiline submission is planned for v1 in #81. The
+[planned submission rules](spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions)
+keep complete one-line input immediate, collect incomplete constructs without execution, and
+submit complete indentation bodies on a valid blank line or effective dedent. Interactive layout
+adjustments require restoration; EOF executes a complete pending source unit even when a mapping
+may validly remain active, and diagnoses incomplete input. Both input paths will preserve physical
+locations, whole-submission cancellation, and multiline history. This specification does not add
+multiline support to the current REPL.
 
 Do not launch the interactive REPL with `./gradlew run`: Gradle forwards ordinary input but does not
 give the Java child process ownership of the terminal, so terminal editing and arrow keys cannot
@@ -234,25 +376,61 @@ shadows this builtin-only grouping and follows ordinary application rules.
 
 ## Current limitations
 
+The [Phase 4 numeric foundation](spec/02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+now provides exact arbitrary-precision integers, signed/unsigned formats through 64 bits,
+value-based `Natural`/`Integer`/`Real`/`Number` domains, `Float`/`Double`, true `/` alongside
+truncating integer `div`, and precision warnings or errors according to result requirements.
+The packed-layout portion of the [approved design](spec/sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented)
+is implemented. `(Contract) expression` converts a value; declarations and directly contracted
+holes remain checks. Packed storage covers finite positional sequences of fixed-format scalars or fixed-size templates, preserving
+template declaration order. Nullable payloads, bit fields, custom conversions, and text-to-number
+conversion through this new syntax are deferred. See the canonical
+[acceptance matrix](spec/sections/06-02-packed-layouts.md#packed-and-prerequisite-acceptance-matrix).
+Packed Collections use contiguous payloads in optimized execution, with reference storage when
+optimizations are disabled. Both retain selected `Packed T` membership, while equally shaped
+ordinary sequences do not gain it merely by being homogeneous. Reflection exposes
+`@packed.elementContract` when visible but never the physical layout or buffer.
+
+The [Phase 4 Collection design](spec/sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+now has its common enumeration/guarantee foundation and contextual shape construction: `keys`,
+`values`, `fields`, `size`, the six guarantee queries, matching reflection fields, `Natural`,
+two-position Field tuples, Sets, general keyed Collections, sorted homogeneous Dictionaries,
+first-key settlement, shape-neutral empty facts, and unified missing-returning
+dot/bracket/`getElement` access, lazy shape-aware map/filter, strict Field-based consumers,
+two-input `zip`/`zipWithKeys` construction, contract/order-sensitive Collection equality, and
+Collection-value `eager` are implemented. `eager` snapshots enumerated content, recursively
+replaces reflection references with `[]`, and preserves mutable container identity.
+Phase 4 includes expected-template
+completion for Collection literals but
+does not add a context-dependent `Template value` constructor call: ordinary template application
+remains a membership predicate. General computations, custom providers, resumable failure handlers,
+template constructor/predicate invocation, and callable `eager` forms are deferred beyond Phase 4.
+
 - A function definition must start at the beginning of a logical line.
-- Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines.
-  Trailing callable blocks remain unavailable until lambda syntax is implemented.
+- Grouped expressions, dynamic lookups, and more-indented ungrouped call arguments may span lines;
+  an indented trailing lambda is the final call argument and owns its deeper body.
 - Built-in and user-defined derived contracts can check bindings, parameters, and results
-  dynamically. Initial named-function constraint inference and the internal purity analysis needed
-  to validate refinement predicates are implemented;
-  nullable/optional contract unions and the initial `Sequence T` parameterized contract are
-  implemented, while general parameterized contracts, complete static dispatch proof, and complete
-  higher-order effect propagation are not implemented.
-- Contract-selected collection representations, first-class dynamic fields, formats,
-  lambdas, cycles, SIMD, rules,
+  dynamically. Named-function constraint inference and Phase 2 transitive/higher-order effect
+  analysis are implemented, including the read-only `caret inspect` report;
+  nullable/optional contract unions and the callable `Sequence T`, `Field K V`, and `Dictionary K V` parameterized contracts are
+  implemented, while general parameterized contracts and complete static dispatch proof are not implemented.
+- Additional contract-selected collection representations and formats,
+  cycles, SIMD, rules,
   rulesets, and rule cycles are not implemented.
-- Arrow contracts support explicit visible effect allowances. Declaration-wide contract variables
-  and complete overload-domain proofs remain planned.
-- Physical-to-logical layout baseline modifiers (`\\` and `\*`) are specified but not implemented.
-- Mutability containers and immutable collection-update syntax are specified but not implemented. There
-  is no object model, module system, compiler backend, bytecode, or optimizer.
-- Reflection is intentionally limited to basic kind, size/name, function-arity, and contract
-  base/requirement metadata.
+- Arrow contracts support explicit visible effect allowances, declaration-wide contract variables,
+  and whole-domain overload coverage. Complete static dispatch/type proof remains planned.
+- Layout-marker placement currently covers the indentation-opening headers supported by the prototype;
+  planned headers become eligible as their syntax is implemented.
+- Higher-order Sequence operations propagate known callback effects; generalized collection
+  element/result variables remain planned.
+- Field-binding reification and container content-contract metadata are implemented for the current
+  named-Collection and container subset. Public `addElement`,
+  `removeElement`, `replaceElement`, their construction-selection interface, and additional immutable-update syntax
+  are deferred beyond Phase 4. There is no object model, module system, compiler backend, or bytecode backend. The interpreter's internal
+  conservative ownership tracker can reuse proven-unique ephemeral collection storage without changing
+  observable persistent semantics.
+- Reflection is intentionally limited to language-owned metadata for value kind and collection
+  shape, callable signatures and surviving overload variants, and contract bases and requirements.
 - Environment-relative metadata-only `@root`/`@module`, semantic code reification, canonical
   quines, and `sandbox source environment` execution are specified but not implemented.
 - Stable module-ID declarations, catalog discovery, and path/`ModuleId` import overloads are
@@ -282,9 +460,11 @@ The ordinary runtime provides:
 
 - `print value` and `type value`;
 - `Any`, `Number`, `String`, `Boolean`, `Null`, `Missing`, `Function`, `Collection`, `Sequence`,
-  `Field`, and `Dictionary` as first-class contracts; `Field K V` and `Dictionary K V` are curried;
+  `Field`, `Set`, and `Dictionary` as first-class contracts; `Field K V`, `Set K`, and
+  `Dictionary K V` are curried;
 - `textSize`, `textAt`, `textSlice`, `textNumber`, and `numberText`;
-- `seqEmpty`, `seqAdd`, `seqGet`, and `seqSize`; and
+- `getElement collection key`, with dot and bracket access lowering through the same lexical binding;
+- `seqEmpty`, `seqAdd`, `seqGet`, `seqSize`, and callable-first `map`; and
 - `dictEmpty`, `dictPut`, `dictGet`, `dictHas`, and `dictKeys`.
 
 Invalid text indexes, sequence indexes, slices, and numeric text conversions return `~`. Dictionary
@@ -297,20 +477,33 @@ value is `~`.
 fieldName = "count"
 print source[fieldName]~
 print (@source).kind
-print (@source).names
+print (@source).ids
 ```
 
-Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `names`. Field keys are
+Dictionary reflection exposes `kind`, `shape`, `size`, and canonical `ids`. String Field keys are
 ordered by locale-independent, case-sensitive Unicode code-point order, regardless of declaration
 or update order; their value expressions are still evaluated in source order. Identifier shorthand
 `^name = value`, `(field "name" value)`, and `dictPut dictionary "name" value` create the same field.
-Sequence reflection exposes its applicable collection metadata. `@function` returns a
-non-callable function reference exposing `kind`, visible
-declaration `name`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
+Fields accept arbitrary non-missing keys, expose `key` and `value` metadata, and participate in the
+Collection protocol as two-position tuples. Set context treats plain elements and key-only Fields as
+members; Dictionary context distinguishes a stored `~` value from absence.
+Valid absent access returns `~` for every spelling. Brackets accept equality-comparable keys allowed
+by the Collection, including null and composite keys; missing keys, fractional sequence indices,
+and keys outside the access contract are located errors. `collection[_]` and `_[key]` are ordinary
+partials, and a local `getElement` binding controls the sugar.
+Sequence reflection exposes its applicable collection metadata. `@function` returns a genuine,
+non-callable metadata Dictionary exposing `kind`, visible
+declaration `id`, remaining arity, a language-owned `signature`, and surviving overload `variants`.
 Signature metadata separates effective, declared, and inferred parameter/result facts and reports
-the known invocation-effect bound. Prefix partials specialize their remaining parameters, while
-compositions union known invocation effects. Both `type (@function)` and `(@function).kind` report
-`"Function"`. References compare by target identity. Reflection exposes no captures, bound arguments,
+the known invocation-effect bound. Metadata fields are lazily filtered for the observing execution
+environment, retain descriptor identity behind hidden identifiers, and cannot gain visibility when moved
+between environments. The internal observation policy is not a Caret value. Prefix and hole partials specialize variables and project their
+remaining parameters; repeated holes conjoin requirements. Compositions specialize compatible
+parameter/result relationships and union known invocation effects. Narrowed overloads preserve
+every survivor signature plus a conservative summary. `type (@function)` reports `"Dictionary"`, while
+`@function.kind` reports `"Function"`. Adjacent postfix `:` restores the reflected target, as in
+`alias = @function:` when dereference remains authorized. Metadata preserves callable/descriptor
+identity and otherwise compares structurally. Reflection exposes no captures, bound arguments,
 Java implementation objects, or callable capability, and does not invoke a reflected function.
 
 ## License

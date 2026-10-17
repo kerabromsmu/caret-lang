@@ -1,0 +1,2 @@
+large = 9007199254740993
+(Double) result = large + 0.5

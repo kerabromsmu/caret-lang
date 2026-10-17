@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+scripts/test-version-policy.sh
+bash scripts/check-example-coverage.sh
 CARET_TEST_TMP=$(mktemp -d /tmp/caret-tests.XXXXXX)
 trap 'rm -rf -- "$CARET_TEST_TMP"' EXIT
 ./gradlew --quiet installDist
-CARET_LAUNCHER=build/install/caret-lang-prototype/bin/caret-lang-prototype
+CARET_LAUNCHER=build/install/caret/bin/caret
+
+java -cp 'build/install/caret/lib/*' caretlang.examples.EmbeddingExample examples/embedding.caret \
+  > "$CARET_TEST_TMP/embedding-output.txt"
+printf 'Hello, Java\n' > "$CARET_TEST_TMP/embedding-expected.txt"
+diff -u "$CARET_TEST_TMP/embedding-expected.txt" "$CARET_TEST_TMP/embedding-output.txt"
 
 expect_failure() {
   local source_file=$1
@@ -21,6 +28,26 @@ expect_failure() {
     exit 1
   fi
 }
+
+expect_failure examples/errors/unsupported_conversion.caret
+expect_failure examples/errors/invalid_packed_layout.caret
+expect_failure examples/errors/keyed_conversion.caret
+expect_failure examples/errors/conversion_range.caret
+expect_failure examples/errors/conversion_shape.caret
+expect_failure examples/errors/packed_invalid_append.caret
+expect_failure examples/errors/mixed_precision_loss_strict.caret
+expect_failure examples/errors/aliased_precision_loss_strict.caret
+expect_failure examples/errors/invalid_lambda_header.caret
+expect_failure examples/errors/invalid_with_target.caret
+expect_failure examples/errors/invalid_outer_path.caret
+expect_failure examples/errors/effect_constraint_noncallable.caret
+expect_failure examples/errors/conflicting_effect_allowance.caret
+expect_failure examples/errors/invalid_effect_modifier.caret
+expect_failure examples/errors/effect_contract_argument.caret
+expect_failure examples/errors/unknown_clause_name.caret
+expect_failure examples/errors/ambiguous_clause_name.caret
+expect_failure examples/errors/unknown_call_effects.caret
+expect_failure examples/errors/function_effect_allowance.caret
 
 expect_test_failure() {
   local source_file=$1
@@ -67,32 +94,107 @@ count,name
 EXPECTED
 diff -u "$CARET_TEST_TMP/expected.txt" "$CARET_TEST_TMP/output.txt"
 
-"$CARET_LAUNCHER" examples/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
-diff -u examples/implemented_features.expected "$CARET_TEST_TMP/implemented-features-output.txt"
+"$CARET_LAUNCHER" examples/features/implemented_features.caret > "$CARET_TEST_TMP/implemented-features-output.txt"
+diff -u examples/features/implemented_features.expected "$CARET_TEST_TMP/implemented-features-output.txt"
 
-"$CARET_LAUNCHER" examples/contracts.caret > "$CARET_TEST_TMP/contracts-output.txt"
-diff -u examples/contracts.expected "$CARET_TEST_TMP/contracts-output.txt"
+"$CARET_LAUNCHER" examples/features/contracts.caret > "$CARET_TEST_TMP/contracts-output.txt"
+diff -u examples/features/contracts.expected "$CARET_TEST_TMP/contracts-output.txt"
 
-"$CARET_LAUNCHER" examples/contract_inference.caret > "$CARET_TEST_TMP/contract-inference-output.txt"
-diff -u examples/contract_inference.expected "$CARET_TEST_TMP/contract-inference-output.txt"
+"$CARET_LAUNCHER" examples/features/contract_inference.caret > "$CARET_TEST_TMP/contract-inference-output.txt"
+diff -u examples/features/contract_inference.expected "$CARET_TEST_TMP/contract-inference-output.txt"
 
-"$CARET_LAUNCHER" examples/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
-diff -u examples/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
+"$CARET_LAUNCHER" examples/features/operators.caret > "$CARET_TEST_TMP/operators-output.txt"
+diff -u examples/features/operators.expected "$CARET_TEST_TMP/operators-output.txt"
 
-"$CARET_LAUNCHER" examples/overloads.caret > "$CARET_TEST_TMP/overloads-output.txt"
-diff -u examples/overloads.expected "$CARET_TEST_TMP/overloads-output.txt"
+"$CARET_LAUNCHER" examples/features/collection_constructors.caret > "$CARET_TEST_TMP/collection-constructors-output.txt"
+diff -u examples/features/collection_constructors.expected "$CARET_TEST_TMP/collection-constructors-output.txt"
 
-"$CARET_LAUNCHER" examples/callable_reflection.caret > "$CARET_TEST_TMP/callable-reflection-output.txt"
-diff -u examples/callable_reflection.expected "$CARET_TEST_TMP/callable-reflection-output.txt"
+"$CARET_LAUNCHER" examples/features/templates.caret > "$CARET_TEST_TMP/templates-output.txt"
+diff -u examples/features/templates.expected "$CARET_TEST_TMP/templates-output.txt"
 
-"$CARET_LAUNCHER" examples/arrow_contracts.caret > "$CARET_TEST_TMP/arrow-contracts-output.txt"
-diff -u examples/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contracts-output.txt"
+"$CARET_LAUNCHER" examples/features/numeric_foundations.caret > "$CARET_TEST_TMP/numeric-foundations-output.txt"
+diff -u examples/features/numeric_foundations.expected "$CARET_TEST_TMP/numeric-foundations-output.txt"
 
-"$CARET_LAUNCHER" examples/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
-diff -u examples/effects.expected "$CARET_TEST_TMP/effects-output.txt"
+"$CARET_LAUNCHER" examples/features/conversion.caret > "$CARET_TEST_TMP/conversion-output.txt"
+diff -u examples/features/conversion.expected "$CARET_TEST_TMP/conversion-output.txt"
 
-"$CARET_LAUNCHER" examples/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
-diff -u examples/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
+"$CARET_LAUNCHER" examples/features/packed_scalar.caret > "$CARET_TEST_TMP/packed-scalar-output.txt"
+diff -u examples/features/packed_scalar.expected "$CARET_TEST_TMP/packed-scalar-output.txt"
+
+"$CARET_LAUNCHER" examples/features/packed_structural.caret > "$CARET_TEST_TMP/packed-structural-output.txt"
+diff -u examples/features/packed_structural.expected "$CARET_TEST_TMP/packed-structural-output.txt"
+
+"$CARET_LAUNCHER" examples/features/error_template.caret > "$CARET_TEST_TMP/error-template-output.txt"
+diff -u examples/features/error_template.expected "$CARET_TEST_TMP/error-template-output.txt"
+
+"$CARET_LAUNCHER" examples/features/refinements.caret > "$CARET_TEST_TMP/refinements-output.txt"
+diff -u examples/features/refinements.expected "$CARET_TEST_TMP/refinements-output.txt"
+
+"$CARET_LAUNCHER" examples/features/overloads.caret > "$CARET_TEST_TMP/overloads-output.txt"
+diff -u examples/features/overloads.expected "$CARET_TEST_TMP/overloads-output.txt"
+
+"$CARET_LAUNCHER" examples/features/callable_reflection.caret > "$CARET_TEST_TMP/callable-reflection-output.txt"
+diff -u examples/features/callable_reflection.expected "$CARET_TEST_TMP/callable-reflection-output.txt"
+
+"$CARET_LAUNCHER" examples/features/arrow_contracts.caret > "$CARET_TEST_TMP/arrow-contracts-output.txt"
+diff -u examples/features/arrow_contracts.expected "$CARET_TEST_TMP/arrow-contracts-output.txt"
+
+"$CARET_LAUNCHER" examples/features/effects.caret > "$CARET_TEST_TMP/effects-output.txt"
+diff -u examples/features/effects.expected "$CARET_TEST_TMP/effects-output.txt"
+
+"$CARET_LAUNCHER" inspect examples/features/inference.caret > "$CARET_TEST_TMP/inference-output.txt"
+diff -u examples/features/inference.expected "$CARET_TEST_TMP/inference-output.txt"
+
+"$CARET_LAUNCHER" examples/features/collection_order.caret > "$CARET_TEST_TMP/collection-order-output.txt"
+diff -u examples/features/collection_order.expected "$CARET_TEST_TMP/collection-order-output.txt"
+
+"$CARET_LAUNCHER" examples/features/collection_protocol.caret > "$CARET_TEST_TMP/collection-protocol-output.txt"
+diff -u examples/features/collection_protocol.expected "$CARET_TEST_TMP/collection-protocol-output.txt"
+
+"$CARET_LAUNCHER" examples/features/eager.caret > "$CARET_TEST_TMP/eager-output.txt"
+diff -u examples/features/eager.expected "$CARET_TEST_TMP/eager-output.txt"
+
+"$CARET_LAUNCHER" examples/features/with_outer.caret > "$CARET_TEST_TMP/with-outer-output.txt"
+diff -u examples/features/with_outer.expected "$CARET_TEST_TMP/with-outer-output.txt"
+
+"$CARET_LAUNCHER" examples/features/field_reification.caret > "$CARET_TEST_TMP/field-reification-output.txt"
+diff -u examples/features/field_reification.expected "$CARET_TEST_TMP/field-reification-output.txt"
+
+"$CARET_LAUNCHER" examples/features/field_shapes.caret > "$CARET_TEST_TMP/field-shapes-output.txt"
+diff -u examples/features/field_shapes.expected "$CARET_TEST_TMP/field-shapes-output.txt"
+
+"$CARET_LAUNCHER" examples/features/collection_access.caret > "$CARET_TEST_TMP/collection-access-output.txt"
+diff -u examples/features/collection_access.expected "$CARET_TEST_TMP/collection-access-output.txt"
+
+"$CARET_LAUNCHER" examples/features/lazy_collection.caret > "$CARET_TEST_TMP/lazy-collection-output.txt"
+diff -u examples/features/lazy_collection.expected "$CARET_TEST_TMP/lazy-collection-output.txt"
+
+"$CARET_LAUNCHER" examples/features/collection_transforms.caret > "$CARET_TEST_TMP/collection-transforms-output.txt"
+diff -u examples/features/collection_transforms.expected "$CARET_TEST_TMP/collection-transforms-output.txt"
+
+"$CARET_LAUNCHER" examples/features/zip.caret > "$CARET_TEST_TMP/zip-output.txt"
+diff -u examples/features/zip.expected "$CARET_TEST_TMP/zip-output.txt"
+
+"$CARET_LAUNCHER" examples/features/collection_equality.caret > "$CARET_TEST_TMP/collection-equality-output.txt"
+diff -u examples/features/collection_equality.expected "$CARET_TEST_TMP/collection-equality-output.txt"
+
+"$CARET_LAUNCHER" examples/features/containers.caret > "$CARET_TEST_TMP/containers-output.txt"
+diff -u examples/features/containers.expected "$CARET_TEST_TMP/containers-output.txt"
+
+"$CARET_LAUNCHER" examples/features/rendering.caret > "$CARET_TEST_TMP/rendering-output.txt"
+diff -u examples/features/rendering.expected "$CARET_TEST_TMP/rendering-output.txt"
+
+"$CARET_LAUNCHER" examples/features/layout_mapping.caret > "$CARET_TEST_TMP/layout-mapping-output.txt"
+diff -u examples/features/layout_mapping.expected "$CARET_TEST_TMP/layout-mapping-output.txt"
+
+"$CARET_LAUNCHER" examples/features/map.caret > "$CARET_TEST_TMP/map-output.txt"
+diff -u examples/features/map.expected "$CARET_TEST_TMP/map-output.txt"
+
+"$CARET_LAUNCHER" examples/features/lambdas.caret > "$CARET_TEST_TMP/lambdas-output.txt"
+diff -u examples/features/lambdas.expected "$CARET_TEST_TMP/lambdas-output.txt"
+
+"$CARET_LAUNCHER" examples/features/sequence_operations.caret > "$CARET_TEST_TMP/sequence-operations-output.txt"
+diff -u examples/features/sequence_operations.expected "$CARET_TEST_TMP/sequence-operations-output.txt"
 
 run_test_file examples/testing.caret "$CARET_TEST_TMP/testing-output.txt"
 cat > "$CARET_TEST_TMP/testing-expected.txt" <<'EXPECTED'
@@ -152,7 +254,7 @@ print (@inside).kind
 print (@inside).remaining
 print (@made).kind
 print (@made).size
-print (@made).names
+print (@made).ids
 CARET
 
 "$CARET_LAUNCHER" "$CARET_TEST_TMP/language.caret" > "$CARET_TEST_TMP/language-output.txt"
@@ -189,13 +291,16 @@ grep -F 'Note: Line 1, column 1: First definition of value' \
 expect_failure examples/errors/reserved_binding.caret 'Line 1, column 1: Reserved spelling cannot be used as a binding name: true'
 expect_failure examples/errors/read_before_initialization.caret 'Line 1, column 9: Binding read before initialization: second'
 expect_failure examples/errors/unknown_name.caret 'Line 1, column 7: Unknown name: absent'
-expect_failure examples/errors/required_missing_field.caret 'Line 5, column 7: Collection has no field: absent'
-expect_failure examples/errors/mixed_collection_shape.caret 'Line 1, column 12: A collection cannot mix named and positional elements'
-expect_failure examples/errors/invalid_dynamic_key.caret 'Line 5, column 7: Dynamic field name must be a string'
+expect_failure examples/errors/mixed_collection_shape.caret 'Line 1, column 9: A collection cannot mix keyed and keyless elements'
+expect_failure examples/errors/ambiguous_collection_shape.caret 'Line 1, column 9: Fields without values require a Set or Dictionary contract'
+expect_failure examples/errors/invalid_dynamic_key.caret 'Line 2, column 9: Dynamic field name must be a string'
+expect_failure examples/errors/invalid_collection_key.caret 'Line 1, column 11: Sequential Collection key must be an integer'
+expect_failure examples/errors/eager_invalid_collection_key.caret 'Line 2, column 14: Dictionary access key must be a String'
 expect_failure examples/errors/division_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/remainder_by_zero.caret 'Line 1, column 11: Division by zero'
 expect_failure examples/errors/non_finite_result.caret 'Line 1, column 7: Numeric result is not finite'
 expect_failure examples/errors/invalid_escape.caret 'Line 1, column 17: Unknown string escape: \q'
+expect_failure examples/errors/invalid_layout_marker.caret unused
 expect_failure examples/errors/mixed_holes.caret 'Line 2, column 11: Cannot mix numbered and unnumbered holes'
 expect_failure examples/errors/callable_equality.caret 'Line 2, column 7: Callable values cannot be compared for equality'
 expect_failure examples/errors/non_callable_infix.caret 'Line 2, column 9: Named infix target is not callable: value'
@@ -222,17 +327,22 @@ expect_failure examples/errors/invalid_contract.caret unused
 expect_failure examples/errors/duplicate_parameter.caret unused
 expect_failure examples/errors/not_callable.caret unused
 expect_failure examples/errors/invalid_condition.caret unused
+expect_failure examples/errors/runtime_invalid_condition.caret unused
 expect_failure examples/errors/expected_number.caret unused
 expect_failure examples/errors/expected_string.caret unused
 expect_failure examples/errors/expected_sequence.caret unused
 expect_failure examples/errors/expected_dictionary.caret unused
+expect_failure examples/errors/expected_collection.caret unused
+expect_failure examples/errors/expected_container.caret unused
 expect_failure examples/errors/invalid_dictionary_key.caret unused
-expect_failure examples/errors/invalid_field_target.caret unused
-expect_failure examples/errors/missing_reflected_field.caret unused
 expect_test_failure examples/errors/invalid_assertion.caret
 expect_failure examples/errors/incomplete_escape.caret unused
 expect_failure examples/errors/inconsistent_continuation_indent.caret unused
 expect_failure examples/errors/definition_in_continuation.caret unused
+expect_failure examples/errors/missing_lambda_body.caret unused
+expect_failure examples/errors/invalid_collection_callback.caret unused
+expect_failure examples/errors/invalid_predicate_result.caret unused
+expect_failure examples/errors/zip_length_mismatch.caret unused
 expect_failure examples/errors/invalid_numbered_hole.caret unused
 expect_failure examples/errors/ambiguous_call_arity.caret unused
 expect_failure examples/errors/unknown_contract.caret unused
@@ -240,8 +350,17 @@ expect_failure examples/errors/not_a_contract.caret unused
 expect_failure examples/errors/dynamic_not_a_contract.caret unused
 expect_failure examples/errors/contract_violation.caret unused
 expect_failure examples/errors/incompatible_inferred_contracts.caret unused
+expect_failure examples/errors/incompatible_declared_inference.caret unused
+expect_failure examples/errors/contract_derivation_cycle.caret unused
+expect_failure examples/errors/template_invalid_constructor.caret unused
+expect_failure examples/errors/template_sugar_unclosed.caret unused
+expect_failure examples/errors/template_noncomparable_fixed.caret unused
+expect_failure examples/errors/precision_loss_strict.caret unused
+expect_failure examples/errors/template_missing_required.caret unused
+expect_failure examples/errors/incompatible_composition_contracts.caret unused
 expect_failure examples/errors/ambiguous_inferred_contract.caret unused
 expect_failure examples/errors/invalid_refinement.caret unused
+expect_failure examples/errors/invalid_lambda_refinement.caret unused
 expect_failure examples/errors/inconsistent_overload_arity.caret unused
 expect_failure examples/errors/no_applicable_overload.caret unused
 expect_failure examples/errors/ambiguous_overload.caret unused

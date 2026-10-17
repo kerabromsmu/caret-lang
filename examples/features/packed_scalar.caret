@@ -1,0 +1,18 @@
+Small = Packed Int8
+(Small) original = [1 2]
+extended = seqAdd original 3
+print Small original
+print Small extended
+print original
+print extended
+print size extended
+print getElement extended 2
+print keys extended
+print (Sequence Number) extended
+print Small (eager extended)
+print @extended.elementContract.id
+
+(Packed UInt64) largest = [18446744073709551615]
+print largest[0]
+(Packed Boolean) flags = [true false]
+print flags

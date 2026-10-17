@@ -1,0 +1,3 @@
+Small = Packed Int8
+original = (Small) [1 2]
+seqAdd original 128

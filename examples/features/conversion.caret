@@ -1,0 +1,19 @@
+add left right = left + right
+
+print Float 0.1
+print (Float) 0.1
+print (Integer) (-3.75)
+print (Int8) add 2 3
+
+Pair = template [(Int8) _ (String) _]
+print (Pair) [7.8 42]
+
+Small = Packed Int8
+(Small) literal = [1 2]
+print Small literal
+converted = (Small) [3.9 4.1]
+print converted
+ordinary = (Sequence Int8) converted
+print Small ordinary
+
+print (Sequence Int8) values [^first = 5 ^second = 6]

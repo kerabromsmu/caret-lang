@@ -1,0 +1,2 @@
+(pure) invalid value = print value
+print "must not execute"

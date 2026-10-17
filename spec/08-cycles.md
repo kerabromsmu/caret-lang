@@ -3,6 +3,14 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Release availability
+
+Ordinary cycles, including previous/next state lookup and atomic phase commits, target v1 in
+[Phase 5](../roadmap/phase-05.md). The existing callable/contract/effect and Collection foundations
+are prerequisites; a Caret-written interpreter, formats, SIMD, and a compiler backend are not.
+The format/SIMD/compiler interactions below apply when those later features exist. Cycle support
+remains planned until its conformance evidence is implemented.
+
 
 <a id="overview"></a>
 ## Overview

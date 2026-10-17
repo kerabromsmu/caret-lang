@@ -1,0 +1,3 @@
+greet name = "Hello, " + name
+
+registered = registerCallbacks [^greet = greet]

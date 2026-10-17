@@ -7,6 +7,10 @@ This manifest records the lossless structural migration from the former 13,639-l
 Document titles, navigation links, and normalized heading levels added during migration are not
 part of the source ranges.
 
+Chapters 06, 07, 11, and 14 now link to smaller canonical files in `spec/sections/`. Their former
+paths remain chapter indexes with the original anchors; follow each index for the current section
+owner. The historical line ranges below continue to identify the same normative prose.
+
 | Destination | Former line ranges |
 |---|---|
 | `01-source-layout-and-diagnostics.md` | 32–81, 433–448, 542–572, 13306–13577 |

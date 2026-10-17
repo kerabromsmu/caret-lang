@@ -1,6 +1,7 @@
 package caretlang;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -15,15 +16,29 @@ import static org.junit.jupiter.api.Assertions.*;
 final class ConformanceMatrixTest {
     private static final Set<String> STATUSES = Set.of("implemented", "planned", "deferred", "unresolved");
     private static final Pattern TEST_REFERENCE = Pattern.compile("([A-Za-z][A-Za-z0-9]*Test)#([A-Za-z][A-Za-z0-9]*)");
-    private static final Pattern EXAMPLE_REFERENCE = Pattern.compile("examples/[A-Za-z0-9_.-]+\\.caret");
+    private static final Pattern EXAMPLE_REFERENCE = Pattern.compile(
+            "examples/(?:(?:features|errors)/)?[A-Za-z0-9_.-]+\\.caret");
 
     @Test
     void requirementIdsStatusesAndImplementedEvidenceAreValid() throws IOException {
-        String markdown = Files.readString(Path.of("CONFORMANCE.md"));
+        String index = Files.readString(Path.of("CONFORMANCE.md"));
         String integrationScript = Files.readString(Path.of("test.sh"));
         Set<String> ids = new HashSet<>();
         int requirements = 0;
 
+        try (var files = Files.list(Path.of("conformance"))) {
+            for (Path document : files.filter(path -> path.toString().endsWith(".md")).toList()) {
+                assertTrue(index.contains("conformance/" + document.getFileName()),
+                        "Conformance index does not link " + document);
+                requirements += validateRequirements(Files.readString(document), integrationScript, ids);
+            }
+        }
+
+        assertTrue(requirements >= 70, "The conformance inventory is unexpectedly incomplete");
+    }
+
+    private int validateRequirements(String markdown, String integrationScript, Set<String> ids) {
+        int requirements = 0;
         for (String line : markdown.lines().toList()) {
             if (!line.matches("\\| [A-Z][A-Z0-9-]*-[0-9]{3} +\\|.*")) continue;
             String[] cells = line.split("\\|", -1);
@@ -43,8 +58,20 @@ final class ConformanceMatrixTest {
             }
             requirements++;
         }
+        return requirements;
+    }
 
-        assertTrue(requirements >= 70, "The conformance inventory is unexpectedly incomplete");
+    @Test
+    void everyFeatureExampleHasGoldenOutputAndIntegrationCoverage() throws IOException {
+        String integrationScript = Files.readString(Path.of("test.sh"));
+        try (var files = Files.list(Path.of("examples/features"))) {
+            for (Path source : files.filter(path -> path.toString().endsWith(".caret")).toList()) {
+                Path expected = Path.of(source.toString().replaceFirst("\\.caret$", ".expected"));
+                assertTrue(Files.isRegularFile(expected), "Feature example lacks expected output: " + source);
+                assertTrue(integrationScript.contains(source.toString()),
+                        "Feature example is not exercised by test.sh: " + source);
+            }
+        }
     }
 
     private void validateTestReferences(String id, String evidence) {
@@ -61,8 +88,10 @@ final class ConformanceMatrixTest {
                 return;
             }
             assertTrue(Set.of(testClass.getDeclaredMethods()).stream()
-                            .anyMatch(method -> method.getName().equals(methodName)),
-                    "Unknown test method for " + id + ": " + className + "#" + methodName);
+                            .anyMatch(method -> method.getName().equals(methodName)
+                                    && (method.isAnnotationPresent(Test.class)
+                                    || method.isAnnotationPresent(TestFactory.class))),
+                    "Evidence is not a registered JUnit test for " + id + ": " + className + "#" + methodName);
         } while (references.find());
     }
 

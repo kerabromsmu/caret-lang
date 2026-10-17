@@ -1,0 +1,4 @@
+MaybeDouble = Double?
+one = 1
+three = 3
+(MaybeDouble) result = one / three

@@ -1,0 +1,2 @@
+record = eager [^name = "Ada"]
+print record[1]

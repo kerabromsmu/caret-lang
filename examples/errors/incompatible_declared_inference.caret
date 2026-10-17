@@ -1,0 +1,2 @@
+numeric (Any) value =
+  value * 2

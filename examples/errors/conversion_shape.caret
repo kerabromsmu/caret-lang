@@ -1,0 +1,2 @@
+Pair = template [(Int8) _ (String) _]
+print (Pair) [1]

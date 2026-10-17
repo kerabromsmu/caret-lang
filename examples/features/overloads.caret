@@ -1,0 +1,23 @@
+describe (Any) value = "fallback"
+describe (Number) value = "number"
+describe (String) value = "text"
+
+combine (Any) left (Any) right = "fallback"
+combine (Number) left (Number) right = "numbers"
+
+numberPair = combine _ 2
+
+print (describe 42)
+print (describe "hello")
+print (describe true)
+print (numberPair 1)
+
+Root = contract ~
+Left = contract Root
+Right = contract Root
+Both = contract [Left Right Root]
+select (Any) value = "fallback"
+select (Left) value = "left"
+select (Both) value = "both"
+(Both) both = 1
+print (select both)

@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 ./gradlew --quiet installDist
-launcher="build/install/caret-lang-prototype/bin/caret-lang-prototype"
+launcher="build/install/caret/bin/caret"
 if [[ $# -eq 0 ]]; then
   exec "$launcher" examples/demo.caret
 fi

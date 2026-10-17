@@ -3,6 +3,27 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Release availability
+
+The Caret-language sandbox feature is still planned. Its
+[v1 subset](../roadmap/phase-10.md#phase-10a-initial-sandboxes-v1) accepts module paths with fixed
+environment snapshots, returns `Result Sandbox`, mediates exported calls, and supports `terminate`
+and `unload`. Restricted imports/catalogs, environment-relative effects/metadata, reflective
+mediation, retained-reference invalidation, and bounded nested authority are required in v1.
+An import path must not bypass module visibility through host filesystem discovery or aliases.
+
+V1 supports explicitly supplied shared read/write containers through mediation that preserves
+identity, content contracts, and effects. A caller may instead pass immutable contents as an
+ordinary value snapshot; reading those contents retains its normal `StateRead` effect. Unsupported
+boundary values must fail explicitly rather than leak native or private implementation state.
+
+Semantic Code input and `.code` await Phase 9C; canonical code/quines await 9D. `swapEnv` and
+`reload` target Phase 10B, and read-only/virtual container views and richer projection mechanisms
+target 10C. The corresponding requirements/examples below describe later planned behavior.
+Caller-supplied filtered or virtual callable implementations can use the v1 environment without
+requiring those later projection mechanisms. The implemented Java embedding API, including its
+environment swapping, retains its existing behavior.
+
 <a id="sandboxes"></a>
 ## Sandboxes
 
@@ -62,7 +83,7 @@ installed. Success changes neither sandbox identity nor generation, plugin state
 plugin-export references. The new snapshot is visible at the next environment-boundary lookup; an
 in-progress host operation finishes against the target resolved when it began. Consequently a host
 function called by the plugin may itself invoke `swapEnv`, and the plugin observes the replacement
-after that boundary call returns. `@root.names` and related environment metadata change atomically
+after that boundary call returns. `@root.ids` and related environment metadata change atomically
 with the snapshot; `@root.code` does not, because exposed host bindings are not sandbox code.
 
 Environment-derived callable references are mediated named references. Calling one after a swap
@@ -78,7 +99,7 @@ plugin.function arguments
 plugin["dynamic"]~
 @plugin.kind
 @plugin.state
-@plugin.names
+@plugin.ids
 @plugin.code
 ```
 
@@ -463,7 +484,7 @@ For example, if the host exposes:
 the sandbox may be permitted to inspect metadata such as:
 
 ```caret
-@log.name
+@log.id
 @log.parameters
 @log.result
 ```
@@ -782,7 +803,9 @@ Sandbox isolation therefore applies to both ordinary name resolution and reflect
 <a id="implementation-requirements"></a>
 ## Implementation requirements
 
-The initial implementation should support at minimum:
+The complete sandbox target across releases should support at minimum the following. For v1,
+the release-availability section above selects the required subset; code, swaps/reload, and richer
+projections are later work. Interpreter/compiler parity becomes a gate when the backend exists.
 
 1. Global availability of:
 
@@ -899,3 +922,79 @@ This allows the same mechanism to support:
 * nested execution environments
 
 without weakening Caret's reflection model.
+
+---
+
+<a id="java-embedding"></a>
+## Java embedding sandbox
+
+### Implemented Phase 4 numeric and diagnostic integration
+
+The [numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+provides an exact arbitrary-precision integer carrier in the public `CaretValue` model alongside
+the existing finite-double `NumberValue`. Integer literals, exports, arguments, host providers,
+nested Collections, and both directions of callbacks must round-trip without intermediate double
+conversion. Keep existing floating-point construction available; a new Java carrier does not
+create a distinct public Caret runtime kind or expose interpreter objects.
+
+Loading, execution, and invocation results expose nonfatal precision warnings separately
+from failure diagnostics, including on otherwise successful operations. Warnings do not trigger
+rollback; errors retain ordinary transaction semantics. Preserve existing environment visibility,
+callback authority, handle ownership, revocation, and diagnostic sanitization. Conversions cannot
+manufacture capabilities or expose packed buffers. The implemented boundary below includes the
+exact integer carrier and separate warning channels. Packed Collections cross embedding as
+semantic sequences; host callbacks do not acquire their selected representation.
+
+### Implemented boundary
+
+The Java 21 prototype exposes `caretlang.embedding` as its initial implemented sandbox boundary.
+An embedded sandbox has a host-controlled environment, private Caret state, and exactly one script
+source. Loading and executing are separate operations: the first `load` call permanently claims the
+source slot and returns a single-attempt handle; `execute` consumes that handle before evaluation.
+Multiple source files require the future module loader.
+
+A successful script execution commits its state and returns an immutable named Collection of every
+binding in that script's top lexical layer. A failed execution rolls Caret state back. Every later
+Java invocation of a returned or registered Caret callable is an independent transaction with the
+same commit rule. Output and completed host callback work are observable effects and cannot be
+rolled back.
+
+The host supplies an immutable `CaretEnvironment`. Named host values are lazy, resolve at most once
+per environment snapshot, and cache either their successful value or sanitized provider failure
+even when a Caret transaction fails. An atomic
+environment swap preserves sandbox and callable identity but discards the old value cache. Existing
+callables resolve host values and callbacks against the current snapshot; removed authority causes
+a Caret failure and never preserves the prior authority.
+
+Before loading, the host may replace the complete environment schema. Loading fixes the names and
+callable metadata visible to that script. Later swaps may replace, remove, or reintroduce those
+known values and callbacks but cannot introduce new names. A rebound callback preserves both arity
+and declared effects; changing either would invalidate the analyzed callable contract and is
+rejected before the active environment or its caches change.
+
+`print` and the reserved `registerCallbacks` bridge are available only when explicitly enabled.
+The output destination belongs to the sandbox builder and cannot be redirected by a swap.
+`registerCallbacks` accepts a named Collection of functions. Its last call in a successful operation
+atomically replaces the Java-visible registry; failure preserves the previous immutable registry
+snapshot. A callable returned through an ordinary result is also invocable and follows the same
+lifetime and authority rules.
+
+All Caret-originated lexer, parser, semantic, authority, callback, and runtime failures cross the
+boundary as result diagnostics. Invalid Java use instead throws one coded `CaretEmbeddingException`.
+This includes a foreign callable anywhere inside a Java-supplied field, Sequence, or Collection,
+whether passed as an invocation argument or returned by a host value provider or callback.
+An uncaught Java callback `Exception` becomes a sanitized Caret internal-error result; a JVM `Error`
+during loading, execution, or invocation escapes after best-effort rollback and invalidates the
+sandbox. Same-sandbox overlap and re-entry
+fail immediately, while independent sandboxes may run concurrently. Closing is idempotent and
+invalidates all sandbox-owned handles.
+
+Unexpected Java implementation failures are not mislabeled as Caret or host-callback failures: they
+invalidate the sandbox and propagate to the host. The downloadable embedding JAR is the named
+`caret.embedding` Java module and exports only `caretlang.embedding`; interpreter, parser, AST,
+bridge, CLI, and runtime implementation packages are not exported.
+
+The public sealed value model preserves null versus missing and uses explicit conversions. It never
+exposes interpreter values, AST nodes, lexical scopes, Java reflection, implementation descriptors,
+or hidden host failures. This embedding API does not implement Caret `sandbox`, modules, `@root`,
+`@module`, or compile-time `#` execution.

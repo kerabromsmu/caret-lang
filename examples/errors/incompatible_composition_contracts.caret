@@ -1,0 +1,3 @@
+(Number) number (Number) value = value
+(String) text (String) value = value
+pipeline = number >> text

@@ -4,6 +4,42 @@
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
 <a id="values"></a>
+<a id="planned-lazy-values-and-lexical-contexts"></a>
+## Lazy values and lexical contexts (partially implemented)
+
+This general rule applies to lazy values throughout the language, including Collection
+access and reflection. It is not specific to handlers, `eager`, or any one runtime kind.
+
+First access computes or obtains the specific value; it is not fixed before access. Once obtained,
+the value stays fixed in that lexical context. Nested contexts using the same inherited established
+binding share it. A fresh invocation creating a new lazy access/binding may obtain a different
+value, even for the same provider and key. The built-in keyless `map` adapter implements this
+establishment model: an alias shares demanded positions, while a fresh map invocation creates a
+fresh result context. Do not impose permanent Collection-wide memoization or
+a special `eager` context. Stronger provider contracts, such as sequential stability, still apply.
+The Collection protocol is owned by the
+[Phase 4 revision](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions).
+
+### Deferred computations and synchronization
+
+A computation will represent a completely deferred expression/function call. Constructing it
+performs none of its runtime work, including argument evaluation; explicit compile-time work
+continues to follow staging rules. Ordinary calls still evaluate where values are needed.
+The computation syntax, full contract, and remaining capture/staging integration are deferred
+beyond Phase 4. Earlier proposals to evaluate arguments at computation construction are superseded.
+Arguments exposed for a failed invocation have already been evaluated at invocation time;
+reflection does not evaluate them again.
+
+Concurrent first readers of the same shared lazy value use one producer. Dependent readers suspend
+until a result is established and resume on completion; independent work continues. Recoverable
+retries, when implemented, leave that result unsettled. These are deferred synchronization design
+constraints, not a Phase 4 concurrency implementation.
+
+Runtime dependency-cycle detection is deferred with concurrency/synchronization; lazy dependency
+cycles may deadlock for now. This permission does not replace the separate implemented `eager`
+diagnostic for cyclic Collection containment. No universal timeout or cancellation policy is
+selected here.
+
 ## Values
 
 ```text
@@ -16,13 +52,122 @@ true false  Boolean
 
 Null and missing are separate runtime values.
 
-`type value` returns the public runtime kind name used by reflection, including `"Null"` for `?`,
-`"Missing"` for `~`, and `"Function"` for a non-callable function reference produced by `@`.
+`type value` returns the public runtime kind name, including `"Null"` for `?` and `"Missing"` for
+`~`. Reflection itself produces a `"Dictionary"`; its `kind` field describes the reflected target.
 
 Number literals start with a digit and may contain at most one decimal point. Malformed number
 literals are reported as language errors rather than leaking a Java numeric-conversion exception.
-Numbers must remain finite. Literals outside the finite range and arithmetic producing a non-finite
-result are errors. Division and remainder by zero are errors.
+Floating-point numbers must remain finite. Floating literals outside the selected finite range
+and floating arithmetic producing a non-finite result are errors; whole-number literals have no
+fixed upper bound. Division and remainder by zero are errors.
+
+### Phase 4 numeric values and arithmetic (implemented)
+
+The following design is implemented by the interpreter. Numeric contract membership is owned by
+[the contracts specification](04-contracts-inference-and-dispatch.md#phase-4-numeric-contracts-implemented).
+
+`Number` prescribes no storage format. Integer values support arbitrary precision, including every
+value in the signed and unsigned 64-bit domains. A runtime must not pass exact integers through
+`double` when parsing, storing, comparing, rendering, exporting, or invoking host callbacks.
+Storage choice is separate from the mathematical value and its public numeric contracts.
+
+Whole-number tokens without a selecting context produce exact integers. Decimal tokens default to
+`Double`. An expected concrete numeric format can instead select the literal representation:
+
+```caret
+count = 123456789012345678901234567890  // exact integer
+ratio = 0.1                           // Double
+(Float) sample = 0.1                  // directly rounded to binary32
+```
+
+Floating-point literal creation rounds to nearest, ties to even, directly from the source literal
+to the selected format; do not first round through another floating-point format. Preserve literal
+text/source provenance until contextual selection is known. The existing lexical number spelling
+is unchanged. NaN and infinities remain unsupported; a result outside the selected finite range is
+an error. No fixed width is silently selected for an unconstrained `Integer` or `Natural`.
+
+| Operation | Phase 4 behavior |
+| --- | --- |
+| Integer `+`, `-`, `*`, unary negation | Exact arbitrary-precision result; no wrap or clamp. |
+| Integer `%` | Exact remainder with the dividend's sign, or zero; zero divisor is an error. |
+| `/` on integers | Exact integer quotient if divisible; otherwise the mathematical quotient rounds to `Double`. |
+| `div` | Two `Integer` operands; exact quotient truncated toward zero; result is `Integer`. |
+| Non-integral real arithmetic | `Double` precision, with ordinary floating-point rounding. |
+| Numeric equality and ordering | Compare mathematical values accurately across representations, without a lossy common-`double` shortcut. |
+
+Integer membership is value-based: `7.0` is integral, but `7.5` is not. For integer operands and
+nonzero `b`, `a == (a div b) * b + (a % b)`. `/` does not become truncating division because its
+operands are integers. A required integer result rejects a mathematically fractional quotient
+before floating-point rounding can make it appear integral. Integer fractional division rounds
+the quotient, rather than overflowing a floating-point conversion of its integer operands first.
+An arithmetic result does not inherit an operand's fixed-width constraint; explicit result
+requirements validate it. In particular, adding `255` and `1` produces `256`, which fails `UInt8`.
+
+### Precision requirements and warnings (implemented)
+
+An implicit conversion that changes a numeric value is a precision loss. In a broad `Number` or
+`Real` result context it warns and continues with the rounded value. Under an explicit concrete
+numeric result requirement, or an `Integer`/`Natural` requirement, it is an error. Contextual literal
+creation and ordinary floating-point arithmetic rounding are permitted by their selected formats;
+they do not generate precision warnings. Explicit conversion deliberately authorizes its documented
+rounding or truncation and does not generate an implicit-precision warning.
+Numeric policy follows the semantic requirement through aliases, nullable/optional modifiers,
+and derived numeric bases. Modifiers continue to admit their declared null/missing alternatives;
+they do not weaken precision checks on numeric computation. A concrete or integral base remains
+strict even when another base is broad. Static analysis follows known contract construction without
+executing refinements; dynamic requirements receive the same checks during evaluation.
+
+Mixed integer/non-integral arithmetic checks exact integer operands before promoting them to
+`Double`. If that promotion changes an operand, the same warning/error policy applies at the
+operation's source location, for `+`, `-`, `*`, `/`, and `%`. An exactly representable integer
+operand does not warn merely because subsequent floating-point arithmetic rounds its result.
+
+An explicit `Float` result requirement does not select binary32 arithmetic: non-integral arithmetic
+still uses `Double`, and the resulting value must satisfy the requirement. A declaration checks an
+existing value without converting it. Inferred default `Double` results alone do not turn the
+broad-context warning policy into an explicit strict requirement.
+
+Declared function result contracts govern precision policy inside the function. A function
+explicitly returning `Number` can warn and return a rounded value; its caller validates that
+established value rather than changing the callee's declaration or inspecting its rounding history.
+Ordinary inference applies where there is no explicit declaration boundary. Failures to satisfy
+the final result contract remain errors even if an earlier conversion emitted only a warning.
+
+Warnings do not excuse overflow, zero division, invalid operand contracts, or unsupported
+conversions. See [diagnostic delivery](01-source-layout-and-diagnostics.md#phase-4-numeric-template-conversion-and-packed-diagnostics-implemented).
+Future rational `Fractional`, `Complex`, wider named fixed-width formats, and bit fields are not
+part of this implementation boundary.
+
+<a id="planned-v1-integer-shifts"></a>
+### Basic integer shifts (v1 design work, #53)
+
+[Card #53](https://github.com/kerabromsmu/caret-lang/issues/53) targets basic `shl`/`shr` design for
+v1. It does not yet specify their contracts or implement the functions. Open questions include
+whether the contracts are `Integer Natural -> Integer`, whether left shift is exact multiplication
+by a power of two without wrapping, and whether right shift of a negative integer uses arithmetic
+sign extension or truncation toward zero. Mathematical shift distances must be reconciled with
+host limits rather than silently adopting host masking/modulo rules.
+
+The design must also settle ordinary pure binary-function behavior, named-infix application and
+partials, the relationship to negative arbitrary-precision bitwise operations, and the boundary
+between arithmetic shifts and width-dependent logical shifts. None of these candidate semantics
+is selected here. Rotations (`rol`/`ror`) and width-dependent extensions remain outside this v1
+portion. Their later design must settle explicit versus intrinsic width; overlapping representability
+contracts such as `UInt8` and `UInt16` do not determine an intrinsic rotation width.
+
+### Immutable semantics and storage ownership
+
+Caret values are observably immutable. An implementation may reuse collection storage only while
+an internal ownership fact proves that no alias can observe the older representation. Binding,
+passing into an interpreted function, capture by a closure or partial, export, reflection, and
+insertion beneath a shared collection conservatively end uniqueness. Unknown ownership always uses
+persistent allocation.
+
+Storage-reuse ownership is neither a Caret value nor reflective metadata, and it does not affect equality,
+ordering, diagnostics, or effects. The prototype has an internal optimization-disabled mode whose
+persistent behavior is authoritative. Its enabled mode currently reuses proven-unique ephemeral
+Sequence and Dictionary storage for `seqAdd` and `dictPut`; both modes must produce identical
+observable results, including on failures.
 
 Strings recognize `\\`, `\"`, `\n`, `\r`, `\t`, and Unicode code-point escapes written as
 `\u{1F642}`. Unknown, incomplete, surrogate, and out-of-range escapes are lexical errors.
@@ -101,7 +246,7 @@ Dynamic names are strings. The `~` suffix makes a missing binding a normal resul
 meta = @a
 meta.kind
 meta.size
-meta.names
+meta.ids
 
 functionMeta = @function
 functionMeta.kind
@@ -113,13 +258,36 @@ functionMeta.variants
 Current metadata:
 
 - all values: `kind`
-- named Collections: `shape = "named"`, `size`, `names`
-- function references: `kind = "Function"`, visible declaration `name` or `~`, `remaining`,
+- named Collections: `shape = "named"`, `size`, `ids`
+- field bindings: stable `FieldBinding` identity, key, declared contracts, immutable binding status,
+  nullability/optionality, export status, and visible owner metadata references
+- containers: stable reflective identity and visible `contentContracts` references without reading content
+- function metadata: `kind = "Function"`, visible declaration `id` or `~`, `remaining`,
   language-owned `signature`, and surviving overload `variants`
 
-`@function` is a reference and reflection mechanism, not an alternate call syntax. Applying the
-result is a `NOT_CALLABLE` error. Reflecting an existing function reference returns the same
-reference.
+Every reflection result is a named metadata Collection with runtime kind `Dictionary`. It retains
+an opaque reference to its target, which adjacent postfix `:` dereferences:
+
+```text
+reference = @function
+alias = reference:
+directAlias = @function:
+```
+
+The metadata dictionary is non-callable; dereferencing restores the exact original function or
+value. `:` on any value not produced directly by reflection is a located `NOT_DEREFERENCEABLE`
+error. Ordinary aliases preserve dereferenceability, while dictionary updates produce ordinary
+dictionaries. Equality and rendering observe only public metadata fields, never the opaque target.
+Every reflection result captures its creation environment's dereference authority. Dereference uses
+the intersection of that captured authority and the current observer's authority, so retaining,
+nesting, aliasing, or re-reflecting metadata can preserve or reduce access but can never amplify it.
+This interpreter/compiler context is not exposed as a Caret value.
+
+`@` consumes exactly one identifier or literal, including a Collection literal. Parentheses are
+required to reflect a larger expression: `@f x` means `(@f) x`, while `@(f x)` reflects the call
+result. Postfix lookup applies to the returned metadata, so `@function.kind` needs no grouping.
+Static member reflection is `object.@field`; dynamically named members use
+`@(object[fieldName])`.
 
 The callable schema below is implemented for the current named functions, built-ins, prefix
 partials, compositions, and closed overload sets. Its immutable descriptors separate effective,
@@ -155,9 +323,9 @@ and `0` compare equal both directly and inside a sequence. Encountering a callab
 either compared structure is a `CALLABLE_EQUALITY` error. Function references compare by the
 identity of their referenced callable.
 
-`@function` produces a non-callable reflective function reference. It suppresses normal implicit
-invocation of a nullary binding and exposes `kind` and `remaining`; bare nullary function names
-continue to invoke automatically.
+`@function` produces a non-callable metadata dictionary. It suppresses normal implicit invocation
+of a nullary binding and exposes `kind` and `remaining`; `@function:` restores the callable, while
+bare nullary function names continue to invoke automatically.
 
 Built-in symbolic binary operators are ordinary two-argument callable values. Prefix and infix
 forms share the same implementation, arity, partial application, call-depth guard, and errors:
@@ -175,9 +343,13 @@ Function invocation has an interpreter-owned maximum depth. Both ordinary applic
 implicit invocation of nullary bindings produce a located `CALL_DEPTH_EXCEEDED` diagnostic instead
 of exposing JVM stack exhaustion.
 
-The planned static contract system preserves this runtime behavior through the normative operator
-matrix below. Concrete numeric representations added later require explicit specialized variants;
-they do not silently change these scalar rules.
+The [v1 tail-call specification work](03-functions-operators-and-lambdas.md#planned-v1-tail-calls)
+retains this current depth behavior until its guarantee and diagnostic decisions are settled and
+implemented.
+
+The initial operator matrix and the
+[Phase 4 numeric revision](#phase-4-numeric-values-and-arithmetic-implemented) are implemented,
+including exact integers, concrete formats, and `div`.
 
 The self-interpreter may represent successful and failed operations as named result collections. Its
 CLI adapter can then render a failed result as the normal located `Error:` diagnostic.
@@ -187,4 +359,4 @@ CLI adapter can then render a failed result as the normal located `Error:` diagn
 
 The first Caret-written interpreter does not depend on static types, loops, mutation, modules,
 lambdas, pattern matching, ownership, reflected invocation, or a compiler backend. Recursion,
-immutable collections, named exported collections, and the planned text operations are sufficient.
+immutable collections, named exported collections, and implemented text operations are sufficient.

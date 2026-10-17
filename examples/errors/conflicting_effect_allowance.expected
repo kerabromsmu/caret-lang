@@ -1,0 +1,2 @@
+Error: Line 1, column 7: pure cannot be combined with named effects
+  Note: Line 1, column 2: Conflicting allowance starts here

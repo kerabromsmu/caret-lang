@@ -3,7 +3,69 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Release availability
+
+Modules and both path/ModuleId import forms target v1 in
+[Phase 9A](../roadmap/phase-09.md#phase-9a-modules-and-imports-v1). Environment-relative,
+metadata-only `@root`/`@module`, their identity relation, and public `kind`, `id`, and visible
+binding `ids` metadata target v1 in
+[Phase 9B](../roadmap/phase-09.md#phase-9b-execution-environments-metadata-and-results-v1).
+None of these planned additions is implemented merely by assigning that target.
+
+Semantic `.code`, `Code`/`CodeElement`, code snapshots, and Code-based sandbox input follow in 9C;
+canonical serialization, structural code equality, and quines follow in 9D. The code-related
+requirements and examples below describe that later target, not the v1 metadata surface. V1 must
+not expose raw source, Java AST/runtime objects, or host implementations as a substitute for Code.
+Later code visibility grants information without granting access to private bindings. Staging and
+persisted compiler interfaces/caches follow their owning later phases.
+
+<a id="planned-v1-visible-identifiers"></a>
+## Visible root identifiers (planned v1 portion, #5)
+
+[Card #5](https://github.com/kerabromsmu/caret-lang/issues/5) contributes deterministic enumeration
+of local and imported bindings visible to the current environment through metadata-only
+`@root.ids`. Preserve exports and import visibility: private/unexported imported bindings and
+unavailable modules are absent. Known entries retain useful static metadata without becoming
+implicit invocation or capability paths. Sandboxes enumerate their substituted root and cannot
+recover host-only identifiers through reflection or retained references.
+
+The `id`/`ids` naming convention already applies to implemented reflection and continues as new
+reflective kinds are introduced; removed reflective `name`/`names` fields are not compatibility
+aliases. Ordinary program fields named `name` are unaffected. Modules/catalogs and root/module
+metadata belong to 9A/9B, with sandbox visibility enforcement in 10A. The card's broader semantic-Code
+dependency remains with 9C; it is not a prerequisite for this metadata-only v1 portion. This scope
+entry adds no new metadata schema or runtime behavior.
+
 <a id="planned-modules-and-compilation"></a>
+## Planned lazy reflection integration
+
+Reflection uses the general
+[lazy-value and lexical-context rules](02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts).
+A value is projected on first access and remains established in that context; reflection is not
+a special live-read exception. Provider access enforces the execution environment's visibility and
+authority. Specific captured argument values do not propagate through sandbox boundaries.
+
+For deferred computation reflection, arguments are ordinary reflective content, subject to those
+general boundaries. Any argument value available for inspection is already computed at invocation
+time; inspecting it does not perform argument evaluation. This is not permission to expose private
+lexical captures, host implementations, or inaccessible capabilities. Computation syntax and
+handler facilities remain deferred; the
+[effects specification](05-effects-and-callable-signatures.md#deferred-failure-handling-and-computations)
+owns their design.
+
+The [implemented Collection protocol](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+exposes guarantees and size through both ordinary functions and reflection. Key enumeration is
+an ordinary protocol operation, not restricted to metadata access.
+For a reflective Collection, `getElement`, `keys`, `values`, `fields`, `size`, equality, and
+Collection facts use the intersection of the reference's captured context and the current
+observer context. Merely checking Collection membership does not project metadata. Retaining a
+reference across observer changes cannot reveal names or inferred facts hidden from either
+context.
+
+Implemented Collection-value `eager` replaces a reflection reference with the empty Collection without traversing its
+metadata, including nested references. It does not snapshot the reflective target or recover
+anything hidden by an environment boundary. This behavior leaves ordinary reflection intact.
+
 ## Planned modules and compilation
 
 <a id="source-modules-and-stable-module-ids"></a>
@@ -150,12 +212,13 @@ loaded as the root module:
 catalog lookup identity; `@module` reflects the current source module. Module metadata may eventually
 expose its ID when present, but this specification does not yet assign a field name for it.
 
-The initial metadata common to these references consists of `kind`, `name`, visible binding
-`names`, and semantic `code`. Future catalogs such as `functions`, `contracts`, and `modules` may
+V1 metadata common to these references consists of `kind`, `id`, and visible binding `ids`.
+Phase 9C adds semantic `code`; the complete intended metadata includes all four fields.
+Future catalogs such as `functions`, `contracts`, and `modules` may
 be added, but their entries are non-callable descriptors; ordinary bindings remain the invocation
 path.
 
-The existing reflective `name` metadata is not thereby defined as the optional stable ModuleId.
+The existing reflective `id` metadata is not thereby defined as the optional stable ModuleId.
 
 An imported module may be reflected through its binding:
 
@@ -203,7 +266,7 @@ Structural code equality and canonical serialization:
 
 * compare binding relationships rather than parameter and private-local spelling;
 * preserve every externally or reflectively observable name, including exports, fields, contracts,
-  module bindings, metadata names, and dynamic lookup targets;
+  module bindings, metadata identifiers, and dynamic lookup targets;
 * may reorder elements only when semantic analysis proves them independent, using a
   language-defined structural order; and
 * retain source/evaluation order whenever independence cannot be proved.
@@ -290,12 +353,12 @@ The root may eventually expose additional metadata catalogs such as:
 
 ```caret
 @root.code
-@root.name
+@root.id
 @root.contracts
 @root.functions
 ```
 
-`kind`, `name`, `names`, and `code` are the settled minimum schema. Additional catalogs contain
+`kind`, `id`, `ids`, and `code` are the settled minimum schema. Additional catalogs contain
 non-callable descriptors, not callable bindings or ambient capabilities.
 
 `@root` is available from anywhere in Caret code. Its contents are relative to, and filtered by,
@@ -405,7 +468,7 @@ Reflection should expose references rather than duplicating runtime objects unne
 For example, a function code element may expose information such as:
 
 ```text
-name
+id
 parameters
 contracts
 body

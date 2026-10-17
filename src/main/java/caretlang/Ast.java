@@ -22,11 +22,16 @@ final class Ast {
     record FunctionDef(String name, ContractClause resultContracts, List<Parameter> params,
                        List<Stmt> body, SourceSpan span) implements Stmt {}
 
-    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, ContractModifier, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract {
+    sealed interface Expr permits Literal, Name, Unary, Binary, Compose, NamedInfix, AmbiguousCall, Conditional, Apply, Field, DynamicField, Reflect, Dereference, ContainerRead, ContainerLiteral, ContractModifier, ContractTerms, Hole, ContractVariable, Group, CollectionLiteral, ArrowContract, Lambda, With, OuterPath {
         SourceSpan span();
     }
     record Literal(Value value, SourceSpan span) implements Expr {}
     record Name(String name, SourceSpan span) implements Expr {}
+    record With(Expr target, List<Stmt> body, SourceSpan span) implements Expr {
+        With { body = List.copyOf(body); }
+    }
+    /** Resolver-owned path; null name represents an incomplete sequence of outer hops. */
+    record OuterPath(int hops, String name, SourceSpan span) implements Expr {}
     record Unary(String operator, Expr operand, SourceSpan span) implements Expr {}
     record Binary(String operator, Expr left, Expr right, SourceSpan span) implements Expr {}
     record Compose(Expr left, Expr right, SourceSpan span) implements Expr {}
@@ -38,12 +43,25 @@ final class Ast {
     record Field(Expr target, String field, boolean optional, SourceSpan span) implements Expr {}
     record DynamicField(Expr target, Expr name, boolean optional, SourceSpan span) implements Expr {}
     record Reflect(Expr target, SourceSpan span) implements Expr {}
+    record Dereference(Expr target, SourceSpan span) implements Expr {}
+    record ContainerRead(Expr target, SourceSpan span) implements Expr {}
+    record ContainerLiteral(ContractClause contracts, Expr value, SourceSpan span) implements Expr {}
     record ContractModifier(Expr target, boolean nullable, boolean optional, SourceSpan span) implements Expr {}
+    /** Parser-retained adjacent arrow-result terms; semantic resolution associates constructor arguments. */
+    record ContractTerms(List<Expr> terms, SourceSpan span) implements Expr {
+        ContractTerms { terms = List.copyOf(terms); }
+    }
     /** index is zero for an ordinary left-to-right hole, otherwise one-based. */
     record Hole(int index, SourceSpan span) implements Expr {}
     /** One-based source index; normalized to zero-based signature metadata. */
     record ContractVariable(int index, SourceSpan span) implements Expr {}
     record Group(Expr expression, SourceSpan span) implements Expr {}
+    record Lambda(List<Parameter> params, List<Stmt> body, SourceSpan span) implements Expr {
+        Lambda {
+            params = List.copyOf(params);
+            body = List.copyOf(body);
+        }
+    }
     sealed interface CollectionElement permits PositionalElement, NamedElement {
         Expr value();
         SourceSpan span();

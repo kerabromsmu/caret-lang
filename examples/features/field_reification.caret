@@ -1,0 +1,14 @@
+health = { (Number) 5 }
+person = [^health = health ^name = "Ada"]
+reference = person.@health
+
+print reference.kind
+print reference.key
+print reference.owner.ids
+print reference.mutable
+with person
+  print @health == reference
+  print health{}
+
+print put health 6
+print person.health{}

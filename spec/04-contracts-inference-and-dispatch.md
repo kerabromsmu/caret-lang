@@ -3,6 +3,114 @@
 
 [Language specification index](../LANGUAGE.md) · [Conformance status](../CONFORMANCE.md)
 
+## Collection contract integration (implemented foundation)
+
+Phase 4 provides the format-independent `Natural` domain of non-negative integers, with exact
+arbitrary-precision support under the numeric revision below. It does not introduce infinite
+numeric values. Collection `size` has result contract `Natural~`.
+
+The [Collection protocol revision](sections/06-01-collection-protocol.md#phase-4-collection-protocol-revision-implemented-with-deferred-extensions)
+owns guarantee queries, shape inference, Field tuples, and contextual empty-Collection equality.
+Runtime validation of lazy membership is unnecessary when inferred/declared producer contracts
+already establish the answer; otherwise necessary computation contributes its ordinary effects.
+Provider guarantees are trusted unless explicitly validated; detectable contradictory declarations
+are errors.
+
+Existing template calls remain predicates in Phase 4. The later dual predicate/constructor
+interpretation selected by result contracts and arity is
+[explicitly deferred](sections/06-01-collection-protocol.md#deferred-template-construction-and-callable-eager).
+That overload and its ambiguity diagnostics are not Phase 4 requirements.
+
+## Phase 4 numeric contracts (implemented)
+
+These contracts are implemented with exact integer and finite floating-point values. They supersede
+older illustrative numeric derivation graphs where those graphs conflict.
+[Numeric evaluation](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+owns literals, arithmetic, and precision policy.
+
+| Contract | Domain / concrete representation |
+| --- | --- |
+| `Number` | Common numeric domain; no format, width, or precision selected. |
+| `Real` | Real-valued numeric domain; includes integers and both floating-point formats. |
+| `Integer` | All supported exact integers; arbitrary precision, no prescribed machine format. |
+| `Natural` | Integers greater than or equal to zero; no prescribed machine format. |
+| `Int8`, `Int16`, `Int32`, `Int64` | Signed integral values from −2^(n−1) through 2^(n−1)−1; n-bit representation. |
+| `UInt8`, `UInt16`, `UInt32`, `UInt64` | Integral values from zero through 2^n−1; n-bit representation. |
+| `Float` | Values exactly representable as finite IEEE binary32; 32-bit representation. |
+| `Double` | Values exactly representable as finite IEEE binary64; 64-bit representation. |
+
+`Integer` derives from `Real`, which derives from `Number`; `Natural` derives from `Integer`.
+Signed formats refine `Integer`; unsigned formats refine `Natural`. `Float` and `Double` refine
+`Real`. These abstract domains do not require every mathematical real to have an exact runtime
+representation. Future `Fractional` may represent ratios of integers under `Real`; future `Complex`
+may derive from `Number` without deriving from `Real`. Neither is implemented in Phase 4.
+
+Membership tests the mathematical value and exact representability, not its current storage tag.
+`Integer 1.0`, `Int8 1`, `UInt64 1`, `Float 1`, and `Double 1` are true. A binary64 value not exactly
+representable in binary32 fails `Float`. Concrete contracts may overlap; implication and dispatch
+must use sound value-domain inclusion rather than treating formats as disjoint runtime kinds.
+Public numeric kind remains `Number`; an internal backing representation is not a new public kind.
+
+Aliases are the same contract identities: `Int = Integer`, `Byte = UInt8`, `Float32 = Float`, and
+`Float64 = Double`. A concrete format selects a layout only when representation is requested.
+`Packed Integer`, `Packed Natural`, `Packed Real`, and `Packed Number` have no concrete fixed-width
+layout; homogeneity alone cannot make them eligible. Packed membership is separately defined by
+[the selected-layout contract](sections/06-02-packed-layouts.md#phase-4-packed-layouts-implemented).
+
+## Phase 4 explicit contract conversion (implemented)
+
+`Contract value` remains a Boolean membership predicate. `(Contract) expression` instead requests
+a value-producing conversion. This deliberately changes the old grouped-predicate interpretation
+in that position. [Conversion grammar](03-functions-operators-and-lambdas.md#phase-4-conversion-syntax-and-div-implemented)
+owns extent, grouping, aliases, and holes. Declaration, parameter, and result clauses remain strict
+requirements; they do not implicitly convert already-established values.
+
+```caret
+(Float) literal = 0.1           // contextual literal construction
+(Double) source = 0.1
+rounded = (Float) source        // explicit conversion, rounding permitted
+// (Float) checked = source     // error: source is not exactly binary32-representable
+truncated = (Integer) -3.75     // -3
+label = (String) 42             // ordinary toString conversion
+```
+
+| Conversion target | Approved built-in behavior |
+| --- | --- |
+| `Float` / `Double` and aliases | Numeric input; round to nearest, ties to even; reject non-finite/out-of-range results. |
+| `Integer`, `Natural`, fixed-width integers and aliases | Numeric input; truncate toward zero, then check target domain/range; never wrap or clamp. |
+| `String` | Use ordinary `toString`, retaining selected overload behavior and effects. |
+| `Sequence T` / `Packed T` | Select the requested representation; recursively convert elements to `T`, preserving enumeration order. |
+| Eligible structural template | Convert corresponding positions or named fields recursively; require exact established shape and validate fixed values, refinements, and repeated-hole constraints. Conversion never applies the contextual-literal missing-field default. |
+| Other contracts | Validate compatible values through the ordinary contract rules; no automatic synthesis of missing fields, capabilities, or behavior. |
+
+The final converted result must satisfy the target contract. Failure is a located language error,
+not missing, a partial result, a warning-only contract violation, or a leaked host exception.
+Explicit conversion authorizes only the documented conversion; it does not bypass refinements,
+visibility, authority, or an enclosing declaration. Already compatible values may be preserved
+where no different representation is requested. Representation-selecting conversion remains
+meaningful even when the input already satisfies the target's semantic element contract:
+`(Sequence Number) packed` produces an ordinary sequence, while `(Packed Int16) packedInt8`
+selects the Int16 layout.
+
+The interpreter retains the selected packed element contract. Optimized execution stores its
+elements in a contiguous fixed-layout payload; optimization-disabled execution uses immutable
+reference storage with equivalent observable behavior. Conversion and selected membership apply
+in both modes.
+
+Keyed-to-positional conversion requires an explicit `keys`, `values`, or `fields` projection; it
+does not discard keys implicitly. Packing, lazy consumption, and unsupported layouts follow the
+Collection specification. Existing null/missing alternatives permit the corresponding value when
+the target contract allows it; conversion cannot erase the distinction. Numeric text parsing and
+numeric/Boolean truthiness conversion are excluded. Existing text primitives retain their current
+behavior; these exclusions concern the new conversion form.
+
+Only built-in conversion behavior is included. User-defined conversion registration is deferred;
+whether it belongs with `format` is a future decision. This syntax neither implements contextual
+template predicate/constructor calls nor adds a public conversion-registration API. The separate
+[expected-template literal rule](sections/06-06-templates-foundations.md#named-fields) applies while
+constructing a literal, not while converting an established value; even `(Template) [literal]` is
+the explicit conversion form and therefore requires the source literal's complete field set.
+
 <a id="contract-foundation-currently-implemented"></a>
 ## Contract foundation currently implemented
 
@@ -24,30 +132,40 @@ add (Number) left (Number) right = left + right
 
 Arguments are checked as they fill parameters, including during partial application. Contracted
 initializers are checked before their bindings commit. `type Number` and `(@Number).kind` report
-`"Contract"`, and `(@Number).name` reports `"Number"`.
+`"Contract"`, and `(@Number).id` reports `"Number"`.
 
 The unary `contract` function constructs nominal contracts. `contract ~` creates a base contract,
 `contract A` derives from one contract, and `contract [A B]` derives from several contracts packaged
 in one ordinary collection argument. Explicit binding and parameter clauses acquire nominal
 membership while checking built-in base constraints; leading function clauses check and attribute
-results. Unannotated named functions infer parameter and result contracts from their values,
+results. Unannotated named functions and lambdas infer parameter and result contracts from their values,
 operations, calls, and surrounding context. When callable contracts remain unresolved, they are
 generalized and each external use receives a fresh instantiation. Ordinary non-callable bindings
 must instead resolve from their initializer or context. An actual use that still leaves a required
 contract variable unresolved is a located compile-time ambiguity error.
 
-The semantic analyzer also computes an initial effect summary for named functions. It propagates
+Explicit callable declarations remain distinct from implementation inference. An implementation
+need must be guaranteed by the declared parameter domain; it cannot silently narrow that public
+domain. Inferred results incompatible with an explicit result clause are rejected with a located
+`INCOMPATIBLE_CONTRACTS` diagnostic.
+
+The semantic analyzer also computes effect summaries for named functions and lambdas. It propagates
 known effects through direct named calls, includes effects from the fixed subexpressions captured
 eagerly while constructing partials, and records an
 unknown-call marker when dynamic invocation prevents a purity proof. This internal summary can
 prove that a prospective refinement is unary, Boolean-returning, and pure. Environment-relative
 effect identities, declaration allowances, callable constraints, and effectful arrow contracts are
-implemented. Complete higher-order propagation and broader effect tooling remain planned. Proven
-predicates are implemented as first-class refinement
-requirements in `contract` construction and direct clauses, including through ordinary aliases.
+implemented. Higher-order propagation covers the current named, anonymous, aliased, partial, composed,
+overloaded, closure, and recursive callable forms, and `caret inspect` exposes the resulting facts
+without executing the program. Later cycles, codecs, rules, and containers extend this same analysis
+as those value kinds arrive. Proven predicates are first-class refinement requirements in `contract`
+construction and direct clauses. Named predicates and their ordinary aliases are implemented; the
+same proof and runtime metadata apply to direct, assigned, captured, and aliased lambdas. Wrong-arity,
+non-Boolean, nullable/optional-result, effectful, and unknown-effect callables are rejected before
+unrelated execution when clause analysis can prove the failure.
 Contract equality is identity-based: aliases of one descriptor compare equal, while every separate
 evaluation of `contract` creates an unequal descriptor even when its requirements are identical.
-Names and reflective metadata do not participate in equality. Contract reflection exposes `name`,
+Identifiers and reflective metadata do not participate in equality. Contract reflection exposes `id`,
 `bases`, and language-owned refinement
 `requirements`.
 
@@ -90,16 +208,19 @@ A modifier target known not to be a contract is rejected during semantic analysi
 When the target's contract status depends on runtime evaluation, failure is instead a located runtime
 `NOT_A_CONTRACT` diagnostic. It never reports Java AST or implementation details.
 
-The general unary `Collection` contract and the initial `Sequence T` parameterized-contract form are
-implemented as described in the collection section below. General parameterization, complete static
-inference/proof, and contextual collection representation selection remain planned.
+The unparameterized unary `Collection` predicate and the callable `Sequence T`, `Field K V`, and
+`Dictionary K V` parameterized-contract constructors are
+implemented as described in the collection section below. Initial contextual Collection
+representation selection is also implemented where its requirements are unambiguous; general
+parameterization and complete static inference/proof remain planned.
 
-In the current prototype, physical indentation directly defines a multiline function body. The
-planned [layout modifiers](01-source-layout-and-diagnostics.md#planned-layout-baseline-modifiers)
-will first translate physical indentation into effective
-logical indentation; the ordinary block rules will then consume that logical indentation. If a
+Effective logical indentation defines a multiline function body. Implemented
+[layout modifiers](01-source-layout-and-diagnostics.md#planned-layout-baseline-modifiers)
+first translate physical indentation into effective logical indentation for supported
+indentation-opening headers; without a marker, physical indentation is effective indentation.
+The ordinary block rules then consume that logical indentation. If a
 body contains exported bindings (`^`), calling the function returns the immutable named `Collection`
-specified in the [collections document](06-collections-fields-and-templates.md#collections-and-lexical-scopes).
+specified in the [collections document](sections/06-03-collection-baseline.md#collections-and-lexical-scopes).
 It is observationally equivalent to the explicit named literal containing those exports. Otherwise
 the prototype returns the final expression or assigned value.
 
@@ -115,9 +236,9 @@ factory          // calls factory and produces its named Collection
 ```
 
 This rule is not limited to zero-argument functions. `@function` refers to the function binding
-without invoking it regardless of the function's arity. The result is a non-callable function
-reference whose reflective fields include `kind` and `remaining`. References to the same function
-compare equal by target identity; references to different functions do not.
+without invoking it regardless of the function's arity. The result is a non-callable metadata
+Dictionary whose fields include `kind` and `remaining`; `@function:` restores the callable.
+Metadata dictionaries compare structurally by their public fields.
 
 <a id="contracts-type-derivation-and-collections"></a>
 ## Contracts, Type Derivation, and Collections
@@ -178,17 +299,20 @@ grammar or parser-level construction form. Its one argument is `~`, one base con
 predicate, or one ordinary Collection of requirements. Consequently:
 
 ```caret
-Number = contract [Eq Comparable Arithmetic]
+Readable = contract ~
+Writable = contract ~
+ReadWrite = contract [Readable Writable]
 ```
 
-is an ordinary assignment whose right-hand side calls `contract` once with a single Collection.
+Each line is an ordinary assignment whose right-hand side calls `contract` once. The final call
+receives one Collection containing both requirements; it is not a two-argument `contract` call.
 Static knowledge of nominal contract construction attaches to the resolved language-owned
 `contract` callable identity, never merely to an identifier spelled `contract`.
 
 A base contract with no additional value restriction may be defined as:
 
 ```caret
-Eq = contract ~
+Marker = contract ~
 ```
 
 Here `~` means that the contract introduces no additional value predicate of its own.
@@ -198,20 +322,21 @@ Membership in such a base contract is established through derivation from that c
 For example:
 
 ```caret
-Eq = contract ~
+RootContract = contract ~
 
-Number = contract Eq
+MiddleContract = contract RootContract
 
-Int = contract Number
+LeafContract = contract MiddleContract
 ```
 
 establishes:
 
 ```text
-Int -> Number -> Eq
+LeafContract -> MiddleContract -> RootContract
 ```
 
-An `Int` therefore satisfies all three contracts.
+A `LeafContract` value therefore satisfies all three contracts. These are user-defined examples;
+the standard numeric domains have the separate Phase 4 definitions above.
 
 ---
 
@@ -317,14 +442,20 @@ named functions until the standard environment explicitly introduces additional 
 operator variants. Merely satisfying a user-defined contract named `Comparable` does not inject an
 implementation into `<`.
 
+Standard callable bindings are extensible overload sets unless a future declaration mechanism
+seals them. Same-name Caret definitions add contract-specific variants, and ordinary most-specific dispatch selects them
+both for direct conversion and recursive collection conversion. Every specialization must return a
+String when extending `toString`. Module callables use the same binding model once imports are
+implemented; no sealing syntax is implemented yet.
+
 <a id="structural-equality-capability"></a>
 ##### Structural equality capability
 
 `Eq` in the operator matrix is the standard structural capability descriptor used by the built-in
 equality operators. Scalar values, null, missing, contract values by descriptor identity,
-non-callable function references by target identity, and language-owned metadata descriptors
+structurally comparable metadata dictionaries, and language-owned metadata descriptors
 satisfy it. Immutable collections satisfy `Eq` only when every recursively reachable
-member does. Planned containers satisfy it by stable container identity, without reading their
+member does. Containers satisfy it by stable container identity, without reading their
 contents.
 
 A live callable does not satisfy `Eq`, and neither does a structure containing one. A statically
@@ -366,10 +497,17 @@ a provably zero divisor and a provably non-finite arithmetic result may be rejec
 otherwise `DIVISION_BY_ZERO` and `NON_FINITE_RESULT` remain the runtime diagnostics at their
 established locations.
 
-Future concrete numeric contracts such as fixed-width integers and floats must add explicit
-operator variants specifying accepted pairs, result contracts, overflow, division, and conversion
-rules before those combinations are implemented. This initial matrix defines no implicit widening,
-signedness conversion, or mixed-representation promotion.
+The [Phase 4 numeric revision](02-values-bindings-and-evaluation.md#phase-4-numeric-values-and-arithmetic-implemented)
+now specifies exact integer arithmetic, concrete formats, division, and conversion policy. Those
+changes require new operator/inference evidence before implementation is claimed. The initial
+implemented matrix above does not itself provide implicit widening, signedness conversion, or
+mixed-representation promotion.
+
+The prototype implements this initial operator matrix, including four reflected closed `+`
+variants, language-owned recursive rendering for concatenation, recursive `Eq` eligibility,
+normalized lazy truth results, and relational `+` results retained through direct named-function
+calls and later ordinary-binding constraints. More general relational propagation through nested
+compositions remains conservative rather than selecting a numeric default.
 
 <a id="contract-declaration-and-identity"></a>
 #### Contract binding and identity
@@ -377,6 +515,9 @@ signedness conversion, or mixed-representation promotion.
 Bindings whose values are contracts are predeclared throughout their lexical block where the
 ordinary declaration rules require it, so their bases may use forward references. Direct and
 indirect contract-derivation cycles are compile-time errors.
+The prototype implements this as a checked identity graph: multiple and redundant bases are
+accepted, diamond derivation retains transitive implication, and a rejected cycle reports the
+participating declaration locations. Graph construction never evaluates refinement predicates.
 `contract` always takes exactly one ordinary argument: `~`, one contract or predicate, or one
 collection of requirements.
 
@@ -411,6 +552,12 @@ parameter and an explicit `Any` requirement are the same generic fallback and ca
 two overload variants. A statically empty constraint is an invalid declaration rather than a
 dispatch variant that wins by accepting no values.
 
+The prototype normalizes overload declaration domains by canonical binding identity and the
+statically declared nominal derivation graph. It removes `Any`, duplicates, and base requirements
+already implied by a stricter term before comparing declarations; this includes forward multiple-
+base diamonds without executing refinements. Runtime specificity uses the same conservative
+implication rules and keeps incomparable variants unordered.
+
 Null and missing alternatives are normalized separately from the conjunction for ordinary present
 values. Their implication follows accepted-set inclusion: `T` implies both `T?` and `T~`; each of
 those implies `T?~`; and `T?` and `T~` are incomparable. Base implication must also hold, so `Int?`
@@ -427,97 +574,52 @@ parameter, so `Sequence Int` implies `Sequence Number` when `Int` implies `Numbe
 imply one another unless their argument descriptors are identical. No constructor is assumed
 covariant merely because its current implementation appears read-only.
 
+The prototype's static implication foundation implements descriptor identity, transitive nominal
+derivation, null/missing accepted-set inclusion, covariance for immutable `Sequence`, and invariance
+for mutable `Container`. Parameter conjunction ordering uses those proofs, normalizes duplicate and
+`Any` requirements, and keeps null and missing alternatives distinct. Unknown relationships remain
+incomparable.
+
 ---
 
 <a id="contract-composition"></a>
 #### Contract composition
 
-`contract` may combine multiple contracts:
+`contract` may combine multiple contracts. For example, using ordinary user-defined contracts:
 
 ```caret
-Number =
-  contract [Eq Comparable Arithmetic]
+Readable = contract ~
+Writable = contract ~
+ReadWrite = contract [Readable Writable]
 ```
 
-This means that every `Number` also satisfies:
+Every `ReadWrite` value also satisfies `Readable` and `Writable`. Multiple derivation is ordinary
+contract composition; no separate multiple-inheritance mechanism is required.
 
-```text
-Eq
-Comparable
-Arithmetic
-```
-
-Conceptually:
-
-```text
-Number x
-    =>
-Eq x
-and Comparable x
-and Arithmetic x
-```
-
-Multiple derivation is therefore ordinary contract composition.
-
-No separate multiple-inheritance mechanism is required.
-
-For example:
-
-```caret
-Integer =
-  contract [Number Integral]
-
-Float =
-  contract [Number Fractional]
-```
-
-establishes:
-
-```text
-Integer -> Number
-Integer -> Integral
-
-Float -> Number
-Float -> Fractional
-```
-
-and transitively all contracts derived by `Number`.
+The standard numeric domains follow the separately specified
+[Phase 4 numeric contracts](#phase-4-numeric-contracts-implemented). In particular, `Float` is a concrete
+binary32 format contract that also accepts exactly representable integral values; it is not a
+fractional-only domain. Future `Fractional` describes exact rational values, not the existing
+floating-point formats.
 
 ---
 
 <a id="type-derivation"></a>
 ### Type derivation
 
-Type derivation is contract inclusion.
-
-For example:
+Type derivation is contract inclusion. A diamond can be expressed without redefining standard
+numeric contracts:
 
 ```caret
-Eq = contract ~
-
-Comparable =
-  contract Eq
-
-Arithmetic =
-  contract Eq
-
-Number =
-  contract [Comparable Arithmetic]
-
-Int =
-  contract [Number Integral]
-
-Float =
-  contract [Number Fractional]
+Base = contract ~
+Left = contract Base
+Right = contract Base
+Combined = contract [Left Right]
 ```
 
-This creates a graph rather than requiring a strict inheritance tree.
-
-A contract may derive from any number of other contracts.
-
-There is no object-layout diamond problem because derivation does not copy or embed base objects.
-
-If several derivation paths lead to `Eq`, the resulting value simply satisfies `Eq`.
+This creates a graph rather than requiring a strict inheritance tree. A contract may derive from
+any number of other contracts. There is no object-layout diamond problem because derivation does
+not copy or embed base objects. Multiple paths to `Base` still establish one membership fact.
 
 ---
 
@@ -571,15 +673,8 @@ Thus Caret uses the same mechanism for:
 <a id="contracts-do-not-contain-operations"></a>
 #### Contracts do not contain operations
 
-A contract does not contain a method table or list of allowed operations.
-
-For example:
-
-```caret
-Eq = contract ~
-```
-
-does not itself declare `eq`.
+A contract does not contain a method table or list of allowed operations. For example, the built-in
+`Eq` contract describes equality eligibility but does not itself declare `eq`.
 
 Equality is an ordinary function defined separately:
 
