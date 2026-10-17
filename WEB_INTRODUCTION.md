@@ -27,19 +27,23 @@ design; this principle does not change the prototype's current behavior.
 ## Planned releases
 
 The [v1 roadmap](PLAN.md#release-targets-and-implementation-order) includes everything already
-implemented (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles, modules,
+implemented (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles, path-based modules (#114),
 root/module identity and visible-binding metadata, shared structured results, the bounded
 [file/console I/O subset (#109)](roadmap/v1-io.md), and initial sandboxes.
 These additions are still planned. Initial
 sandboxes will load module paths with fixed environments, expose explicit capabilities, and support
-termination/unloading. Passing a mutable container explicitly shares read/write access; passing
-its immutable contents supplies a snapshot. Nested sandboxes and reflection must preserve the
-same authority boundary.
+termination/unloading. V1 accepts immutable data and mediated function calls; shared mutable
+containers and nested sandbox creation are unsupported and explicitly rejected. Passing immutable
+contents supplies a snapshot with normal state-read effects at its source. Full container sharing
+and nesting (#118), and module IDs/catalog discovery (#115), follow after v1. Reflection and
+capabilities must enforce the same isolation boundary throughout.
 
 The [reviewed v1 scope](LANGUAGE.md#v1-feature-work) also includes visible root identifiers (#5),
-basic integer-shift design (#53), language-wide tail-call specification work (#57), a
+basic integer-shift specification and implementation (#53), direct self-tail recursion specification and implementation (#57), a
 Turing-completeness proof using Caret programs (#80), and basic seeded pseudorandom generation (#110).
-The shift contracts and behavior and the tail-call guarantees and coverage remain open questions.
+The shift contracts and behavior and the precise self-tail recursion coverage remain open questions.
+Full language-wide tail calls (#113), including mutual tail calls and broader callable coverage,
+are excluded from v1.
 The proof/example card does not itself establish a new runtime guarantee.
 
 The planned randomness subset will initialize from an explicit seed and produce successive
@@ -67,7 +71,7 @@ resumable failure handling remain later work. The v1 subset must fit that larger
 completing the entire design is not a prerequisite for the subset. Existing Java embedding and its
 environment swapping remain available. Gated computations (#60) are to be specified soon in a
 later discussion, with v1 inclusion undecided. Cycles can proceed independently of the v1 tail-call
-specification work. Release allocation does not implement the planned features or settle their designs.
+implementation. Release allocation does not implement the planned features or settle their designs.
 
 The implemented template notation makes the specimen's boundary explicit and uses ordinary lexical
 lookup of `template`, including shadowing:
@@ -711,7 +715,7 @@ with `@module == @root`. Complete semantic module code will be represented as im
 Caret values and convertible to canonical, implementation-independent Caret source, making program
 reification and canonical quines possible.
 
-Planned source modules may declare stable logical IDs such as `clientServer = module`. An import may
+After v1 path imports, planned source modules may declare stable logical IDs such as `clientServer = module`. An import may
 use either a relative source path or a `ModuleId` resolved through the current environment's flat
 module catalog. Module IDs do not become lexical bindings, canonical source paths still identify
 module evaluation, and a sandbox sees only the catalog entries explicitly supplied to it.

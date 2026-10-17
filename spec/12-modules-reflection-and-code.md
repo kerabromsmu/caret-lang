@@ -5,11 +5,15 @@
 
 ## Release availability
 
-Modules and both path/ModuleId import forms target v1 in
+Relative-path modules/imports target v1 in
 [Phase 9A](../roadmap/phase-09.md#phase-9a-modules-and-imports-v1). Environment-relative,
 metadata-only `@root`/`@module`, their identity relation, and public `kind`, `id`, and visible
 binding `ids` metadata target v1 in
 [Phase 9B](../roadmap/phase-09.md#phase-9b-execution-environments-metadata-and-results-v1).
+Module-ID declarations/imports, automatic discovery and catalogs are post-v1
+[#115](https://github.com/kerabromsmu/caret-lang/issues/115), following path imports
+[#114](https://github.com/kerabromsmu/caret-lang/issues/114). The full module model below retains
+those later requirements; path loading still requires explicit source authorization in sandboxes.
 None of these planned additions is implemented merely by assigning that target.
 
 Semantic `.code`, `Code`/`CodeElement`, code snapshots, and Code-based sandbox input follow in 9C;
@@ -31,7 +35,7 @@ recover host-only identifiers through reflection or retained references.
 
 The `id`/`ids` naming convention already applies to implemented reflection and continues as new
 reflective kinds are introduced; removed reflective `name`/`names` fields are not compatibility
-aliases. Ordinary program fields named `name` are unaffected. Modules/catalogs and root/module
+aliases. Ordinary program fields named `name` are unaffected. Path modules and root/module
 metadata belong to 9A/9B, with sandbox visibility enforcement in 10A. The card's broader semantic-Code
 dependency remains with 9C; it is not a prerequisite for this metadata-only v1 portion. This scope
 entry adds no new metadata schema or runtime behavior.
@@ -170,7 +174,8 @@ ModuleId import when that ID is supplied by the environment.
 <a id="module-diagnostics-and-implementation-requirements"></a>
 ### Module diagnostics and implementation requirements
 
-The initial module implementation must:
+The complete module implementation across releases must (v1 implements the path-only subset
+described above; declaration/catalog and ModuleId requirements follow in #115):
 
 1. parse at most one well-formed `moduleId = module` declaration at file top level;
 2. diagnose a second declaration, a declaration in a nested scope, and malformed declaration forms;

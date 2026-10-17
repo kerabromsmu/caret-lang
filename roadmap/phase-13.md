@@ -18,8 +18,8 @@ with sandbox integration coordinated with Phase 10A. It does not wait for Phase 
 of the post-v1 generalized I/O design (#99); its bounded API must be specified before implementation.
 
 Other reviewed v1 work includes [basic seeded generation (#110)](../spec/05-effects-and-callable-signatures.md#planned-v1-seeded-random-generation),
-[integer-shift design (#53)](../spec/02-values-bindings-and-evaluation.md#planned-v1-integer-shifts),
-and [tail-call specification work (#57)](../spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls).
+[integer-shift specification and implementation (#53)](../spec/02-values-bindings-and-evaluation.md#planned-v1-integer-shifts),
+and [direct self-tail recursion specification and implementation (#57)](../spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls).
 These do not wait for the broad 13B standard-library milestone. Keep their card-level open questions
 unresolved until their design discussions; #110 does not complete the broader randomness system #98.
 

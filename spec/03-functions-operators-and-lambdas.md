@@ -303,29 +303,34 @@ compatible parameter and result contracts and unions invocation-effect bounds; p
 incompatibilities receive a located diagnostic.
 
 <a id="planned-v1-tail-calls"></a>
-## Language-wide tail calls (v1 specification work, #57)
+## Direct self-tail recursion (planned v1, #57)
 
-[Card #57](https://github.com/kerabromsmu/caret-lang/issues/57) targets a language-wide tail-call
-specification for v1 across the interpreter and future compiler. Direct and mutual recursion
-already work, but nested invocation has a depth limit of 256 and deep tail recursion currently
-fails with a located `CALL_DEPTH_EXCEEDED` diagnostic. The card does not yet choose guaranteed
-proper tail calls versus an optional optimization or authorize implementation before that choice.
+[Card #57](https://github.com/kerabromsmu/caret-lang/issues/57) targets specification and
+implementation of direct self-tail recursion in ordinary function bodies, including conditional
+result branches, for v1. [Full language-wide tail calls (#113)](https://github.com/kerabromsmu/caret-lang/issues/113)
+are excluded from v1 and scheduled for a later, unassigned release.
 
-The remaining design must settle:
+Direct and mutual recursion already work, but nested invocation has a depth limit of 256 and deep
+tail recursion currently fails with a located `CALL_DEPTH_EXCEEDED` diagnostic. The reduced feature
+is planned, not implemented. Other calls and non-tail recursion retain existing behavior.
 
-- Tail positions and exclusions, including selected conditional branches, exported-block results,
-  `$`, partial application, composition, overload dispatch, and nullary invocation.
-- Direct versus mutual recursion and calls through aliases, closures, partials, and dynamically
-  selected callables; parity across CLI, REPL, sandboxes, embedding, and future compiled execution.
-- Preservation of argument evaluation order, effects, contracts, diagnostics and spans, reflection,
-  sandbox authority, and host callback boundaries; non-tail depth checks and optimized-call
-  diagnostics; and whether `cycle` shares the mechanism or remains independently lowered.
+Before implementation, #57 must specify eligible tail positions, resolved self-call identity,
+shadowing, parameter/result contracts, effects, depth diagnostics and applicable execution
+boundaries. Preserve argument evaluation order, source locations, reflection and authority.
+Document restricted coverage as an implementation limitation of the first-class callable model;
+do not recognize self calls merely by matching identifier spelling. No new syntax is planned.
 
-No guarantee, coverage rule, or runtime change is selected here. The future acceptance work covers
-large direct/mutual tail recursion, non-tail recursion, conditional paths, aliases, closures,
-partials, effects, failures, sandbox execution, and Java invocation, with a runnable example and
-conformance evidence when implemented. A compiler backend is not a prerequisite to specifying this
-feature, and ordinary cycles remain independent.
+General mutual tail calls and calls through aliases, closures, partials, composition, overload
+dispatch and dynamically selected callables are outside the reduced v1 guarantee. #113 retains
+those coverage decisions, general proper-tail-call guarantees versus optional optimization,
+nullary invocation, exported-block results, `$`, host callbacks, interpreter/compiler parity and
+sandbox integration. Ordinary cycles remain independent; no compiler backend is a v1 prerequisite.
+
+Acceptance for #57 includes large direct self-tail recursion and conditional branches, unchanged
+non-tail depth failures, argument evaluation order, contracts/effects, located failures, shadowing,
+unsupported call paths retaining existing behavior, applicable entry points, a runnable `.caret`
+integration example, conformance evidence and public documentation. This scope split settles no
+remaining semantic question and changes no current runtime behavior.
 
 <a id="lambda-functions"></a>
 ## Lambda Functions

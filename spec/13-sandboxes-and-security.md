@@ -5,17 +5,24 @@
 
 ## Release availability
 
-The Caret-language sandbox feature is still planned. Its
-[v1 subset](../roadmap/phase-10.md#phase-10a-initial-sandboxes-v1) accepts module paths with fixed
-environment snapshots, returns `Result Sandbox`, mediates exported calls, and supports `terminate`
-and `unload`. Restricted imports/catalogs, environment-relative effects/metadata, reflective
-mediation, retained-reference invalidation, and bounded nested authority are required in v1.
-An import path must not bypass module visibility through host filesystem discovery or aliases.
+The Caret-language sandbox feature is still planned. Its restricted
+[v1 subset (#117)](https://github.com/kerabromsmu/caret-lang/issues/117) accepts module paths with
+fixed environment snapshots, returns `Result Sandbox`, mediates exported calls, and supports
+`terminate` and `unload`. Explicitly authorized path imports, environment-relative effects/metadata,
+reflective mediation and retained-reference invalidation remain required. Paths must not bypass
+source visibility through host discovery, traversal or aliases.
 
-V1 supports explicitly supplied shared read/write containers through mediation that preserves
-identity, content contracts, and effects. A caller may instead pass immutable contents as an
-ordinary value snapshot; reading those contents retains its normal `StateRead` effect. Unsupported
-boundary values must fail explicitly rather than leak native or private implementation state.
+V1 supports immutable data and mediated function calls; shared mutable containers and nested
+sandbox creation are unsupported and must be rejected explicitly, including indirect bypasses.
+Exact supported boundary values and interfaces remain specification prerequisites. A caller may
+pass immutable contents as a snapshot; producing it retains its normal `StateRead` effect.
+Unsupported values must never leak native or private state.
+
+[Full boundary support (#118)](https://github.com/kerabromsmu/caret-lang/issues/118) adds shared
+read/write containers and nested sandboxes after v1, preserving identity, contracts, effects and
+bounded child authority. The complete requirements below retain that later target. Reduced v1
+coverage is an implementation limitation, not weaker isolation. ModuleId catalog integration also
+follows its post-v1 module feature (#115); v1 still restricts every permitted source path.
 
 Semantic Code input and `.code` await Phase 9C; canonical code/quines await 9D. `swapEnv` and
 `reload` target Phase 10B, and read-only/virtual container views and richer projection mechanisms
@@ -804,8 +811,9 @@ Sandbox isolation therefore applies to both ordinary name resolution and reflect
 ## Implementation requirements
 
 The complete sandbox target across releases should support at minimum the following. For v1,
-the release-availability section above selects the required subset; code, swaps/reload, and richer
-projections are later work. Interpreter/compiler parity becomes a gate when the backend exists.
+the release-availability section above selects the required subset; shared containers, nested
+creation, code, swaps/reload and richer projections are later work. Interpreter/compiler parity
+becomes a gate when the backend exists.
 
 1. Global availability of:
 

@@ -59,8 +59,9 @@ every current diagnostic message variant and its exact fixture or focused test e
 
 The [release roadmap](PLAN.md#release-targets-and-implementation-order) defines **1.0** as the
 implemented baseline (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles,
-modules, metadata-only root/module reflection, the shared `Result T` contract, the bounded
-[file/console I/O subset (#109)](roadmap/v1-io.md), and initial path-based sandboxes. Those additions
+path-based modules (#114), metadata-only root/module reflection, the shared `Result T` contract, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and restricted path-based sandboxes (#117). Module IDs/catalog discovery (#115), shared mutable
+containers across sandbox boundaries and nested sandbox creation (#118) are post-v1. Those additions
 are planned, not implemented by this roadmap change. The I/O subset covers whole-file UTF-8
 text/binary reads, replacement and append, console line input and text output, and explicit Results for recoverable
 failures. Its pipeline API, nullary composition, effects, and capability exposure must be specified
@@ -68,17 +69,17 @@ before implementation. The
 [complete generalized I/O design (#99)](https://github.com/kerabromsmu/caret-lang/issues/99),
 including persistent endpoints, incremental/network/asynchronous transfers, general codecs, and
 resumable failure handling, follows after v1; completing its full design does not block the subset.
-V1 sandboxes will use fixed environments, exported calls, termination/unloading, explicitly shared
-read/write containers, and immutable data snapshots.
+V1 sandboxes will use fixed environments, mediated exported calls, termination/unloading and
+immutable data snapshots. Shared mutable containers and nested creation are explicitly unsupported.
 Semantic Code/serialization, Code-based sandboxes, environment swaps/reload, and restricted
 container views follow later. The complete rules/rulesets/objects/`ruleCycle` phase targets the
 next release, provisionally **1.1**, or **2.0** if approved changes break v1 compatibility.
 Self-hosting, SIMD, formats, staging, the compiler backend, and remaining tooling are later work.
 Gated computations (#60) are to be specified soon in a later discussion, with v1 inclusion undecided.
 
-The [eight reviewed v1 cards](LANGUAGE.md#v1-feature-work) also explicitly include visible root
-identifiers (#5) within module/environment metadata, basic integer-shift design (#53), language-wide
-tail-call specification work (#57), Turing-completeness proof/example work (#80), and basic seeded
+The [eleven v1 cards](LANGUAGE.md#v1-feature-work) also explicitly include visible root
+identifiers (#5) within module/environment metadata, basic integer-shift specification/implementation (#53), reduced
+direct self-tail recursion specification/implementation (#57), Turing-completeness proof/example work (#80), and basic seeded
 pseudorandom generation (#110). The randomness subset initializes from an explicit seed and produces
 successive numbers using one documented default algorithm, with the same seed/algorithm reproducing
 the sequence. Its API, algorithm, contracts, generator state and effects remain unresolved, as do
