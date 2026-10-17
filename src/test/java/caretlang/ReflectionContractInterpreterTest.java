@@ -237,6 +237,9 @@ final class ReflectionContractInterpreterTest {
         assertEquals(Diagnostic.Phase.RUNTIME, exceeded.diagnostic().phase());
         assertEquals(5, exceeded.span().start().line());
         assertEquals(5, exceeded.span().start().column());
+        assertSame(DiagnosticCatalog.EFFECT_ALLOWANCE_EXCEEDED, exceeded.catalogEntry());
+        assertEquals("Line 5, column 5: Callable effect allowance exceeded: Output\n"
+                + "  Note: Line 4, column 5: Effect constraint declared here", exceeded.getMessage());
         assertEquals(Diagnostic.Codes.CONFLICTING_EFFECT_ALLOWANCE,
                 assertThrows(LangException.class, () -> execute("(pure Output) value = 1"))
                         .diagnostic().code());

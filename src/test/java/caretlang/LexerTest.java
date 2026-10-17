@@ -8,6 +8,28 @@ import static org.junit.jupiter.api.Assertions.*;
 
 final class LexerTest {
     @Test
+    void keepsTemplateDelimitersSeparateFromAdjacentOperatorsAndIndexComparisons() {
+        assertEquals(List.of("<", "[", "]", ">", ">>", "f", ""),
+                Lexer.lex("<[]>>>f").stream().map(Lexer.Token::text).toList());
+        assertEquals(List.of("<", "[", "]", ">", "==", "<", "[", "]", ">", ""),
+                Lexer.lex("<[]>==<[]>").stream().map(Lexer.Token::text).toList());
+        assertEquals(List.of("values", "[", "0", "]", ">=", "1", ""),
+                Lexer.lex("values[0]>=1").stream().map(Lexer.Token::text).toList());
+        assertEquals(List.of("0", "<", "[", "1", "]", "[", "0", "]", ""),
+                Lexer.lex("0<[1][0]").stream().map(Lexer.Token::text).toList());
+    }
+
+    @Test
+    void preservesTemplateDelimiterLocationsAndIgnoresQuotedBrackets() {
+        List<Lexer.Token> tokens = Lexer.lex("<[\"[\"]>==x", 20, 3, 5);
+        assertEquals(List.of("<", "[", "[", "]", ">", "==", "x", ""),
+                tokens.stream().map(Lexer.Token::text).toList());
+        assertEquals(Lexer.Kind.STRING, tokens.get(2).kind());
+        assertEquals(new SourcePosition(26, 3, 11), tokens.get(4).span().start());
+        assertEquals(new SourcePosition(27, 3, 12), tokens.get(4).span().end());
+    }
+
+    @Test
     void recognizesCompositionAsOneSymbol() {
         List<Lexer.Token> tokens = Lexer.lex("left >> right");
         assertEquals(List.of("left", ">>", "right", ""),

@@ -8,6 +8,11 @@ Phase 10 is split into a v1 boundary and later lifecycle/projection features. De
 modules and Phase 9B environments, metadata, and shared results. Keep the implemented Java embedding
 API, including environment swapping, intact; its behavior is not reduced to the new Caret subset.
 
+Coordinate Phase 10A with the separately scheduled [v1 file/console I/O subset (#109)](v1-io.md).
+Once its API is settled, v1 acceptance includes explicit I/O capability mediation, environment-relative
+effects, and adversarial path/reflection/retained-reference/nested-authority tests. This integration
+does not require completing generalized I/O (#99) or introducing persistent endpoints.
+
 <a id="phase-10a-initial-sandboxes-v1"></a>
 ### Phase 10A — Initial sandboxes (v1)
 

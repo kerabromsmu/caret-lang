@@ -71,9 +71,13 @@ Missing and present-null must remain distinguishable.
 ### Named collection access
 
 ```caret
-person.name     // statically guaranteed access
-person.phone~   // optional access; returns ~ when absent
+person.name     // String-key lookup; returns ~ when absent
+person.phone~   // equivalent optional spelling; returns ~ when absent
 ```
+
+Dot, bracket, and `getElement` access share the same lookup semantics. Valid absent keys return
+`~`; invalid keys violate the access contract. See the
+[canonical lookup rules](../../spec/sections/06-01-collection-protocol.md#lookup-and-keys).
 
 ### Partial application
 
@@ -96,6 +100,15 @@ pair _1 _1
 
 The highest numbered hole determines the resulting arity. Numbered and unnumbered holes may not be
 mixed in one partial expression.
+
+### Template sugar
+
+Implemented `<[ … ]>` is a grouped ordinary `template [ … ]` application with normal lexical
+lookup, including shadowing. Each delimiter pair is adjacent. Its grouping does not itself request
+contract conversion; parentheses retain their existing conversion behavior. Follow the
+[owning specification](../../spec/sections/06-06-templates-foundations.md#template-sugar).
+Use `^name = (String) _` for a contracted named field. Bare nested Collections remain recursive
+structure; reusable nested template Contracts constrain fields through `(NestedContract) _`.
 
 ### Reflection
 

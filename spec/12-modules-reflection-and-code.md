@@ -19,6 +19,23 @@ not expose raw source, Java AST/runtime objects, or host implementations as a su
 Later code visibility grants information without granting access to private bindings. Staging and
 persisted compiler interfaces/caches follow their owning later phases.
 
+<a id="planned-v1-visible-identifiers"></a>
+## Visible root identifiers (planned v1 portion, #5)
+
+[Card #5](https://github.com/kerabromsmu/caret-lang/issues/5) contributes deterministic enumeration
+of local and imported bindings visible to the current environment through metadata-only
+`@root.ids`. Preserve exports and import visibility: private/unexported imported bindings and
+unavailable modules are absent. Known entries retain useful static metadata without becoming
+implicit invocation or capability paths. Sandboxes enumerate their substituted root and cannot
+recover host-only identifiers through reflection or retained references.
+
+The `id`/`ids` naming convention already applies to implemented reflection and continues as new
+reflective kinds are introduced; removed reflective `name`/`names` fields are not compatibility
+aliases. Ordinary program fields named `name` are unaffected. Modules/catalogs and root/module
+metadata belong to 9A/9B, with sandbox visibility enforcement in 10A. The card's broader semantic-Code
+dependency remains with 9C; it is not a prerequisite for this metadata-only v1 portion. This scope
+entry adds no new metadata schema or runtime behavior.
+
 <a id="planned-modules-and-compilation"></a>
 ## Planned lazy reflection integration
 

@@ -18,7 +18,8 @@ The current prototype supports:
 - fixed-precedence named binary infix calls (`2 add 3`) through the ordinary callable model;
 - left-to-right function composition (`parse >> validate`) with partial application;
 - lazy conditionals (`condition & yes ! no`) and short-circuiting `and`/`or`;
-- exported immutable Dictionaries, required/optional field access, and dynamic lookup;
+- exported immutable Dictionaries and unified dot, bracket, and `getElement` lookup, returning
+  missing for valid absent keys with equivalent optional spellings;
 - arbitrary partial application with ordinary and numbered holes;
 - basic language-owned reflection through `@value`;
 - Unicode code-point text operations;
@@ -31,6 +32,8 @@ The current prototype supports:
 - stacked `\\`/`\*` physical-to-logical indentation mappings; and
 - first-class built-in and user-defined derived contracts, predicate membership calls, and
   contract-checked bindings, parameters, and function results; and
+- structural templates with ordinary `template` construction or `<[ … ]>` sugar, preserving
+  lexical shadowing and Collection specimen/hole semantics;
 - proven-pure unary Boolean named functions and lambdas, including captures and aliases, as
   first-class refinement requirements in derived contracts and direct clauses; and
 - first-class nullable/optional contract unions (`T?`, `T~`, and `T?~`) that preserve the
@@ -55,15 +58,34 @@ their implementation status and automated evidence. [DIAGNOSTICS.md](DIAGNOSTICS
 every current diagnostic message variant and its exact fixture or focused test evidence.
 
 The [release roadmap](PLAN.md#release-targets-and-implementation-order) defines **1.0** as the
-implemented baseline plus ordinary cycles, modules, metadata-only root/module reflection, the
-shared `Result T` contract, and initial path-based sandboxes. Those additions are planned, not
-implemented by this roadmap change. V1 sandboxes will use fixed environments, exported calls,
-termination/unloading, explicitly shared read/write containers, and immutable data snapshots.
+implemented baseline (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles,
+modules, metadata-only root/module reflection, the shared `Result T` contract, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and initial path-based sandboxes. Those additions
+are planned, not implemented by this roadmap change. The I/O subset covers whole-file UTF-8
+text/binary reads, replacement and append, console line input and text output, and explicit Results for recoverable
+failures. Its pipeline API, nullary composition, effects, and capability exposure must be specified
+before implementation. The
+[complete generalized I/O design (#99)](https://github.com/kerabromsmu/caret-lang/issues/99),
+including persistent endpoints, incremental/network/asynchronous transfers, general codecs, and
+resumable failure handling, follows after v1; completing its full design does not block the subset.
+V1 sandboxes will use fixed environments, exported calls, termination/unloading, explicitly shared
+read/write containers, and immutable data snapshots.
 Semantic Code/serialization, Code-based sandboxes, environment swaps/reload, and restricted
 container views follow later. The complete rules/rulesets/objects/`ruleCycle` phase targets the
 next release, provisionally **1.1**, or **2.0** if approved changes break v1 compatibility.
 Self-hosting, SIMD, formats, staging, the compiler backend, and remaining tooling are later work.
-GitHub card allocation awaits a separate review.
+Gated computations (#60) are to be specified soon in a later discussion, with v1 inclusion undecided.
+
+The [eight reviewed v1 cards](LANGUAGE.md#v1-feature-work) also explicitly include visible root
+identifiers (#5) within module/environment metadata, basic integer-shift design (#53), language-wide
+tail-call specification work (#57), Turing-completeness proof/example work (#80), and basic seeded
+pseudorandom generation (#110). The randomness subset initializes from an explicit seed and produces
+successive numbers using one documented default algorithm, with the same seed/algorithm reproducing
+the sequence. Its API, algorithm, contracts, generator state and effects remain unresolved, as do
+the shift and tail-call design choices. The broader randomness system (#98) remains later work.
+Ordinary cycles do not depend on general tail calls. The
+[reviewed card assignments](PLAN.md#reviewed-todo-cards) keep release allocation, design readiness,
+and implementation status separate; this documentation adds no runtime behavior.
 
 For a conceptual comparison with related language families, see
 [Caret Doesn’t Look Like One Language — and That’s the Point](docs/language-comparison.md). That
@@ -72,11 +94,12 @@ article covers both implemented foundations and explicitly labeled planned featu
 The planned language uses one contract system for types, interfaces, refinements, and capabilities.
 Contracts form derivation graphs and act as predicates, while the prototype now provides initial
 contract-based multiple dispatch for ordinary functions. Collections use one universal `[...]`
-literal. The prototype implements positional and String-keyed Dictionary forms, and exported blocks are
-shorthand for equivalent Dictionaries. Lexical scopes remain non-value name-resolution
+literal. The prototype implements keyless and general keyed Collections, including first-class
+Fields and contract-selected Dictionaries with homogeneous sortable keys. Exported blocks are
+shorthand for String-keyed Dictionaries. Lexical scopes remain non-value name-resolution
 environments. Contextual contracts select Sequence, Set, Dictionary, and Packed representations
-where their requirements are unambiguous; further representations and first-class dynamic fields
-remain planned. A non-empty Collection is entirely positional or
+where their requirements are unambiguous; further representations remain planned.
+A non-empty Collection is entirely positional or
 entirely named, while `[]` is one shape-neutral empty Collection. A collection expression containing holes is an
 ordinary function whose parameters complete that collection. Passing such a reifiable constructor,
 or a concrete fixed collection, to the implemented `template` function creates an exact structural
@@ -87,6 +110,10 @@ rule, omitting a field whose template hole directly uses `T~` or `T?~` materiali
 value `~`; `T?~` also permits an explicitly supplied null. Aliases of those contracts accept an
 explicit `~` but do not enable omission. Existing Collections remain exact-shape values: template
 membership and explicit conversion do not insert fields.
+
+`Person = <[^name = (String) _]>` is sugar for ordinary `template [^name = (String) _]`
+application. Delimiters make the specimen boundary visible while preserving lexical lookup of
+`template`, including shadowing. See [the template example](examples/features/templates.caret).
 
 In the planned language, `contract`, `template`, `format`, `rule`, `cycle`, and `sandbox` are
 ordinary callable bindings, not parser constructs with function-like spelling. They use normal
@@ -144,8 +171,9 @@ feature documents as a searchable MkDocs Material learning site with a left-hand
 That release-hardening work will produce a runnable, implemented-only
 “Learn Caret in Y Minutes” tutorial and an upstream-ready contribution artifact.
 
-See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret) for a runnable
-program demonstrating every feature currently supported by the prototype.
+See [`examples/features/implemented_features.caret`](examples/features/implemented_features.caret)
+for a runnable overview of the prototype's foundations, and the
+[focused feature examples](examples/features/) for demonstrations of additional implemented features.
 [`examples/features/contracts.caret`](examples/features/contracts.caret) demonstrates built-in and user-defined
 contracts and derivation.
 
@@ -262,6 +290,15 @@ and `exit` are not saved, and history is limited to 1,000 entries.
 Enter one-line expressions or assignments and type `exit` (or press Ctrl-D) to leave. Ctrl-C cancels
 the current input and opens a fresh prompt. Bindings remain available for the rest of the session.
 The REPL does not yet accept multiline function definitions or other multiline input.
+
+Multiline submission is planned for v1 in #81. The
+[planned submission rules](spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions)
+keep complete one-line input immediate, collect incomplete constructs without execution, and
+submit complete indentation bodies on a valid blank line or effective dedent. Interactive layout
+adjustments require restoration; EOF executes a complete pending source unit even when a mapping
+may validly remain active, and diagnoses incomplete input. Both input paths will preserve physical
+locations, whole-submission cancellation, and multiline history. This specification does not add
+multiline support to the current REPL.
 
 Do not launch the interactive REPL with `./gradlew run`: Gradle forwards ordinary input but does not
 give the Java child process ownership of the terminal, so terminal editing and arrow keys cannot

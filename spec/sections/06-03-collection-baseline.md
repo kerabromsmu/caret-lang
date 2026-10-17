@@ -6,8 +6,11 @@
 <a id="immutable-collections"></a>
 ## Immutable collections (implemented baseline)
 
-The prototype provides String-keyed Dictionaries through exported blocks, explicit named literals,
-ordinary `field key value` construction, and persistent updates. It also provides immutable sequences through:
+The prototype provides immutable keyless and keyed Collections, including contract-selected
+Dictionaries with homogeneous sortable keys. Exported blocks and static named literals produce
+String-keyed Dictionaries; ordinary `field key value` construction also supports other keys under
+the [Collection protocol](06-01-collection-protocol.md#fields-tuples-sets-and-contextual-shape).
+The existing sequence and String-keyed Dictionary helpers remain available:
 
 ```text
 seqEmpty
@@ -22,29 +25,36 @@ dictHas dictionary key
 dictKeys dictionary
 ```
 
-Dictionary keys are currently strings, and key iteration uses locale-independent, case-sensitive
-Unicode code-point order. `dictHas` distinguishes
-an absent key from a present key whose value is
-`~`.
-Positional and String-keyed Dictionary literal syntax is implemented, including static `^name`
-shorthand and dynamic first-class Field construction. Initial context-selected Sequence, Set,
-Dictionary, and Packed representations are implemented where requirements are unambiguous;
-further representations remain planned.
+Dictionary enumeration uses sorted key order; String keys use locale-independent, case-sensitive
+Unicode code-point order. General keyed Collections permit equality-comparable keys without
+requiring homogeneous types or sorting. The legacy `dictPut`/`dictGet`/`dictHas`/`dictKeys` helpers
+operate on String-keyed Dictionaries; `dictHas` distinguishes an absent key from a present `~`.
+The common protocol supplies access and enumeration for the broader Collection model.
+Positional and keyed literal syntax is implemented, including static `^name` shorthand and
+first-class Field construction. Context-selected Sequence, Set, Dictionary, and Packed
+representations are implemented where requirements are unambiguous; further representations remain
+planned.
 
-### Higher-order Sequence operations
+<a id="higher-order-sequence-operations"></a>
+### Higher-order Collection operations
 
 The standard operations are `map transform values`, `filter values predicate`,
 `fold values initial combine`, `any values predicate`, and `all values predicate`. `map` preserves
 its established callable-first order; the others are collection-first and can read naturally in
-named-infix form. `filter` retains source order. `fold` is a strict scalar left fold that calls
-`combine accumulator element`. Empty results are respectively `[]`, the supplied initial value,
-`false`, and `true` for filter, fold, any, and all.
+named-infix form. `map` and `filter` produce lazy Collections without invoking their callbacks at
+construction. `filter` retains source traversal order and keys for keyed inputs, and compacts
+keyless positional indices. `fold` is a strict ordered left fold that calls
+`combine accumulator element`. Empty keyless filtering produces `[]`; empty `fold`, `any`, and
+`all` return the supplied initial value, `false`, and `true`, respectively. Result shape and
+guarantees follow the [lazy transform rules](06-01-collection-protocol.md#lazy-transforms-and-consumers).
 
 Predicates may return Boolean, null, or missing. Null and missing count as false; other result kinds
-produce a located `INVALID_PREDICATE_RESULT`. All elements are passed unchanged. `any` stops after
-its first true result and `all` after its first false result. Callbacks use ordinary callable arity,
-contract, call-depth, and effect checks. The operations accept named functions, lambdas, partials,
-and compositions, return persistent values, and do not traverse Dictionaries.
+produce a located `INVALID_PREDICATE_RESULT`. Callbacks receive the elements exposed by `fields`:
+bare values for keyless inputs and Field tuples for keyed inputs, including Dictionaries and Sets.
+`any` stops after its first true result and `all` after its first false result. Callbacks use
+ordinary callable arity, contract, call-depth, and effect checks. The operations accept named
+functions, lambdas, partials, and compositions. Lazy results establish demanded entries according
+to the existing evaluation rules; strict consumers traverse Dictionary fields in sorted key order.
 
 <a id="collections-and-lexical-scopes"></a>
 ## Collections and lexical scopes
@@ -93,18 +103,20 @@ The empty Collection `[]` has no named/positional distinction. It vacuously sati
 collection contracts compatible with zero elements, without changing identity or acquiring a
 shape. Explicit structural contracts that require actual positions or fields remain unsatisfied.
 
-Dictionary values evaluate field expressions in source order, then store, traverse, render, and
-reflect fields in locale-independent, case-sensitive Unicode code-point lexicographic order.
-Declaration and update order therefore do not affect equality. `^name = value` is shorthand for the
-ordinary Field whose String key is `"name"`; reserved binding spellings remain valid static keys
-because fields are members, not lexical bindings.
+Collection literals evaluate field expressions in source order and retain the first equal key.
+Dictionaries traverse, render, and reflect fields in sorted key order; for String keys this is
+locale-independent, case-sensitive Unicode code-point lexicographic order. General keyed
+Collections retain production order. These ordering rules also govern equality.
+`^name = value` is shorthand for the ordinary Field whose String key is `"name"`; reserved binding
+spellings remain valid static keys because fields are members, not lexical bindings.
 
 The standard `toString` representation preserves collection shape. Empty collections render as
-`[]`; flat positional collections render inline as `[ 1 2 3 ]`. Named collections render one
-canonically ordered, quoted key per indented line using `"key" = value`. A positional collection
-containing another collection also uses indented multiline form. Nested Strings use canonical
-Caret quoting and escapes, while a top-level String converts to its raw text. Rendering traverses
-collections without consuming the Java call stack and never exposes host implementation text.
+`[]`; flat positional collections render inline as `[ 1 2 3 ]`. String-keyed Dictionaries render
+one sorted, quoted key per indented line using `"key" = value`. Fields with non-String keys render
+as `field key value`, preserving their Collection's enumeration order. A positional collection
+containing another collection also uses indented multiline form. Nested Strings use canonical Caret quoting and
+escapes, while a top-level String converts to its raw text. Rendering traverses collections without
+consuming the Java call stack and never exposes host implementation text.
 
 Collection conversion recursively uses the active polymorphic `toString` overload set, allowing a
 contract-specific specialization to control the representation of a contained value.

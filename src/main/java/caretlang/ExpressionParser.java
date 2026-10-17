@@ -265,7 +265,7 @@ final class ExpressionParser {
     private Expr namedInfix() {
         Expr expr = term();
         while (peek().kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(peek().text())
-                && canStartAtom(peekNext()) && nextTokenIsNotAdjacentContractModifier()) {
+                && canStartAtom(current + 1) && nextTokenIsNotAdjacentContractModifier()) {
             Token function = tokens.get(current++);
             Expr right = term();
             expr = new NamedInfix(expr, new Name(function.text(), function.span()), right,
@@ -316,16 +316,16 @@ final class ExpressionParser {
         Expr expr = postfix();
         if (namedInfixOperand && expr instanceof Name
                 && peek().kind() == Kind.IDENT
-                && LanguageSyntax.canBeNamedInfix(peek().text()) && canStartAtom(peekNext())
+                && LanguageSyntax.canBeNamedInfix(peek().text()) && canStartAtom(current + 1)
                 && nextTokenIsNotAdjacentContractModifier()) {
             Expr middle = postfix();
             Expr last = postfix();
             expr = new AmbiguousCall(expr, middle, last, SourceSpan.cover(expr.span(), last.span()));
         }
-        while (canStartAtom(peek())) {
+        while (canStartAtom(current)) {
             if (namedInfixOperand && isValueLed(expr)
                     && peek().kind() == Kind.IDENT && LanguageSyntax.canBeNamedInfix(peek().text())
-                    && canStartAtom(peekNext()) && nextTokenIsNotAdjacentContractModifier()) break;
+                    && canStartAtom(current + 1) && nextTokenIsNotAdjacentContractModifier()) break;
             Expr argument = postfix();
             expr = new Apply(expr, argument, SourceSpan.cover(expr.span(), argument.span()));
         }
@@ -448,6 +448,22 @@ final class ExpressionParser {
     }
 
     private Expr primary() {
+        if (templateSugarStartsAt(current)) {
+            Token open = tokens.get(current++);
+            Token collectionOpen = peek();
+            Expr specimen = primary();
+            if (peek().kind() != Kind.SYMBOL || !peek().text().equals(">")
+                    || !adjacent(specimen.span(), peek())) {
+                throw error(Diagnostic.Codes.PARSE_UNCLOSED_DELIMITER,
+                        "Expected ']>' after template specimen");
+            }
+            Token close = tokens.get(current++);
+            SourceSpan span = SourceSpan.cover(open.span(), close.span());
+            Name template = new Name("template", SourceSpan.cover(open.span(), collectionOpen.span()));
+            // Parsing as one primary supplies grouping without introducing the explicit
+            // parenthesized-contract conversion semantics attached to an Ast.Group.
+            return new Apply(template, specimen, span);
+        }
         if (match("@")) {
             Token operator = previous();
             Expr operand = reflectionPrimary();
@@ -608,6 +624,13 @@ final class ExpressionParser {
     private boolean hasTopLevelOperatorBeforeCollectionEnd() {
         int depth = 0;
         for (int index = current; index < tokens.size(); index++) {
+            if (depth == 0) {
+                int templateClose = templateSugarClose(index);
+                if (templateClose >= 0) {
+                    index = templateClose;
+                    continue;
+                }
+            }
             String text = tokens.get(index).text();
             if (text.equals("(") || text.equals("[") || text.equals("{")) depth++;
             else if (text.equals(")") || text.equals("]") || text.equals("}")) {
@@ -643,7 +666,25 @@ final class ExpressionParser {
         return new Literal(new Value.Num(value, token.text()), token.span());
     }
 
-    private boolean canStartAtom(Token token) {
+    private boolean templateSugarStartsAt(int index) {
+        return index >= 0 && index + 1 < tokens.size()
+                && tokens.get(index).kind() == Kind.SYMBOL && tokens.get(index).text().equals("<")
+                && tokens.get(index + 1).kind() == Kind.SYMBOL && tokens.get(index + 1).text().equals("[")
+                && adjacent(tokens.get(index).span(), tokens.get(index + 1));
+    }
+
+    /** A complete delimiter pair distinguishes an argument from an ordinary '<' comparison. */
+    private int templateSugarClose(int index) {
+        if (!templateSugarStartsAt(index)) return -1;
+        int close = matchingClose(tokens, index + 1, "[", "]");
+        return close >= 0 && close + 1 < tokens.size() && tokens.get(close + 1).kind() == Kind.SYMBOL
+                && tokens.get(close + 1).text().equals(">")
+                && adjacent(tokens.get(close).span(), tokens.get(close + 1)) ? close + 1 : -1;
+    }
+
+    private boolean canStartAtom(int index) {
+        Token token = tokens.get(Math.min(index, tokens.size() - 1));
+        if (templateSugarClose(index) >= 0) return true;
         if (token.kind() == Kind.NUMBER || token.kind() == Kind.STRING) return true;
         if (token.kind() == Kind.IDENT) {
             return LanguageSyntax.canStartApplicationArgument(token.text());
@@ -656,7 +697,8 @@ final class ExpressionParser {
         int index = current + 1;
         Token firstOperand = index < tokens.size() ? tokens.get(index) : tokens.getLast();
         while (index < tokens.size() && tokens.get(index).kind() != Kind.EOF
-                && !LanguageSyntax.binaryOperatorSpellings().contains(tokens.get(index).text())) {
+                && (!LanguageSyntax.binaryOperatorSpellings().contains(tokens.get(index).text())
+                    || templateSugarClose(index) >= 0)) {
             int end = postfixAtomEnd(index);
             if (end == index) break;
             operands++;
@@ -674,7 +716,10 @@ final class ExpressionParser {
         if (index >= tokens.size()) return index;
         Token token = tokens.get(index);
         int end;
-        if (token.text().equals("(")) {
+        int templateClose = templateSugarClose(index);
+        if (templateClose >= 0) {
+            end = templateClose + 1;
+        } else if (token.text().equals("(")) {
             int depth = 1;
             end = index + 1;
             while (end < tokens.size() && depth > 0) {
@@ -694,7 +739,7 @@ final class ExpressionParser {
                 else if (text.equals(close)) depth--;
             }
             if (depth != 0) return index;
-        } else if (canStartAtom(token)) {
+        } else if (canStartAtom(index)) {
             end = index + 1;
         } else {
             return index;
@@ -765,6 +810,7 @@ final class ExpressionParser {
     private static int matchingClose(List<Token> source, int open, String opening, String closing) {
         int depth = 0;
         for (int index = open; index < source.size(); index++) {
+            if (source.get(index).kind() != Kind.SYMBOL) continue;
             String text = source.get(index).text();
             if (text.equals(opening)) depth++;
             else if (text.equals(closing) && --depth == 0) return index;

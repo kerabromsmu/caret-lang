@@ -13,10 +13,25 @@ reused for another behavior.
 ## Release allocation and partial requirements
 
 [`PLAN.md`](PLAN.md#release-targets-and-implementation-order) owns release allocation, independently
-of the statuses here. V1 includes all implemented rows plus ordinary cycles, Phase 9A modules,
-Phase 9B environments/metadata and shared `Result T`, and Phase 10A initial sandboxes. The complete
+of the statuses here. V1 includes all implemented rows (including #61 template sugar) plus #81/Phase 13A
+multiline REPL submission, ordinary cycles, Phase 9A modules,
+Phase 9B environments/metadata and shared `Result T`, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and Phase 10A initial sandboxes. #109 requires
+whole-file UTF-8 text/binary reads, replacement/append, console lines/text output, and explicit
+recoverable Results, but remains Underspecified until its public API and semantics are settled.
+Release allocation itself does not establish implementation evidence. `TEMPLATE-SUGAR-001` records
+the implemented #61 Phase 4 follow-up; the historical #79 audit still describes the original Phase 4
+foundation. The complete generalized I/O
+design (#99) targets post-v1; completing #109 does not complete it. The complete
 rules/rulesets/objects/`ruleCycle` phase targets the next release, provisionally 1.1. Advanced
-module/sandbox work and the remaining phases target later releases.
+module/sandbox work and the remaining Phase 13B and other assigned phases target later releases.
+The [eight labeled cards](LANGUAGE.md#v1-feature-work) explicitly include #5's visible-identifier
+portion within 9A/9B/10A, #53 integer-shift design, #57 language-wide tail-call specification work,
+#80 proof/example work, and #110 basic seeded generation in addition to #61/#81/#109. #53/#57 retain
+their design/specification deliverables, #80 adds no runtime guarantee, and #110's API, algorithm,
+state, contracts, and effects remain unresolved. Completing #110 does not complete #98; rotations
+and width-dependent extensions remain outside #53's v1 portion. #60 gated computations are to be
+specified soon in a later discussion, with v1 inclusion undecided; #60 is not a v1 completion gate.
 
 Existing IDs, statuses, and evidence remain intact. A row combining v1 and later behavior must
 remain planned with partial evidence until the whole requirement is implemented. In particular,
@@ -37,14 +52,18 @@ their golden output and error fixtures. Public element-operation APIs, custom pr
 computations, resumable handlers, callable `eager`, and later compiler/sandbox features remain
 deferred or planned in their own rows.
 
+`EFFECT-CALL-001` remains planned: runtime rejection of unavailable callable effect bounds is
+implemented, but the specified analysis-phase `UNKNOWN_CALL_EFFECTS` rejection has no semantic
+emitter. Catalog representation tests do not establish that missing enforcement path.
+
 
 ## Requirement groups
 
 - [Core](conformance/core.md) — 55 requirements
 - [Callables](conformance/callables.md) — 33 requirements
-- [Contracts](conformance/contracts.md) — 34 requirements
+- [Contracts](conformance/contracts.md) — 35 requirements
 - [Collections](conformance/collections.md) — 46 requirements
 - [Numeric Formats](conformance/numeric-formats.md) — 26 requirements
 - [Cycles Rules](conformance/cycles-rules.md) — 28 requirements
 - [Modules Security](conformance/modules-security.md) — 30 requirements
-- [Staging Tools](conformance/staging-tools.md) — 21 requirements
+- [Staging Tools](conformance/staging-tools.md) — 22 requirements

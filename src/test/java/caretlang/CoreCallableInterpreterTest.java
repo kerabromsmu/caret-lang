@@ -588,6 +588,109 @@ final class CoreCallableInterpreterTest {
     }
 
     @Test
+    void callableMetadataWhitelistsPublicFieldsWithoutLeakingCapturedOrBoundValues() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        Interpreter interpreter = new Interpreter(new PrintStream(bytes, true, StandardCharsets.UTF_8));
+        int[] hostInvocations = {0};
+        interpreter.defineEmbeddingCallable("hostSecret", 1, arguments -> {
+            hostInvocations[0]++;
+            return new Value.Str("host-private-value");
+        }, List.of());
+        Value.Seq metadata = assertInstanceOf(Value.Seq.class, interpreter.execute(new Parser("""
+                make capturedSecret =
+                  secretClosure ignored = capturedSecret
+                  secretClosure
+                first left right = left
+                closed = make "captured-private-value"
+                partial = first "bound-private-value" _
+                (Sequence String~) typed (Sequence String~) items = items
+                use ([Number] -> Number) callback = callback 1
+                (Output Number) noisy (Number) value = print value
+                metadata = [@closed @partial @hostSecret @typed @use @noisy]
+                metadata
+                """).parseProgram()));
+        assertEquals(6, metadata.size());
+
+        for (ReflectionContext observer : List.of(ReflectionContext.defining(),
+                ReflectionContext.externalModule(false, false, Set.of()),
+                ReflectionContext.sandbox(false, false, Set.of()))) {
+            interpreter.reflectionContext(observer);
+            assertSafeCallableMetadata(metadata, observer);
+            interpreter.execute(new Parser("print metadata").parseProgram());
+        }
+        String rendered = bytes.toString(StandardCharsets.UTF_8);
+        for (String secret : List.of("capturedSecret", "captured-private-value", "bound-private-value",
+                "host-private-value")) {
+            assertFalse(rendered.contains(secret), "Metadata rendering leaked " + secret);
+        }
+        assertEquals(0, hostInvocations[0], "Reflection must not invoke host callbacks");
+
+        // Positive controls: the callable values really do retain the private payloads.
+        interpreter.reflectionContext(ReflectionContext.defining());
+        assertEquals(new Value.Str("captured-private-value"),
+                interpreter.execute(new Parser("closed 0").parseProgram()));
+        assertEquals(new Value.Str("bound-private-value"),
+                interpreter.execute(new Parser("partial 0").parseProgram()));
+        assertEquals(new Value.Str("host-private-value"),
+                interpreter.execute(new Parser("hostSecret 0").parseProgram()));
+        assertEquals(1, hostInvocations[0]);
+    }
+
+    private static void assertSafeCallableMetadata(Value value, ReflectionContext observer) {
+        switch (value) {
+            case Value.Seq sequence ->
+                    sequence.values().forEach(element -> assertSafeCallableMetadata(element, observer));
+            case Value.ProjectedDictionary dictionary -> {
+                var fields = dictionary.fields(observer);
+                String kind = assertInstanceOf(Value.Str.class, fields.get("kind")).value();
+                Set<String> expected = switch (kind) {
+                    case "Function" -> Set.of("kind", "id", "remaining", "signature", "variants");
+                    case "Signature" -> Set.of("kind", "parameters", "result", "effects", "variables");
+                    case "Parameter" -> Set.of("kind", "position", "id", "requirements", "declared", "inferred");
+                    case "FunctionResult" -> Set.of("kind", "guarantees", "declared", "inferred");
+                    case "FunctionEffects" -> Set.of("kind", "upperBound", "declared", "inferred");
+                    case "SignatureVariable" -> Set.of("kind", "index", "requirements");
+                    case "VariableRef" -> Set.of("kind", "index");
+                    case "ContractRef", "Effect" -> Set.of("kind", "id");
+                    case "ContractApplication" -> Set.of("kind", "constructor", "arguments");
+                    case "ModifiedContractRef" -> Set.of("kind", "base", "nullable", "optional");
+                    case "ArrowContractRef" -> Set.of("kind", "parameters", "result");
+                    default -> throw new AssertionError("Unexpected callable metadata kind: " + kind);
+                };
+                assertEquals(expected, fields.keySet(), kind);
+                for (String forbidden : List.of("captures", "captureNames", "captureValues", "boundValues",
+                        "boundArguments", "source", "sourceSpan", "native", "implementation", "capabilities")) {
+                    assertTrue(dictionary.find(forbidden, observer).isEmpty(), kind + "." + forbidden);
+                }
+                CollectionRuntime.Provider provider = CollectionRuntime.provider(dictionary, observer).orElseThrow();
+                List<Value> keys = assertInstanceOf(Value.Seq.class, provider.keys()).values();
+                assertEquals(expected, keys.stream().map(key -> assertInstanceOf(Value.Str.class, key).value())
+                        .collect(java.util.stream.Collectors.toSet()));
+                List<Value> values = assertInstanceOf(Value.Seq.class, provider.valueEntries()).values();
+                List<Value> entries = assertInstanceOf(Value.Seq.class, provider.fieldEntries()).values();
+                assertEquals(expected.size(), keys.size());
+                assertEquals(keys.size(), values.size());
+                assertEquals(keys.size(), entries.size());
+                for (int index = 0; index < keys.size(); index++) {
+                    Value expectedValue = fields.get(((Value.Str) keys.get(index)).value());
+                    assertTrue(ValueSemantics.equal(expectedValue, provider.getElement(keys.get(index)), observer));
+                    assertTrue(ValueSemantics.equal(expectedValue, values.get(index), observer));
+                    Value.Field entry = assertInstanceOf(Value.Field.class, entries.get(index));
+                    assertEquals(keys.get(index), entry.key());
+                    assertTrue(ValueSemantics.equal(expectedValue, entry.value(), observer));
+                }
+                fields.values().forEach(element -> assertSafeCallableMetadata(element, observer));
+            }
+            case Value.Str(String value1) ->
+                    assertFalse(Set.of("capturedSecret", "captured-private-value", "bound-private-value",
+                            "host-private-value").contains(value1), "Metadata leaked a private name or value");
+            case null, default ->
+                    assertTrue(value instanceof Value.Num || value instanceof Value.Bool || value == Value.Missing.INSTANCE,
+                            "Metadata exposed a live value of kind " + ValueKind.of(value));
+        }
+    }
+
+    @Test
     void dereferencesReflectionDictionariesForFunctionsValuesAndMembers() {
         assertEquals("Dictionary\nFunction\n5\n7\nNumber\n\"field\" = 9\n9\nSequence\n", execute("""
                 add left right = left + right
@@ -723,6 +826,10 @@ final class CoreCallableInterpreterTest {
                 """));
         assertEquals(Diagnostic.Codes.READ_BEFORE_INITIALIZATION, selected.diagnostic().code());
         assertEquals(Diagnostic.Phase.RUNTIME, selected.diagnostic().phase());
+        assertSame(DiagnosticCatalog.RUNTIME_PREMATURE_READ, selected.catalogEntry());
+        assertEquals(1, selected.span().start().line());
+        assertEquals(19, selected.span().start().column());
+        assertEquals("Line 1, column 19: Binding read before initialization", selected.getMessage());
     }
 
     @Test

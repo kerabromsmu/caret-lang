@@ -353,6 +353,7 @@ expect_failure examples/errors/incompatible_inferred_contracts.caret unused
 expect_failure examples/errors/incompatible_declared_inference.caret unused
 expect_failure examples/errors/contract_derivation_cycle.caret unused
 expect_failure examples/errors/template_invalid_constructor.caret unused
+expect_failure examples/errors/template_sugar_unclosed.caret unused
 expect_failure examples/errors/template_noncomparable_fixed.caret unused
 expect_failure examples/errors/precision_loss_strict.caret unused
 expect_failure examples/errors/template_missing_required.caret unused

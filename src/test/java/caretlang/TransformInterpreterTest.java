@@ -66,7 +66,16 @@ final class TransformInterpreterTest {
         LangException transform = expectDiagnostic("map 1 [2]", "exactly one argument", 1, 5);
         assertEquals(Diagnostic.Codes.INVALID_MAP_TRANSFORM, transform.diagnostic().code());
         assertEquals(Diagnostic.Phase.RUNTIME, transform.diagnostic().phase());
-        assertDiagnostic("add left right = left\nmap add [1]", "exactly one argument", 2, 5);
+        assertSame(DiagnosticCatalog.INVALID_MAP_TRANSFORM, transform.catalogEntry());
+        assertEquals("Line 1, column 5: map transform must be a callable requiring exactly one argument",
+                transform.getMessage());
+        LangException arity = expectDiagnostic("add left right = left\nmap add [1]",
+                "exactly one argument", 2, 5);
+        assertSame(DiagnosticCatalog.INVALID_MAP_TRANSFORM, arity.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, arity.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.INVALID_MAP_TRANSFORM, arity.diagnostic().code());
+        assertEquals("Line 2, column 5: map transform must be a callable requiring exactly one argument",
+                arity.getMessage());
 
         LangException element = expectDiagnostic("mapped = map numberText [1 \"bad\"]\nprint mapped",
                 "Expected number", 1, 25);

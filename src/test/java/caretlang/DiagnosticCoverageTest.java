@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.FutureTask;
@@ -124,6 +125,39 @@ final class DiagnosticCoverageTest {
             }
             assertTrue(found, "Missing evidence for " + id);
         });
+    }
+
+    @Test
+    void malformedNumericTokensExerciseTheInternalParserDiagnostic() {
+        SourceSpan span = SourceSpan.point(new SourcePosition(12, 3, 5));
+        // These tokens cannot come from the lexer; exercise both parser validation branches.
+        for (String spelling : List.of("invalid", "1.2.3")) {
+            LangException failure = assertThrows(LangException.class, () -> new ExpressionParser(
+                    List.of(new Lexer.Token(Lexer.Kind.NUMBER, spelling, span))).parse());
+            assertSame(DiagnosticCatalog.PARSE_INVALID_NUMBER, failure.catalogEntry());
+            assertEquals(Diagnostic.Phase.PARSER, failure.diagnostic().phase());
+            assertEquals(Diagnostic.Codes.PARSE_INVALID_NUMBER, failure.diagnostic().code());
+            assertEquals(span, failure.span());
+            assertEquals("Line 3, column 5: Invalid number literal", failure.getMessage());
+        }
+    }
+
+    @Test
+    void duplicateEnvironmentBindingsExerciseTheRuntimeDiagnostic() {
+        Environment environment = new Environment(null);
+        environment.define("value", new Value.Num(1));
+        LangException declaration = assertThrows(LangException.class, () -> environment.declare("value"));
+        LangException initialization = assertThrows(LangException.class,
+                () -> environment.initialize("value", new Value.Num(2)));
+        for (LangException failure : List.of(declaration, initialization)) {
+            assertSame(DiagnosticCatalog.RUNTIME_DUPLICATE_DEFINITION, failure.catalogEntry());
+            assertEquals(Diagnostic.Phase.RUNTIME, failure.diagnostic().phase());
+            assertEquals(Diagnostic.Codes.DUPLICATE_DEFINITION, failure.diagnostic().code());
+            // The internal environment has no source context; evaluator callers attach it.
+            assertNull(failure.span());
+            assertEquals("Duplicate definition: value", failure.getMessage());
+        }
+        assertEquals(new Value.Num(1), environment.get("value"));
     }
 
     @Test

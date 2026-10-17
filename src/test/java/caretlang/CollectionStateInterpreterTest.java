@@ -166,10 +166,27 @@ final class CollectionStateInterpreterTest {
                 CollectionRuntime.provider(provider, ReflectionContext.defining()).orElseThrow().facts().validate(span));
         assertEquals(Diagnostic.Codes.CONTRADICTORY_COLLECTION_GUARANTEES, error.diagnostic().code());
         assertEquals(Diagnostic.Phase.RUNTIME, error.diagnostic().phase());
+        assertSame(DiagnosticCatalog.CONTRADICTORY_COLLECTION_GUARANTEES, error.catalogEntry());
         assertEquals(span, error.diagnostic().primarySpan());
+        assertEquals("Line 2, column 4: A sequential Collection cannot declare ordered as false",
+                error.getMessage());
         assertEquals(0, provider.reads);
         assertEquals(ValueKind.COLLECTION, ValueKind.of(provider));
         assertTrue(BuiltinContract.COLLECTION.accepts(provider));
+
+        TestProvider noValues = new TestProvider(new CollectionRuntime.Facts(
+                CollectionRuntime.Guarantee.TRUE, CollectionRuntime.Guarantee.TRUE,
+                CollectionRuntime.Guarantee.UNKNOWN, CollectionRuntime.Guarantee.UNKNOWN,
+                CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.FALSE));
+        LangException valuesError = assertThrows(LangException.class, () -> CollectionRuntime
+                .provider(noValues, ReflectionContext.defining()).orElseThrow().facts().validate(span));
+        assertSame(DiagnosticCatalog.CONTRADICTORY_COLLECTION_GUARANTEES, valuesError.catalogEntry());
+        assertEquals(Diagnostic.Phase.RUNTIME, valuesError.diagnostic().phase());
+        assertEquals(Diagnostic.Codes.CONTRADICTORY_COLLECTION_GUARANTEES, valuesError.diagnostic().code());
+        assertEquals(span, valuesError.span());
+        assertEquals("Line 2, column 4: A sequential Collection cannot declare hasValues as false",
+                valuesError.getMessage());
+        assertEquals(0, noValues.reads);
 
         TestProvider valid = new TestProvider(new CollectionRuntime.Facts(
                 CollectionRuntime.Guarantee.FALSE, CollectionRuntime.Guarantee.UNKNOWN,

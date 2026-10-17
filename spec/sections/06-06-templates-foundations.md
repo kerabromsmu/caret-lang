@@ -50,8 +50,9 @@ Templates use the ordinary Caret contract system.
 
 They do not introduce a separate type system.
 
-`template specimen` is ordinary whitespace application. There is no `template` parser production,
-template-only invocation syntax, or spelling-based semantic rule. Inspection of a collection
+`template specimen` is ordinary whitespace application. The `template` binding is not a parser
+keyword or spelling-based semantic rule. The notation below lowers to that same ordinary
+application rather than introducing special construction or invocation semantics. Inspection of a collection
 constructor descriptor is behavior of the resolved language-owned `template` callable and its
 contracts. Aliases retain the same ordinary callable behavior.
 
@@ -91,7 +92,8 @@ template : CollectionConstructor -> Contract
 
 A concrete collection produces a fixed-only exact template. A `CollectionConstructor` is an
 ordinary hole function whose retained descriptor is structurally a collection construction.
-`template` is not syntax and creates no exception to ordinary application or hole evaluation.
+`template` remains an ordinary binding, not a keyword, and creates no exception to ordinary
+application or hole evaluation. Template sugar does not change this callable model.
 
 For example, the compact form above is equivalent to:
 
@@ -107,6 +109,77 @@ Point = template PointConstructor
 
 Calling `PointConstructor 10.0 20.0` produces `[10.0 20.0]`; calling
 `template PointConstructor` instead derives the corresponding membership contract.
+
+<a id="planned-template-sugar"></a>
+<a id="template-sugar"></a>
+### Template sugar (implemented, #61)
+
+The `<[ … ]>` notation is sugar for the ordinary application `template [ … ]`, grouped
+as one expression. Its contents are always a Collection literal, including an empty literal;
+it does not enclose an arbitrary specimen expression. The ordinary callable form still accepts
+concrete Collections or eligible constructors supplied through bindings.
+
+The emitted `template` reference uses normal lexical lookup. A local binding or parameter named
+`template` shadows the standard callable for this notation exactly as it does for a written
+`template [ … ]` application. Sugar does not force the built-in identity, guarantee a Contract
+under shadowing, add a scope, or change argument evaluation, effects, or runtime kinds.
+
+Named-field contracts retain their established spelling:
+
+```caret
+Form = <[
+  ^formType = 10
+  ^name = (String) _
+  ^data = (Collection) _
+]>
+```
+
+It denotes the same application as `template [^formType = 10 ^name = (String) _ ^data = (Collection) _]`.
+Collection literals remain hole-expression boundaries. Contracted holes, numbered/repeated holes,
+fixed captures, missing defaults, and named/positional structure retain their existing rules.
+The enclosing sugar must not turn the specimen's holes into parameters of an outer template call.
+
+Nested ordinary `[...]` literals remain Collection structure; they are not separately constructed
+template Contracts. Within an eligible constructor, that structure contributes recursively to
+the enclosing template as specified below:
+
+```caret
+Person = <[
+  ^name = (String) _
+  ^address = [
+    ^street = (String) _
+    ^city = (String) _
+  ]
+]>
+```
+
+An explicit nested template expression produces an ordinary Contract. To constrain a field using
+that Contract, use the existing contracted-hole form rather than placing the Contract in a fixed
+field value, where ordinary fixed-value comparability requirements still apply:
+
+```caret
+Address = <[^street = (String) _ ^city = (String) _]>
+Person = <[^name = (String) _ ^address = (Address) _]>
+```
+
+Ordinary Collection layout, application, and expression grouping apply inside and around the
+notation. Each delimiter pair (`<[` and `]>`) is adjacent. Their grouping supplies ordinary
+application precedence; it does not introduce parenthesized-contract conversion. Thus `<[_]> [1]`
+is an ordinary membership call, while `(<[_]>) [1]` uses the existing explicit conversion syntax.
+Comparison/indexing forms such as `0<[1][0]` and `items[0]>=1` retain their ordinary meanings.
+Diagnostics retain physical source locations and cover the original delimiters. Once a template
+opening is parsed, a missing or nonadjacent closing `]>` uses `PARSE_UNCLOSED_DELIMITER` at the next
+token or end of source.
+
+Implementation evidence covers sugar/call equivalence, local shadowing, empty/positional/named
+specimens, nested Collections and contracted templates, fixed capture order, all existing hole
+rules, multiline layout, and located malformed/unclosed-delimiter diagnostics. See
+`TemplateSugarInterpreterTest`, the lexer/parser tests, and the runnable
+[template example](../../examples/features/templates.caret). The ordinary `template` callable
+form remains available.
+
+<a id="template-constructor-eligibility"></a>
+### Constructor eligibility and implemented behavior
 
 Only reifiable hole functions whose expression directly constructs a collection are accepted
 initially. Named functions, opaque/native callables, and partial expressions such as `[transform _]`

@@ -9,6 +9,11 @@ environment-relative root/module identity and visible-binding metadata, path-bas
 fixed environments, exported calls, termination/unloading, and explicit shared read/write
 containers with immutable value snapshots. All existing Java embedding evidence remains implemented.
 
+[Card #5's visible-identifier portion](../spec/12-modules-reflection-and-code.md#planned-v1-visible-identifiers)
+belongs to this v1 metadata target: deterministic visible local/imported identifiers, `id`/`ids`
+naming, and sandbox-relative visibility without callable authority. Its broader semantic-Code
+dependency remains later work; this allocation changes no existing status or evidence.
+
 Code descriptors/serialization, Code input, swaps/reload, and restricted container projections
 target later chunks. `ROOT-SCHEMA-001`, `MODULE-REFLECT-001`, `SANDBOX-SYNTAX-001`,
 `SANDBOX-RESULT-001`, `SANDBOX-CONTAINER-001`, `SANDBOX-LIFECYCLE-001`, and `MODULE-VIS-001`

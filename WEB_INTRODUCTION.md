@@ -15,22 +15,79 @@ print answer
 The project explores a simple question: how compact can a programming language become while
 remaining predictable, statically analyzable, and pleasant to work with?
 
+Caret's [base design principle](LANGUAGE.md#first-class-by-default) is that everything is first-class
+by default: language entities should be usable as values that can be bound, passed, returned, stored,
+and composed where applicable. New features build on the same functions, values, contracts, and
+lazy-evaluation rules, keeping the concepts developers need to learn consistent. Additional syntax
+or special treatment needs a reason; unavoidable exceptions are documented in the specification.
+Compact syntax sugar preserves the underlying semantics. Existing specified exceptions and
+implementation limitations remain explicit, including the deferred nullary callable-reference
+design; this principle does not change the prototype's current behavior.
+
 ## Planned releases
 
 The [v1 roadmap](PLAN.md#release-targets-and-implementation-order) includes everything already
-implemented plus ordinary cycles, modules, root/module identity and visible-binding metadata,
-shared structured results, and initial sandboxes. These additions are still planned. Initial
+implemented (including template sugar, #61) plus multiline REPL submission (#81), ordinary cycles, modules,
+root/module identity and visible-binding metadata, shared structured results, the bounded
+[file/console I/O subset (#109)](roadmap/v1-io.md), and initial sandboxes.
+These additions are still planned. Initial
 sandboxes will load module paths with fixed environments, expose explicit capabilities, and support
 termination/unloading. Passing a mutable container explicitly shares read/write access; passing
 its immutable contents supplies a snapshot. Nested sandboxes and reflection must preserve the
 same authority boundary.
 
+The [reviewed v1 scope](LANGUAGE.md#v1-feature-work) also includes visible root identifiers (#5),
+basic integer-shift design (#53), language-wide tail-call specification work (#57), a
+Turing-completeness proof using Caret programs (#80), and basic seeded pseudorandom generation (#110).
+The shift contracts and behavior and the tail-call guarantees and coverage remain open questions.
+The proof/example card does not itself establish a new runtime guarantee.
+
+The planned randomness subset will initialize from an explicit seed and produce successive
+pseudorandom numbers using one documented default algorithm. The same seed and algorithm reproduce
+the sequence. Its API, seed/output contracts, algorithm/versioning, generator state and effects still
+need specification. Algorithm selection/custom generators, cryptographic/external randomness,
+special distributions and fairness policies, Collection selection, and dedicated sequence helpers
+remain part of the later #98 design. No new syntax or generator-state policy is selected here.
+
+The planned I/O subset will read whole files as UTF-8 text or binary data, replace or append file
+content, read console lines, and write console text with or without a newline. Recoverable failures
+will return explicit structured Results; invalid programs, contract/authority violations, and
+implementation faults remain errors. The subset will use ordinary functions and composition,
+with effects describing behavior and capabilities controlling access. Its public API, nullary
+composition, EOF handling, and Result policy still need specification before implementation.
+
 The next release will add the complete rules, rulesets, objects, and `ruleCycle` feature set,
 provisionally as 1.1; approved incompatible changes would require 2.0. Semantic code reflection,
 serialization/quines, Code-based sandboxes, environment swapping/reload, read-only or virtual
 container views, the Caret-written self-interpreter, SIMD, formats, staging, the compiler backend,
-and remaining tooling belong to later releases. Existing Java embedding and its environment
-swapping remain available. Additional GitHub feature cards will be assigned in a separate review.
+and remaining tooling belong to later releases. The
+[complete generalized I/O design (#99)](https://github.com/kerabromsmu/caret-lang/issues/99) also follows
+after v1: persistent endpoints, incremental/network/asynchronous transfers, general codecs, and
+resumable failure handling remain later work. The v1 subset must fit that larger pipeline design;
+completing the entire design is not a prerequisite for the subset. Existing Java embedding and its
+environment swapping remain available. Gated computations (#60) are to be specified soon in a
+later discussion, with v1 inclusion undecided. Cycles can proceed independently of the v1 tail-call
+specification work. Release allocation does not implement the planned features or settle their designs.
+
+The implemented template notation makes the specimen's boundary explicit and uses ordinary lexical
+lookup of `template`, including shadowing:
+
+```caret
+Person = <[^name = (String) _ ^phone = (String~) _]>
+```
+
+It is sugar for `template [^name = (String) _ ^phone = (String~) _]`, with the same template and
+hole rules. The [template specification](spec/sections/06-06-templates-foundations.md#template-sugar)
+defines nested Collections and contracted nested templates. Ordinary nested `[...]` remains
+Collection structure; a reusable template constrains a field through `(NestedContract) _`.
+The runnable [template example](examples/features/templates.caret) includes the sugar and shadowing.
+
+The planned multiline REPL keeps complete one-line input immediate, accumulates incomplete source
+without executing it, and submits complete indentation bodies on a valid blank line or effective
+dedent. EOF executes a complete pending source unit; incomplete input produces a located diagnostic.
+Cancellation discards the pending submission, and history recalls an accepted block as one entry.
+See the [submission rules](spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions).
+The current REPL still accepts only single-line submissions.
 
 ## Designed around expressions
 
@@ -411,10 +468,13 @@ The current interpreter supports exact integers, finite floating-point numbers, 
 provides persistent sequences and canonically ordered Dictionaries. Collection updates
 produce new values rather than mutating existing ones, and equality is structural for ordinary data.
 The bare `[]` value is a shape-neutral empty Collection accepted by compatible sequence and
-dictionary contracts. Named Collection fields traverse and reflect in locale-independent,
-case-sensitive Unicode code-point order, while their expressions evaluate in source order. Static
-`^name` fields, ordinary `field "name" value` results, and `dictPut` updates share one String-keyed
-Dictionary representation and one member protocol.
+dictionary contracts. Dictionaries traverse and reflect in sorted key order; String keys use
+locale-independent, case-sensitive Unicode code-point order. Field expressions evaluate in source
+order. Static `^name` fields, ordinary `field "name" value` results, and `dictPut` updates share one String-keyed
+Dictionary representation and one member protocol. Contract-selected Dictionaries also support
+other homogeneous sortable keys, while general keyed Collections allow equality-comparable keys
+and retain production order. The legacy `dictPut`, `dictGet`, `dictHas`, and `dictKeys` helpers
+remain specific to String-keyed Dictionaries; the common protocol covers the broader model.
 
 `toString` is an extensible ordinary overload set. Its standard fallback renders top-level Strings
 as raw text, flat positional collections as `[ 1 2 ]`, and named or structurally nested collections

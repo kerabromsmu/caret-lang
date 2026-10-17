@@ -8,7 +8,7 @@ But Caret is not trying to reproduce any of them.
 
 What makes it interesting is how these ideas start fitting together around a fairly small set of concepts.
 
-Caret is being designed around a recurring principle:
+Caret is being designed around the [first-class-by-default principle](../LANGUAGE.md#first-class-by-default):
 
 > If something can be represented as an ordinary value, function, contract, or Collection, avoid inventing a separate language mechanism for it.
 
@@ -73,7 +73,7 @@ Caret is not built around the idea that every useful program should remain purel
 
 That difference becomes important later.
 
-## Types are contracts, not containers for behavior — Prototype foundation, planned dispatch
+## Types are contracts, not containers for behavior — Prototype foundation, planned capability contracts
 
 One of Caret's more fundamental ideas is that a type is a **contract**.
 
@@ -84,6 +84,10 @@ Int value
 Number value
 Eq value
 ```
+
+`Int` and `Number` are implemented contracts. `Eq` and `Comparable` below illustrate planned
+capability contracts; they are not current built-ins, and the illustrated hierarchy remains
+conceptual.
 
 The prototype also accepts proven-pure unary Boolean functions as refinement requirements in
 derived contracts and declaration clauses. Closed same-name contract-specialized overload dispatch
@@ -104,8 +108,9 @@ But contracts do not own methods.
 
 Instead of defining equality "inside" a type, Caret defines ordinary functions:
 
-> **Planned example:** Same-name contract-specialized overload sets and their dispatch are not yet
-> implemented by the prototype.
+> **Planned example:** This sketch uses the future `Eq` contract and placeholder function bodies.
+> Same-name contract-specialized overload sets and most-specific runtime dispatch are implemented;
+> see the runnable [overload example](../examples/features/overloads.caret).
 
 ```caret
 eq (Eq) a (Eq) b =
@@ -138,8 +143,8 @@ structural requirement
 
 A template, for example, is simply a structural contract:
 
-> **Planned example:** `template` and the universal structural collection model are not yet
-> implemented.
+The prototype implements structural templates through ordinary `template` application or
+`<[ … ]>` sugar, with the same specimen and hole rules:
 
 ```caret
 Point =
@@ -150,6 +155,8 @@ Point =
 ```
 
 `Point` can then be used wherever any other contract can be used.
+See the [owning specification](../spec/sections/06-06-templates-foundations.md#template-sugar)
+and runnable [template example](../examples/features/templates.caret).
 
 This creates a rather different type-system philosophy:
 
@@ -204,10 +211,12 @@ This is one of the more Lisp-like aspects of Caret—not syntactically, but arch
 
 A relatively small collection model is expected to support increasingly sophisticated abstractions built on top of it.
 
-## Mutation exists, but you can see exactly where — Planned
+## Mutation exists, but you can see exactly where — Prototype
 
-Caret values are immutable by default. The explicit container syntax in this section is specified
-but not implemented by the current prototype.
+Caret values are immutable by default. The prototype implements explicit containers, reads,
+contract-checked writes, and field-binding reification, including `StateRead`/`StateWrite` effects.
+See the runnable [container](../examples/features/containers.caret) and
+[field-reification](../examples/features/field_reification.caret) examples.
 
 When mutable state is required, it is introduced using an explicit container:
 
@@ -335,9 +344,9 @@ Again, the recurring pattern is visible:
 
 ## Caret's metaprogramming follows the same philosophy — Partly prototype, mostly planned
 
-The prototype implements basic `@value` reflection. Environment-relative `@root`, structured code
-reification, imports, lambdas, higher-order collection operations, and compile-time `#` execution in
-the following examples are planned.
+The prototype implements basic `@value` reflection, lambdas, and higher-order Collection operations.
+Environment-relative `@root`, structured code reification, imports, and compile-time `#` execution
+remain planned, so the following examples combining those facilities are conceptual.
 
 Code itself can be represented structurally:
 

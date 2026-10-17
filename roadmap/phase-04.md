@@ -17,6 +17,15 @@ for its covered behavior. The common protocol, Field tuple, contextual shape, se
 transform, and strict-consumer foundations are implemented; deferred extensions retain separate
 requirements and evidence.
 
+### Completed follow-up — Template sugar (#61)
+
+The [template-sugar notation](../spec/sections/06-06-templates-foundations.md#template-sugar) adds
+`<[ … ]>` as ordinary lexical `template` application grouped as one expression, preserving
+shadowing, specimen holes, captures, contracts, layout, and located diagnostics. This follow-up
+uses the completed template runtime and introduces no new value kind or scope. It is covered by
+`TEMPLATE-SUGAR-001`, `TemplateSugarInterpreterTest`, lexer/parser tests, and the runnable template
+example. The historical #79 completion audit remains the record of the original Phase 4 foundation.
+
 ### Agreed collection revision and deferrals
 
 - Preserve implemented ordinary keys/values/fields/size access, guarantee queries and reflective

@@ -25,6 +25,29 @@ owning specification. Release allocation is separate from implementation status:
 may target a later release, and a requirement spanning several releases remains incomplete until
 all its behavior has evidence. A release implements its selected subset, not the whole corpus.
 
+## First-class by default
+
+**Everything in Caret is first-class by default.** New language features should integrate with
+ordinary values, functions, contracts, and the established lazy-evaluation model. Language entities
+should support binding, passing, returning, and storing as values, and composition where applicable.
+Designs should reuse these mechanisms and avoid unnecessary syntax or separate conceptual systems,
+so developers can apply a small, consistent set of concepts throughout the language. A special case
+is permitted only when it cannot be avoided; its owning specification must explain why.
+
+The [function model](spec/03-functions-operators-and-lambdas.md#function-application),
+[first-class contracts](spec/04-contracts-inference-and-dispatch.md#contract-foundation-currently-implemented),
+and [lazy-value rules](spec/02-values-bindings-and-evaluation.md#planned-lazy-values-and-lexical-contexts)
+provide the foundation. Optional syntax sugar may provide compact notation while preserving the
+underlying semantics. Evaluation demand, effect ordering, visibility, and authority continue to
+follow their owning specifications; this principle does not make every entity callable or every
+operation lazy, or grant additional authority.
+
+Explicitly specified exceptions include lexical scopes and resolver-only paths such as `outer.name`,
+which remain internal name-resolution mechanisms to preserve lexical privacy and visibility
+boundaries. Implementation limitations, such as the deferred first-class nullary callable-reference
+design, remain identified as limitations rather than becoming permanent exceptions to this
+principle. Adding this design rule does not itself implement deferred behavior.
+
 ## Core invariants
 
 1. Whitespace performs function application and indentation defines blocks.
@@ -52,6 +75,29 @@ all its behavior has evidence. A release implements its selected subset, not the
 This invariant does not imply that every language facility is a function. Established syntax such
 as `->`, `[...]`, container braces, contract clauses, `#`, `@`, `$`, layout markers, and module-ID
 declarations remains syntax where its owning specification says so.
+
+## V1 feature work
+
+The [release roadmap](PLAN.md#release-targets-and-implementation-order) owns sequencing and release
+completion. Alongside the implemented baseline and the planned cycle/module/environment/sandbox
+phases, v1 includes the eight labeled cards below at their recorded scope. Allocation is separate
+from design readiness and implementation status; open questions remain open.
+
+| Card | V1 scope and owning documentation |
+|---|---|
+| [#5 — Visible identifiers](https://github.com/kerabromsmu/caret-lang/issues/5) | [Environment-relative root identifier metadata](spec/12-modules-reflection-and-code.md#planned-v1-visible-identifiers), including visible imported bindings; semantic Code remains later work. |
+| [#53 — Integer shifts](https://github.com/kerabromsmu/caret-lang/issues/53) | [Basic `shl`/`shr` design](spec/02-values-bindings-and-evaluation.md#planned-v1-integer-shifts); contracts and shift semantics remain unresolved, with rotations/width-dependent extensions outside this v1 portion. |
+| [#57 — Tail calls](https://github.com/kerabromsmu/caret-lang/issues/57) | [Language-wide tail-call specification work](spec/03-functions-operators-and-lambdas.md#planned-v1-tail-calls); guarantees, tail positions, coverage, and diagnostics remain to be designed. |
+| [#61 — Template sugar](https://github.com/kerabromsmu/caret-lang/issues/61) | [Implemented `<[ … ]>` notation](spec/sections/06-06-templates-foundations.md#template-sugar), preserving ordinary lexical application semantics as a Phase 4 follow-up. |
+| [#80 — Turing-completeness proof](https://github.com/kerabromsmu/caret-lang/issues/80) | [Proof/example work](roadmap/phase-13.md#v1-proof-and-example-work): one or more Caret programs supporting the requested proof; no proof construction or new runtime guarantee is specified here. |
+| [#81 — Multiline REPL](https://github.com/kerabromsmu/caret-lang/issues/81) | [Planned submission rules](spec/01-source-layout-and-diagnostics.md#planned-multiline-repl-submissions) shared by interactive and plain input. |
+| [#109 — File/console I/O](https://github.com/kerabromsmu/caret-lang/issues/109) | [Bounded synchronous I/O subset](spec/05-effects-and-callable-signatures.md#planned-v1-file-console-io) of #99; public API and remaining semantics must be specified before implementation. |
+| [#110 — Seeded generation](https://github.com/kerabromsmu/caret-lang/issues/110) | [Basic seeded pseudorandom generation](spec/05-effects-and-callable-signatures.md#planned-v1-seeded-random-generation), compatible with #98; API, algorithm, state, effects, and contracts remain unresolved. |
+
+These entries record the cards' current detail without adding syntax, APIs, or semantic decisions.
+The full I/O and randomness designs (#99/#98) remain later work, and #60 gated computations retain
+undecided release placement. Existing specification/design cards remain specification work, and
+#80 remains a proof/example deliverable.
 
 ## Specification documents
 
